@@ -10,7 +10,7 @@
     <ProductVersion>10.0.20506</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
     <RootNamespace></RootNamespace>
-    <ProjectGuid>{FA715EDA-4494-C7BF-F226-2AAF8DB517D4}</ProjectGuid>
+    <ProjectGuid>{CC94F8E8-8AA4-57A4-C708-B7D41C2C3FF7}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <AssemblyName>Assembly-CSharp</AssemblyName>
@@ -60,18 +60,18 @@
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\2022.3.60f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Resources\test\Script\StageBuilder.cs" />
     <Compile Include="Assets\Scripts\UI\UI_Lobby.cs" />
     <Compile Include="Assets\Scripts\Manager\UIManager.cs" />
     <Compile Include="Assets\Scripts\RegionDisplay.cs" />
+    <Compile Include="Assets\Resources\test\Script\CharacterMove.cs" />
     <Compile Include="Assets\Scripts\RegionData.cs" />
     <Compile Include="Assets\Scripts\Common\Shared.cs" />
-    <Compile Include="Assets\Resources\test\StageBuilder.cs" />
+    <Compile Include="Assets\Resources\test\Script\MapPiece.cs" />
+    <Compile Include="Assets\Resources\test\Script\EntranceSnapper.cs" />
+    <Compile Include="Assets\Resources\test\Script\test.cs" />
     <Compile Include="Assets\Scripts\RegionButtonManager.cs" />
-    <Compile Include="Assets\Resources\test\MapPiece.cs" />
-    <Compile Include="Assets\Resources\test\EntranceSnapper.cs" />
     <Compile Include="Assets\Scripts\UI\UI_Departure.cs" />
-    <Compile Include="Assets\Resources\test\CharacterMove.cs" />
-    <Compile Include="Assets\Resources\test\test.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
