@@ -9,7 +9,9 @@ public enum HexDirection
     DownRight, // 2
     Down,      // 3
     DownLeft,  // 4
-    UpLeft     // 5
+    UpLeft,     // 5
+    Left,       //6
+    Right       //7
 }
 
 // 각 입구/출구의 방향과 위치

@@ -122,50 +122,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &453336946
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 453336948}
-  - component: {fileID: 453336947}
-  m_Layer: 0
-  m_Name: Grid
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!156049354 &453336947
-Grid:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 453336946}
-  m_Enabled: 1
-  m_CellSize: {x: 0.8659766, y: 1, z: 1}
-  m_CellGap: {x: 0, y: 0, z: 0}
-  m_CellLayout: 1
-  m_CellSwizzle: 0
---- !u!4 &453336948
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 453336946}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &689718823
 GameObject:
   m_ObjectHideFlags: 0
@@ -395,7 +351,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 0.7619048, y: 0.7619048}
+    oldSize: {x: 0.32, y: 0.32}
     newSize: {x: 0.32, y: 0.32}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -457,7 +413,7 @@ Transform:
   m_GameObject: {fileID: 979377648}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 7.2320437, y: -6.4558153, z: -0.05339822}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -475,17 +431,61 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 727d954efc848854783c151e39e0d11b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startRoomPrefab: {fileID: 6528783437413790367, guid: 35096ec8d66948140a20e4a74d0d5a63, type: 3}
+  startRoomPrefab: {fileID: 4898944166592018547, guid: abdd9abc04f866543bc573b5e91ff8da, type: 3}
   mapPiecePrefabs:
-  - {fileID: -245872181134081771, guid: d02a8e79496a7764eab4501d8a88f029, type: 3}
-  - {fileID: 3276362274108938788, guid: 1a2c20803104a1e4f84789c8b99f7cd4, type: 3}
-  - {fileID: -3054219374272159989, guid: 35d9fd477695ce6448bc4617d74c8381, type: 3}
-  - {fileID: -3930444147924733583, guid: caf9eab25ec354f4bb2655450183e055, type: 3}
-  gridParent: {fileID: 453336948}
+  - {fileID: 4103000954240763057, guid: bd532cb0bd5e91749b1bfcce072665ba, type: 3}
+  - {fileID: 5968193032810142079, guid: ed20ac1647f1b374a9769338355ae814, type: 3}
+  - {fileID: 952641893043499047, guid: 8b1155e41ea51ba4a89a31479a1daa2a, type: 3}
+  - {fileID: 6968629708417016996, guid: 8e6fac5b013efe84a99503eef3f90aa1, type: 3}
+  gridParent: {fileID: 1369432282}
+--- !u!1 &1369432280
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1369432282}
+  - component: {fileID: 1369432281}
+  m_Layer: 0
+  m_Name: Grid
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!156049354 &1369432281
+Grid:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1369432280}
+  m_Enabled: 1
+  m_CellSize: {x: 0.4, y: 0.5, z: 1}
+  m_CellGap: {x: 0, y: 0, z: 0}
+  m_CellLayout: 1
+  m_CellSwizzle: 0
+--- !u!4 &1369432282
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1369432280}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 453336948}
+  - {fileID: 1369432282}
   - {fileID: 741215540}
   - {fileID: 979377650}

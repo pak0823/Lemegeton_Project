@@ -1,4 +1,3 @@
-// Assets/Editor/EntranceSnapper.cs로 저장
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.Tilemaps;
@@ -23,10 +22,11 @@ public class EntranceSnapper : EditorWindow
     {
         foreach (var obj in Selection.gameObjects)
         {
-            var tilemap = obj.GetComponentInParent<Tilemap>();
+            // 부모-조상 계층에서 Tilemap 자동 탐색
+            var tilemap = FindTilemapInParents(obj.transform);
             if (tilemap == null)
             {
-                Debug.LogWarning($"{obj.name}의 부모에 Tilemap이 없습니다.");
+                Debug.LogWarning($"{obj.name}의 부모 계층에 Tilemap이 없습니다.");
                 continue;
             }
 
@@ -40,5 +40,17 @@ public class EntranceSnapper : EditorWindow
             obj.transform.localPosition = parentLocal;
         }
         Debug.Log("Entrance 자동 스냅 완료!");
+    }
+
+    // 조상 계층에서 Tilemap 자동 탐색 함수
+    Tilemap FindTilemapInParents(Transform t)
+    {
+        while (t != null)
+        {
+            var tilemap = t.GetComponent<Tilemap>();
+            if (tilemap != null) return tilemap;
+            t = t.parent;
+        }
+        return null;
     }
 }
