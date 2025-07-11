@@ -4,14 +4,12 @@ using UnityEngine.Tilemaps;
 
 public enum HexDirection
 {
-    Up,        // 0
-    UpRight,   // 1
-    DownRight, // 2
-    Down,      // 3
-    DownLeft,  // 4
-    UpLeft,     // 5
-    Left,       //6
-    Right       //7
+    UpRight,
+    DownRight,
+    Right,
+    UpLeft,
+    DownLeft,
+    Left       
 }
 
 // 각 입구/출구의 방향과 위치
@@ -39,12 +37,10 @@ public class MapPiece : MonoBehaviour
         Vector3 cellCenter = tilemap.GetCellCenterWorld(Vector3Int.zero);
     }
 
-    // (선택) 에디터에서 자동으로 찾게 하고 싶으면 아래 메서드를 활성화해서 사용
-    /*
     void Reset()
     {
         entrances.Clear();
-        foreach (Transform t in transform.Find("Entrances")) // "Entrances"라는 자식 오브젝트 아래에 Entrance 오브젝트 배치
+        foreach (Transform t in transform.Find("Enter")) // "Entrances"라는 자식 오브젝트 아래에 Entrance 오브젝트 배치
         {
             // 예: "Entrance_Up", "Entrance_UpRight" 이런 식으로 네이밍
             foreach (HexDirection dir in System.Enum.GetValues(typeof(HexDirection)))
@@ -60,5 +56,4 @@ public class MapPiece : MonoBehaviour
             }
         }
     }
-    */
 }
