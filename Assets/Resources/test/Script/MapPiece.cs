@@ -4,15 +4,14 @@ using UnityEngine.Tilemaps;
 
 public enum HexDirection
 {
-    UpRight,
-    DownRight,
-    Right,
-    UpLeft,
-    DownLeft,
-    Left       
+    Right = 0,
+    UpRight = 1,
+    UpLeft = 2,
+    Left = 3,
+    DownLeft = 4,
+    DownRight = 5
 }
 
-// 각 입구/출구의 방향과 위치
 [System.Serializable]
 public class EntranceInfo
 {
@@ -24,36 +23,69 @@ public class MapPiece : MonoBehaviour
 {
     public List<EntranceInfo> entrances = new List<EntranceInfo>();
 
-
-    private void Start()
+    private void Awake()
     {
-        Tilemap tilemap = GetComponentInChildren<Tilemap>();
-        if (tilemap == null)
+        InitializeEntrances();
+    }
+
+    void InitializeEntrances()
+    {
+        entrances.Clear();
+        Transform enterParent = transform.Find("Enter");
+        if (enterParent == null)
         {
-            Debug.LogWarning("타일맵이 없습니다!");
+            Debug.LogWarning($"{name}: 'Enter' 오브젝트가 없습니다. Entrance 자동 초기화 실패!");
             return;
         }
 
-        Vector3 cellCenter = tilemap.GetCellCenterWorld(Vector3Int.zero);
-    }
+        // HexDirection 열거형 이름들을 길이(내림차순)로 정렬하여 더 긴 이름이 먼저 검사되도록 합니다.
+        // 예를 들어, "UpRight"가 "Right"보다 먼저 검사되어야 합니다.
+        List<string> hexDirectionNames = new List<string>(System.Enum.GetNames(typeof(HexDirection)));
+        hexDirectionNames.Sort((a, b) => b.Length.CompareTo(a.Length)); // 긴 이름을 먼저 검사하도록 정렬
 
-    void Reset()
-    {
-        entrances.Clear();
-        foreach (Transform t in transform.Find("Enter")) // "Entrances"라는 자식 오브젝트 아래에 Entrance 오브젝트 배치
+        foreach (Transform t in enterParent)
         {
-            // 예: "Entrance_Up", "Entrance_UpRight" 이런 식으로 네이밍
-            foreach (HexDirection dir in System.Enum.GetValues(typeof(HexDirection)))
+            // t.name에서 "Enter_" 접두사를 제거한 실제 방향 이름 부분을 가져옵니다.
+            string objNameWithoutPrefix = t.name.Replace("Enter_", "");
+
+            foreach (string dirName in hexDirectionNames)
             {
-                if (t.name.Contains(dir.ToString()))
+                // 오브젝트의 이름이 HexDirection 이름과 정확히 일치하는지 확인
+                if (objNameWithoutPrefix == dirName)
                 {
                     EntranceInfo info = new EntranceInfo();
-                    info.direction = dir;
+                    info.direction = (HexDirection)System.Enum.Parse(typeof(HexDirection), dirName); // 문자열을 HexDirection으로 파싱
                     info.entranceTransform = t;
                     entrances.Add(info);
-                    break;
+                    break; // 정확히 일치하는 것을 찾았으니 다음 오브젝트로 넘어감
                 }
             }
+        }
+    }
+
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.red;
+        foreach (var e in entrances)
+        {
+            if (e.entranceTransform != null)
+                Gizmos.DrawLine(e.entranceTransform.position, e.entranceTransform.position + DirToVector(e.direction) * 0.5f);
+        }
+
+        // Collider Bounds를 시각화하는 Gizmos 코드 제거됨
+    }
+
+    Vector3 DirToVector(HexDirection dir)
+    {
+        switch (dir)
+        {
+            case HexDirection.Right: return new Vector3(1, 0, 0);
+            case HexDirection.UpRight: return new Vector3(0.5f, 0.87f, 0);
+            case HexDirection.UpLeft: return new Vector3(-0.5f, 0.87f, 0);
+            case HexDirection.Left: return new Vector3(-1, 0, 0);
+            case HexDirection.DownLeft: return new Vector3(-0.5f, -0.87f, 0);
+            case HexDirection.DownRight: return new Vector3(0.5f, -0.87f, 0);
+            default: return Vector3.zero;
         }
     }
 }
