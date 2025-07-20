@@ -391,6 +391,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1955277182941065026}
+  - component: {fileID: -3645682385697977682}
   m_Layer: 0
   m_Name: Room01
   m_TagString: Untagged
@@ -413,8 +414,27 @@ Transform:
   m_Children:
   - {fileID: 2646283864660889563}
   - {fileID: 7478885845963731324}
+  - {fileID: 3944528888341860560}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &-3645682385697977682
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1320289688980891362}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7a581b441164cc43a0969d315f8f890, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  trapPrefabs:
+  - {fileID: 1665918614930665382, guid: 0fefe9c61ead60c45b86c1ee01922644, type: 3}
+  trapCount: 3
+  chestPrefabs:
+  - {fileID: 2248749166385109767, guid: 04793a12fd2352d46a8e2a1dacb60ccf, type: 3}
+  chestCount: 4
 --- !u!1 &5221108161912356975
 GameObject:
   m_ObjectHideFlags: 0
@@ -1329,3 +1349,34 @@ TilemapRenderer:
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
   m_MaskInteraction: 0
+--- !u!1 &8944438953661130091
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3944528888341860560}
+  m_Layer: 0
+  m_Name: Object
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3944528888341860560
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8944438953661130091}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1955277182941065026}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using System.Linq;
 
 public class MapManager : MonoBehaviour
 {
@@ -10,6 +11,7 @@ public class MapManager : MonoBehaviour
 
     private GameObject currentMap;       // 현재 생성된 맵
     private Tilemap currentTilemap;      // 현재 타일맵
+
 
     void Start()
     {
@@ -30,11 +32,19 @@ public class MapManager : MonoBehaviour
         // 현재 맵 내의 Tilemap 컴포넌트 가져오기
         currentTilemap = currentMap.GetComponentInChildren<Tilemap>();  // Tilemap 컴포넌트 가져오기
 
+        var spawner = currentMap.GetComponentInChildren<MapObjectSpawner>();
+
         // 타일맵이 제대로 가져와졌는지 확인
         if (currentTilemap != null)
         {
-            // 타일맵 정보를 플레이어에게 전달
-            PlayerMovement playerMovement = playerPrefab.GetComponent<PlayerMovement>();
+            //오브젝트 랜덤 배치
+            if (spawner != null)
+                spawner.Spawn(currentTilemap);
+            else
+                Debug.LogError("MapObjectSpawner 컴포넌트를 찾을 수 없습니다!");
+
+                // 타일맵 정보를 플레이어에게 전달
+                PlayerMovement playerMovement = playerPrefab.GetComponent<PlayerMovement>();
             if (playerMovement != null)
             {
                 playerMovement.SetTilemap(currentTilemap);  // 플레이어 이동 스크립트에 타일맵 전달

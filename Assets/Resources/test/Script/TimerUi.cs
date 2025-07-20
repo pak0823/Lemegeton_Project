@@ -8,7 +8,7 @@ public class TimerUI : MonoBehaviour
     public Text timerText;
     public Text endMessageText;
 
-    private List<int> fibonacciMinutes = new List<int> { 1, 2, 3, 5 };
+    private List<int> fibonacciMinutes = new List<int> { 5, 3, 2, 1 };
     private int currentStage = 0;
 
     private float timeLeft = 0;
