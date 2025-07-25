@@ -10,6 +10,8 @@ public class BarrierController : MonoBehaviour
     [Tooltip("Barrier 앞에 위치한 트리거 Collider2D (Player 진입 감지)")]
     Collider2D exitTrigger;
 
+    public int stageIndex;  // 이 배리어가 속한 스테이지 번호
+
     [Header("Interaction")]
     [Tooltip("UI로 'Press F to Exit' 표시용 이벤트")]
     public UnityEvent onShowPrompt;
@@ -40,14 +42,13 @@ public class BarrierController : MonoBehaviour
         if (isOpen && playerInRange && Input.GetKeyDown(KeyCode.F))
         {
             // 다음 맵 로드
-            //LoadNextMap();
+            LoadNextMap();
             Debug.Log("다음맵으로 이동함");
         }
     }
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        Debug.Log("닿고 있는 오브젝트:" + other);
         if (!isOpen) return;
         if (other.CompareTag("Player"))
         {
@@ -91,7 +92,7 @@ public class BarrierController : MonoBehaviour
     // 다음 맵으로 이동
     private void LoadNextMap()
     {
-        // TODO: 실제 씬 이름이나 MapManager 호출로 변경
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
+        Shared.MapToggleManager.currentStage = stageIndex;
+        Shared.MapToggleManager.EnterQuizMap();
     }
 }

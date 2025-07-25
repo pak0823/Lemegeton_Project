@@ -3,5 +3,10 @@ using UnityEngine;
 public static class Shared
 {
     public static UIManager UIManager;
+    public static MapToggleManager MapToggleManager;
+    public static PuzzleManager PuzzleManager;
+
     public static UI_Lobby UI_Lobby;
+
+    public static PlayerMovement PlayerMovement;
 }

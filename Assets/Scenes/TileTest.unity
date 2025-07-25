@@ -382,6 +382,7 @@ GameObject:
   m_Component:
   - component: {fileID: 979377650}
   - component: {fileID: 979377651}
+  - component: {fileID: 979377652}
   m_Layer: 0
   m_Name: MapManager
   m_TagString: Untagged
@@ -418,8 +419,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mapPrefabs:
   - {fileID: 3588855407276996286, guid: e2d53e1b2c9556b41bb4f7bdd72f675b, type: 3}
+  - {fileID: 5253341124758373996, guid: 17564c39e4794074ba5e6dd674e14f7a, type: 3}
+  - {fileID: 5476152165107222940, guid: e8bcfb226c3316a42b28a91da418d24f, type: 3}
   gridParent: {fileID: 1369432282}
   playerPrefab: {fileID: 6085547847459231341, guid: 4d1955ec196cf6340bf5613fac860fb6, type: 3}
+--- !u!114 &979377652
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 979377648}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8262e813da20f24b866ee2560bb817a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  gridParent: {fileID: 0}
+  mainMap: {fileID: 0}
+  playerTransform: {fileID: 0}
+  stageDB: {fileID: 11400000, guid: 6fd2b071ba2ba6f47b2c09afbee70079, type: 2}
+  currentStage: 1
 --- !u!1 &989505364
 GameObject:
   m_ObjectHideFlags: 0
@@ -696,6 +716,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2146890640}
   - component: {fileID: 2146890639}
+  - component: {fileID: 2146890641}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -746,6 +767,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2146890641
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2146890638}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba99976cfc665c340ad58fac211d7d8d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
