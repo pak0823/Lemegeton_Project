@@ -39,7 +39,7 @@ public class BarrierController : MonoBehaviour
 
     void Update()
     {
-        if (isOpen && playerInRange && Input.GetKeyDown(KeyCode.F))
+        if (isOpen && playerInRange && (Input.GetKeyDown(KeyCode.F)|| Input.GetKeyDown(KeyCode.Space)))
         {
             // ¥Ÿ¿Ω ∏  ∑ŒµÂ
             LoadNextMap();

@@ -7,7 +7,7 @@ public class ObjectGaugeManager : MonoBehaviour
 {
     public static ObjectGaugeManager Instance { get; private set; }
 
-    [Tooltip("게이지 임계치 (0~1) 이상일 때 이벤트 발생")] public float thresholdPercent = 0.6f;
+    [Tooltip("게이지 임계치 (0~1) 이상일 때 이벤트 발생")] public float thresholdPercent = 0.66f;
     public UnityEvent onThresholdReached;
 
     private int totalBoxes;

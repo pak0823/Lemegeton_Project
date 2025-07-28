@@ -22,7 +22,7 @@ public class BoxInteract : MonoBehaviour
         if (fKeyPrompt != null)
             fKeyPrompt.SetActive(isPlayerNear && !isOpened);
 
-        if (isPlayerNear && !isOpened && Input.GetKeyDown(KeyCode.F))
+        if (isPlayerNear && !isOpened && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)))  
         {
             animator.SetTrigger("Box");
             isOpened = true;

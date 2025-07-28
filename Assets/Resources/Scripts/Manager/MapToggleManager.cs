@@ -25,6 +25,9 @@ public class MapToggleManager : MonoBehaviour
     // 현재 스테이지에 해당하는 퀴즈맵 중 하나를 랜덤 생성하여 전환
     public void EnterQuizMap()
     {
+        //입력된 모든키 상태 초기화
+        Input.ResetInputAxes();
+
         // 메인 맵 비활성화
         mainMap.SetActive(false);
 
@@ -73,6 +76,7 @@ public class MapToggleManager : MonoBehaviour
         if (playerSpawn != null)
         {
             playerTransform.position = playerSpawn.position;
+            Shared.PuzzleManager.CacheInitialPlayerPosition(playerTransform.position);
         }
         else
         {

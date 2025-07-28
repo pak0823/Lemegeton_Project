@@ -21,7 +21,7 @@ public class MapObjectSpawner : MonoBehaviour
     }
 
     // 맵 생성 직후 MapManager가 호출
-    public void Spawn(Tilemap tilemap, Vector3Int excludeCell)
+    public void Spawn(Tilemap tilemap, Vector3Int excludeCell, BoxCollider2D barrierExclude)
     {
         // 컨테이너 찾기
         Transform container = tilemap.transform.parent.Find("Object");
@@ -31,14 +31,28 @@ public class MapObjectSpawner : MonoBehaviour
             container = this.transform;
         }
 
-        var bounds = tilemap.cellBounds;
+        //var bounds = tilemap.cellBounds;
         var floorCells = new List<Vector3Int>();
         foreach (Vector3Int pos in tilemap.cellBounds.allPositionsWithin)
-            if (tilemap.GetTile(pos)?.name.Contains("Floor") == true)
-                floorCells.Add(pos);
+        {
+            // 1) 바닥 타일인지
+            if (tilemap.GetTile(pos)?.name.Contains("Floor") != true)
+                continue;
 
-        // 1) 플레이어 위치 제거
-        floorCells.RemoveAll(c => c == excludeCell);
+            // 2) 플레이어 시작 지점 제외
+            if (pos == excludeCell)
+                continue;
+
+            // 3) Barrier 콜라이더 영역 제외
+            if (barrierExclude != null)
+            {
+                Vector3 worldPos = tilemap.GetCellCenterWorld(pos);
+                if (barrierExclude.bounds.Contains(worldPos))
+                    continue;
+            }
+
+            floorCells.Add(pos);
+        }
 
         // 함정 배치
         for (int i = 0; i < trapCount && floorCells.Count > 0; i++)
@@ -52,6 +66,9 @@ public class MapObjectSpawner : MonoBehaviour
                 container);
             floorCells.RemoveAt(idx);
         }
+
+        //오브젝트 게이지 처리
+        ObjectGaugeManager.Instance.RegisterTotalBoxes(chestCount);
 
         // 상자 배치
         for (int i = 0; i < chestCount && floorCells.Count > 0; i++)
@@ -73,9 +90,6 @@ public class MapObjectSpawner : MonoBehaviour
                 else
                     obj.transform.localScale = new Vector3(-1f, 1f, 1f);
             }
-
-            //오브젝트 게이지 처리
-            ObjectGaugeManager.Instance.RegisterTotalBoxes(chestCount);
             floorCells.RemoveAt(idx);
         }
     }

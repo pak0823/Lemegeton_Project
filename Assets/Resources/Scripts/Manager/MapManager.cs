@@ -65,13 +65,19 @@ public class MapManager : MonoBehaviour
         var spawner = currentMap.GetComponentInChildren<MapObjectSpawner>();
         var spawnPoint = currentMap.transform.Find("PlayerStart");
 
+        //Barrier 범위값 가져오기
+        var barrierObj = currentMap.transform.Find("Barrier");
+        BoxCollider2D barrierCol = null;
+        if (barrierObj != null)
+            barrierCol = barrierObj.GetComponent<BoxCollider2D>();
+
         // 타일맵이 제대로 가져와졌는지 확인 후
         // 셀 좌표 계산 후 오브젝트 스폰
-        if (floorMap != null && spawner != null && spawnPoint != null)
+        if (floorMap != null && spawner != null && spawnPoint != null && barrierCol != null)
         {
             // SpawnPoint 오브젝트 찾아서 월드→셀 좌표로 변환
             Vector3Int spawnCell = floorMap.WorldToCell(spawnPoint.position);
-            spawner.Spawn(floorMap, spawnCell);
+            spawner.Spawn(floorMap, spawnCell, barrierCol);
         }
         else
         {
@@ -79,6 +85,8 @@ public class MapManager : MonoBehaviour
                 Debug.LogError("MapObjectSpawner 컴포넌트를 찾을 수 없습니다!");
             else if(spawnPoint == null)
                 Debug.LogError("PlayerStart 오브젝트를 찾을 수 없습니다!");
+            else if(barrierObj == null)
+                        Debug.LogError("barrierObj 오브젝트를 찾을 수 없습니다!");
         }
             
 
