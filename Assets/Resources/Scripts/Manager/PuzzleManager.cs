@@ -107,12 +107,13 @@ public class PuzzleManager : MonoBehaviour
         IsPuzzleActive = false;
     }
 
-    public void ExecutePush(Vector3Int oldCell, Vector3Int newCell)
+    public void ExecutePush(PuzzleBox box, Vector3Int oldCell, Vector3Int newCell)
     {
-        if (!boxes.TryGetValue(oldCell, out var box)) return;
         boxes.Remove(oldCell);
         boxes[newCell] = box;
         box.SetCell(newCell, FloorTilemap);
+
+        //Debug.Log($"[ExecutePush] box={box.name}, {oldCell}→{newCell}");
     }
 
     // 플레이어가 playerCell 위치에서 dir 방향으로 상자를 밀어내고,
@@ -120,21 +121,21 @@ public class PuzzleManager : MonoBehaviour
     public bool TryPush(Vector3Int boxCell, Vector3Int dir)
     {
 
-        // 1) 우선 박스가 진짜 있는 셀인지 확인
+        // 우선 박스가 진짜 있는 셀인지 확인
         if (!boxes.TryGetValue(boxCell, out var boxCheck))
         {
             Debug.Log($"[Push] 실패: 박스가 없는 셀입니다. boxCell={boxCell}");
             return false;
         }
 
-        // 1) 입력 받은 박스 셀과 방향
-        Debug.Log($"[TryPush] 박스 셀={boxCell}, 방향={dir}");
+        // 입력 받은 박스 셀과 방향
+        //Debug.Log($"[TryPush] 박스 셀={boxCell}, 방향={dir}");
 
-        // 2) 목표 셀 계산
+        // 목표 셀 계산
         Vector3Int target = boxCell + dir;
-        Debug.Log($"[TryPush] 목표 셀={target}");
+        //Debug.Log($"[TryPush] 목표 셀={target}");
 
-        // 3) 이동 가능 여부 검사
+        // 이동 가능 여부 검사
         bool hasFloor = FloorTilemap.HasTile(target);
         bool hasWall = WallTilemap.HasTile(target);
         bool hasBox = boxes.ContainsKey(target);

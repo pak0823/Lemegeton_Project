@@ -32,6 +32,8 @@ public class PuzzleBox : MonoBehaviour
         StopAllCoroutines();
         // 새로운 이동 코루틴 실행 (0.15초 동안 Lerp)
         StartCoroutine(AnimateMove(transform.position, target, 0.15f));
+
+        //Debug.Log("현재 이동된 Box 오브젝트: " + this.gameObject.name);
     }
 
     // 초기 셀로 되돌림

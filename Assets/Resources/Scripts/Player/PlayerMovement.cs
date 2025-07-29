@@ -24,7 +24,8 @@ public class PlayerMovement : MonoBehaviour
     private bool isPushMode = false;
     private Direction pendingDirectionKey = Direction.None;
     private PuzzleBox selectedBox = null;       // 현재 선택된 박스
-    public float selectRadius = 0.6f;   //박스 선택 범위
+    private List<PuzzleBox> contactBoxes = new List<PuzzleBox>();
+    private bool isPerformingPush = false; //이미 상자를 밀고 있는지 체크
 
     SpriteRenderer spriterenderer;
     Animator animator;
@@ -39,30 +40,27 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        if (isPerformingPush) return;   //상자 밀기모드라면 이동 무시
+
         Vector2 keyInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
-        // 1) F키 눌러 “박스 선택 모드” 진입
-        if (!isPushMode
-         && Shared.PuzzleManager.IsPuzzleActive
-         && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)))
+        // 상호작용키를 눌러 박스 선택 모드 진입
+        if (!isPushMode && Shared.PuzzleManager.IsPuzzleActive
+            && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)) && selectedBox != null)
         {
-            // 플레이어 근처의 박스 탐색
-            Collider2D[] hits = Physics2D.OverlapCircleAll(
-                transform.position,
-                selectRadius,
-                LayerMask.GetMask("Box")
-            );
-            if (hits.Length > 0)
+            if(contactBoxes.Count > 0)
             {
-                // 첫 번째 박스를 선택
-                selectedBox = hits[0].GetComponent<PuzzleBox>();
-                if (selectedBox != null)
-                {
-                    isPushMode = true;
-                    path.Clear();
-                    Debug.Log($"[Select] 박스 선택: {selectedBox.name}");
-                }
+                // 접촉 중인 박스들 중 가장 가까운 것 선택
+                selectedBox = contactBoxes
+                    .OrderBy(b => Vector2.SqrMagnitude(
+                        (Vector2)transform.position
+                        - (Vector2)b.transform.position))
+                    .First();
+                isPushMode = true;
+                path.Clear();
+                Debug.Log($"[Select] 박스 선택: {selectedBox.name}");
             }
+            return;
         }
 
         if (isMouseMove && keyInput.sqrMagnitude > 0f)
@@ -104,15 +102,25 @@ public class PlayerMovement : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (isPerformingPush) return;
+
         // 캐싱
         int pathCount = path.Count;
         float inputSq = input.sqrMagnitude;
         var puzzleMgr = Shared.PuzzleManager;
         bool puzzleActive = puzzleMgr != null && puzzleMgr.IsPuzzleActive;
 
-        // 플레이어가 있는 셀과 패리티 계산
-        Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
-        bool playerOdd = (playerCell.y & 1) == 1;
+        // pendingDirectionKey 에 대응하는 반대 키
+        Direction oppositeKey = pendingDirectionKey switch
+        {
+            Direction.West => Direction.East,
+            Direction.East => Direction.West,
+            Direction.NW => Direction.SE,
+            Direction.NE => Direction.SW,
+            Direction.SW => Direction.NE,
+            Direction.SE => Direction.NW,
+            _=> Direction.None
+        };
 
         // 애니메이션 업데이트
         bool isMoving = pathCount > 0 || inputSq > 0f;
@@ -121,32 +129,41 @@ public class PlayerMovement : MonoBehaviour
         // 푸시 모드 처리 (선택된 박스에만 적용)
         if (isPushMode && selectedBox != null && pendingDirectionKey != Direction.None && puzzleActive)
         {
-            // 플레이어 → 박스
-            Vector3Int d1 = GetOffsetForKey(pendingDirectionKey, playerOdd);
-            Vector3Int boxCell = playerCell + d1;
+            // 선택된 박스 셀
+            Vector3Int boxCell = selectedBox.CurrentCell;
             bool boxOdd = (boxCell.y & 1) == 1;
 
-            // 박스 → 목표
-            Vector3Int d2 = GetOffsetForKey(pendingDirectionKey, boxOdd);
-            Vector3Int targetCell = boxCell + d2;
+            // 뒤 오프셋 계산
+            Vector3Int backOffset = GetOffsetForKey(oppositeKey, boxOdd);
 
-            Debug.Log($"[Push] 시도: Key={pendingDirectionKey}, playerCell={playerCell}, boxCell={boxCell}, targetCell={targetCell}");
+            // 방향 오프셋과 목표 셀 계산
+            Vector3Int dir = GetOffsetForKey(pendingDirectionKey, boxOdd);
+            Vector3Int targetCell = boxCell + dir;
+
+            // 플레이어 셀
+            Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
+
+            //플레이어가 박스 뒤쪽 방향에 있는지 확인
+            if (playerCell != boxCell + backOffset)
+            {
+                Debug.Log("[Push] 실패: 박스 뒤에서만 밀 수 있습니다.");
+                isPushMode = false;
+                pendingDirectionKey = Direction.None;
+                selectedBox = null;
+                return;
+            }
 
             // 밀기 시도
-            if (puzzleMgr.TryPush(boxCell, d2))
+            if (puzzleMgr.TryPush(boxCell, dir))
             {
-                Debug.Log($"[Push] 성공 → 상자 이동 {boxCell} → {targetCell}");
-                //// 플레이어를 박스 원래 위치로 이동
-                //Vector3 newPlayerPos = floorTilemap.GetCellCenterWorld(boxCell);
-                //rb.MovePosition(newPlayerPos);
-                StartCoroutine(PerformPush(selectedBox, boxCell, d2));
+                StartCoroutine(PerformPush(selectedBox, boxCell, dir));
             }
             else
             {
-                Debug.Log($"[Push] 실패: 밀 수 없는 방향 또는 장애물 존재");
+                Debug.Log($"[Push] 실패: 이동 불가 target={targetCell}");
             }
 
-            // 푸시 모드 해제
+            // 푸시 모드 초기화
             isPushMode = false;
             pendingDirectionKey = Direction.None;
             selectedBox = null;
@@ -189,6 +206,26 @@ public class PlayerMovement : MonoBehaviour
         if (moveDir.x != 0f)
             spriterenderer.flipX = moveDir.x > 0f;
     }
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.TryGetComponent<PuzzleBox>(out var box))
+        {
+            selectedBox = box;
+            contactBoxes.Add(box);
+            Debug.Log($"[SelectTrigger] 박스 접촉: {box.name}");
+        }
+            
+    }
+    void OnTriggerExit2D(Collider2D other)
+    {
+        if (other.TryGetComponent<PuzzleBox>(out var box) && selectedBox == box)
+        {
+            selectedBox = null;
+            contactBoxes.Remove(box);
+            Debug.Log($"[SelectTrigger] 박스 이탈: {box.name}");
+        }
+            
+    }
 
 
     void SetTargetPosition(Vector3 worldTarget)
@@ -203,7 +240,7 @@ public class PlayerMovement : MonoBehaviour
         isMouseMove = path.Count > 0;
     }
 
-    public void ClearPath()
+    public void ClearPath() //마우스 이동 경로 초기화
     {
         isMouseMove = false;
         path.Clear();
@@ -211,19 +248,23 @@ public class PlayerMovement : MonoBehaviour
 
     IEnumerator PerformPush(PuzzleBox box, Vector3Int boxCell, Vector3Int dir)
     {
-        // 1) Push 애니메이션 트리거
+        Debug.Log($"[PerformPush] 시작 → box={box.name}, boxCell={boxCell}, dir={dir}");
+        if (isPerformingPush) yield break;
+        isPerformingPush = true;
+
+        // Push 애니메이션 트리거
         //animator.SetTrigger("Push");
 
-        // 2) 애니메이션 타이밍에 맞춘 duration
+        // 애니메이션 타이밍에 맞춘 duration
         float duration = 0.2f;
 
-        // 3) 시작/목표 위치 계산
+        // 시작/목표 위치 계산
         Vector3 fromBox = box.transform.position;
         Vector3 toBox = floorTilemap.GetCellCenterWorld(boxCell + dir);
         Vector3 fromPlayer = rb.position;
         Vector3 toPlayer = fromBox;
 
-        // 4) 동시에 Lerp
+        // 동시에 Lerp
         float t = 0f;
         while (t < 1f)
         {
@@ -232,17 +273,21 @@ public class PlayerMovement : MonoBehaviour
             rb.MovePosition(Vector3.Lerp(fromPlayer, toPlayer, t));
             yield return null;
         }
-        // 5) 최종 위치 보정
+
+        // 최종 위치 보정
         box.transform.position = toBox;
         rb.MovePosition(toPlayer);
 
+        Debug.Log($"[PerformPush] 이동 완료 → box={box.name}, targetCell={boxCell + dir}");
+        Shared.PuzzleManager.ExecutePush(box, boxCell, boxCell + dir);
 
-        Shared.PuzzleManager.ExecutePush(boxCell, boxCell + dir);
-
-        // 7) Push 모드 해제 등
+        // Push 모드 해제 등
         isPushMode = false;
         pendingDirectionKey = Direction.None;
         selectedBox = null;
+        isPerformingPush = false;
+        if (!contactBoxes.Contains(box))
+            contactBoxes.Add(box);
     }
 
 
@@ -360,10 +405,8 @@ public class PlayerMovement : MonoBehaviour
               + Mathf.Abs((a.x + a.y) - (b.x + b.y))) / 2;
     }
 
-    /// <summary>
-    /// 바닥 타일맵에 Floor 타일이 있고, 벽 타일맵에 타일이 없으며,
-    /// 경로 방해 오브젝트가 없는 셀만 걷기 가능
-    /// </summary>
+    // 바닥 타일맵에 Floor 타일이 있고, 벽 타일맵에 타일이 없으며,
+    // 경로 방해 오브젝트가 없는 셀만 걷기 가능
     bool IsWalkableCell(Vector3Int cell)
     {
         if (!floorTilemap.HasTile(cell) || !floorTilemap.GetTile(cell).name.Contains("Floor"))
@@ -419,9 +462,6 @@ public class PlayerMovement : MonoBehaviour
             default: return Vector3Int.zero;
         }
     }
-
-
-
 
     void OnDrawGizmos() //이동 경로 표시용
     {
