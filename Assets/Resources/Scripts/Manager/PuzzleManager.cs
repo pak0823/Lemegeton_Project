@@ -16,6 +16,9 @@ public class PuzzleManager : MonoBehaviour
 
     //BoxGoal을 리스트로 저장
     private List<BoxGoal> goals = new List<BoxGoal>();
+    public bool IsPuzzleComplete { get; private set; } //퀴즈맵 클리어 확인
+
+    public GameObject portalPrefab;
 
     private Vector3 initialPlayerWorld;
     public Button resetBtn;
@@ -69,7 +72,13 @@ public class PuzzleManager : MonoBehaviour
     public void InitializeGoals()
     {
         goals.Clear();
-        goals.AddRange(FindObjectsOfType<BoxGoal>());
+
+        foreach (var goal in FindObjectsOfType<BoxGoal>())
+        {
+            goal.Init(FloorTilemap);
+            goals.Add(goal);
+        }
+
         NotifyGoalChanged();
     }
 
@@ -82,17 +91,23 @@ public class PuzzleManager : MonoBehaviour
     //모든 BoxGoal 위치에 박스가 위치하는지 확인
     public void NotifyGoalChanged()
     {
-        // 모든 목표가 active 상태인지 확인
-        bool allDone = goals.All(g => g.IsActive);
-        if (allDone)
+        // 각 목표 셀에 박스가 있으면 활성, 없으면 비활성
+        foreach (var goal in goals)
+            goal.SetActive(boxes.ContainsKey(goal.Cell));
+
+        // 모두 활성이라면 퍼즐 완료 처리
+        if (goals.All(g => g.IsActive))
             OnPuzzleComplete();
     }
 
     //모든 목표가 active일 때 수행되는 포탈 생성
     private void OnPuzzleComplete()
     {
+        if (IsPuzzleComplete) return;
+        IsPuzzleComplete = true;
+
         //포탈 프리팹을 Instantiate
-        //Instantiate(portalPrefab, portalSpawnPosition, Quaternion.identity);
+        Instantiate(portalPrefab, initialPlayerWorld, Quaternion.identity);
 
         Debug.Log("모든 박스 배치 성공!");
         Debug.Log("포탈이 생성되었습니다.");
@@ -153,6 +168,8 @@ public class PuzzleManager : MonoBehaviour
     // 저장된 초기 위치대로 모두 되돌림
     public void ResetPuzzle()
     {
+        if (IsPuzzleComplete) return;
+
         boxes.Clear();
         foreach (var box in allBoxes)
         {

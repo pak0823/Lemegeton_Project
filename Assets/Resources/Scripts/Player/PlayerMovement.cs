@@ -40,12 +40,10 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        if (isPerformingPush) return;   //상자 밀기모드라면 이동 무시
-
         Vector2 keyInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
         // 상호작용키를 눌러 박스 선택 모드 진입
-        if (!isPushMode && Shared.PuzzleManager.IsPuzzleActive
+        if (!isPushMode && Shared.PuzzleManager.IsPuzzleActive && !Shared.PuzzleManager.IsPuzzleComplete
             && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)) && selectedBox != null)
         {
             if(contactBoxes.Count > 0)
@@ -63,23 +61,9 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        if (isMouseMove && keyInput.sqrMagnitude > 0f)
-        {
-            spriterenderer.flipX = keyInput.x < 0f;
-            isMouseMove = false;
-            path.Clear();
-        }
-
-        if (Input.GetMouseButton(1))
-        {
-            Vector3 screenPos = Input.mousePosition;
-            screenPos.z = -Camera.main.transform.position.z;
-            Vector3 worldPos = Camera.main.ScreenToWorldPoint(screenPos);
-            SetTargetPosition(worldPos);
-        }
-
         if (isPushMode)
         {
+            animator.SetInteger("Move",0);
             // 화살표 조합 검사
             bool up = Input.GetKey(KeyCode.UpArrow) || Input.GetKey(KeyCode.W);
             bool down = Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.S);
@@ -95,6 +79,28 @@ public class PlayerMovement : MonoBehaviour
             else return;  // 다른 입력 무시
 
             return;  // FixedUpdate로 넘김
+        }
+
+        if (isPerformingPush)
+        {
+            return;   //상자 밀기모드라면 이동 무시
+        }
+        else
+        {
+            if (isMouseMove && keyInput.sqrMagnitude > 0f)
+            {
+                spriterenderer.flipX = keyInput.x < 0f;
+                isMouseMove = false;
+                path.Clear();
+            }
+
+            if (Input.GetMouseButton(1))
+            {
+                Vector3 screenPos = Input.mousePosition;
+                screenPos.z = -Camera.main.transform.position.z;
+                Vector3 worldPos = Camera.main.ScreenToWorldPoint(screenPos);
+                SetTargetPosition(worldPos);
+            }
         }
 
         input = !isMouseMove ? keyInput.normalized : Vector2.zero;
@@ -127,7 +133,7 @@ public class PlayerMovement : MonoBehaviour
         animator.SetInteger("Move", isMoving ? 1 : 0);
 
         // 푸시 모드 처리 (선택된 박스에만 적용)
-        if (isPushMode && selectedBox != null && pendingDirectionKey != Direction.None && puzzleActive)
+        if (isPushMode && selectedBox != null && pendingDirectionKey != Direction.None && puzzleActive && !Shared.PuzzleManager.IsPuzzleComplete)
         {
             // 선택된 박스 셀
             Vector3Int boxCell = selectedBox.CurrentCell;
@@ -246,23 +252,34 @@ public class PlayerMovement : MonoBehaviour
         path.Clear();
     }
 
+    //상자 밀기 전용 함수
     IEnumerator PerformPush(PuzzleBox box, Vector3Int boxCell, Vector3Int dir)
     {
         Debug.Log($"[PerformPush] 시작 → box={box.name}, boxCell={boxCell}, dir={dir}");
         if (isPerformingPush) yield break;
         isPerformingPush = true;
 
-        // Push 애니메이션 트리거
-        //animator.SetTrigger("Push");
-
-        // 애니메이션 타이밍에 맞춘 duration
-        float duration = 0.2f;
-
         // 시작/목표 위치 계산
         Vector3 fromBox = box.transform.position;
         Vector3 toBox = floorTilemap.GetCellCenterWorld(boxCell + dir);
         Vector3 fromPlayer = rb.position;
         Vector3 toPlayer = fromBox;
+
+        Vector3 moveDir = (toBox - fromBox).normalized;
+        spriterenderer.flipX = (moveDir.x > 0);
+
+        // Push 애니메이션 관리
+        // PushType 결정
+        int pushType = dir.y > 0 ? 2     // y + : 아래 -> 위 대각
+                     : dir.y < 0 ? 1    // y - : 위 -> 아래 대각
+                     : 0;               // y == 0 : 좌/우 수평
+ 
+        // 파라미터 세팅 & 트리거
+        animator.SetInteger("PushDir", pushType);
+        animator.SetTrigger("Push");
+
+        // 애니메이션 타이밍에 맞춘 duration
+        float duration = 0.35f;
 
         // 동시에 Lerp
         float t = 0f;
@@ -280,6 +297,7 @@ public class PlayerMovement : MonoBehaviour
 
         Debug.Log($"[PerformPush] 이동 완료 → box={box.name}, targetCell={boxCell + dir}");
         Shared.PuzzleManager.ExecutePush(box, boxCell, boxCell + dir);
+        Shared.PuzzleManager.NotifyGoalChanged();
 
         // Push 모드 해제 등
         isPushMode = false;

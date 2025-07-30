@@ -3,6 +3,7 @@ using UnityEngine;
 public static class Shared
 {
     public static UIManager UIManager;
+    public static SceneTransitionManager SceneTransitionManager;
     public static MapToggleManager MapToggleManager;
     public static PuzzleManager PuzzleManager;
 
