@@ -3,7 +3,7 @@ using UnityEngine.Events;
 
 // 맵 내 전체 상자 개수 대비
 // 열린 상자 + 발동된 함정 수를 게이지로 계산
-public class ObjectGaugeManager : MonoBehaviour
+public class ObjectGaugeManager : MonoBehaviour, IResettable
 {
     public static ObjectGaugeManager Instance { get; private set; }
 
@@ -19,7 +19,6 @@ public class ObjectGaugeManager : MonoBehaviour
     {
         if (Instance == null) Instance = this;
         else { Destroy(gameObject); return; }
-        // 씬 전환 등에도 유지하고 싶다면: DontDestroyOnLoad(gameObject);
     }
 
     // 맵 생성 후 상자 총 개수를 등록
@@ -67,4 +66,11 @@ public class ObjectGaugeManager : MonoBehaviour
         if (totalBoxes <= 0) return 0f;
         return Mathf.Clamp01((openedBoxes + triggeredTraps) / (float)totalBoxes);
     }
+    public void ResetState()
+    {
+        openedBoxes = 0;
+        triggeredTraps = 0;
+    }
+
+
 }

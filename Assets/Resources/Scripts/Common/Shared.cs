@@ -2,6 +2,7 @@ using UnityEngine;
 
 public static class Shared
 {
+    public static MapManager MapManager;
     public static UIManager UIManager;
     public static SceneTransitionManager SceneTransitionManager;
     public static MapToggleManager MapToggleManager;

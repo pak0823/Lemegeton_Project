@@ -2,17 +2,16 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-//  ScriptableObject 기반으로 스테이지별, 랜덤 퀴즈맵 전환 관리
 public class MapToggleManager : MonoBehaviour
 {
     [Header("맵 참조")]
     public Transform gridParent;
-    public GameObject mainMap;  // MapManager가 생성한 던전 루트 오브젝트
-    public Transform playerTransform;   // 씬에 있는 플레이어 Transform
+    public GameObject mainMap;
+    [SerializeField] private Transform playerTransform;
 
     [Header("StageData")]
-    public StageDatabase stageDB;   //  에디터에 할당
-    public int currentStage = 1;    //  진입할 스테이지 번호(1부터)
+    public StageDatabase stageDB;
+    public int currentStage = 1;
 
     private GameObject activeQuizMap;
 
@@ -20,91 +19,113 @@ public class MapToggleManager : MonoBehaviour
     {
         if (Shared.MapToggleManager == null) Shared.MapToggleManager = this;
         else Destroy(gameObject);
+
     }
 
-    // 현재 스테이지에 해당하는 퀴즈맵 중 하나를 랜덤 생성하여 전환
     public void EnterQuizMap()
     {
-        //입력된 모든키 상태 초기화
         Input.ResetInputAxes();
+        Shared.PuzzleManager.IsPuzzleActive = true;
 
-        // 메인 맵 비활성화
-        mainMap.SetActive(false);
+        if (mainMap != null) mainMap.SetActive(false);
 
-        // 이전 퀴즈맵 제거
         if (activeQuizMap != null)
             Destroy(activeQuizMap);
 
-        // 데이터베이스에서 스테이지 찾기
-        var data = stageDB.stages.FirstOrDefault(s => s.stageNumber == currentStage);
-        if (data == null || data.quizMapPrefabs.Length == 0)
+        GameObject quizMapPrefab = GetRandomQuizMapPrefab();
+        if (quizMapPrefab == null)
         {
-            Debug.LogWarning($"Stage {currentStage} 데이터 또는 퀴즈맵이 없습니다.");
+            Debug.LogWarning($"Stage {currentStage}의 퀴즈맵을 찾을 수 없습니다.");
             return;
         }
 
-        // 퀴즈맵 랜덤 선택
-        int idx = Random.Range(0, data.quizMapPrefabs.Length);
-        //activeQuizMap = Instantiate(data.quizMapPrefabs[idx]);
-        activeQuizMap = Instantiate(
-            data.quizMapPrefabs[idx],
-            Vector3.zero,                     // 월드 스폰 위치가 따로 없으면 Vector3.zero
-            Quaternion.identity,
-            gridParent                        
-        );
+        activeQuizMap = Instantiate(quizMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
+        SetupQuizMap(activeQuizMap);
+    }
 
-        // 3) Floor/Wall Tilemap 자동 검색
-        Tilemap floorMap = null, wallMap = null;
-        foreach (var tm in activeQuizMap.GetComponentsInChildren<Tilemap>())
+    public void ExitQuizMap()
+    {
+        if (activeQuizMap != null)
         {
-            var n = tm.gameObject.name.ToLower();
-            if (floorMap == null && n.Contains("floor")) floorMap = tm;
-            if (wallMap == null && n.Contains("wall")) wallMap = tm;
-            if (floorMap != null && wallMap != null) break;
+            Destroy(activeQuizMap);
+            activeQuizMap = null;
         }
-        if (floorMap == null) Debug.LogError("Floor 타일맵을 찾을 수 없습니다!");
-        if (wallMap == null) Debug.LogWarning("Wall 타일맵을 찾을 수 없습니다.");
 
-
-        // 새 타일맵을 PlayerMovement, PuzzleManager에 전달
-        Shared.PlayerMovement.SetTilemap(floorMap, wallMap);
-        Shared.PuzzleManager.SetMaps(floorMap, wallMap);
-        Shared.PlayerMovement.ClearPath();
-
-        // 플레이어 위치 이동
-        var playerSpawn = activeQuizMap.transform.Find("PlayerStart");
-        if (playerSpawn != null)
+        if (mainMap != null)
         {
-            playerTransform.position = playerSpawn.position;
-            Shared.PuzzleManager.CacheInitialPlayerPosition(playerTransform.position);
-        }
-        else
-        {
-            Debug.LogWarning("퀴즈맵에 'PlayerStart' 오브젝트가 없습니다.");
+            mainMap.SetActive(true);
+            MovePlayerToSpawnPoint(mainMap);
         }
     }
 
-    // 퀴즈맵 종료 후 메인 맵으로 복귀
-    //public void ExitQuizMap(Vector3 returnPosition)
-    //{
-    //    if (activeQuizMap != null) Destroy(activeQuizMap);
-    //    mainMap.SetActive(true);
+    GameObject GetRandomQuizMapPrefab()
+    {
+        var stageData = stageDB.stages.FirstOrDefault(s => s.stageNumber == currentStage);
+        if (stageData == null || stageData.quizMapPrefabs.Length == 0)
+            return null;
 
-    //    // 메인맵에서도 Floor/Wall Tilemap 재검색
-    //    Tilemap floorMap = null, wallMap = null;
-    //    foreach (var tm in mainMap.GetComponentsInChildren<Tilemap>())
-    //    {
-    //        var n = tm.gameObject.name.ToLower();
-    //        if (floorMap == null && n.Contains("floor")) floorMap = tm;
-    //        if (wallMap == null && n.Contains("wall")) wallMap = tm;
-    //        if (floorMap != null && wallMap != null) break;
-    //    }
-    //    if (floorMap == null) Debug.LogError("Floor 타일맵을 찾을 수 없습니다!");
-    //    if (wallMap == null) Debug.LogWarning("Wall 타일맵을 찾을 수 없습니다.");
+        int index = Random.Range(0, stageData.quizMapPrefabs.Length);
+        return stageData.quizMapPrefabs[index];
+    }
 
-    //    Shared.PlayerMovement.SetTilemap(floorMap, wallMap);
-    //    Shared.PlayerMovement.ClearPath();
-    //    Shared.PuzzleManager.ClearMaps();
-    //    playerTransform.position = returnPosition;
-    //}
+    void SetupQuizMap(GameObject quizMap)
+    {
+        var (floorMap, wallMap) = FindTilemaps(quizMap);
+
+        if (floorMap == null)
+        {
+            Debug.LogError("Floor 타일맵을 찾을 수 없습니다!");
+            return;
+        }
+
+        if (Shared.PlayerMovement != null)
+        {
+            Shared.PlayerMovement.SetTilemap(floorMap, wallMap);
+            Shared.PlayerMovement.ClearPath();
+            Debug.Log("[MapToggleManager] SetTilemap 호출 완료");
+        }
+        else
+        {
+            Debug.LogWarning("[MapToggleManager] PlayerMovement 인스턴스가 아직 준비되지 않음");
+        }
+
+        Shared.PuzzleManager?.SetMaps(floorMap, wallMap);
+        MovePlayerToSpawnPoint(quizMap);
+    }
+
+    (Tilemap floor, Tilemap wall) FindTilemaps(GameObject map)
+    {
+        Tilemap floor = null, wall = null;
+        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
+        {
+            var name = tm.gameObject.name.ToLower();
+            if (name.Contains("floor")) floor = tm;
+            if (name.Contains("wall")) wall = tm;
+            if (floor != null && wall != null) break;
+        }
+        return (floor, wall);
+    }
+
+    void MovePlayerToSpawnPoint(GameObject map)
+    {
+        var spawn = map.transform.Find("PlayerStart");
+        if (spawn != null)
+        {
+            playerTransform.position = spawn.position;
+            Shared.PuzzleManager?.CacheInitialPlayerPosition(spawn.position);
+        }
+        else
+        {
+            Debug.LogWarning("맵에 'PlayerStart' 오브젝트가 없습니다.");
+        }
+    }
+
+    public Vector3 GetPlayerStartPosition()
+    {
+        return playerTransform.position;
+    }
+    public void SetPlayerStartPosition(Transform _playerPos)
+    {
+         playerTransform = _playerPos;
+    }
 }

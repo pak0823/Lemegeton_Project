@@ -8,8 +8,10 @@ ScriptsOnlyBuild:
     - MapObjectSpawner
     - PlayerDebuffController
     - PlayerMovement
+    - PortalController
     - PuzzleBox
     - RegionData
+    - SceneTransitionManager
     - StageDatabase
     - StageQuizMapData
     - TrapBehavior
@@ -24,10 +26,13 @@ ScriptsOnlyBuild:
     - ObjectGaugeManager
     - PlayerDebuffController
     - PlayerMovement
+    - PortalController
     - PuzzleBox
     - PuzzleManager
+    - SceneTransitionManager
     - StageDatabase
     - StageQuizMapData
+    - TestCode
     - TimerUI
     - TrapBehavior
     Unity.2D.Animation.Editor.dll:
@@ -97,6 +102,36 @@ ScriptsOnlyBuild:
     - UnityEngine.UI.Navigation
     - UnityEngine.UI.SpriteState
   methodsToPreserve:
+  - assembly: Assembly-CSharp
+    fullTypeName: TestCode
+    methodName: StartGame
+  - assembly: Assembly-CSharp
+    fullTypeName: TestCode
+    methodName: QuitGame
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
+  - assembly: UnityEngine.CoreModule
+    fullTypeName: UnityEngine.GameObject
+    methodName: SetActive
   - assembly: UnityEngine.CoreModule
     fullTypeName: UnityEngine.GameObject
     methodName: SetActive
@@ -118,32 +153,60 @@ ScriptsOnlyBuild:
   - assembly: Assembly-CSharp
     fullTypeName: PuzzleManager
     methodName: ResetPuzzle
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
-  - assembly: UnityEngine.CoreModule
-    fullTypeName: UnityEngine.GameObject
-    methodName: SetActive
+  - assembly: Assembly-CSharp
+    fullTypeName: TestCode
+    methodName: QuitGame
   sceneClasses:
-    Assets/Scenes/TileTest.unity:
+    Assets/Scenes/BattleScene.unity:
+    - Class: 1
+      Script: {instanceID: 0}
+    - Class: 4
+      Script: {instanceID: 0}
+    - Class: 20
+      Script: {instanceID: 0}
+    - Class: 21
+      Script: {instanceID: 0}
+    - Class: 28
+      Script: {instanceID: 0}
+    - Class: 48
+      Script: {instanceID: 0}
+    - Class: 81
+      Script: {instanceID: 0}
+    - Class: 104
+      Script: {instanceID: 0}
+    - Class: 114
+      Script: {instanceID: 16666}
+    - Class: 114
+      Script: {instanceID: 16668}
+    - Class: 114
+      Script: {instanceID: 16728}
+    - Class: 114
+      Script: {instanceID: 17984}
+    - Class: 114
+      Script: {instanceID: 18238}
+    - Class: 114
+      Script: {instanceID: 19130}
+    - Class: 114
+      Script: {instanceID: 21432}
+    - Class: 114
+      Script: {instanceID: 22442}
+    - Class: 115
+      Script: {instanceID: 0}
+    - Class: 128
+      Script: {instanceID: 0}
+    - Class: 157
+      Script: {instanceID: 0}
+    - Class: 196
+      Script: {instanceID: 0}
+    - Class: 213
+      Script: {instanceID: 0}
+    - Class: 222
+      Script: {instanceID: 0}
+    - Class: 223
+      Script: {instanceID: 0}
+    - Class: 224
+      Script: {instanceID: 0}
+    Assets/Scenes/TestScene.unity:
     - Class: 1
       Script: {instanceID: 0}
     - Class: 4
@@ -157,6 +220,115 @@ ScriptsOnlyBuild:
     - Class: 48
       Script: {instanceID: 0}
     - Class: 50
+      Script: {instanceID: 0}
+    - Class: 58
+      Script: {instanceID: 0}
+    - Class: 60
+      Script: {instanceID: 0}
+    - Class: 61
+      Script: {instanceID: 0}
+    - Class: 70
+      Script: {instanceID: 0}
+    - Class: 74
+      Script: {instanceID: 0}
+    - Class: 81
+      Script: {instanceID: 0}
+    - Class: 91
+      Script: {instanceID: 0}
+    - Class: 95
+      Script: {instanceID: 0}
+    - Class: 104
+      Script: {instanceID: 0}
+    - Class: 114
+      Script: {instanceID: 616}
+    - Class: 114
+      Script: {instanceID: 16666}
+    - Class: 114
+      Script: {instanceID: 16668}
+    - Class: 114
+      Script: {instanceID: 16728}
+    - Class: 114
+      Script: {instanceID: 16826}
+    - Class: 114
+      Script: {instanceID: 17984}
+    - Class: 114
+      Script: {instanceID: 18238}
+    - Class: 114
+      Script: {instanceID: 18412}
+    - Class: 114
+      Script: {instanceID: 18906}
+    - Class: 114
+      Script: {instanceID: 19586}
+    - Class: 114
+      Script: {instanceID: 20112}
+    - Class: 114
+      Script: {instanceID: 20168}
+    - Class: 114
+      Script: {instanceID: 20674}
+    - Class: 114
+      Script: {instanceID: 20812}
+    - Class: 114
+      Script: {instanceID: 20962}
+    - Class: 114
+      Script: {instanceID: 21172}
+    - Class: 114
+      Script: {instanceID: 21188}
+    - Class: 114
+      Script: {instanceID: 21196}
+    - Class: 114
+      Script: {instanceID: 21334}
+    - Class: 114
+      Script: {instanceID: 21432}
+    - Class: 114
+      Script: {instanceID: 22050}
+    - Class: 114
+      Script: {instanceID: 22412}
+    - Class: 114
+      Script: {instanceID: 22442}
+    - Class: 114
+      Script: {instanceID: 23296}
+    - Class: 114
+      Script: {instanceID: 24012}
+    - Class: 115
+      Script: {instanceID: 0}
+    - Class: 128
+      Script: {instanceID: 0}
+    - Class: 157
+      Script: {instanceID: 0}
+    - Class: 196
+      Script: {instanceID: 0}
+    - Class: 212
+      Script: {instanceID: 0}
+    - Class: 213
+      Script: {instanceID: 0}
+    - Class: 222
+      Script: {instanceID: 0}
+    - Class: 223
+      Script: {instanceID: 0}
+    - Class: 224
+      Script: {instanceID: 0}
+    - Class: 156049354
+      Script: {instanceID: 0}
+    - Class: 483693784
+      Script: {instanceID: 0}
+    - Class: 1839735485
+      Script: {instanceID: 0}
+    Assets/Scenes/TitleScene.unity:
+    - Class: 1
+      Script: {instanceID: 0}
+    - Class: 4
+      Script: {instanceID: 0}
+    - Class: 20
+      Script: {instanceID: 0}
+    - Class: 21
+      Script: {instanceID: 0}
+    - Class: 28
+      Script: {instanceID: 0}
+    - Class: 48
+      Script: {instanceID: 0}
+    - Class: 50
+      Script: {instanceID: 0}
+    - Class: 58
       Script: {instanceID: 0}
     - Class: 60
       Script: {instanceID: 0}
@@ -185,47 +357,43 @@ ScriptsOnlyBuild:
     - Class: 114
       Script: {instanceID: 16728}
     - Class: 114
-      Script: {instanceID: 16826}
-    - Class: 114
       Script: {instanceID: 16864}
     - Class: 114
       Script: {instanceID: 17984}
     - Class: 114
       Script: {instanceID: 18238}
     - Class: 114
-      Script: {instanceID: 18412}
+      Script: {instanceID: 19130}
     - Class: 114
-      Script: {instanceID: 18906}
+      Script: {instanceID: 20112}
     - Class: 114
-      Script: {instanceID: 19584}
+      Script: {instanceID: 20168}
     - Class: 114
-      Script: {instanceID: 20110}
+      Script: {instanceID: 20674}
     - Class: 114
-      Script: {instanceID: 20166}
+      Script: {instanceID: 20962}
     - Class: 114
-      Script: {instanceID: 20672}
+      Script: {instanceID: 21172}
     - Class: 114
-      Script: {instanceID: 20810}
+      Script: {instanceID: 21188}
     - Class: 114
-      Script: {instanceID: 20960}
+      Script: {instanceID: 21196}
     - Class: 114
-      Script: {instanceID: 21170}
+      Script: {instanceID: 21334}
     - Class: 114
-      Script: {instanceID: 21186}
+      Script: {instanceID: 21432}
     - Class: 114
-      Script: {instanceID: 21194}
+      Script: {instanceID: 22050}
     - Class: 114
-      Script: {instanceID: 21332}
+      Script: {instanceID: 22206}
     - Class: 114
-      Script: {instanceID: 21430}
+      Script: {instanceID: 22412}
     - Class: 114
-      Script: {instanceID: 22406}
+      Script: {instanceID: 22442}
     - Class: 114
-      Script: {instanceID: 22436}
+      Script: {instanceID: 23296}
     - Class: 114
-      Script: {instanceID: 23290}
-    - Class: 114
-      Script: {instanceID: 24006}
+      Script: {instanceID: 24012}
     - Class: 115
       Script: {instanceID: 0}
     - Class: 128
@@ -243,6 +411,8 @@ ScriptsOnlyBuild:
     - Class: 223
       Script: {instanceID: 0}
     - Class: 224
+      Script: {instanceID: 0}
+    - Class: 225
       Script: {instanceID: 0}
     - Class: 156049354
       Script: {instanceID: 0}
@@ -295,7 +465,7 @@ ScriptsOnlyBuild:
     className: UnityOnScrollbarValueChangedMessageListener
   - hash:
       serializedVersion: 2
-      Hash: 1c43fcd12cd997cb8369ec568170e65a
+      Hash: 4d3917a9a5a753f447af34f6e919106f
     assemblyName: Assembly-CSharp
     namespaceName: 
     className: TimerUI
@@ -637,6 +807,12 @@ ScriptsOnlyBuild:
     className: UnityOnControllerColliderHitMessageListener
   - hash:
       serializedVersion: 2
+      Hash: 570f88733307de3f341c62f77e8f2b1d
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: TestCode
+  - hash:
+      serializedVersion: 2
       Hash: 960935b102b3064f4b924de16426e340
     assemblyName: Unity.TextMeshPro
     namespaceName: TMPro
@@ -859,7 +1035,7 @@ ScriptsOnlyBuild:
     className: AnimationPlayableAsset
   - hash:
       serializedVersion: 2
-      Hash: de9e2fc86120868a431499b82a68f17e
+      Hash: 0c238981e85a179d5189f72e118304ae
     assemblyName: Assembly-CSharp
     namespaceName: 
     className: PuzzleManager
@@ -895,7 +1071,7 @@ ScriptsOnlyBuild:
     className: CCDSolver2D
   - hash:
       serializedVersion: 2
-      Hash: b4a040ad3edb8210ffd87c84b6945f8e
+      Hash: bdfe86cb43c2e85de0fbf87d33c1c25d
     assemblyName: Assembly-CSharp
     namespaceName: 
     className: PlayerMovement
@@ -1031,6 +1207,18 @@ ScriptsOnlyBuild:
     assemblyName: Unity.TextMeshPro
     namespaceName: TMPro
     className: TextMeshProUGUI
+  - hash:
+      serializedVersion: 2
+      Hash: aab453f1c27c02101cd89b7aeaff4590
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: PortalController
+  - hash:
+      serializedVersion: 2
+      Hash: 5697ec1ab1f1db6ef6b6919800c57a8f
+    assemblyName: Assembly-CSharp
+    namespaceName: 
+    className: SceneTransitionManager
   - hash:
       serializedVersion: 2
       Hash: da5a949a0bbd2ff91bc51c5805c2c41f
@@ -1381,5 +1569,7 @@ ScriptsOnlyBuild:
     className: UnityOnSliderValueChangedMessageListener
   platform: 19
   scenePathNames:
-  - Assets/Scenes/TileTest.unity
-  playerPath: C:/Users/ziwoo/Desktop/Test_0729/Project_Lemegeton.exe
+  - Assets/Scenes/TitleScene.unity
+  - Assets/Scenes/TestScene.unity
+  - Assets/Scenes/BattleScene.unity
+  playerPath: C:/Users/ziwoo/Desktop/Prototype_0.1/Project_Lemegeton.exe

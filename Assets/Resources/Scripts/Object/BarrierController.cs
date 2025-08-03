@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.SceneManagement;
 
 public class BarrierController : MonoBehaviour
 {
@@ -19,6 +18,7 @@ public class BarrierController : MonoBehaviour
 
     private bool isOpen = false;
     private bool playerInRange = false;
+    private bool hasLoaded = false;
 
     void Start()
     {
@@ -33,26 +33,28 @@ public class BarrierController : MonoBehaviour
         if (exitTrigger == null) Debug.LogError("ExitTrigger 콜라이더가 없습니다!");
         if (barrierCollider == null) Debug.LogError("BarrierCollider 콜라이더가 없습니다!");
 
-        ObjectGaugeManager.Instance.onThresholdReached.AddListener(Open);
+        if (ObjectGaugeManager.Instance != null)
+            ObjectGaugeManager.Instance.onThresholdReached.AddListener(Open);
+
         Close();
     }
 
     void Update()
     {
-        if (isOpen && playerInRange && (Input.GetKeyDown(KeyCode.F)|| Input.GetKeyDown(KeyCode.Space)))
+        if (!isOpen || !playerInRange || hasLoaded) return;
+
+        if (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space))
         {
-            // 다음 맵 로드
             LoadNextMap();
-            Debug.Log("다음맵으로 이동함");
+            Debug.Log("[Barrier] 퀴즈맵으로 이동함");
         }
     }
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        if (!isOpen) return;
+        if (!isOpen || hasLoaded) return;
         if (other.CompareTag("Player"))
         {
-            Debug.Log("ExitTrigger에 PLAYER 진입 감지! → UI 띄워야 함");
             playerInRange = true;
             onShowPrompt?.Invoke();
         }
@@ -60,7 +62,7 @@ public class BarrierController : MonoBehaviour
 
     void OnTriggerExit2D(Collider2D other)
     {
-        if (!isOpen) return;
+        if (!isOpen || hasLoaded) return;
         if (other.CompareTag("Player"))
         {
             playerInRange = false;
@@ -68,30 +70,32 @@ public class BarrierController : MonoBehaviour
         }
     }
 
-    // Barrier를 여는 처리
     public void Open()
     {
         isOpen = true;
         barrierCollider.enabled = false;
-        Debug.Log("Barrier Opened");
-        // 애니메이션 재생 (열림)
-        //Animator animator = GetComponent<Animator>();
-        //if (animator != null) animator.SetTrigger("Open");
+        Debug.Log("[Barrier] 열림 상태");
     }
 
-    // Barrier를 닫는 처리
     public void Close()
     {
         isOpen = false;
         barrierCollider.enabled = true;
-        // 애니메이션 재생 (닫힘)
-        //Animator animator = GetComponent<Animator>();
-        //if (animator != null) animator.SetTrigger("Close");
     }
 
     // 다음 맵으로 이동
     private void LoadNextMap()
     {
+        if (Shared.MapToggleManager == null)
+        {
+            Debug.LogError("[Barrier] MapToggleManager가 설정되지 않았습니다!");
+            return;
+        }
+
+        hasLoaded = true;
+        onHidePrompt?.Invoke();
+
+        Shared.PuzzleManager?.ClearMaps();
         Shared.MapToggleManager.currentStage = stageIndex;
         Shared.MapToggleManager.EnterQuizMap();
     }

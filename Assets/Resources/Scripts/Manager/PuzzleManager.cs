@@ -3,192 +3,132 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UI;
-using static UnityEngine.GraphicsBuffer;
 
 public class PuzzleManager : MonoBehaviour
 {
     public Tilemap FloorTilemap { get; private set; }
     public Tilemap WallTilemap { get; private set; }
-    private Dictionary<Vector3Int, PuzzleBox> boxes = new();
-
-    // 초기 박스 순서를 유지하기 위해 리스트로도 저장
-    private List<PuzzleBox> allBoxes = new();
-
-    //BoxGoal을 리스트로 저장
-    private List<BoxGoal> goals = new List<BoxGoal>();
-    public bool IsPuzzleComplete { get; private set; } //퀴즈맵 클리어 확인
-
     public GameObject portalPrefab;
-
-    private Vector3 initialPlayerWorld;
     public Button resetBtn;
 
-    public bool IsPuzzleActive { get; private set; }
+    private List<PuzzleBox> puzzleBoxes = new();
+    private List<BoxGoal> goals = new();
+    private Vector3 initialPlayerWorld;
 
-    private void Awake()
+    public bool IsPuzzleComplete { get; private set; } = false;
+    public bool IsPuzzleActive { get; set; } = false;
+
+    void Awake()
     {
         Shared.PuzzleManager = this;
-
-
-        resetBtn.gameObject.SetActive(false);//임시로 추가
-    }
-
-    void Start()
-    {
-        // 박스 초기화: 씬에 있는 모든 Box 컴포넌트 돌면서
-        foreach (var box in FindObjectsOfType<PuzzleBox>())
-        {
-            var c = FloorTilemap.WorldToCell(box.transform.position);
-            boxes[c] = box;
-            box.SetCell(c, FloorTilemap);
-        }
+        resetBtn?.gameObject.SetActive(false);
     }
 
     public void SetMaps(Tilemap floor, Tilemap wall)
     {
         FloorTilemap = floor;
         WallTilemap = wall;
-        InitializeBoxes();    // 상자 셀 초기화
-        InitializeGoals();  //BoxGoal 리스트 갱신
-        IsPuzzleActive = true;
 
-        resetBtn.gameObject.SetActive(true); //임시로 추가
+        InitBoxes();
+        InitGoals();
+        IsPuzzleComplete = false;
+
+        if (IsPuzzleActive)
+            resetBtn?.gameObject.SetActive(true);
     }
 
-    // FloorTilemap 위 모든 PuzzleBox를 찾아서 셀 단위로 배치하고,
-    // Dictionary를 초기화
-    private void InitializeBoxes()
+    void InitBoxes()
     {
-        boxes.Clear();
+        puzzleBoxes.Clear();
         foreach (var box in FindObjectsOfType<PuzzleBox>())
         {
-            Vector3Int c = FloorTilemap.WorldToCell(box.transform.position);
-            boxes[c] = box;
-            allBoxes.Add(box);
-            // 초기 위치 저장
-            box.CacheInitialCell(c, FloorTilemap);
+            var cell = FloorTilemap.WorldToCell(box.transform.position);
+            puzzleBoxes.Add(box);
+            box.CacheInitialCell(cell, FloorTilemap);
         }
     }
-    public void InitializeGoals()
-    {
-        goals.Clear();
 
+    void InitGoals()
+    {
+        if (!IsPuzzleActive) return;
+
+        goals.Clear();
         foreach (var goal in FindObjectsOfType<BoxGoal>())
         {
             goal.Init(FloorTilemap);
             goals.Add(goal);
         }
-
-        NotifyGoalChanged();
+        CheckGoals();
     }
 
-    //플레이어 초기 위치 저장
-    public void CacheInitialPlayerPosition(Vector3 pos)
+    public void ExecutePush(PushObject box, Vector3Int fromCell, Vector3Int toCell)
     {
-        initialPlayerWorld = pos;
+        if (!IsPuzzleActive || IsPuzzleComplete) return;
+
+        // 밀린 대상이 PuzzleBox일 경우에만 처리
+        if (box.TryGetComponent<PuzzleBox>(out var puzzleBox))
+        {
+            puzzleBox.SetCell(toCell, FloorTilemap);
+            CheckGoals();
+        }
     }
 
-    //모든 BoxGoal 위치에 박스가 위치하는지 확인
-    public void NotifyGoalChanged()
+    public void CheckGoals()
     {
-        // 각 목표 셀에 박스가 있으면 활성, 없으면 비활성
         foreach (var goal in goals)
-            goal.SetActive(boxes.ContainsKey(goal.Cell));
+        {
+            bool hasBoxOnGoal = puzzleBoxes.Any(box =>
+            {
+                Vector3Int boxCell = FloorTilemap.WorldToCell(box.transform.position);
+                return boxCell == goal.Cell;
+            });
+            goal.SetActive(hasBoxOnGoal);
+        }
 
-        // 모두 활성이라면 퍼즐 완료 처리
-        if (goals.All(g => g.IsActive))
+        if (goals.All(g => g.IsActive) && goals.Count > 0)
             OnPuzzleComplete();
     }
 
-    //모든 목표가 active일 때 수행되는 포탈 생성
-    private void OnPuzzleComplete()
+    void OnPuzzleComplete()
     {
         if (IsPuzzleComplete) return;
-        IsPuzzleComplete = true;
 
-        //포탈 프리팹을 Instantiate
+        IsPuzzleComplete = true;
         Instantiate(portalPrefab, initialPlayerWorld, Quaternion.identity);
 
-        Debug.Log("모든 박스 배치 성공!");
-        Debug.Log("포탈이 생성되었습니다.");
+        foreach (var box in puzzleBoxes)
+        {
+            var push = box.GetComponent<PushObject>();
+            if (push != null) push.isPushable = false; // 밀기 차단
+        }
+
+        resetBtn?.gameObject.SetActive(false);
+
+        Debug.Log("[PuzzleManager] 모든 박스 목표 달성 → 포탈 생성 완료");
+    }
+
+    public void ResetPuzzle()
+    {
+        if (IsPuzzleComplete) return;
+
+        foreach (var box in puzzleBoxes)
+            box.ResetToInitial(FloorTilemap);
+
+        Shared.PlayerMovement.TeleportTo(initialPlayerWorld);
+        InitGoals();
     }
 
     public void ClearMaps()
     {
         FloorTilemap = null;
         WallTilemap = null;
-        boxes.Clear();
-        allBoxes.Clear();
+        puzzleBoxes.Clear();
+        goals.Clear();
         IsPuzzleActive = false;
     }
 
-    public void ExecutePush(PuzzleBox box, Vector3Int oldCell, Vector3Int newCell)
+    public void CacheInitialPlayerPosition(Vector3 pos)
     {
-        boxes.Remove(oldCell);
-        boxes[newCell] = box;
-        box.SetCell(newCell, FloorTilemap);
-
-        //Debug.Log($"[ExecutePush] box={box.name}, {oldCell}→{newCell}");
-    }
-
-    // 플레이어가 playerCell 위치에서 dir 방향으로 상자를 밀어내고,
-    // 성공 시 true 반환
-    public bool TryPush(Vector3Int boxCell, Vector3Int dir)
-    {
-
-        // 우선 박스가 진짜 있는 셀인지 확인
-        if (!boxes.TryGetValue(boxCell, out var boxCheck))
-        {
-            Debug.Log($"[Push] 실패: 박스가 없는 셀입니다. boxCell={boxCell}");
-            return false;
-        }
-
-        // 입력 받은 박스 셀과 방향
-        //Debug.Log($"[TryPush] 박스 셀={boxCell}, 방향={dir}");
-
-        // 목표 셀 계산
-        Vector3Int target = boxCell + dir;
-        //Debug.Log($"[TryPush] 목표 셀={target}");
-
-        // 이동 가능 여부 검사
-        bool hasFloor = FloorTilemap.HasTile(target);
-        bool hasWall = WallTilemap.HasTile(target);
-        bool hasBox = boxes.ContainsKey(target);
-
-        if (!hasFloor || hasWall || hasBox)
-        {
-            Debug.Log($"[TryPush] 실패 → Floor?{hasFloor} Wall?{hasWall} Box?{hasBox}");
-            return false;
-        }
-
-        return true;
-    }
-
-    // Reset 버튼으로 호출
-    // 저장된 초기 위치대로 모두 되돌림
-    public void ResetPuzzle()
-    {
-        if (IsPuzzleComplete) return;
-
-        boxes.Clear();
-        foreach (var box in allBoxes)
-        {
-            // 박스 자체를 월드 단위로 이동
-            box.ResetToInitial(FloorTilemap);
-
-            // 딕셔너리 재등록
-            Vector3Int c = box.CurrentCell;
-            boxes[c] = box;
-        }
-
-        // 플레이어 원위치로 돌리기
-        if (initialPlayerWorld != null)
-        {
-            Shared.PlayerMovement.TeleportTo(initialPlayerWorld);
-        }
-
-        //BoxGoal 상태 초기화
-        InitializeGoals();
-
+        initialPlayerWorld = pos;
     }
 }

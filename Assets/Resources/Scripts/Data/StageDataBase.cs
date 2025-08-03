@@ -3,5 +3,6 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "Game/StageDatabase")]
 public class StageDatabase : ScriptableObject
 {
-    [Tooltip("모든 스테이지 데이터 목록")] public StageQuizMapData[] stages;
+    [Tooltip("퀴즈 맵 데이터")] public StageQuizMapData[] stages;
+    [Tooltip("일반 맵 데이터")] public StageNormalMapData[] normalStages;
 }

@@ -15,14 +15,27 @@ public class TimerUI : MonoBehaviour
     private bool isRunning = false;
     private bool isFinished = false;
 
-    private void Start()
+
+    //임시용 Ui
+    public Text gaugeText;
+
+private void Start()
     {
         StartNextStage();
+        GaugeTextUi();
     }
 
     private void Update()
     {
-        if (!isRunning || isFinished) return;
+        if (!isRunning || isFinished || Shared.PuzzleManager.IsPuzzleActive)
+        {
+            if (timerText.gameObject.activeSelf)
+            {
+                timerText.gameObject.SetActive(false);
+                gaugeText.gameObject.SetActive(false);  //임시용
+            }            
+            return;
+        }
 
         timeLeft -= Time.deltaTime;
 
@@ -34,7 +47,6 @@ public class TimerUI : MonoBehaviour
             if (currentStage < fibonacciMinutes.Count)
             {
                 StartNextStage();
-                //StartCoroutine(ShowEndMessage()); // -> 테스트로 빠르게 확인하기 위해 넣어둠.
             }
             else
             {
@@ -45,6 +57,7 @@ public class TimerUI : MonoBehaviour
         }
 
         UpdateTimerUI();
+        GaugeTextUi();
     }
 
     void StartNextStage()
@@ -56,6 +69,7 @@ public class TimerUI : MonoBehaviour
 
     void UpdateTimerUI()
     {
+
         if(timeLeft > 60f)
         {
             int minutes = Mathf.FloorToInt(timeLeft / 60f);
@@ -107,5 +121,12 @@ public class TimerUI : MonoBehaviour
         }
 
         endMessageText.gameObject.SetActive(false);
+    }
+
+    //임시용 함수
+    public void GaugeTextUi()
+    {
+        float percent = ObjectGaugeManager.Instance.GetGaugePercent();
+        gaugeText.text = $"ObjectGauge: {(percent * 100):F1}%"; // 소수점 1자리
     }
 }

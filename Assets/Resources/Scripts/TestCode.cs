@@ -4,10 +4,12 @@ using UnityEngine;
 
 public class TestCode : MonoBehaviour
 {
-    /// <summary>
-    /// 버튼 클릭 시 게임을 종료합니다.
-    /// 에디터에서는 플레이 모드를 정지합니다.
-    /// </summary>
+    public void StartGame()
+    {
+        Shared.SceneTransitionManager.FadeToScene("TestScene");
+        Debug.Log("인게임 씬으로 이동");
+    }
+
     public void QuitGame()
     {
         // 빌드된 애플리케이션에서는 실제로 종료
@@ -18,4 +20,6 @@ public class TestCode : MonoBehaviour
         UnityEditor.EditorApplication.isPlaying = false;
 #endif
     }
+
+
 }

@@ -8,6 +8,11 @@ public class BoxInteract : MonoBehaviour
     private bool isPlayerNear = false;
     private bool isOpened = false;
 
+    private void Awake()
+    {
+        isOpened = false;
+    }
+
     void Start()
     {
         if (animator == null)
@@ -24,9 +29,8 @@ public class BoxInteract : MonoBehaviour
 
         if (isPlayerNear && !isOpened && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)))  
         {
-            animator.SetTrigger("Box");
             isOpened = true;
-            //Debug.Log("Box Open");
+            animator.SetBool("IsOpen", isOpened);
             ObjectGaugeManager.Instance.IncrementChest();
         }
     }
@@ -36,7 +40,6 @@ public class BoxInteract : MonoBehaviour
         if (other.CompareTag("Player"))
         {
             isPlayerNear = true;
-            //Debug.Log("isPlayerNear=true");
         }
     }
 
@@ -45,7 +48,6 @@ public class BoxInteract : MonoBehaviour
         if (other.CompareTag("Player"))
         {
             isPlayerNear = false;
-            //Debug.Log("isPlayerNear=false");
         }
     }
 }

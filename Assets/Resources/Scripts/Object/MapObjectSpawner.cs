@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -21,7 +22,8 @@ public class MapObjectSpawner : MonoBehaviour
     }
 
     // 맵 생성 직후 MapManager가 호출
-    public void Spawn(Tilemap tilemap, Vector3Int excludeCell, BoxCollider2D barrierExclude)
+    // excludeColliders 배열에 들어있는 콜라이더들의 영역 위엔 오브젝트를 스폰하지 않음
+    public void Spawn(Tilemap tilemap, params Collider2D[] excludeColliders)
     {
         // 컨테이너 찾기
         Transform container = tilemap.transform.parent.Find("Object");
@@ -31,7 +33,6 @@ public class MapObjectSpawner : MonoBehaviour
             container = this.transform;
         }
 
-        //var bounds = tilemap.cellBounds;
         var floorCells = new List<Vector3Int>();
         foreach (Vector3Int pos in tilemap.cellBounds.allPositionsWithin)
         {
@@ -39,17 +40,10 @@ public class MapObjectSpawner : MonoBehaviour
             if (tilemap.GetTile(pos)?.name.Contains("Floor") != true)
                 continue;
 
-            // 2) 플레이어 시작 지점 제외
-            if (pos == excludeCell)
+            // 2) excludeColliders 에 들어온 모든 콜라이더 영역 제외
+            Vector3 worldPos = tilemap.GetCellCenterWorld(pos);
+            if (excludeColliders.Any(col => col != null && col.OverlapPoint(worldPos)))
                 continue;
-
-            // 3) Barrier 콜라이더 영역 제외
-            if (barrierExclude != null)
-            {
-                Vector3 worldPos = tilemap.GetCellCenterWorld(pos);
-                if (barrierExclude.bounds.Contains(worldPos))
-                    continue;
-            }
 
             floorCells.Add(pos);
         }
