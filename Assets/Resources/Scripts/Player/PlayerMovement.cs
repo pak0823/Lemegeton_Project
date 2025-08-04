@@ -11,8 +11,10 @@ public class PlayerMovement : MonoBehaviour
     [Header("타일맵 설정")]
     public Tilemap floorTilemap;
     public Tilemap wallTilemap;
-    public float moveSpeed = 2f;
+    public float defaultMoveSpeed = 2f;
     public LayerMask impassableLayerMask;
+
+    public float activeMoveSpeed;   //버프로 적용되는 이동속도
 
     private Rigidbody2D rb;
     private List<Vector3> path = new();
@@ -29,18 +31,28 @@ public class PlayerMovement : MonoBehaviour
 
     private SpriteRenderer spriterenderer;
     private Animator animator;
+    private PlayerDebuffController PlayerDebuffController;
 
     void Awake()
     {
         Shared.PlayerMovement = this;
+        PlayerDebuffController = GetComponent<PlayerDebuffController>();
         rb = GetComponent<Rigidbody2D>();
         spriterenderer = GetComponent<SpriteRenderer>();
         animator = GetComponent<Animator>();
+
+        activeMoveSpeed = defaultMoveSpeed;
     }
 
     void Update()
     {
         if (isPerformingPush) return;
+
+        if (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
+        {
+            animator.SetInteger("Move", 0);
+            return; // 키입력, 마우스 이동, FlipX 처리 전부 건너뜀
+        }
 
         inputDir = GetHexDirectionArrowKey();
 
@@ -138,8 +150,13 @@ public class PlayerMovement : MonoBehaviour
         if (path.Count > 0)
         {
             Vector3 targetWorld = path[currentPathIndex];
-            Vector2 newPos = Vector2.MoveTowards(rb.position, targetWorld, moveSpeed * Time.fixedDeltaTime);
+            Vector2 newPos = Vector2.MoveTowards(rb.position, targetWorld, defaultMoveSpeed * Time.fixedDeltaTime);
             rb.MovePosition(newPos);
+
+            // 마우스 이동 flipX 적용
+            float dx = targetWorld.x - rb.position.x;
+            if (Mathf.Abs(dx) > 0.01f)
+                spriterenderer.flipX = dx > 0;
 
             if (Vector2.Distance(rb.position, targetWorld) < 0.05f)
             {
@@ -156,7 +173,7 @@ public class PlayerMovement : MonoBehaviour
         // 키 이동 처리
         if (input.sqrMagnitude > 0f)
         {
-            Vector2 newPos = rb.position + input * moveSpeed * Time.fixedDeltaTime;
+            Vector2 newPos = rb.position + input * defaultMoveSpeed * Time.fixedDeltaTime;
             Vector3Int tgtCell = floorTilemap.WorldToCell(newPos);
             if (IsWalkableCell(tgtCell))
             {
@@ -279,7 +296,13 @@ public class PlayerMovement : MonoBehaviour
         Vector3 fromBox = box.transform.position;
         Vector3 toBox = floorTilemap.GetCellCenterWorld(fromCell + dir);
         Vector3 fromPlayer = rb.position;
-        Vector3 toPlayer = fromBox;
+
+        // 박스 이동 방향
+        Vector3 pushDir = (fromBox - toBox).normalized;
+
+        // 셀 중심보다 박스 쪽으로 조금 더 붙임
+        float offset = 0.15f; // 조정 가능
+        Vector3 toPlayer = fromBox - pushDir * offset;
 
         float t = 0f;
         while (t < 1f)
@@ -409,5 +432,11 @@ public class PlayerMovement : MonoBehaviour
             Direction.East => (new Vector2(1f, 0f), true),
             _ => (Vector2.zero, false)
         };
+    }
+
+    public void ResetInput() //디버프 시 이동 방향 초기화
+    {
+        input = Vector2.zero;
+        inputDir = Direction.None;
     }
 }

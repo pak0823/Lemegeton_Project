@@ -11,4 +11,5 @@ public static class Shared
     public static UI_Lobby UI_Lobby;
 
     public static PlayerMovement PlayerMovement;
+    public static PlayerDebuffController PlayerDebuffController;
 }
