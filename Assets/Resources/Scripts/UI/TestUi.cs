@@ -8,6 +8,15 @@ public class TestUi : MonoBehaviour
     void Start()
     {
         bool isExploration = !Shared.PuzzleManager.IsPuzzleActive; // ∆€¡Ò∏ ¿Ã æ∆¥— ªÛ≈¬
+        Debug.Log("isExploration :" + isExploration);
+        Debug.Log("IsPuzzleActive :" + Shared.PuzzleManager.IsPuzzleActive);
+
+        resetButton.SetActive(isExploration);
+    }
+
+    private void Update()
+    {
+        bool isExploration = !Shared.PuzzleManager.IsPuzzleActive; // ∆€¡Ò∏ ¿Ã æ∆¥— ªÛ≈¬
         resetButton.SetActive(isExploration);
     }
 

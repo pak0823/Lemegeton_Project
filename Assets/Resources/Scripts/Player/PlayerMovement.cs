@@ -72,7 +72,7 @@ public class PlayerMovement : MonoBehaviour
                 pendingDirectionKey = Direction.None;
                 animator.SetFloat("PushX", 0f);
                 animator.SetFloat("PushY", 0f);
-                animator.SetBool("IsPushing", false);
+                animator.SetBool("IsPushIdle", false);
                 Debug.Log("[Push] 밀기 모드 종료");
                 return;
             }
@@ -131,8 +131,8 @@ public class PlayerMovement : MonoBehaviour
             {
                 selectedBox = contactBoxes.OrderBy(b => Vector2.SqrMagnitude(rb.position - (Vector2)b.transform.position)).First();
                 isPushMode = true;
-                animator.SetBool("IsPushing", true); // 밀기 애니메이션 시작
-                spriterenderer.flipX = (selectedBox.transform.position.x - rb.position.x) > 0;
+                animator.SetBool("IsPushIdle", true); // 밀기대기모드 애니메이션 시작
+                //spriterenderer.flipX = (selectedBox.transform.position.x - rb.position.x) > 0;
                 path.Clear();
                 Debug.Log("[Push] 밀기 모드 진입");
             }
@@ -208,6 +208,12 @@ public class PlayerMovement : MonoBehaviour
 
                 bool odd = Mathf.Abs(playerCell.y) % 2 == 1;
                 pendingDirectionKey = GetDirectionFromDelta(delta, odd);
+
+                var (blend, flipX) = GetPushBlend(pendingDirectionKey);
+                animator.SetFloat("PushX", blend.x);
+                animator.SetFloat("PushY", blend.y);
+                spriterenderer.flipX = flipX;
+
                 return;
             }
         }
@@ -292,6 +298,8 @@ public class PlayerMovement : MonoBehaviour
         animator.SetFloat("PushX", blend.x);
         animator.SetFloat("PushY", blend.y);
         spriterenderer.flipX = flipX;
+        //animator.SetBool("IsPushIdle", false); // 밀기 애니메이션 시작
+        animator.SetBool("IsPushing", true); // 밀기 애니메이션 시작
 
         Vector3 fromBox = box.transform.position;
         Vector3 toBox = floorTilemap.GetCellCenterWorld(fromCell + dir);
@@ -315,6 +323,7 @@ public class PlayerMovement : MonoBehaviour
 
         box.transform.position = toBox;
         rb.MovePosition(toPlayer);
+        animator.SetBool("IsPushing", false); // 밀기 애니메이션 시작
 
         // 퍼즐 박스 위치 갱신 및 목표 체크 호출
         Shared.PuzzleManager?.ExecutePush(box, fromCell, fromCell + dir);
