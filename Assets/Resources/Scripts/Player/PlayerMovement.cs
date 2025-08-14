@@ -190,6 +190,7 @@ public class PlayerMovement : MonoBehaviour
         {
             selectedBox.SetHighlight(false);
             selectedBox = null;
+            Debug.Log("하이라이트 종료됨.");
         }
 
         contactBoxes.Clear();
@@ -201,6 +202,7 @@ public class PlayerMovement : MonoBehaviour
                 selectedBox = box;
                 contactBoxes.Add(box);
                 box.SetHighlight(true);
+                Debug.Log("하이라이트 작동함.");
 
                 Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
                 Vector3Int boxCell = floorTilemap.WorldToCell(box.transform.position);

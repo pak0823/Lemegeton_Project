@@ -8,6 +8,10 @@ public static class Shared
     public static MapToggleManager MapToggleManager;
     public static PuzzleManager PuzzleManager;
 
+    public static BattleGridManager battleGridManager;
+    public static BattleMapManager battleMapManager;
+
+
     public static UI_Lobby UI_Lobby;
 
     public static PlayerMovement PlayerMovement;

@@ -62,6 +62,7 @@
   <ItemGroup>
     <Compile Include="Assets\Resources\Scripts\UI\RegionDisplay.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\Trap\TrapBehavior.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\BattleManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\DebuffData.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\UI_Departure.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\TileCounter.cs" />
@@ -70,18 +71,24 @@
     <Compile Include="Assets\Resources\Scripts\Manager\UIManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\Enum.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\BarrierController.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\IBattleMapProvider.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PushObject.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\TilemapDebugger.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\BattlegridManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Player\PlayerDebuffController.cs" />
     <Compile Include="Assets\Resources\Scripts\Player\PlayerMovement.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionData.cs" />
+    <Compile Include="Assets\Resources\Scripts\Data\UnitData.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PortalController.cs" />
     <Compile Include="Assets\Resources\Scripts\TestCode.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\MapObjectSpawner.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\BattleMapManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\Box\BoxInteract.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\Interface.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\BattleInput.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\BoxGoal.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PuzzleBox.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Highlighter.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageDataBase.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionButtonManager.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\TestUi.cs" />
@@ -91,6 +98,8 @@
     <Compile Include="Assets\Resources\Scripts\UI\UI_Lobby.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\MapManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\MapToggleManager.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\BattleUnit.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\TurnOrderManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageQuizMapData.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\SceneTransitionManager.cs" />
   </ItemGroup>

@@ -32,14 +32,6 @@ public class PushObject : MonoBehaviour
         SetHighlight(false);
     }
 
-    private void Update()
-    {
-        if(!Shared.PlayerMovement.isPushMode)
-        {
-            SetHighlight(false);
-        }
-    }
-
     public void SetHighlight(bool on)
     {
         if (highlightRenderer != null && isHighlighted != on)
