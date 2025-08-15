@@ -53,6 +53,12 @@ public class BattleInput : MonoBehaviour
             }
         }
 
+        // === 타겟 사이클링/확정 ===
+        // 공격 타게팅 상태일 때만 반응 (BattleManager 내부에서도 가드)
+        if (Input.GetKeyDown(KeyCode.RightArrow)) battle.CycleTarget(+1); // 빠른→느린
+        if (Input.GetKeyDown(KeyCode.LeftArrow)) battle.CycleTarget(-1); // 느린→빠른
+        if (Input.GetKeyDown(KeyCode.C)) battle.ConfirmTarget(); // 확정 공격
+
         // 우클릭/ESC로 취소(선택사항)
         if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
         {

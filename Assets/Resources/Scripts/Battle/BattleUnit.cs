@@ -143,7 +143,13 @@ public class BattleUnit : MonoBehaviour
         HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
         if (HP == 0)
         {
+            if (animator) animator.SetBool("Warning", false);
             OnDied?.Invoke(this);
+        }
+        else if(HP <= 1)
+        {
+            if (animator) animator.SetBool("Warning",true);
+            Debug.Log("warning!");
         }
         Debug.Log($"{name} HP={HP}");
     }

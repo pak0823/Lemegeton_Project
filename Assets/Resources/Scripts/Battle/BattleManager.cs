@@ -29,7 +29,15 @@ public class BattleManager : MonoBehaviour
     bool initialized = false; // 중복 Init 방지
 
     bool IsPlayerTurn => acting != null && acting.team == Team.Player;
+    public bool IsTargeting => state == BattleState.Targeting;
     Coroutine enemyRoutine;   // 코루틴 핸들
+
+    // === 타겟 선택(표시/순환) ===
+    [Header("Targeting")]
+    public TargetMarker targetMarker;              // 인스펙터에 배치한 TargetMarker 할당
+    List<BattleUnit> targetCycle = new();          // 적 리스트(AGI desc)
+    int targetIndex = -1;                          // 현재 인덱스
+    BattleUnit selectedTarget;                     // 현재 선택된 대상
 
     //void GrantExtraActions(int n = 1)  // (추후 버프/효과에서 호출)
     //{
@@ -98,6 +106,7 @@ public class BattleManager : MonoBehaviour
         remainingActions = baseActionsPerTurn;
         usedActions.Clear();
         highlighter?.Clear();
+        ClearTargetSelection();   // 턴 전환 시 타겟 표시 정리
         //UpdateActionButtons();
 
         // 플레이어/적 분기
@@ -171,6 +180,8 @@ public class BattleManager : MonoBehaviour
         state = BattleState.Targeting;
         var cells = GetAttackCells(provider.EnemyFloor, acting.Cell, acting.AttackRange);
         highlighter?.ShowCells(provider.EnemyFloor, cells);        //사거리 표시
+        BuildTargetCycle();         // 적 리스트 구성(AGI 내림차순)
+        if (targetCycle.Count > 0) SelectTarget(0); // 첫 대상 표시
     }
 
     IEnumerable<Vector3Int> GetAttackCells(Tilemap map, Vector3Int center, int range)
@@ -296,6 +307,51 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    // === 타겟 사이클 구축/선택/확정 ===
+    void BuildTargetCycle()
+    {
+        targetCycle = FindObjectsOfType<BattleUnit>()
+            .Where(u => u.team == Team.Enemy && !u.IsDead)
+            .OrderByDescending(u => u.AGI)  // 빠른 → 느린
+            .ToList();
+        targetIndex = -1;
+        selectedTarget = null;
+    }
+    void SelectTarget(int index)
+    {
+        if (targetCycle.Count == 0) { ClearTargetSelection(); return; }
+        int n = targetCycle.Count;
+        targetIndex = ((index % n) + n) % n;                // 안전한 모듈로
+        selectedTarget = targetCycle[targetIndex];
+        // 표시 업데이트
+        if (targetMarker != null) targetMarker.Attach(selectedTarget);
+    }
+    public void CycleTarget(int dir)
+    {
+        if (!IsPlayerTurn || !IsTargeting) return;
+        if (targetCycle.Count == 0) return;
+        SelectTarget(targetIndex + dir); // dir=+1(→), -1(←)
+    }
+    public void ConfirmTarget()
+    {
+        if (!IsPlayerTurn || !IsTargeting) return;
+        if (selectedTarget == null) return;
+
+        bool inRange = grid.InRangeAcrossMaps(
+            provider.PlayerFloor,
+            acting.CurrentMap, acting.Cell,
+            selectedTarget.CurrentMap, selectedTarget.Cell,
+            acting.AttackRange);
+
+        if (!inRange) { Debug.Log("사거리 밖 대상"); return; }
+        ResolveAttack(selectedTarget);
+    }
+    void ClearTargetSelection()
+    {
+        selectedTarget = null;
+        targetIndex = -1;
+        if (targetMarker != null) targetMarker.Hide();
+    }
 
     public void CancelCurrentAction()
     {
@@ -303,6 +359,7 @@ public class BattleManager : MonoBehaviour
         {
             state = BattleState.ActionSelect;
             highlighter?.Clear();
+            ClearTargetSelection();    // 취소 시 숨김
         }
     }
 
