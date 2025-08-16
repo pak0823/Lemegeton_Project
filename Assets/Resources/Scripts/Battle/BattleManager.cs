@@ -39,6 +39,9 @@ public class BattleManager : MonoBehaviour
     int targetIndex = -1;                          // 현재 인덱스
     BattleUnit selectedTarget;                     // 현재 선택된 대상
 
+    // === 수동 종료 감지용 ===
+    bool manualEndRequested = false;
+
     //void GrantExtraActions(int n = 1)  // (추후 버프/효과에서 호출)
     //{
     //    remainingActions += Mathf.Max(0, n);
@@ -107,6 +110,7 @@ public class BattleManager : MonoBehaviour
         usedActions.Clear();
         highlighter?.Clear();
         ClearTargetSelection();   // 턴 전환 시 타겟 표시 정리
+        manualEndRequested = false; // 턴 시작마다 리셋
         //UpdateActionButtons();
 
         // 플레이어/적 분기
@@ -124,9 +128,29 @@ public class BattleManager : MonoBehaviour
 
         UpdateTurnIndicator();//임시 테스트용
     }
+    // 버튼/키로 호출할 공개용(수동 종료) 래퍼
+    public void OnClickEndTurn()
+    {
+        if (acting == null || acting.team != Team.Player) return;
+        manualEndRequested = true;
+        EndTurn();
+    }
+
     public void EndTurn()
     {
         highlighter?.Clear();
+        
+        // 수동 종료 + 이번 턴에 아무 행동도 안 했으면 1 회복
+        if (acting != null
+            && acting.team == Team.Player
+            && manualEndRequested
+            && usedActions.Count == 0)
+        {
+            acting.Heal(1);
+            Debug.Log("[EndTurn] 행동 없이 수동 종료 → HP +1 회복");
+        }
+        manualEndRequested = false; // 사용했으면 바로 리셋
+
         turn.Advance();
         NextTurn();
     }

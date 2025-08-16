@@ -9,6 +9,7 @@ public class BattleInput : MonoBehaviour
     public BattleManager battle;
     public LayerMask unitMask;
     IBattleMapProvider provider;
+    public GameSpeedController speedCtrl; // 인스펙터에 GameSpeedController 할당
 
     void Awake()
     {
@@ -53,17 +54,38 @@ public class BattleInput : MonoBehaviour
             }
         }
 
+        // 우클릭/ESC로 취소(선택사항)
+        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.X))
+        {
+            battle.CancelCurrentAction();
+        }
+
         // === 타겟 사이클링/확정 ===
         // 공격 타게팅 상태일 때만 반응 (BattleManager 내부에서도 가드)
         if (Input.GetKeyDown(KeyCode.RightArrow)) battle.CycleTarget(+1); // 빠른→느린
         if (Input.GetKeyDown(KeyCode.LeftArrow)) battle.CycleTarget(-1); // 느린→빠른
-        if (Input.GetKeyDown(KeyCode.C)) battle.ConfirmTarget(); // 확정 공격
+        if (Input.GetKeyDown(KeyCode.C)) battle.ConfirmTarget(); // 결정(확정)
 
-        // 우클릭/ESC로 취소(선택사항)
-        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Escape))
+        // === 액션 단축키 (플레이어 턴에만 동작; 내부에서도 가드) ===
+        if (Input.GetKeyDown(KeyCode.W))
         {
             battle.CancelCurrentAction();
+            battle.OnClickAttack(); // 공격
         }
+        if (Input.GetKeyDown(KeyCode.Z)) // 이동
+        {
+            battle.CancelCurrentAction();
+            battle.OnClickMove();
+        }
+        if (Input.GetKeyDown(KeyCode.E))  // 턴 종료
+        {
+            battle.CancelCurrentAction();
+            battle.OnClickEndTurn();    // 수동 종료(회복 판단용)
+        }
+
+        // === 배속 토글 ===
+        if (Input.GetKeyDown(KeyCode.F2) && speedCtrl != null)
+            speedCtrl.ToggleSpeed();
     }
 
     bool TryCell(Tilemap map, Vector3 world, out Vector3Int cell)

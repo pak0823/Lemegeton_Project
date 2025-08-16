@@ -33,6 +33,8 @@ public class PlayerMovement : MonoBehaviour
     private Animator animator;
     private PlayerDebuffController PlayerDebuffController;
 
+    private BoxInteract highlightedChest = null;
+
     void Awake()
     {
         Shared.PlayerMovement = this;
@@ -132,10 +134,18 @@ public class PlayerMovement : MonoBehaviour
                 selectedBox = contactBoxes.OrderBy(b => Vector2.SqrMagnitude(rb.position - (Vector2)b.transform.position)).First();
                 isPushMode = true;
                 animator.SetBool("IsPushIdle", true); // 밀기대기모드 애니메이션 시작
-                //spriterenderer.flipX = (selectedBox.transform.position.x - rb.position.x) > 0;
                 path.Clear();
                 Debug.Log("[Push] 밀기 모드 진입");
             }
+            return;
+        }
+
+        // 선택된 푸시 오브젝트가 없고, 포커스된 상자가 있을 때만 열기
+        if (!isPushMode && selectedBox == null && highlightedChest != null
+        && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)))
+        {
+            highlightedChest.OpenChest();
+            highlightedChest = null; // 열렸으니 참조 해제
             return;
         }
     }
@@ -190,11 +200,19 @@ public class PlayerMovement : MonoBehaviour
         {
             selectedBox.SetHighlight(false);
             selectedBox = null;
-            Debug.Log("하이라이트 종료됨.");
+        }
+
+        // 기존에 켜진 상자 하이라이트 해제(포커스 갱신 전 초기화)
+        if (highlightedChest != null)
+        {
+            highlightedChest.SetFocused(false);   // 이전 포커스 해제
+            highlightedChest.SetHighlight(false);
+            highlightedChest = null;
         }
 
         contactBoxes.Clear();
         Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, 0.15f);
+
         foreach (var hit in hits)
         {
             if (hit.TryGetComponent<PushObject>(out var box))
@@ -202,7 +220,6 @@ public class PlayerMovement : MonoBehaviour
                 selectedBox = box;
                 contactBoxes.Add(box);
                 box.SetHighlight(true);
-                Debug.Log("하이라이트 작동함.");
 
                 Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
                 Vector3Int boxCell = floorTilemap.WorldToCell(box.transform.position);
@@ -216,6 +233,33 @@ public class PlayerMovement : MonoBehaviour
                 animator.SetFloat("PushY", blend.y);
                 spriterenderer.flipX = flipX;
 
+                return;
+            }
+
+            // 2) 상자 1개만 포커스/하이라이트
+            BoxInteract closest = null;
+            float bestSqr = float.MaxValue;
+            Vector3 p = transform.position;
+
+            foreach (var hitBox in hits)
+            {
+                if (hitBox.TryGetComponent<BoxInteract>(out var chest) && !chest.IsOpened)// 열린 상자는 제외하고, 닫혀있으면 하이라이트
+                {
+                    float d = (chest.transform.position - p).sqrMagnitude;
+                    if (d < bestSqr)
+                    {
+                        bestSqr = d;
+                        closest = chest;
+                    }
+                    //Debug.Log("[Chest] 보상상자 하이라이트 작동함.");
+                }
+            }
+
+            if (closest != null)
+            {
+                highlightedChest = closest;
+                highlightedChest.SetFocused(true);    // [추가] 포커스 부여(= UI/입력 허용)
+                highlightedChest.SetHighlight(true);  // 선택 1개만 하이라이트
                 return;
             }
         }

@@ -154,6 +154,16 @@ public class BattleUnit : MonoBehaviour
         Debug.Log($"{name} HP={HP}");
     }
 
+    // 수동 턴 종료 회복 (최대체력 초과 금지)
+    public void Heal(int amount)
+    {
+        if (amount <= 0) return;
+        int before = HP;
+        HP = Mathf.Min(MaxHP, HP + amount);
+        if (HP != before)
+            Debug.Log($"{name} Heal +{HP - before}  → {HP}/{MaxHP}");
+    }
+
     // === Animation Events ===
     // Attack 클립의 임팩트 프레임에서 호출
     public void AnimEvent_AttackImpact() => OnAttackImpact?.Invoke();

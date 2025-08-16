@@ -1,0 +1,73 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+public class GameSpeedController : MonoBehaviour
+{
+    [Header("Speed cycle")]
+    public float[] speeds = { 1f, 2f, 3f };
+
+    [Header("UI")]
+    public Image buttonImage;          // 배속 버튼의 Image
+    public Sprite[] speedIcons;        // 각 배속에 대응하는 아이콘(배열 길이 = speeds 길이)
+    public Text label;             // “x1 / x2 / x3” 표기용
+
+    int index = 0;
+    float baseFixedDeltaTime;
+
+    void Awake()
+    {
+        baseFixedDeltaTime = Time.fixedDeltaTime;
+        Apply(); // 시작은 1x
+    }
+
+    void OnDisable()
+    {
+        // 씬 전환/비활성 시 기본속도로 복원
+        index = 0; 
+        Apply();
+    }
+
+    public void ToggleSpeed()
+    {
+        index = (index + 1) % speeds.Length;
+        Apply();
+    }
+
+    public void SetSpeedIndex(int i)
+    {
+        index = (i % speeds.Length + speeds.Length) % speeds.Length;
+        Apply();
+    }
+
+    void Apply()
+    {
+        float s = speeds[index];
+        Time.timeScale = s;
+        Time.fixedDeltaTime = baseFixedDeltaTime * s; // 물리 보폭 동기화
+
+        // 아이콘/라벨 업데이트
+        UpdateVisuals();
+
+        Debug.Log($"[Speed] {s:0.#}배속");
+    }
+
+    void UpdateVisuals()
+    {
+        if (buttonImage != null && speedIcons != null && index < speedIcons.Length)
+        {
+            buttonImage.sprite = speedIcons[index];
+            // 버튼 이미지 비율이 깨지면 주석 해제:
+            // buttonImage.SetNativeSize();
+            // buttonImage.preserveAspect = true;
+        }
+
+        // 숫자 라벨: “x1 / x2 / x3” 표기
+        if (label != null)
+        {
+            label.text = $"x{speeds[index]:0.#}";   // 1, 2, 3처럼 정수로 보이게 하고 싶으면 0.# 대신 0 사용
+            label.raycastTarget = false;    // 라벨이 입력을 가로채지 않도록
+        }
+    }
+
+    public float CurrentSpeed => speeds[index];
+}
