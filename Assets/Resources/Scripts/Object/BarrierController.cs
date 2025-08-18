@@ -33,8 +33,8 @@ public class BarrierController : MonoBehaviour
         if (exitTrigger == null) Debug.LogError("ExitTrigger 콜라이더가 없습니다!");
         if (barrierCollider == null) Debug.LogError("BarrierCollider 콜라이더가 없습니다!");
 
-        if (ObjectGaugeManager.Instance != null)
-            ObjectGaugeManager.Instance.onThresholdReached.AddListener(Open);
+        if (Shared.ObjectGaugeManager != null)
+            Shared.ObjectGaugeManager.onThresholdReached.AddListener(Open);
 
         Close();
     }
@@ -43,7 +43,7 @@ public class BarrierController : MonoBehaviour
     {
         if (!isOpen || !playerInRange || hasLoaded) return;
 
-        if (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space))
+        if (Input.GetKeyDown(KeyCode.C))
         {
             LoadNextMap();
             Debug.Log("[Barrier] 퀴즈맵으로 이동함");

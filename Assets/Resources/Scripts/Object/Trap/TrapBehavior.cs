@@ -54,7 +54,7 @@ public class TrapBehavior : MonoBehaviour
         if (isTriggered) return;
 
         isTriggered = true;
-        ObjectGaugeManager.Instance.IncrementTrap();
+        Shared.ObjectGaugeManager.IncrementTrap();
 
         if (applyOnce)
             gameObject.SetActive(false); // Destroy 대신 비활성화로 처리

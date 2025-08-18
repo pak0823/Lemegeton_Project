@@ -48,12 +48,30 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        if (isPerformingPush) return;
+        //if (isPerformingPush) return;
 
-        if (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
+        //if (GamePause.IsPaused) //일시정지 상태일 때 이동 처리 무시
+        //{
+        //    animator.SetInteger("Move", 0);
+        //    return;
+        //}
+
+        //if (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
+        //{
+        //    animator.SetInteger("Move", 0);
+        //    return; // 키입력, 마우스 이동, FlipX 처리 전부 건너뜀
+        //}
+
+        // 입력 차단 조건을 한 곳에서 체크
+        bool isInputBlocked = isPerformingPush
+                              || GamePause.IsPaused
+                              || (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
+                              || (Shared.ObjectGaugeManager != null && Shared.ObjectGaugeManager.IsBattleNoticeActive);
+
+        if (isInputBlocked)
         {
-            animator.SetInteger("Move", 0);
-            return; // 키입력, 마우스 이동, FlipX 처리 전부 건너뜀
+            animator.SetInteger("Move", 0); // 움직임 애니메이션 중지
+            return;
         }
 
         inputDir = GetHexDirectionArrowKey();
@@ -65,7 +83,7 @@ public class PlayerMovement : MonoBehaviour
         {
             input = Vector2.zero;
 
-            if (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space))
+            if (Input.GetKeyDown(KeyCode.C))
             {
                 animator.SetInteger("Move", 0);
                 selectedBox?.SetHighlight(false);
@@ -127,7 +145,7 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // 밀기 모드 진입
-        if (!isPushMode && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)) && selectedBox != null)
+        if (!isPushMode && (Input.GetKeyDown(KeyCode.C) && selectedBox != null))
         {
             if (contactBoxes.Count > 0)
             {
@@ -142,7 +160,7 @@ public class PlayerMovement : MonoBehaviour
 
         // 선택된 푸시 오브젝트가 없고, 포커스된 상자가 있을 때만 열기
         if (!isPushMode && selectedBox == null && highlightedChest != null
-        && (Input.GetKeyDown(KeyCode.F) || Input.GetKeyDown(KeyCode.Space)))
+        && Input.GetKeyDown(KeyCode.C))
         {
             highlightedChest.OpenChest();
             highlightedChest = null; // 열렸으니 참조 해제
@@ -153,6 +171,7 @@ public class PlayerMovement : MonoBehaviour
     void FixedUpdate()
     {
         if (isPerformingPush) return;
+        if (GamePause.IsPaused) return;
 
         animator.SetInteger("Move", (path.Count > 0 || input.sqrMagnitude > 0f) ? 1 : 0);
 
@@ -251,14 +270,13 @@ public class PlayerMovement : MonoBehaviour
                         bestSqr = d;
                         closest = chest;
                     }
-                    //Debug.Log("[Chest] 보상상자 하이라이트 작동함.");
                 }
             }
 
             if (closest != null)
             {
                 highlightedChest = closest;
-                highlightedChest.SetFocused(true);    // [추가] 포커스 부여(= UI/입력 허용)
+                highlightedChest.SetFocused(true);    // 포커스 부여(= UI/입력 허용)
                 highlightedChest.SetHighlight(true);  // 선택 1개만 하이라이트
                 return;
             }

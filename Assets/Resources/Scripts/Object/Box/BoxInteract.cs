@@ -83,7 +83,7 @@ public class BoxInteract : MonoBehaviour
         if (isOpened) return;
         isOpened = true;
         animator.SetBool("IsOpen", isOpened);
-        ObjectGaugeManager.Instance.IncrementChest();
+        Shared.ObjectGaugeManager.IncrementChest();
 
         // 열린 뒤에는 포커스/하이라이트/안내 UI 정리
         SetHighlight(false);

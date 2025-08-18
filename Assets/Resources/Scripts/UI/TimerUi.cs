@@ -16,10 +16,11 @@ public class TimerUI : MonoBehaviour
     private bool isFinished = false;
 
 
-    //임시용 Ui
-    public Text gaugeText;
+    //임시용 Ui => 추후에 Canvans 스크립트에 옮길 에정
+    public Text objectGaugeText;
+    public Text perceiveGaugeText;
 
-private void Start()
+    private void Start()
     {
         StartNextStage();
         GaugeTextUi();
@@ -32,7 +33,8 @@ private void Start()
             if (timerText.gameObject.activeSelf)
             {
                 timerText.gameObject.SetActive(false);
-                gaugeText.gameObject.SetActive(false);  //임시용
+                objectGaugeText.gameObject.SetActive(false);  //임시용
+                perceiveGaugeText.gameObject.SetActive(false);  //임시용
             }            
             return;
         }
@@ -47,6 +49,7 @@ private void Start()
             if (currentStage < fibonacciMinutes.Count)
             {
                 StartNextStage();
+                Shared.ObjectGaugeManager.IncrementAwarenessByTimer();//인지 게이지 증가
             }
             else
             {
@@ -126,7 +129,7 @@ private void Start()
     //임시용 함수
     public void GaugeTextUi()
     {
-        float percent = ObjectGaugeManager.Instance.GetGaugePercent();
-        gaugeText.text = $"ObjectGauge: {(percent * 100):F1}%"; // 소수점 1자리
+        float percent = Shared.ObjectGaugeManager.GetGaugePercent();
+        objectGaugeText.text = $"ObjectGauge: {(percent * 100):F1}%"; // 소수점 1자리
     }
 }

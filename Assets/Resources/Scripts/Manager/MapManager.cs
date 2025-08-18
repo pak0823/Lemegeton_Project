@@ -125,6 +125,11 @@ public class MapManager : MonoBehaviour
             Shared.PlayerMovement = null;
         }
 
+        if (Shared.ObjectGaugeManager != null)
+        {
+            Shared.ObjectGaugeManager.ResetState();
+        }
+
         currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
         var (floorMap, wallMap) = FindTilemaps(currentMap);
 

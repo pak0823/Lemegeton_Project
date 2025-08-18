@@ -7,9 +7,11 @@ public static class Shared
     public static SceneTransitionManager SceneTransitionManager;
     public static MapToggleManager MapToggleManager;
     public static PuzzleManager PuzzleManager;
+    public static ObjectGaugeManager ObjectGaugeManager;
 
     public static BattleGridManager battleGridManager;
     public static BattleMapManager battleMapManager;
+    public static TurnOrderManager TurnOrderManager;
 
 
     public static UI_Lobby UI_Lobby;
