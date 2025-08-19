@@ -39,6 +39,7 @@ public class TrapBehavior : MonoBehaviour
         if (controller != null && debuffData != null)
         {
             controller.ApplyDebuff(debuffData);
+            Shared.ObjectGaugeManager.IncrementAwarenessByTrap();//인지 게이지 증가
             TriggerTrap();
         }
 

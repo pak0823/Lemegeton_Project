@@ -15,6 +15,7 @@ public class BattleManager : MonoBehaviour
     public LayerMask unitMask;
 
     BattleState state = BattleState.Idle;
+    bool atbPaused = false; // 턴 중 ATB 충전 멈춤
     BattleUnit acting;
     List<Vector3Int> moveOptions = new();
 
@@ -39,6 +40,10 @@ public class BattleManager : MonoBehaviour
 
     // === 수동 종료 감지용 ===
     bool manualEndRequested = false;
+
+    // ATB UI 업데이트용 이벤트
+    public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
+    public event OnATBChangedDelegate OnATBChanged;
     #endregion
 
     #region Unity Callbacks
@@ -58,7 +63,10 @@ public class BattleManager : MonoBehaviour
         }
 
         if (!initialized && provider != null && provider.PlayerFloor != null && provider.EnemyFloor != null)
+        {
             Init();
+        }
+            
     }
 
     void OnDisable()
@@ -68,81 +76,146 @@ public class BattleManager : MonoBehaviour
     #endregion
 
     #region Initialization
+
     void Init()
     {
-        var units = FindObjectsOfType<BattleUnit>();
+        var units = FindObjectsOfType<BattleUnit>().ToList();
+        if (units.Count == 0) return;
+
+        float minAGI = units.Min(u => u.AGI);
+        float maxAGI = units.Max(u => u.AGI);
+
         foreach (var u in units)
         {
             var map = (u.team == Team.Player) ? provider.PlayerFloor : provider.EnemyFloor;
             var cell = map.WorldToCell(u.transform.position);
+
             u.Bind(map, cell);
             grid.SetOccupied(u.team, u.Cell, true);
+            u.InitializeATB(minAGI, maxAGI);
 
-            // 사망 이벤트 구독
             u.OnDied += HandleUnitDied;
         }
 
-        turn.BuildOrder(units);
-        NextTurn();
+        //turn.BuildOrder(units);
         initialized = true;
     }
+
     #endregion
 
-    #region Turn Management
-    void NextTurn()
+    void Update()
     {
-        acting = turn.Current;
-        if (acting == null)
+        if (!initialized) return;
+
+        if (!atbPaused)
         {
-            CheckBattleEnd();
-            return;
+            float delta = Time.deltaTime;
+            var allUnits = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead);
+            foreach (var u in allUnits)
+            {
+                u.UpdateATB(delta);
+                OnATBChanged?.Invoke(u, u.ATB, u.MaxATB); // UI 업데이트 이벤트 호출
+            }
+                
         }
 
-        // 턴 시작: 토큰/사용기록 초기화
+        // ATB 최대 유닛 찾기
+        if (!atbPaused)
+        {
+            var readyUnit = FindObjectsOfType<BattleUnit>().FirstOrDefault(u => u.IsTurnReady && !u.IsDead);
+            if (readyUnit != null)
+            {
+                acting = readyUnit;
+                atbPaused = true;
+                StartTurn(acting);
+            }
+        }
+    }
+
+
+    #region Turn Management
+    //void NextTurn()
+    //{
+    //    acting = turn.Current;
+    //    if (acting == null)
+    //    {
+    //        CheckBattleEnd();
+    //        return;
+    //    }
+
+    //    // 턴 시작: 토큰/사용기록 초기화
+    //    remainingActions = baseActionsPerTurn;
+    //    usedActions.Clear();
+    //    highlighter?.Clear();
+    //    ClearTargetSelection(); // 턴 전환 시 타겟 표시 정리
+    //    manualEndRequested = false; // 턴 시작마다 리셋
+
+    //    // 플레이어/적 분기
+    //    if (acting.team == Team.Enemy)
+    //    {
+    //        state = BattleState.Resolving; // 입력 잠깐 막기
+    //        if (enemyRoutine != null) StopCoroutine(enemyRoutine);
+    //        enemyRoutine = StartCoroutine(EnemyAutoAct()); // 항상 새로 시작
+    //    }
+    //    else
+    //    {
+    //        if (enemyRoutine != null) { StopCoroutine(enemyRoutine); enemyRoutine = null; }
+    //        state = BattleState.ActionSelect; // 플레이어만 버튼/입력 허용
+    //    }
+
+    //    UpdateTurnIndicator();//임시 테스트용
+    //}
+    void StartTurn(BattleUnit unit)
+    {
+        if (unit == null) return;
+
+        acting = unit;
         remainingActions = baseActionsPerTurn;
         usedActions.Clear();
         highlighter?.Clear();
-        ClearTargetSelection(); // 턴 전환 시 타겟 표시 정리
-        manualEndRequested = false; // 턴 시작마다 리셋
+        ClearTargetSelection();
+        manualEndRequested = false;
 
-        // 플레이어/적 분기
-        if (acting.team == Team.Enemy)
+        // 모든 ATB 정지
+        atbPaused = true;
+
+        if (unit.team == Team.Player)
         {
-            state = BattleState.Resolving; // 입력 잠깐 막기
-            if (enemyRoutine != null) StopCoroutine(enemyRoutine);
-            enemyRoutine = StartCoroutine(EnemyAutoAct()); // 항상 새로 시작
+            state = BattleState.ActionSelect; // 플레이어 입력 허용
+            Debug.Log($"[PlayerTurn] {unit.name} 턴 시작 → ATB 정지");
         }
         else
         {
-            if (enemyRoutine != null) { StopCoroutine(enemyRoutine); enemyRoutine = null; }
-            state = BattleState.ActionSelect; // 플레이어만 버튼/입력 허용
+            state = BattleState.Resolving; // 입력 잠금
+            Debug.Log($"[EnemyTurn] {unit.name} 턴 시작 → ATB 정지");
+            StartCoroutine(EnemyTurnRoutine(unit));
         }
 
-        UpdateTurnIndicator();//임시 테스트용
+        UpdateTurnIndicator();
     }
 
     public void OnClickEndTurn()
     {
         if (acting == null || acting.team != Team.Player) return;
-        manualEndRequested = true;
-        EndTurn();
+        manualEndRequested = true;   // 회복 판정용 플래그만 남김
+        EndPlayerTurn();             // 종료 로직은 한 군데로 집약
     }
 
-    public void EndTurn()
-    {
-        highlighter?.Clear();
+    //public void EndTurn()
+    //{
+    //    highlighter?.Clear();
 
-        // 수동 종료 + 이번 턴에 아무 행동도 안 했으면 1 회복
-        if (acting != null && acting.team == Team.Player && manualEndRequested && usedActions.Count == 0)
-        {
-            acting.Heal(1);
-            Debug.Log("[EndTurn] 행동 없이 수동 종료 → HP +1 회복");
-        }
+    //    // 수동 종료 + 이번 턴에 아무 행동도 안 했으면 1 회복
+    //    if (acting != null && acting.team == Team.Player && manualEndRequested && usedActions.Count == 0)
+    //    {
+    //        acting.Heal(1);
+    //        Debug.Log("[EndTurn] 행동 없이 수동 종료 → HP +1 회복");
+    //    }
 
-        manualEndRequested = false; // 사용했으면 바로 리셋
-        turn.Advance();
-        NextTurn();
-    }
+    //    manualEndRequested = false; // 사용했으면 바로 리셋
+    //    turn.Advance();
+    //    NextTurn();
+    //}
 
     void UpdateTurnIndicator() //임시 테스트용 턴 확인
     {
@@ -154,7 +227,7 @@ public class BattleManager : MonoBehaviour
     #region Movement
     public void OnClickMove()
     {
-        if (!IsPlayerTurn) return; // 적 턴 금지
+        if (acting == null || !IsPlayerTurn) return; // 적 턴 금지
         if (usedActions.Contains(BattleAction.Move) || remainingActions <= 0) return; // 중복/토큰 없음
 
         state = BattleState.Moving;
@@ -245,6 +318,8 @@ public class BattleManager : MonoBehaviour
 
     void ResolveAttack(BattleUnit target)
     {
+        if (acting == null) return;
+
         state = BattleState.Resolving;
         highlighter?.Clear();
         Debug.Log("공격 시작 → 임팩트에서 데미지 1회 적용");
@@ -254,7 +329,7 @@ public class BattleManager : MonoBehaviour
     IEnumerator Co_AttackThenConsume(BattleUnit attacker, BattleUnit target, BattleAction act)
     {
         bool impactDone = false;
-        System.Action impact = null;
+        System.Action impact = null; 
         impact = () =>
         {
             attacker.OnAttackImpact -= impact;
@@ -285,22 +360,53 @@ public class BattleManager : MonoBehaviour
         usedActions.Add(act);
         remainingActions = Mathf.Max(0, remainingActions - 1);
 
+        // 남은 행동이 있으면 플레이어 입력 대기
         if (remainingActions > 0)
         {
-            if (acting.team == Team.Enemy)
+            if (IsPlayerTurn)
             {
-                if (enemyRoutine != null) StopCoroutine(enemyRoutine);
-                enemyRoutine = StartCoroutine(EnemyAutoAct());
+                state = BattleState.ActionSelect; // 플레이어 선택 허용
             }
             else
             {
-                state = BattleState.ActionSelect;
+                // 적 턴이면 EnemyTurnRoutine 재개
+                if (enemyRoutine != null) StopCoroutine(enemyRoutine);
+                enemyRoutine = StartCoroutine(EnemyTurnRoutine(acting));
             }
         }
         else
         {
-            EndTurn();
+            // 행동 토큰 모두 소진 → 턴 종료 처리
+            if (IsPlayerTurn)
+            {
+                EndPlayerTurn();
+            }
+            else
+            {
+                EndEnemyTurn(acting);
+            }
         }
+    }
+
+    // 플레이어 턴 종료 처리
+    void EndPlayerTurn()
+    {
+        highlighter?.Clear();
+        ClearTargetSelection();
+
+        if (manualEndRequested && usedActions.Count == 0)
+        {
+            acting.Heal(1);
+            Debug.Log("[EndPlayerTurn] 행동 없이 수동 종료 → HP +1 회복");
+        }
+
+        manualEndRequested = false;
+
+        // ATB 재개(다음 턴은 Update()가 자동 감지)
+        acting.ATB = 0f;       // 현 유닛만 초기화
+        acting = null;
+        atbPaused = false;
+        state = BattleState.Idle;
     }
 
     public void CancelCurrentAction()
@@ -360,9 +466,14 @@ public class BattleManager : MonoBehaviour
     void HandleUnitDied(BattleUnit dead)
     {
         grid.SetOccupied(dead.team, dead.Cell, false);
-        turn.Remove(dead);
+        //turn.Remove(dead);
 
-        if (dead == acting) NextTurn();
+        if (dead == acting)
+        {
+            acting = null;
+            atbPaused = false; // ATB 충전 재개
+            state = BattleState.Idle;
+        }
         Debug.Log($"[Die] {dead.name}");
 
         // 사망 연출 대기 후 제거
@@ -390,39 +501,58 @@ public class BattleManager : MonoBehaviour
     #endregion
 
     #region Enemy AI
-    IEnumerator EnemyAutoAct()
+    IEnumerator EnemyTurnRoutine(BattleUnit enemy)
     {
-        yield return new WaitForSeconds(1f); // 살짝 텀(연출/안전)
+        yield return new WaitForSeconds(0.5f); // 살짝 텀
 
-        // 1) 가장 가까운 플레이어 타겟 선정(교차 맵 거리 기준)
-        var players = FindObjectsOfType<BattleUnit>().Where(u => u.team == Team.Player && !u.IsDead).ToList();
-        if (players.Count == 0) { EndTurn(); yield break; }
+        // 행동 순서 예시: 공격 우선, 이동 가능 시 이동
+        var players = FindObjectsOfType<BattleUnit>()
+                        .Where(u => u.team == Team.Player && !u.IsDead)
+                        .ToList();
+        if (players.Count == 0) { EndEnemyTurn(enemy); yield break; }
 
-        BattleUnit target = players.OrderBy(u => grid.CrossMapDistance(provider.PlayerFloor, acting.CurrentMap, acting.Cell, u.CurrentMap, u.Cell)).First();
+        BattleUnit target = players
+            .OrderBy(u => grid.CrossMapDistance(provider.PlayerFloor, enemy.CurrentMap, enemy.Cell, u.CurrentMap, u.Cell))
+            .First();
 
-        // 2) 사거리면 공격
-        bool inRange = grid.InRangeAcrossMaps(provider.PlayerFloor, acting.CurrentMap, acting.Cell, target.CurrentMap, target.Cell, acting.AttackRange);
-        if (inRange && !usedActions.Contains(BattleAction.Attack) && remainingActions > 0)
+        bool inRange = grid.InRangeAcrossMaps(provider.PlayerFloor, enemy.CurrentMap, enemy.Cell,
+                                               target.CurrentMap, target.Cell, enemy.AttackRange);
+
+        if (inRange)
         {
-            ResolveAttack(target);
-            yield break;
+            ResolveAttack(target); // 공격
+            yield return new WaitUntil(() => state != BattleState.Resolving);
+        }
+        else
+        {
+            // 이동
+            var candidates = grid.GetAdjacentWalkable(enemy.team, enemy.Cell).ToList();
+            if (candidates.Count > 0)
+            {
+                var best = candidates
+                    .OrderBy(c => grid.CrossMapDistance(
+                    provider.PlayerFloor, // 기준 맵
+                    enemy.CurrentMap, // fromMap
+                    enemy.Cell, // fromCell (현재 위치)
+                    target.CurrentMap, // toMap
+                    c)).First(); // toCell (이동 후보)
+                yield return enemy.AnimateMoveTo(enemy.CurrentMap, best);
+                enemy.MoveTo(enemy.CurrentMap, best);
+            }
         }
 
-        // 3) 이동
-        var candidates = grid.GetAdjacentWalkable(acting.team, acting.Cell).ToList();
-        if (!usedActions.Contains(BattleAction.Move) && remainingActions > 0 && candidates.Count > 0)
-        {
-            var best = candidates.OrderBy(c => grid.CrossMapDistance(provider.PlayerFloor, acting.CurrentMap, c, target.CurrentMap, target.Cell)).First();
-            grid.SetOccupied(acting.team, acting.Cell, false);
-            yield return acting.AnimateMoveTo(acting.CurrentMap, best); // 내부에서 MoveTo 갱신
-            grid.SetOccupied(acting.team, acting.Cell, true);
-            OnActionConsumed(BattleAction.Move); // 이동 소비 → 남은 토큰 판단
-            yield break;
-        }
+        EndEnemyTurn(enemy);
+    }
 
-        // 4) 할 수 있는 행동 없으면 종료
-        remainingActions = 0;
-        EndTurn();
+    void EndEnemyTurn(BattleUnit enemy)
+    {
+        enemyRoutine = null;
+
+        enemy.ATB = 0f;
+        if (acting == enemy) acting = null;
+
+        atbPaused = false;     // 전체 ATB 재개
+        state = BattleState.Idle;
     }
     #endregion
 }

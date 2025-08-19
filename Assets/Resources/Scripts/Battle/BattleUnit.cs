@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.UI;
 
 public enum Team { Player, Enemy }
 public class BattleUnit : MonoBehaviour
@@ -14,9 +15,14 @@ public class BattleUnit : MonoBehaviour
     public Team team;
     public float AGI;
     [NonSerialized] public float ATB = 0f; // 0~100
+    public float MaxATB { get; private set; } = 100f; // 기본 100
+    public bool IsTurnReady => ATB >= 100f; // ATB가 최대가 되어 행동 가능 상태
+    public float atbPerSecond; // 초당 ATB 충전 속도
     public int AttackDamage = 1;
     public int AttackRange = 2;
     public int MaxHP = 100;
+
+    public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
 
     public int HP { get; private set; }
     #endregion
@@ -78,13 +84,25 @@ public class BattleUnit : MonoBehaviour
     }
     #endregion
 
+    public void InitializeATB(float minAGI, float maxAGI)
+    {
+        float normalized = (AGI - minAGI) / Mathf.Max(0.01f, maxAGI - minAGI);
+        float turnTime = Mathf.Lerp(12f, 6f, normalized); // 6~12초
+        atbPerSecond = MaxATB / turnTime;
+    }
+
+    public void UpdateATB(float deltaTime)
+    {
+        if (IsDead || IsTurnReady) return; // 사망 또는 이미 준비 완료
+        ATB = Mathf.Min(100f, ATB + atbPerSecond * deltaTime);
+    }
+
+    // 턴이 끝났을 때 ATB 초기화
+    public void ResetATB()
+    {
+        ATB = 0f;
+    }
     #region Movement
-    // 방향 보정(추후 필요시 사용)
-    //public void FaceTo(Vector3 worldTarget)
-    //{
-    //    if (!spriteRenderer) return;
-    //    spriteRenderer.flipX = (worldTarget.x > transform.position.x);
-    //}
 
     public IEnumerator AnimateMoveTo(Tilemap map, Vector3Int toCell)
     {
@@ -169,13 +187,18 @@ public class BattleUnit : MonoBehaviour
             if (animator) animator.SetBool("Warning", false);
             OnDied?.Invoke(this);
         }
-        else if (HP <= 1)
+        else if (HP == 1)
         {
             if (animator) animator.SetBool("Warning", true);
             Debug.Log("warning!");
         }
+        else
+        {
+            if (animator) animator.SetBool("Warning", false);
+            if (animator) animator.SetBool("Warning", false);
+        }
 
-        Debug.Log($"{name} HP={HP}");
+            Debug.Log($"{name} HP={HP}");
     }
 
     public void Heal(int amount)

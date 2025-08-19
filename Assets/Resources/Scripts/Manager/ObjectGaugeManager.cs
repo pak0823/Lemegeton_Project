@@ -106,6 +106,12 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
             IncrementAwareness();
     }
 
+    public void IncrementAwarenessByTrap()
+    {
+        if (battleTriggered) return;
+        IncrementAwareness();
+    }
+
     public void IncrementAwarenessByTimer()
     {
         if (battleTriggered) return;
