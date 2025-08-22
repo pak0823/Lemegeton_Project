@@ -9,6 +9,7 @@ public static class Shared
     public static PuzzleManager PuzzleManager;
     public static ObjectGaugeManager ObjectGaugeManager;
 
+    public static BattleManager BattleManager;
     public static BattleGridManager battleGridManager;
     public static BattleMapManager battleMapManager;
     public static TurnOrderManager TurnOrderManager;

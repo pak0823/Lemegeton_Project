@@ -17,6 +17,7 @@ public class MapObjectSpawner : MonoBehaviour
     {
         // 자식에 붙은 타일맵을 자동으로 찾아서 저장
         tilemap = GetComponentInChildren<Tilemap>();
+
         if (tilemap == null)
             Debug.LogError("MapObjectSpawner: 자식에서 Tilemap을 찾을 수 없습니다.");
     }
@@ -53,11 +54,21 @@ public class MapObjectSpawner : MonoBehaviour
         {
             int idx = Random.Range(0, floorCells.Count);
             Vector3 worldPos = tilemap.GetCellCenterWorld(floorCells[idx]);
+            // 프리팹 선택
+            var prefab = trapPrefabs[Random.Range(0, trapPrefabs.Count)];
+
             GameObject obj = Instantiate(
-                trapPrefabs[Random.Range(0, trapPrefabs.Count)],
+                prefab,
                 worldPos,
                 Quaternion.identity,
                 container);
+
+            // pid 관련 처리
+            var pid = obj.GetComponent<ExplorationPersistId>();
+            if (pid == null) pid = obj.AddComponent<ExplorationPersistId>();
+            // prefabName 매칭을 위해 이름 고정(스냅샷의 prefabName 키로 사용할 것)
+            obj.name = prefab.name;
+
             floorCells.RemoveAt(idx);
         }
 
@@ -69,11 +80,19 @@ public class MapObjectSpawner : MonoBehaviour
         {
             int idx = Random.Range(0, floorCells.Count);
             Vector3 worldPos = tilemap.GetCellCenterWorld(floorCells[idx]);
+
+            // 프리팹 선택
+            var prefab = chestPrefabs[Random.Range(0, chestPrefabs.Count)];
             GameObject obj = Instantiate(
-                chestPrefabs[Random.Range(0, chestPrefabs.Count)],
+                prefab,
                 worldPos,
                 Quaternion.identity,
                 container);
+
+            // pid 관련 처리
+            var pid = obj.GetComponent<ExplorationPersistId>();
+            if (pid == null) pid = obj.AddComponent<ExplorationPersistId>();
+            obj.name = prefab.name; // 스냅샷 prefabName 키와 동일하게
 
             // Flip 처리: x > 0이면 좌우 반전
             if (worldPos.x > 0f)

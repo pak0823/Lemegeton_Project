@@ -2,12 +2,14 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
 
-public class BoxInteract : MonoBehaviour
+public class BoxInteract : MonoBehaviour, IExplorationPersistable
 {
+    private ExplorationPersistId pid;
     public Animator animator;
     public GameObject fKeyPrompt;   // F키 안내 UI (Text, Image 등)
     private bool isPlayerNear = false;
-    private bool isOpened = false;
+    [SerializeField] private bool isOpened = false;
+    private bool _applyOpenOnStart = false;  // 복원 시 다음 프레임에 반영
 
     // === 하이라이트 필드 ===
     [Header("하이라이트 처리")]
@@ -23,7 +25,8 @@ public class BoxInteract : MonoBehaviour
 
     private void Awake()
     {
-        isOpened = false;
+        pid = GetComponent<ExplorationPersistId>();
+        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
 
         // SpriteRenderer 캐시 및 원본 색상 저장
         if (highlightRenderer == null)
@@ -41,6 +44,13 @@ public class BoxInteract : MonoBehaviour
             animator = GetComponent<Animator>();
         if (fKeyPrompt != null)
             fKeyPrompt.SetActive(false); // 시작시 꺼두기
+
+        // 복귀 직후 Animator 초기 상태가 덮어써도 여기서 다시 강제로 맞춤
+        if (isOpened || _applyOpenOnStart)
+        {
+            _applyOpenOnStart = false;
+            ForceOpenedVisual();
+        }
     }
 
     void Update(){}
@@ -53,14 +63,6 @@ public class BoxInteract : MonoBehaviour
         // 포커스 기준으로만 안내 UI 제어
         if (fKeyPrompt != null)
             fKeyPrompt.SetActive(isFocused && !isOpened);
-
-        // 포커스 해제 시 안내 UI/하이라이트 정리
-        //if (!isFocused)
-        //{
-        //    if (fKeyPrompt != null) fKeyPrompt.SetActive(false);
-        //    SetHighlight(false);
-        //}
-        // 포커스 획득 시에는 PlayerMovement에서 하이라이트를 켜준다
     }
 
     // PushObject와 동일 패턴의 하이라이트 메서드
@@ -114,5 +116,52 @@ public class BoxInteract : MonoBehaviour
             }
         }
     }
-    
+
+    // 복원용: 즉시 열린 상태로 세팅
+    public void OpenImmediately()
+    {
+        isOpened = true;
+        ForceOpenedVisual();
+        // 하이라이트/포커스 끄기 등 부가 처리 필요 시 추가
+    }
+
+    private void ForceOpenedVisual()
+    {
+        // 애니메이터가 비어있으면 즉시 캐싱
+        if (animator == null) animator = GetComponent<Animator>();
+        if (animator != null)
+        {
+            //TrySetAnimatorBool(animator, "IsOpen", isOpened);
+            animator.SetBool("IsOpen", isOpened);
+            animator.Update(0f); // 한 프레임 강제 평가로 시각 확정
+        }
+        if (fKeyPrompt) fKeyPrompt.SetActive(false);
+    }
+
+    // IExplorationPersistable
+    public string PersistID => pid.Id;
+    public ExplorationObjectState SaveState()
+    {
+        return new ExplorationObjectState
+        {
+            id = PersistID,
+            kind = "Chest",
+            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
+            position = transform.position,
+            b1 = isOpened
+        };
+    }
+
+    public void LoadState(ExplorationObjectState s)
+    {
+        transform.position = s.position;
+        isOpened = s.b1;
+        if (isOpened)
+        {
+            // 즉시 반영 + 다음 프레임에도 한 번 더 보정
+            OpenImmediately();
+            _applyOpenOnStart = true;
+        }
+    }
+
 }

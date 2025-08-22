@@ -10,6 +10,7 @@ public class TrapBehavior : MonoBehaviour
     private bool isTriggered = false;
     private Vector3 initialPosition;
     private Quaternion initialRotation;
+    private TrapPersist TrapPersist;
 
     private static List<TrapBehavior> allTraps = new();
     public static IReadOnlyList<TrapBehavior> AllTraps => allTraps;
@@ -24,8 +25,15 @@ public class TrapBehavior : MonoBehaviour
 
     void Start()
     {
-        if (applyOnce && isTriggered)
-            gameObject.SetActive(false);
+
+        TrapPersist = GetComponent<TrapPersist>();
+
+        if(TrapPersist != null)
+        {
+            // 1회용이고 이미 발동(=비활성)이면 GO 자체 비활성
+            if (applyOnce && !TrapPersist.IsActive)
+                gameObject.SetActive(false);
+        }
     }
     void OnDestroy()
     {
@@ -38,15 +46,22 @@ public class TrapBehavior : MonoBehaviour
         var controller = other.GetComponent<PlayerDebuffController>();
         if (controller != null && debuffData != null)
         {
+            // 플레이어가 밟은 경우: 디버프 + Persist 상태 마킹 + 통계 + 종료 일원화
             controller.ApplyDebuff(debuffData);
-            Shared.ObjectGaugeManager.IncrementAwarenessByTrap();//인지 게이지 증가
+            TrapPersist?.MarkTriggered();
+            Shared.ObjectGaugeManager.RegisterTrapTriggeredByPlayer(); // 인지+트랩 카운트
             TriggerTrap();
+            return;
         }
 
         var PushBox = other.GetComponent<PushObject>();
         if (PushBox != null)
         {
-            gameObject.SetActive(false);
+            // 박스가 활성화시킨 경우도 동일하게 Persist/통계를 남기고 종료 처리
+            TrapPersist?.MarkTriggered();
+            Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
+            TriggerTrap();
+            return;
         }
     }
 
@@ -55,7 +70,6 @@ public class TrapBehavior : MonoBehaviour
         if (isTriggered) return;
 
         isTriggered = true;
-        Shared.ObjectGaugeManager.IncrementTrap();
 
         if (applyOnce)
             gameObject.SetActive(false); // Destroy 대신 비활성화로 처리

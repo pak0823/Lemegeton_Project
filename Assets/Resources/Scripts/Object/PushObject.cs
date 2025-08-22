@@ -3,8 +3,9 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UIElements;
 
-public class PushObject : MonoBehaviour
+public class PushObject : MonoBehaviour, IExplorationPersistable
 {
+    private ExplorationPersistId pid;
     public Tilemap floorTilemap;
     public Tilemap wallTilemap;
     public LayerMask obstacleLayer;
@@ -22,6 +23,10 @@ public class PushObject : MonoBehaviour
     private void Awake()
     {
         initialPosition = transform.position;
+
+        pid = GetComponent<ExplorationPersistId>();
+        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
+
         highlightRenderer = GetComponent<SpriteRenderer>();
         if (highlightRenderer != null)
             originalColor = highlightRenderer.color;
@@ -96,6 +101,24 @@ public class PushObject : MonoBehaviour
     {
         floorTilemap = floor;
         wallTilemap = wall;
+    }
+
+    // IExplorationPersistable
+    public string PersistID => pid.Id;
+    public ExplorationObjectState SaveState()
+    {
+        return new ExplorationObjectState
+        {
+            id = PersistID,
+            kind = "Push",
+            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
+            position = transform.position
+        };
+    }
+    public void LoadState(ExplorationObjectState s)
+    {
+        transform.position = s.position;
+        // 내부 캐시/경로가 있다면 여기서 초기화
     }
 }
 

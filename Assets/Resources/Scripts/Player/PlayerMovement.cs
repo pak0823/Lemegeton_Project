@@ -48,20 +48,6 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        //if (isPerformingPush) return;
-
-        //if (GamePause.IsPaused) //일시정지 상태일 때 이동 처리 무시
-        //{
-        //    animator.SetInteger("Move", 0);
-        //    return;
-        //}
-
-        //if (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
-        //{
-        //    animator.SetInteger("Move", 0);
-        //    return; // 키입력, 마우스 이동, FlipX 처리 전부 건너뜀
-        //}
-
         // 입력 차단 조건을 한 곳에서 체크
         bool isInputBlocked = isPerformingPush
                               || GamePause.IsPaused
@@ -70,7 +56,7 @@ public class PlayerMovement : MonoBehaviour
 
         if (isInputBlocked)
         {
-            animator.SetInteger("Move", 0); // 움직임 애니메이션 중지
+            HaltImmediately();
             return;
         }
 
@@ -171,7 +157,11 @@ public class PlayerMovement : MonoBehaviour
     void FixedUpdate()
     {
         if (isPerformingPush) return;
-        if (GamePause.IsPaused) return;
+        if (GamePause.IsPaused || (Shared.ObjectGaugeManager != null && Shared.ObjectGaugeManager.IsBattleNoticeActive))
+        {
+            if (animator != null) animator.SetInteger("Move", 0);
+            return;
+        }
 
         animator.SetInteger("Move", (path.Count > 0 || input.sqrMagnitude > 0f) ? 1 : 0);
 
@@ -505,6 +495,15 @@ public class PlayerMovement : MonoBehaviour
             Direction.East => (new Vector2(1f, 0f), true),
             _ => (Vector2.zero, false)
         };
+    }
+
+    public void HaltImmediately()   //플레이어 이동 강제 즉시 정지(이동 중 생기는 버그를 위한)
+    {
+        // 입력과 경로를 모두 초기화해서 FixedUpdate가 더 이상 움직이지 않게 함
+        input = Vector2.zero;
+        inputDir = Direction.None; // 이미 ResetInput()도 있지만 여기서 직접 처리
+        ClearPath();
+        if (animator != null) animator.SetInteger("Move", 0);
     }
 
     public void ResetInput() //디버프 시 이동 방향 초기화

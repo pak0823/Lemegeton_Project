@@ -9,6 +9,23 @@ public class SceneTransitionManager : MonoBehaviour
     [Header("페이드 지속시간")]
     public float fadeDuration = 1f;
 
+    [Header("전투 복귀 컨텍스트")]
+    public string pendingReturnScene;         // 돌아갈 탐험 씬 이름
+    public Vector3 pendingReturnPosition;     // 돌아갈 월드 좌표
+    public bool HasPendingReturn => !string.IsNullOrEmpty(pendingReturnScene);
+
+    [Tooltip("탐험맵 재로딩 시 이 프리팹을 사용(랜덤 재추첨 방지)")]
+    public GameObject explorationMapPrefabOverride;
+
+    [Header("탐험 스냅샷")]
+    public ExplorationSnapshot explorationSnapshot;
+    public bool HasExplorationSnapshot => explorationSnapshot != null;
+
+    public void SaveExplorationSnapshot(ExplorationSnapshot snap)
+    {
+        explorationSnapshot = snap;
+    }
+
     private void Awake()
     {
         if (Shared.SceneTransitionManager == null)
@@ -35,10 +52,10 @@ public class SceneTransitionManager : MonoBehaviour
             yield return null;
         }
 
-        // ▼ 씬 로드 (비동기)
+        // 씬 로드 (비동기)
         yield return SceneManager.LoadSceneAsync(sceneName);
 
-        // ▼ 페이드 인 (alpha 1 → 0)
+        // 페이드 인 (alpha 1 → 0)
         t = fadeDuration;
         while (t > 0f)
         {
@@ -46,5 +63,63 @@ public class SceneTransitionManager : MonoBehaviour
             fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
+    }
+
+    public void SaveReturnPoint(string sceneName, Vector3 worldPos)
+    {
+        pendingReturnScene = sceneName;
+        pendingReturnPosition = worldPos;
+        Debug.Log($"[Return] Save: scene={sceneName}, pos={worldPos}");
+    }
+    public void ReturnToSavedPoint()
+    {
+        if (!HasPendingReturn)
+        {
+            Debug.LogWarning("[Return] 저장된 복귀 지점이 없습니다.");
+            return;
+        }
+        StartCoroutine(ReturnCoroutine());
+    }
+
+    IEnumerator ReturnCoroutine()
+    {
+        // 페이드 아웃
+        float t = 0f;
+        while (t < fadeDuration)
+        {
+            t += Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+
+        // 탐험 씬 로드
+        yield return SceneManager.LoadSceneAsync(pendingReturnScene);
+
+        // 탐험 씬에서 PlayerMovement 준비될 때까지 대기 후 순간이동
+        int safety = 300; // ~5초(60FPS 가정)
+        while (Shared.PlayerMovement == null && safety-- > 0)
+            yield return null;
+
+        if (Shared.PlayerMovement != null)
+        {
+            Shared.PlayerMovement.TeleportTo(pendingReturnPosition);
+            Debug.Log($"[Return] Teleport to {pendingReturnPosition}");
+        }
+        else
+        {
+            Debug.LogWarning("[Return] PlayerMovement 미발견 → 텔레포트 생략");
+        }
+
+        // 페이드 인
+        t = fadeDuration;
+        while (t > 0f)
+        {
+            t -= Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+
+        // 1회성 컨텍스트 정리
+        pendingReturnScene = null;
     }
 }

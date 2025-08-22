@@ -1,6 +1,7 @@
-using UnityEngine;
 using System.Collections;
+using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 // 맵 내 전체 상자 개수 대비
@@ -67,10 +68,16 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
     }
 
     // 함정 발동 시 호출
-    public void IncrementTrap()
+    public void RegisterTrapTriggeredByPlayer()
     {
         triggeredTraps++;
+        IncrementAwarenessByTrap();  // 인지게이지만 여기서 올림
+        CheckThreshold();
         Debug.Log($"[ObjectGaugeManager] 발동된 함정 수: {triggeredTraps}");
+    }
+    public void RegisterTrapClearedByPush() // 인지 게이지는 올리지 않음
+    {
+        triggeredTraps++;            // 통계는 올림        
         CheckThreshold();
     }
 
@@ -142,17 +149,63 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
         {
             battleNoticeUI.SetActive(true);
             IsBattleNoticeActive = true; // 입력 차단 시작
+            if (Shared.PlayerMovement != null)
+                Shared.PlayerMovement.HaltImmediately(); //이동 중인 값이 있으면 강제 리셋
+
             yield return new WaitForSeconds(battleNoticeDuration);
             battleNoticeUI.SetActive(false);
             IsBattleNoticeActive = false; // 입력 차단 종료
         }
 
+        yield return null;
+        yield return new WaitForEndOfFrame();
+
+        //탐험 스냅샷 저장
+        var snap = new ExplorationSnapshot();
+        // 씬 내 모든 IExplorationPersistable 수집
+        foreach (var mb in FindObjectsOfType<MonoBehaviour>(true))
+        {
+            if (mb is IExplorationPersistable ip)
+                snap.objects.Add(ip.SaveState());
+        }
+
+        // Object 게이지 값
+        snap.totalBoxes = totalBoxes;
+        snap.openedBoxes = openedBoxes;
+        snap.triggeredTraps = triggeredTraps;
+        snap.thresholdReached = thresholdReached;
+        Shared.SceneTransitionManager.SaveExplorationSnapshot(snap);
+        Debug.Log($"[Snapshot] saved: objs={snap.objects.Count}, boxes {openedBoxes}/{totalBoxes}, traps={triggeredTraps}");
+
+        // 전투 진입 직전, 복귀 컨텍스트 저장
+        string sceneName = SceneManager.GetActiveScene().name;
+        Vector3 pos = (Shared.PlayerMovement != null)
+            ? Shared.PlayerMovement.transform.position
+            : (Shared.MapToggleManager != null
+                ? Shared.MapToggleManager.GetPlayerStartPosition()
+                : Vector3.zero);
+
+        Shared.SceneTransitionManager.SaveReturnPoint(sceneName, pos);
+
+        var traps = snap.objects.FindAll(o => o.kind == "Trap");
+        var trig = traps.FindAll(o => o.b1 || !o.b2);
+        Debug.Log($"[Snapshot] traps saved triggered-or-inactive = {trig.Count}/{traps.Count}");
+
         // 씬 전환 전에 게이지 초기화
         awarenessGauge = 0;
-
         Shared.SceneTransitionManager.FadeToScene("BattleScene");
     }
     #endregion
+
+    public void SetObjectGaugeFromSnapshot(int total, int opened, int traps, bool reached)
+    {
+        totalBoxes = total;
+        openedBoxes = opened;
+        triggeredTraps = traps;
+        thresholdReached = reached;
+        // UI 등 필요한 반영
+        // 인지 게이지(awareness)는 0 유지 (전투 진입 직전에 0으로 내려가 있음)
+    }
 
     #region IResettable
     public void ResetState()

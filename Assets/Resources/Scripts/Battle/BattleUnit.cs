@@ -181,24 +181,19 @@ public class BattleUnit : MonoBehaviour
     public void TakeDamage(int amount)
     {
         HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
+        if (animator) animator.SetTrigger("Hit");
 
-        if (HP == 0)
+        if (HP == 0) //죽었을 시
         {
             if (animator) animator.SetBool("Warning", false);
             OnDied?.Invoke(this);
         }
-        else if (HP == 1)
+        else if (HP == 1) // 위험처리할 Hp에 도달할 시
         {
             if (animator) animator.SetBool("Warning", true);
-            Debug.Log("warning!");
-        }
-        else
-        {
-            if (animator) animator.SetBool("Warning", false);
-            if (animator) animator.SetBool("Warning", false);
         }
 
-            Debug.Log($"{name} HP={HP}");
+        Debug.Log($"{name} HP={HP}");
     }
 
     public void Heal(int amount)
@@ -206,6 +201,10 @@ public class BattleUnit : MonoBehaviour
         if (amount <= 0) return;
         int before = HP;
         HP = Mathf.Min(MaxHP, HP + amount);
+
+        if(HP > 1)  //회복 후 위험상태에서 벗어났을 시
+            if (animator) animator.SetBool("Warning", false);
+
         if (HP != before) Debug.Log($"{name} Heal +{HP - before} → {HP}/{MaxHP}");
     }
     #endregion
