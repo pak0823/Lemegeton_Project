@@ -15,6 +15,7 @@ public class BattleUnit : MonoBehaviour
     public Team team;
     public float AGI;
     [NonSerialized] public float ATB = 0f; // 0~100
+    public float Overfill { get; private set; } = 0f; // ATB가 그 프레임에 100을 넘기면 얼마큼 넘었는지 저장(동시턴 우선순위 1순위)
     public float MaxATB { get; private set; } = 100f; // 기본 100
     public bool IsTurnReady => ATB >= 100f; // ATB가 최대가 되어 행동 가능 상태
     public float atbPerSecond; // 초당 ATB 충전 속도
@@ -94,13 +95,24 @@ public class BattleUnit : MonoBehaviour
     public void UpdateATB(float deltaTime)
     {
         if (IsDead || IsTurnReady) return; // 사망 또는 이미 준비 완료
-        ATB = Mathf.Min(100f, ATB + atbPerSecond * deltaTime);
+
+        float gain = atbPerSecond * deltaTime;
+        float raw = ATB + gain;           // 클램프 전 원시값
+
+        // 이번 프레임에 100%를 넘겼다면, 넘긴 만큼을 Overfill에 보관
+        if (raw >= 100f)
+            Overfill = raw - 100f;
+        else
+            Overfill = 0f;
+
+        ATB = Mathf.Min(100f, raw);
     }
 
     // 턴이 끝났을 때 ATB 초기화
     public void ResetATB()
     {
         ATB = 0f;
+        Overfill = 0f; // 동시턴 우선순위 잔여값도 초기화
     }
     #region Movement
 
@@ -109,8 +121,7 @@ public class BattleUnit : MonoBehaviour
         Vector3 fromW = transform.position;
         Vector3 toW = map.GetCellCenterWorld(toCell);
 
-        //FaceTo(toW);
-        //if (animator) animator.SetBool("IsMoving", true);
+        if (animator) animator.SetBool("IsMoving", true);
 
         float t = 0f;
         while (t < 1f)
@@ -123,7 +134,7 @@ public class BattleUnit : MonoBehaviour
         transform.position = toW; // 셀 스냅/상태 갱신
         MoveTo(map, toCell);
 
-        //if (animator) animator.SetBool("IsMoving", false);
+        if (animator) animator.SetBool("IsMoving", false);
     }
 
     public void Bind(Tilemap map, Vector3Int startCell)
@@ -143,7 +154,7 @@ public class BattleUnit : MonoBehaviour
     #region Attack
     public IEnumerator AnimateAttack(BattleUnit target)
     {
-        if (target != null) /*FaceTo(target.transform.position)*/;
+        if (target != null)
 
         if (animator) animator.SetTrigger("Attack");
 
@@ -165,7 +176,7 @@ public class BattleUnit : MonoBehaviour
     #region Hit / Death
     public void PlayHit()
     {
-        //if (animator) animator.SetTrigger("Hit"); // Hit 애니메이션 추가 시 사용
+        if (animator) animator.SetTrigger("Hit"); // Hit 애니메이션 추가 시 사용
     }
 
     public IEnumerator PlayDieAndWait(float maxWait = 1.5f)
@@ -181,7 +192,6 @@ public class BattleUnit : MonoBehaviour
     public void TakeDamage(int amount)
     {
         HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
-        if (animator) animator.SetTrigger("Hit");
 
         if (HP == 0) //죽었을 시
         {

@@ -1,8 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using static UnityEngine.GraphicsBuffer;
 
 public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, EndTurn }
 public enum BattleAction { Move, Attack }
@@ -45,10 +47,12 @@ public class BattleManager : MonoBehaviour
     // ATB UI 업데이트용 이벤트
     public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
     public event OnATBChangedDelegate OnATBChanged;
+    readonly System.Random rng = new System.Random();// 소난수 발생기
 
     [Header("Skill Runtime")]
     public bool isSelectingSkill = false;          // 스킬 선택 패널이 열렸는지
     public SkillDefinition currentSkill;           // 현재 선택된 스킬(선택 전이면 id 미정)
+    public Vector3Int selectedCell;                // 타일 스킬용 내부 커서
 
     // UI와 통신용 이벤트
     public event System.Action<bool> OnSkillPanelToggled;  // true=열기/false=닫기
@@ -129,13 +133,23 @@ public class BattleManager : MonoBehaviour
                 
         }
 
-        // ATB 최대 유닛 찾기
+        // ATB 최대 유닛(동시턴 타이브레이커 포함) 찾기
         if (!atbPaused)
         {
-            var readyUnit = FindObjectsOfType<BattleUnit>().FirstOrDefault(u => u.IsTurnReady && !u.IsDead);
-            if (readyUnit != null)
+            var candidates = FindObjectsOfType<BattleUnit>()
+                .Where(u => u.IsTurnReady && !u.IsDead)
+                .ToList();
+
+            if (candidates.Count > 0)
             {
-                acting = readyUnit;
+                // 우선순위: Overfill(desc) → AGI(desc) → tiny random
+                var selected = candidates
+                    .OrderByDescending(u => u.Overfill)    // 1) 프레임 내 과충전량이 많은 순
+                    .ThenByDescending(u => u.AGI)          // 2) AGI 높은 순
+                    .ThenBy(u => rng.NextDouble())         // 3) 아주 작은 난수
+                    .First();
+
+                acting = selected;
                 atbPaused = true;
                 StartTurn(acting);
             }
@@ -349,7 +363,7 @@ public class BattleManager : MonoBehaviour
         manualEndRequested = false;
 
         // ATB 재개(다음 턴은 Update()가 자동 감지)
-        acting.ATB = 0f;       // 현 유닛만 초기화
+        acting.ResetATB(); // ATB와 Overfill 함께 초기화
         acting = null;
         atbPaused = false;
         state = BattleState.Idle;
@@ -455,7 +469,6 @@ public class BattleManager : MonoBehaviour
     void HandleUnitDied(BattleUnit dead)
     {
         grid.SetOccupied(dead.team, dead.Cell, false);
-        //turn.Remove(dead);
 
         if (dead == acting)
         {
@@ -544,7 +557,7 @@ public class BattleManager : MonoBehaviour
     {
         enemyRoutine = null;
 
-        enemy.ATB = 0f;
+        enemy.ResetATB();
         if (acting == enemy) acting = null;
 
         atbPaused = false;     // 전체 ATB 재개
@@ -615,8 +628,25 @@ public class BattleManager : MonoBehaviour
             if (targetCycle.Count > 0)
                 SelectTarget(0);          // 첫 타겟(=가장 빠른 AGI)으로 마커/미리보기
         }
-
-        
+        else // Tile 타겟형: 내부 타일 커서를 1회 세팅하고 프리뷰 유지
+        {
+            var map = provider?.EnemyFloor;
+            if (map != null)
+            {
+                var cam = Camera.main;
+                Vector3 world = (cam != null)
+                    ? cam.ScreenToWorldPoint(Input.mousePosition)
+                    : Vector3.zero;
+                world.z = 0f;
+                
+                var hover = map.WorldToCell(world);
+                                // 마우스가 타일 위면 그 타일, 아니면 기본(-2,-2)
+                var start = map.HasTile(hover) ? hover : new Vector3Int(-2, -2, 0);
+                
+                selectedCell = start;                   // 내부 커서 고정
+                PreviewSkillAreaOnTile(map, selectedCell); // 즉시 프리뷰
+            }
+        }
     }
 
     // 포인티드-탑 헥사: x(컬럼) 홀짝 판단 (Step 3에서 쓸 예정, 지금도 사용 가능)
@@ -658,12 +688,7 @@ public class BattleManager : MonoBehaviour
         // 미리보기 정리
         ClearPreview();
 
-        state = BattleState.Resolving;
-        // 실행: 타겟 유닛이 서 있는 맵 + 그 유닛의 셀을 기준으로 AoE
-        ResolveSkillAtCell(currentSkill, target.CurrentMap, target.Cell, acting);
-
-        // 행동 종료 처리
-        FinishActionAfterSkill();
+        StartCoroutine(Co_ResolveSkillThenFinish(currentSkill, target.CurrentMap, target.Cell, acting));
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int originCell)
     {
@@ -671,9 +696,7 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || acting == null) return;
 
         ClearPreview();
-        state = BattleState.Resolving;
-        ResolveSkillAtCell(currentSkill, map, originCell, acting);
-        FinishActionAfterSkill();
+        StartCoroutine(Co_ResolveSkillThenFinish(currentSkill, map, originCell, acting));
     }
 
     // 스킬 범위를 계산해, 같은 맵에 있는 유닛들 중 해당 셀에 위치한 유닛에게 피해 적용
@@ -687,8 +710,25 @@ public class BattleManager : MonoBehaviour
 
         // 3) 피해 적용 (임시: 적 유닛만 타격, 피해량은 캐스터의 일반 공격력 사용)
         ExecuteSkillDamage(caster, victims, def);
+        // 효과음/VFX 등은 여기에서
+    }
 
-        // (선택) 효과음/VFX 등은 여기에서
+    // === 유닛 점유/워커블 헬퍼 ===
+    bool IsCellOccupied(Tilemap map, Vector3Int cell)
+    {
+        foreach (var unit in FindObjectsOfType<BattleUnit>())
+        {
+            if (unit == null || unit.IsDead) continue;
+            if (unit.CurrentMap == map && unit.Cell == cell) return true;
+        }
+        return false;
+    }
+    bool IsWalkableCell(Tilemap map, Vector3Int cell)
+    {
+        // 맵에 타일이 있어야 하고, 유닛이 점유하고 있지 않아야 한다
+        if (!map.HasTile(cell)) return false;
+        if (IsCellOccupied(map, cell)) return false;
+        return true;
     }
 
     IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
@@ -705,6 +745,101 @@ public class BattleManager : MonoBehaviour
                 yield return u;
         }
     }
+
+    // 이동 보간 시간(인스펙터에서 조절 가능)
+    [SerializeField] float postMoveDuration = 0.1f;
+
+    // 스킬 해결 → (필요 시) 이동 애니메 → 종료
+    IEnumerator Co_ResolveSkillThenFinish(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        // 상태 잠금
+        state = BattleState.Resolving;
+
+        // 1) 범위/피해 적용 (기존 ResolveSkillAtCell의 로직과 동일)
+        var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
+        var victims = GetUnitsInArea(map, area);
+        ExecuteSkillDamage(caster, victims, def);
+
+        // 2) 스킬1/2 후 이동 목적지 계산
+        if (caster != null && !caster.IsDead)
+        {
+            if (TryComputePostMoveDestination(def, caster, out var destCell))
+            {
+                // 3) 보간 이동
+                yield return Co_MoveUnitSmooth(caster, caster.CurrentMap, destCell, postMoveDuration);
+            }
+        }
+
+        // 4) 종료 처리(토큰 소모/턴 진행/패널 닫기 등)
+        FinishActionAfterSkill();
+    }
+    // 목적지 계산: 스킬2=앞(NW), 스킬1=뒤(SE), 최대 2칸, 워커블만
+    bool TryComputePostMoveDestination(SkillDefinition def, BattleUnit caster, out Vector3Int dest)
+    {
+        dest = caster.Cell;
+
+        if (def.id != SkillId.Skill1 && def.id != SkillId.Skill2) return false;
+
+        // 절대 대각 방향(축좌표): 앞=NW(0,-1), 뒤=SE(0,+1)
+        var stepAx = (def.id == SkillId.Skill2) ? new Vector2Int(0, -1) : new Vector2Int(0, 1);
+
+        var map = caster.CurrentMap;
+        var curAx = SkillLibrary.ToAxial(caster.Cell);
+        var last = caster.Cell;
+
+        for (int i = 0; i < 2; i++) // 최대 2칸
+        {
+            curAx = new Vector2Int(curAx.x + stepAx.x, curAx.y + stepAx.y);
+            var next = SkillLibrary.ToOffset(curAx);
+
+            if (!IsWalkableCell(map, next)) break; // 타일 없거나 점유 중이면 중단
+            last = next;
+        }
+
+        if (last != caster.Cell) { dest = last; return true; }
+        return false;
+    }
+
+    IEnumerator Co_MoveUnitSmooth(BattleUnit unit, Tilemap map, Vector3Int toCell, float duration)
+    {
+        var fromCell = unit.Cell;
+        var startPos = unit.transform.position;
+        var endPos = map.GetCellCenterWorld(toCell);
+        endPos.z = startPos.z;
+
+        // 점유 해제(이동 시작)
+        grid.SetOccupied(unit.team, fromCell, false);
+
+        // --- 애니메이션 준비 ---
+        var anim = unit.GetComponentInChildren<Animator>();
+        if (anim != null)
+        {
+            anim.ResetTrigger("Idle");
+            anim.SetBool("IsMoving", true);
+            Vector2 dir = (endPos - startPos);
+            // 루트모션을 쓰지 않는 구성(Transform 직접 보간) 기준
+        }
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / Mathf.Max(0.0001f, duration);
+            unit.transform.position = Vector3.Lerp(startPos, endPos, Mathf.Clamp01(t));
+            yield return null;
+        }
+
+        // 좌표/맵 필드 갱신
+        unit.MoveTo(map, toCell);
+
+        // 점유 설정(이동 완료)
+        grid.SetOccupied(unit.team, unit.Cell, true);
+
+        if (anim != null)
+        {
+            anim.SetBool("IsMoving", false);
+        }
+    }
+
 
     void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillDefinition def)
     {

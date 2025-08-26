@@ -112,15 +112,6 @@ public class BattleGridManager : MonoBehaviour
               + Mathf.Abs((aRef.x + aRef.y) - (bRef.x + bRef.y))) / 2;
     }
 
-    //public bool InRangeAcrossMaps(
-    //Tilemap reference,           // 기준으로 삼을 타일맵 (보통 PlayerFloor)
-    //Tilemap fromMap, Vector3Int fromCell,
-    //Tilemap toMap, Vector3Int toCell,
-    //int range)
-    //{
-    //    return CrossMapDistance(reference, fromMap, fromCell, toMap, toCell) <= range;
-    //}
-
     public void SetOccupied(Team t, Vector3Int cell, bool on)
     {
         var set = (t == Team.Player) ? playerOcc : enemyOcc;

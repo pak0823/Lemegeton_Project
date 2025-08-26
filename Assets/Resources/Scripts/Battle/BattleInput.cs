@@ -197,10 +197,21 @@ public class BattleInput : MonoBehaviour
             {
                 var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
 
-                if (map != null && TryCell(map, world, out var cell))
-                    battle.PreviewSkillAreaOnTile(map, cell);
-                else
-                    battle.ClearPreview();
+                if (map != null)
+                {
+                    var cell = map.WorldToCell(world);
+                    if (map.HasTile(cell))
+                    {
+                        // 마우스가 타일 위 → 내부 커서 갱신 + 프리뷰
+                        battle.selectedCell = cell;
+                        battle.PreviewSkillAreaOnTile(map, cell);
+                    }
+                    else
+                    {
+                        // 마우스가 타일 밖 → 내부 커서 기준으로 프리뷰 유지
+                        battle.PreviewSkillAreaOnTile(map, battle.selectedCell);
+                    }
+                }
             }
         }
 
@@ -228,10 +239,11 @@ public class BattleInput : MonoBehaviour
                 // 현재 전장 타일맵을 기준으로 셀 확정
                 var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
 
-                if (map != null && TryCell(map, world, out var cell))
+                if (map != null)
                 {
-                    battle.ConfirmSkillOnTile(map, cell);
-                    return;
+                    // 마우스 위치와 무관하게 내부 커서 기준으로 확정
+                    battle.ConfirmSkillOnTile(map, battle.selectedCell);
+                        return;
                 }
             }
         }
