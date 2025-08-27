@@ -2390,37 +2390,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 5158325106566958107, guid: 321dec81cfeb42b4fb6352f92bfde25b, type: 3}
   m_PrefabInstance: {fileID: 4093721356566463280}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1218045969
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1218045970}
-  m_Layer: 0
-  m_Name: Sprite
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1218045970
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1218045969}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1274941019
 GameObject:
   m_ObjectHideFlags: 0
@@ -2911,6 +2880,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   overlayMap: {fileID: 1668103366}
   highlightTile: {fileID: 11400000, guid: 4703e3ff1a68cb142a285e2dc0c7e54a, type: 2}
+  clipToBaseMap: 0
 --- !u!1 &1669155401
 GameObject:
   m_ObjectHideFlags: 0
@@ -3867,10 +3837,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 80fa3998a8e992140ae7b4827dd49b2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  bar: {fileID: 1075714696}
-  unitIconPrefab: {fileID: 2343180334564519238, guid: 4f824ffed1d54be408607871a4605b6e, type: 3}
-  barWidth: 700
   barImage: {fileID: 1156702536}
+  unitIconPrefab: {fileID: 2343180334564519238, guid: 4f824ffed1d54be408607871a4605b6e, type: 3}
+  playerRowY: 20
+  enemyRowY: -20
+  extraSpacing: 0
+  barWidth: 700
 --- !u!4 &2057654913 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8781631134391336676, guid: 8dda7166ba6bc5a4cb1f99bec9c531f7, type: 3}
@@ -4701,9 +4673,17 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 625908437}
     - target: {fileID: 3604632207186200263, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
+      propertyPath: explosionPrefab
+      value: 
+      objectReference: {fileID: 1543269463555958427, guid: 1e2e1d75228f58b43b4fc1533de883af, type: 3}
+    - target: {fileID: 3604632207186200263, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
       propertyPath: postMoveDuration
       value: 0.3
       objectReference: {fileID: 0}
+    - target: {fileID: 3604632207186200263, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
+      propertyPath: projectilePrefab
+      value: 
+      objectReference: {fileID: 1543269463555958427, guid: 691b833b72266f84d9cd2e94f86aff23, type: 3}
     - target: {fileID: 8282321106037221778, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -4816,4 +4796,3 @@ SceneRoots:
   - {fileID: 1594126588}
   - {fileID: 419949692}
   - {fileID: 901264282}
-  - {fileID: 1218045970}

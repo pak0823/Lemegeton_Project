@@ -152,7 +152,7 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Attack
-    public IEnumerator AnimateAttack(BattleUnit target)
+    public IEnumerator AnimateAttack(BattleUnit target) //근접공격 애니메이션
     {
         if (target != null)
 
@@ -171,7 +171,45 @@ public class BattleUnit : MonoBehaviour
 
         OnAttackEnded -= onEnd;
     }
+
+    public IEnumerator AnimateRanged()  //원거리 공격 애니메이션
+    {
+        if (animator) animator.SetTrigger("Ranged");
+        bool ended = false;
+        Action onEnd = () => ended = true;
+        OnAttackEnded += onEnd;
+        float timeout = 2f;
+        while (!ended && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
+        OnAttackEnded -= onEnd;
+    }
+
+    //점프 애니메이션 및 기능
+    public IEnumerator AnimateJumpToWorld(
+    Vector3 toWorld,
+    float? durationOverride = null,         // 시간을 직접 지정
+    float? speedUnitsPerSec = null,         // 또는 속도로 지정(거리/속도 = 시간)
+    float arcHeight = 0.15f)
+    {
+        if (animator) animator.SetTrigger("Jump");
+
+        Vector3 from = transform.position;
+        float distance = Vector3.Distance(from, toWorld);
+        float duration = durationOverride ?? (speedUnitsPerSec.HasValue
+            ? distance / Mathf.Max(0.01f, speedUnitsPerSec.Value)
+            : 0.18f); // 기본값
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / Mathf.Max(0.01f, duration);
+            float arc = Mathf.Sin(t * Mathf.PI) * arcHeight;
+            transform.position = Vector3.Lerp(from, toWorld, t) + new Vector3(0f, arc, 0f);
+            yield return null;
+        }
+    }
     #endregion
+
+
 
     #region Hit / Death
     public void PlayHit()

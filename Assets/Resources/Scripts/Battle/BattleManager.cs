@@ -57,6 +57,16 @@ public class BattleManager : MonoBehaviour
     // UI와 통신용 이벤트
     public event System.Action<bool> OnSkillPanelToggled;  // true=열기/false=닫기
     public event System.Action<SkillDefinition[]> OnSkillPanelPopulate;   // 버튼 라벨 세팅용
+
+    [Header("Projectile/VFX")]
+    public GameObject projectilePrefab;     // 투사체
+    [SerializeField] float projectileDuration = 0.35f;
+    [SerializeField] float explosionDuration = 0.25f;
+    [SerializeField] float projectileArcHeight = 0.6f;
+
+    //점프 애니메이션 속도 및 높이 값
+    [SerializeField] float jumpDuration = 0.08f;     // 시간 기반
+    [SerializeField] float jumpArc = 0.15f;
     #endregion
 
     #region Unity Callbacks
@@ -500,12 +510,12 @@ public class BattleManager : MonoBehaviour
         if (!anyEnemy) 
         { 
             Debug.Log("[Battle] 승리!");
-            Shared.SceneTransitionManager.ReturnToSavedPoint();
+            //Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
         else if (!anyPlayer) 
         { 
             Debug.Log("[Battle] 패배...");
-            Shared.SceneTransitionManager.ReturnToSavedPoint();
+            //Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
     }
     #endregion
@@ -688,7 +698,7 @@ public class BattleManager : MonoBehaviour
         // 미리보기 정리
         ClearPreview();
 
-        StartCoroutine(Co_ResolveSkillThenFinish(currentSkill, target.CurrentMap, target.Cell, acting));
+        StartCoroutine(Co_GapCloseThenResolveOnTarget(currentSkill, acting, target));
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int originCell)
     {
@@ -696,7 +706,7 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || acting == null) return;
 
         ClearPreview();
-        StartCoroutine(Co_ResolveSkillThenFinish(currentSkill, map, originCell, acting));
+        StartCoroutine(Co_ProjectileSkillThenFinish(currentSkill, map, originCell, acting));
     }
 
     // 스킬 범위를 계산해, 같은 맵에 있는 유닛들 중 해당 셀에 위치한 유닛에게 피해 적용
@@ -880,5 +890,133 @@ public class BattleManager : MonoBehaviour
     public void ClearPreview()
     {
         if (highlighter != null) highlighter.Clear();
+    }
+
+
+    bool TryGetFrontCellOfTarget(BattleUnit caster, BattleUnit target, out Vector3Int frontCell) //근접 공격 시 타겟 앞 타일로 이동
+    {
+        frontCell = target.Cell;
+
+        // 타겟 기준으로 '시전자 방향'을 찾는다.
+        int dirIdx = SkillLibrary.NearestDirectionIndex(target.Cell, caster.Cell);
+        var stepAx = SkillLibrary.DirIndexToAxial(dirIdx);
+
+        var tAx = SkillLibrary.ToAxial(target.Cell);
+        var frontAx = new Vector2Int(tAx.x + stepAx.x, tAx.y + stepAx.y);
+        var candidate = SkillLibrary.ToOffset(frontAx);
+
+        // 실제로 이동하는 건 아니고 '연출용 좌표'로만 쓸 거라 HasTile 정도만 체크
+        if (provider != null && provider.EnemyFloor != null && provider.EnemyFloor.HasTile(candidate))
+        {
+            frontCell = candidate;
+            return true;
+        }
+        return false;
+    }
+
+    IEnumerator Co_GapCloseThenResolveOnTarget(SkillDefinition def, BattleUnit caster, BattleUnit target)
+    {
+        state = BattleState.Resolving;
+
+        Vector3 originalW = caster.transform.position;
+
+        // 1) 타겟 앞 타일(적 맵 좌표)의 월드 지점으로 '연출용 점프'
+        if (TryGetFrontCellOfTarget(caster, target, out var frontCell))
+        {
+            Vector3 frontW = provider.EnemyFloor.GetCellCenterWorld(frontCell);
+            yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
+        }
+
+        // 2) 공격 모션 + 임팩트 타이밍에 범위피해(대상 유닛 셀을 '원점'으로)
+        bool impactDone = false;
+        System.Action impact = null;
+        impact = () =>
+        {
+            caster.OnAttackImpact -= impact;
+            impactDone = true;
+            ResolveSkillAtCell(def, target.CurrentMap, target.Cell, caster); // 기존 범위·피해 루틴 재사용
+        };
+        caster.OnAttackImpact += impact;
+
+        yield return caster.AnimateAttack(target);  // 기존 근접 모션 재사용
+
+        if (!impactDone) // 폴백(애니 이벤트 누락 시)
+            ResolveSkillAtCell(def, target.CurrentMap, target.Cell, caster);
+
+        // 3) 원위치 '순간 복귀'
+        caster.transform.position = originalW;
+
+        FinishActionAfterSkill(); // 패널 닫기/토큰 소모/턴 진행
+    }
+
+    IEnumerator Co_ProjectileSkillThenFinish(SkillDefinition def, Tilemap map, Vector3Int cell, BattleUnit caster)
+    {
+        state = BattleState.Resolving;
+
+        bool castEnded = false;   // 캐스터 모션 종료(AnimEvent_AttackEnd)
+        bool projEnded = false;   // 투사체 도착/폭발/피해 적용까지 완료
+
+        // 1) 캐스터 모션 종료 이벤트 훅
+        System.Action onCastEnd = null;
+        onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
+        caster.OnAttackEnded += onCastEnd;
+
+        // 2) 발사 타이밍(AnimEvent_AttackImpact) 훅: 투사체 생성만!
+        System.Action onFire = null;
+        onFire = () =>
+        {
+            caster.OnAttackImpact -= onFire;
+            // 투사체 생성 및 Init
+            if (projectilePrefab != null)
+            {
+                var startW = caster.transform.position;
+                var targetW = map.GetCellCenterWorld(cell);
+                var go = Instantiate(projectilePrefab, startW, Quaternion.identity);
+                var pc = go.GetComponent<ProjectileController>();
+                if (pc != null)
+                {
+                    // 일정 속도로 이동시키기 (초당 3유닛)
+                    pc.Init(startW, targetW, () => {
+                        ResolveSkillAtCell(def, map, cell, caster); // 폭발 직후에 범위피해 적용
+                    }, speedUnitsPerSec: 3f);
+                }
+                else
+                {
+                    // 컴포넌트 누락 대비 폴백
+                    StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, () =>
+                    {
+                        ResolveSkillAtCell(def, map, cell, caster);
+                        projEnded = true;
+                    }));
+                }
+            }
+            else
+            {
+                // 프리팹 없을 땐 즉시 적용(테스트용)
+                ResolveSkillAtCell(def, map, cell, caster);
+                projEnded = true;
+            }
+        };
+
+        caster.OnAttackImpact += onFire;
+
+        // 3) 제자리 원거리 모션 재생
+        yield return caster.AnimateRanged(); // 내부에서 AttackEnd를 기다림
+
+        // 4) 안전장치: 혹시 모션이 먼저 끝나도 투사체가 끝날 때까지 대기
+        float timeout = 3f; // 과도한 지연 방지
+        while (!(castEnded && projEnded) && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
+        FinishActionAfterSkill();
+    }
+    IEnumerator FallbackProjectile(Vector3 start, Vector3 end, float time, System.Action done)
+    {
+        float t = 0f;
+        while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); yield return null; }
+        done?.Invoke();
     }
 }
