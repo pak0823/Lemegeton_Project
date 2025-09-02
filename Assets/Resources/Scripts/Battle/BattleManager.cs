@@ -4,6 +4,8 @@ using System.Linq;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.UIElements;
+using static UnityEditor.PlayerSettings;
 using static UnityEngine.GraphicsBuffer;
 
 public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, EndTurn }
@@ -14,6 +16,7 @@ public class BattleManager : MonoBehaviour
     #region Variables
     public BattleGridManager grid;
     public TurnOrderManager turn;
+    UnitStatusPanelUI _statusPanel;
     public LayerMask unitMask;
 
     BattleState state = BattleState.Idle;
@@ -34,7 +37,8 @@ public class BattleManager : MonoBehaviour
     public BattleUnit SelectedTarget => selectedTarget;
     Coroutine enemyRoutine; // 코루틴 핸들
 
-    // === 타겟 선택(표시/순환) ===
+
+        // === 타겟 선택(표시/순환) ===
     [Header("Targeting")]
     public TargetMarker targetMarker; // 인스펙터에 배치한 TargetMarker 할당
     List<BattleUnit> targetCycle = new(); // 적 리스트(AGI desc)
@@ -48,6 +52,11 @@ public class BattleManager : MonoBehaviour
     public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
     public event OnATBChangedDelegate OnATBChanged;
     readonly System.Random rng = new System.Random();// 소난수 발생기
+
+    // === AGI 변화 감지용 ===
+    float _lastMinAGI, _lastMaxAGI, _lastAGISum;
+    int _lastAGICount;
+    const float AGI_EPS = 0.0001f;
 
     [Header("Skill Runtime")]
     public bool isSelectingSkill = false;          // 스킬 선택 패널이 열렸는지
@@ -67,7 +76,20 @@ public class BattleManager : MonoBehaviour
     //점프 애니메이션 속도 및 높이 값
     [SerializeField] float jumpDuration = 0.08f;     // 시간 기반
     [SerializeField] float jumpArc = 0.15f;
+
+    //유닛 스킬 표시용
+    public event System.Action<BattleUnit, string> OnUnitActionLabel; // (유닛, 라벨)
+    void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
     #endregion
+
+    UnitStatusPanelUI StatusPanel
+    {
+        get
+        {
+            if (_statusPanel == null) _statusPanel = FindObjectOfType<UnitStatusPanelUI>();
+            return _statusPanel;
+        }
+    }
 
     #region Unity Callbacks
     void Awake()
@@ -121,7 +143,12 @@ public class BattleManager : MonoBehaviour
             u.OnDied += HandleUnitDied;
         }
 
-        //turn.BuildOrder(units);
+        // AGI 스냅샷 저장
+        _lastMinAGI = minAGI;
+        _lastMaxAGI = maxAGI;
+        _lastAGISum = units.Sum(u => u.AGI);
+        _lastAGICount = units.Count;
+
         initialized = true;
     }
 
@@ -130,6 +157,23 @@ public class BattleManager : MonoBehaviour
     void Update()
     {
         if (!initialized) return;
+
+        // === AGI 변화 감지(실시간) ===
+        {
+            var alive = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
+            float curMin = (alive.Count > 0) ? alive.Min(u => u.AGI) : 0f;
+            float curMax = (alive.Count > 0) ? alive.Max(u => u.AGI) : 0f;
+            float curSum = (alive.Count > 0) ? alive.Sum(u => u.AGI) : 0f;
+            int curCnt = alive.Count;
+
+            if (curCnt != _lastAGICount
+                || Mathf.Abs(curMin - _lastMinAGI) > AGI_EPS
+                || Mathf.Abs(curMax - _lastMaxAGI) > AGI_EPS
+                || Mathf.Abs(curSum - _lastAGISum) > AGI_EPS)
+            {
+                RecomputeATBSpeedsFromLiveUnits();
+            }
+        }
 
         if (!atbPaused)
         {
@@ -196,6 +240,31 @@ public class BattleManager : MonoBehaviour
 
         UpdateTurnIndicator();
     }
+
+    // === 생존 유닛들의 현재 AGI 범위로 전원의 ATB 속도 재계산 ===
+    void RecomputeATBSpeedsFromLiveUnits()
+    {
+        var alive = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
+        if (alive.Count == 0) return;
+
+        float min = alive.Min(u => u.AGI);
+        float max = alive.Max(u => u.AGI);
+        foreach (var u in alive)
+            u.InitializeATB(min, max); // atbPerSecond만 갱신(ATB 값은 그대로)
+
+        // 스냅샷 갱신
+        _lastMinAGI = min;
+        _lastMaxAGI = max;
+        _lastAGISum = alive.Sum(u => u.AGI);
+        _lastAGICount = alive.Count;
+    }
+
+    //public void SetAGI(float newAGI) // 호출하여 명시적인 강제 재계산 필요시 사용
+    //{
+    //    AGI = newAGI;
+    //    var bm = Shared.BattleManager ?? FindObjectOfType<BattleManager>();
+    //    if (bm != null) bm.RecomputeATBSpeedsFromLiveUnits();
+    //}
 
     public void OnClickEndTurn()
     {
@@ -678,6 +747,10 @@ public class BattleManager : MonoBehaviour
         // 해당 유닛이 서 있는 맵(타일맵)을 기준으로 하이라이트
         var map = unit.CurrentMap;
         highlighter.ShowCells(map, cells);
+
+        // 범위 내 유닛 수집 → 패널 하이라이트
+        var victims = GetUnitsInArea(map, cells);
+        StatusPanel?.HighlightUnits(victims);
     }
 
     // 현재 선택된 스킬의 범위를 "타일 기준"으로 미리보기
@@ -688,6 +761,10 @@ public class BattleManager : MonoBehaviour
         bool odd = SkillLibrary.IsOddColumn(originCell);
         var cells = currentSkill.GetAreaCells(originCell, odd);
         highlighter.ShowCells(map, cells);
+
+        // 범위 내 유닛 수집 → 패널 하이라이트
+        var victims = GetUnitsInArea(map, cells);
+        StatusPanel?.HighlightUnits(victims);
     }
 
     public void ConfirmSkillOnUnit(BattleUnit target)
@@ -890,6 +967,7 @@ public class BattleManager : MonoBehaviour
     public void ClearPreview()
     {
         if (highlighter != null) highlighter.Clear();
+        StatusPanel?.ClearHighlights();
     }
 
 

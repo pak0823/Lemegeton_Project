@@ -13,6 +13,7 @@ public static class Shared
     public static BattleGridManager battleGridManager;
     public static BattleMapManager battleMapManager;
     public static TurnOrderManager TurnOrderManager;
+    public static BattleInput battleInput;
 
 
     public static UI_Lobby UI_Lobby;

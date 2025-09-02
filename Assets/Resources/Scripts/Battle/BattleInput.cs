@@ -8,18 +8,29 @@ public class BattleInput : MonoBehaviour
     public Camera cam;
     public BattleManager battle;
     public LayerMask unitMask;
-    public GameSpeedController speedCtrl; // 인스펙터에 GameSpeedController 할당
+    public GameSpeedController speedCtrl; // GameSpeedController 할당
+    public HudController hudCtrl;   //HUD 컨트롤러 할당
     #endregion
 
     #region Internal References
     IBattleMapProvider provider;
     #endregion
 
+    // 배속 키 바인딩을 테이블로 정의
+    readonly (KeyCode key, int idx)[] speedBinds = new (KeyCode, int)[] {
+    (KeyCode.Alpha1, 0),   // x1
+    (KeyCode.Alpha2, 1),   // x2
+    (KeyCode.Alpha3, 2),   // x3
+    (KeyCode.BackQuote, 3) // 정지(물결/백틱 키)
+};
+
     #region Unity Callbacks
     void Awake()
     {
         if (cam == null) cam = Camera.main;
         provider = Shared.battleMapManager as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>();
+
+        if (Shared.battleInput == null) Shared.battleInput = this;
     }
 
     void Start()
@@ -44,14 +55,22 @@ public class BattleInput : MonoBehaviour
     #region Input Handlers
     void HandleGameSpeedToggle()
     {
-        // === 배속 토글 ===
-        if (Input.GetKeyDown(KeyCode.F2))
-            speedCtrl?.ToggleSpeed();
+        for (int i = 0; i < speedBinds.Length; i++)
+        {
+            var (key, idx) = speedBinds[i];
+            if (Input.GetKeyDown(key))
+            {
+                speedCtrl?.SetSpeedIndex(idx);
+                break;
+            }
+        }
     }
 
     void HandleMouseInput()
     {
         if (!Input.GetMouseButtonDown(0)) return;
+
+        hudCtrl?.Show();    //HUD가 꺼진 상태에서 마우스 클릭이 확인될 시 켜짐
 
         // 스킬 타겟팅(플레이어 턴 + Targeting + 스킬 선택됨) 중이면 레거시 우회
         bool canTargetSkill = (battle != null
@@ -96,6 +115,8 @@ public class BattleInput : MonoBehaviour
                    && battle.IsTargeting                // Targeting 상태
                    && battle.currentSkill.GetAreaCells != null); // 스킬 선택됨
 
+        if (HandleHudToggleEarly()) return; //HUD 상태 관리
+
         // 우클릭/X로 취소(선택사항)
         if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.X))
         {
@@ -117,30 +138,31 @@ public class BattleInput : MonoBehaviour
         }
 
         // === 액션 단축키 (플레이어 턴에만 동작; 내부에서도 가드) ===
-        if (Input.GetKeyDown(KeyCode.W))// 공격(W)
-        {
-            battle?.CancelCurrentAction();
-            battle?.OnClickAttack(); 
-        }
+        //if (Input.GetKeyDown(KeyCode.W))// 공격(W)
+        //{
+        //    battle?.CancelCurrentAction();
+        //    battle?.OnClickAttack(); 
+        //}
 
-        if (Input.GetKeyDown(KeyCode.Z)) // 이동(Z)
-        {
-            battle?.CancelCurrentAction();
-            battle?.CloseSkillPanel();   // 입력단에서도 한 번 더 닫기
-            battle?.OnClickMove();
-        }
+        //if (Input.GetKeyDown(KeyCode.Z)) // 이동(Z)
+        //{
+        //    battle?.CancelCurrentAction();
+        //    battle?.CloseSkillPanel();   // 입력단에서도 한 번 더 닫기
+        //    battle?.OnClickMove();
+        //}
 
-        if (Input.GetKeyDown(KeyCode.E)) // 턴 종료(E)
-        {
-            battle?.CancelCurrentAction();
-            battle?.OnClickEndTurn(); // 수동 종료(회복 판단용)
-        }
+        //if (Input.GetKeyDown(KeyCode.E)) // 턴 종료(E)
+        //{
+        //    battle?.CancelCurrentAction();
+        //    battle?.OnClickEndTurn(); // 수동 종료(회복 판단용)
+        //}
 
         if (Input.GetKeyDown(KeyCode.F1))   // 도망가기(F1)
         {
             battle?.CancelCurrentAction(); // 진행 중이던 선택 취소
             battle?.OnClickEscape();       // 전투 즉시 종료 & 복귀
         }
+
 
         if (canSelectSkillNow && Input.GetKeyDown(KeyCode.Alpha1)) { battle?.SelectSkill(0); }
         if (canSelectSkillNow && Input.GetKeyDown(KeyCode.Alpha2)) { battle?.SelectSkill(1); }
@@ -249,6 +271,34 @@ public class BattleInput : MonoBehaviour
         }
     }
     #endregion
+
+    bool HandleHudToggleEarly()
+    {
+        // 1) LeftControl로 토글
+        if (Input.GetKeyDown(KeyCode.LeftControl))
+        {
+            hudCtrl?.Toggle();
+            return true; // 같은 프레임에 다른 입력 소비 방지
+        }
+
+        // 2) HUD가 꺼져있을 때 아무 키/마우스 버튼 입력으로 즉시 복귀
+        if (hudCtrl != null && !hudCtrl.IsVisible)
+        {
+            if (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.Escape))
+            {
+                return true;
+            }
+            // anyKeyDown은 키 또는 마우스 버튼 눌림에 반응(스크롤/이동 제외)
+            if (Input.anyKeyDown)
+            {
+                hudCtrl.Show();
+                return true; // 같은 프레임 다른 입력 막음
+            }
+
+        }
+
+        return false;
+    }
 
     #region Helper
     bool TryCell(Tilemap map, Vector3 world, out Vector3Int cell)

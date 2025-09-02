@@ -19,13 +19,19 @@ public class BattleUnit : MonoBehaviour
     public float MaxATB { get; private set; } = 100f; // 기본 100
     public bool IsTurnReady => ATB >= 100f; // ATB가 최대가 되어 행동 가능 상태
     public float atbPerSecond; // 초당 ATB 충전 속도
+
+    [Header("Resource Stats")]
     public int AttackDamage = 1;
-    public int AttackRange = 2;
-    public int MaxHP = 100;
+    public int MaxHP = 100;     //최대 HP
+    public int MaxMP = 100;     //최대 MP
+    public int MaxRage = 100;       //최대 분노 게이지
 
     public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
 
     public int HP { get; private set; }
+    public int MP { get; private set; }
+    public int Rage { get; private set; }
+
     #endregion
 
     #region Visual
@@ -76,8 +82,10 @@ public class BattleUnit : MonoBehaviour
         if (data != null)
         {
             team = data.team;
+            AttackDamage = data.AttackDamage;
             MaxHP = data.MaxHP;
-            AttackRange = data.AttackRange;
+            MaxMP = data.MaxMP;
+            MaxRage = data.MaxRage;
             AGI = data.AGI;
         }
 

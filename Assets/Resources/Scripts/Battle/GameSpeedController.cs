@@ -9,12 +9,12 @@ public static class GamePause
 public class GameSpeedController : MonoBehaviour
 {
     [Header("Speed cycle")]
-    public float[] speeds = { 1f, 1.5f, 2f, 0f };
+    float[] speeds = { 1f, 2f, 3f, 0f };
 
     [Header("UI")]
     public Image buttonImage;          // 배속 버튼의 Image
     public Sprite[] speedIcons;        // 각 배속에 대응하는 아이콘(배열 길이 = speeds 길이)
-    public Text label;             // “x1 / x1.5 / x2” 표기용
+    public Text label;             // “x1 / x2 / x3” 표기용
 
     int index = 0;
     float baseFixedDeltaTime;
@@ -36,11 +36,7 @@ public class GameSpeedController : MonoBehaviour
         Apply();
     }
 
-    public void ToggleSpeed()
-    {
-        index = (index + 1) % speeds.Length;
-        Apply();
-    }
+    public void CycleSpeed(int step = 1) { index = (index + step + speeds.Length) % speeds.Length; Apply(); }
 
     public void SetSpeedIndex(int i)
     {
@@ -72,7 +68,10 @@ public class GameSpeedController : MonoBehaviour
         if (s == 0f)
             Debug.Log("[Speed] 정지");
         else
-            Debug.Log($"[Speed] {s:0.#}배속");
+        {
+            Debug.Log($"[Speed] {s:0}배속");
+        }
+            
     }
 
     void UpdateVisuals()
@@ -92,7 +91,7 @@ public class GameSpeedController : MonoBehaviour
                 label.text = "||"; // 정지 아이콘 텍스트
             else
             {
-                label.text = $"x{speeds[index]:0.#}";   // 1, 2, 3처럼 정수로 보이게 하고 싶으면 0.# 대신 0 사용
+                label.text = $"x{speeds[index]:0}";   // 1, 2, 3처럼 정수로 보이게 하고 싶으면 0.# 대신 0 사용
             }
 
             label.raycastTarget = false;    // 라벨이 입력을 가로채지 않도록
