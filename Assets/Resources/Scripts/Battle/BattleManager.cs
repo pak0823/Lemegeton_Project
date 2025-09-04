@@ -1,12 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEngine.UIElements;
-using static UnityEditor.PlayerSettings;
-using static UnityEngine.GraphicsBuffer;
 
 public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, EndTurn }
 public enum BattleAction { Move, Attack }
@@ -62,16 +58,14 @@ public class BattleManager : MonoBehaviour
     public bool isSelectingSkill = false;          // 스킬 선택 패널이 열렸는지
     public SkillDefinition currentSkill;           // 현재 선택된 스킬(선택 전이면 id 미정)
     public Vector3Int selectedCell;                // 타일 스킬용 내부 커서
+    public SkillAsset currentSkillSO;                   // 현재 선택된 SO 스킬
+    public event System.Action<SkillAsset[]> OnSkillPanelPopulateSO; // SO 목록 UI용
 
     // UI와 통신용 이벤트
     public event System.Action<bool> OnSkillPanelToggled;  // true=열기/false=닫기
-    public event System.Action<SkillDefinition[]> OnSkillPanelPopulate;   // 버튼 라벨 세팅용
 
     [Header("Projectile/VFX")]
     public GameObject projectilePrefab;     // 투사체
-    [SerializeField] float projectileDuration = 0.35f;
-    [SerializeField] float explosionDuration = 0.25f;
-    [SerializeField] float projectileArcHeight = 0.6f;
 
     //점프 애니메이션 속도 및 높이 값
     [SerializeField] float jumpDuration = 0.08f;     // 시간 기반
@@ -313,13 +307,13 @@ public class BattleManager : MonoBehaviour
         }
         else if (state == BattleState.Targeting)
         {
-            if (currentSkill.GetAreaCells != null
-                && currentSkill.targetMode == SkillTargetMode.Tile
+            if (state == BattleState.Targeting
+                && currentSkillSO != null
+                && currentSkillSO.targetMode == SkillTargetMode.Tile
                 && clickedMap == provider.EnemyFloor)
             {
                 ConfirmSkillOnTile(clickedMap, clickedCell);
             }
-
         }
     }
 
@@ -347,9 +341,7 @@ public class BattleManager : MonoBehaviour
     public void OnUnitClicked(BattleUnit target)
     {
         if (!IsPlayerTurn) return;
-        if (!IsTargeting) return;
-        if (currentSkill.GetAreaCells == null) return;
-        if (currentSkill.targetMode != SkillTargetMode.Unit) return;
+        if (!IsTargeting || currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
         if (target == null || target.team == acting.team) return;
 
         ConfirmSkillOnUnit(target);
@@ -451,11 +443,11 @@ public class BattleManager : MonoBehaviour
     public void CancelCurrentAction()
     {
         // 타겟팅 중(스킬 선택됨) → '스킬만 해제', 패널은 유지
-        if (state == BattleState.Targeting && currentSkill.GetAreaCells != null)
+        if (state == BattleState.Targeting && currentSkillSO != null)
         {
-            ClearPreview(); // 하이라이트 제거
-            ClearTargetSelection(); // TargetMarker 제거
-            currentSkill = default;  // 스킬만 초기화
+            ClearPreview();
+            ClearTargetSelection();
+            currentSkillSO = null;
             state = BattleState.ActionSelect;
             if (!isSelectingSkill) OpenSkillPanel();
             return;
@@ -514,7 +506,7 @@ public class BattleManager : MonoBehaviour
         targetMarker?.Attach(selectedTarget);
 
         // 스킬이 Unit형으로 선택된 상태라면, 선택된 타겟 기준으로 범위 미리보기 갱신
-        if (currentSkill.GetAreaCells != null && currentSkill.targetMode == SkillTargetMode.Unit)
+        if (currentSkillSO != null && currentSkillSO.targetMode == SkillTargetMode.Unit)
         {
             PreviewSkillAreaOnUnit(selectedTarget);
         }
@@ -528,12 +520,11 @@ public class BattleManager : MonoBehaviour
 
     public void ConfirmTarget()
     {
-        if (!IsPlayerTurn || !IsTargeting || selectedTarget == null) return;// 스킬 미선택이면 무시
-        if (currentSkill.GetAreaCells == null) return;  // Unit형 스킬일 때만 C로 확정
-        if (currentSkill.targetMode != SkillTargetMode.Unit) return;
-        if (selectedTarget == null) return;
+        if (!IsPlayerTurn || !IsTargeting || selectedTarget == null) return;
+        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
 
-        ConfirmSkillOnUnit(selectedTarget);
+        ClearPreview();
+        StartCoroutine(Co_GapCloseThenResolveOnTargetSO(currentSkillSO, acting, selectedTarget));
     }
 
     void ClearTargetSelection()
@@ -663,19 +654,11 @@ public class BattleManager : MonoBehaviour
 
     public void OpenSkillPanel()
     {
+        if (!IsPlayerTurn || acting == null) return;
         isSelectingSkill = true;
 
-        // 스킬 목록 제공(여기선 1~5까지; 4개만 쓰면 배열 길이만 줄이면 됨)
-        var defs = new[]
-        {
-            SkillLibrary.Get(SkillId.Skill1),
-            SkillLibrary.Get(SkillId.Skill2),
-            SkillLibrary.Get(SkillId.Skill3),
-            SkillLibrary.Get(SkillId.Skill4),
-            SkillLibrary.Get(SkillId.Skill5)
-        };
-
-        OnSkillPanelPopulate?.Invoke(defs);
+        var list = acting?.data?.skills ?? System.Array.Empty<SkillAsset>();
+        OnSkillPanelPopulateSO?.Invoke(list);
         OnSkillPanelToggled?.Invoke(true);
     }
     public void CloseSkillPanel()
@@ -686,22 +669,25 @@ public class BattleManager : MonoBehaviour
 
     public void SelectSkill(int index)
     {
-        // index: 0~3
-        var id = (SkillId)index;
-        var def = SkillLibrary.Get(id);
-        currentSkill = def;
-        EnterSkillTargeting(def);
+        var list = acting?.data?.skills;
+        if (list == null || index < 0 || index >= list.Length) return;
+
+        currentSkillSO = list[index]; // SkillAsset
+        EnterSkillTargeting(currentSkillSO);
     }
-    private void EnterSkillTargeting(SkillDefinition def)
+    private void EnterSkillTargeting(SkillAsset skill)
     {
+        if (skill == null) return;
+
         // 스킬 타겟팅 모드로 진입
         state = BattleState.Targeting;
         highlighter?.Clear();
         ClearTargetSelection(); // 기존 선택/마커 초기화
-        Debug.Log($"[Skill] Select: {def.name} (mode: {def.targetMode}) → Targeting");
+
+        //Debug.Log($"[Skill] Select: {skill.name} (mode: {skill.targetMode}) → Targeting");
 
         // Unit 타겟형이면: AGI 내림차순 사이클 구성 후 첫 타겟으로 마커 표시
-        if (def.targetMode == SkillTargetMode.Unit)
+        if (skill.targetMode == SkillTargetMode.Unit)
         {
             BuildTargetCycle();           // Enemy만, AGI desc
             if (targetCycle.Count > 0)
@@ -713,16 +699,10 @@ public class BattleManager : MonoBehaviour
             if (map != null)
             {
                 var cam = Camera.main;
-                Vector3 world = (cam != null)
-                    ? cam.ScreenToWorldPoint(Input.mousePosition)
-                    : Vector3.zero;
+                var world = cam ? cam.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
                 world.z = 0f;
-                
-                var hover = map.WorldToCell(world);
-                                // 마우스가 타일 위면 그 타일, 아니면 기본(-2,-2)
-                var start = map.HasTile(hover) ? hover : new Vector3Int(-2, -2, 0);
-                
-                selectedCell = start;                   // 내부 커서 고정
+                var hover = map.WorldToCell(world);          
+                selectedCell = map.HasTile(hover) ? hover : new Vector3Int(-2, -2, 0);  // 마우스가 타일 위면 그 타일, 아니면 기본(-2,-2)
                 PreviewSkillAreaOnTile(map, selectedCell); // 즉시 프리뷰
             }
         }
@@ -734,21 +714,15 @@ public class BattleManager : MonoBehaviour
     // 현재 선택된 스킬의 범위를 "유닛 기준"으로 미리보기
     public void PreviewSkillAreaOnUnit(BattleUnit unit)
     {
-        if (currentSkill.GetAreaCells == null) return;
-        if (unit == null) { highlighter.Clear(); return; }
-
-        // 아군(플레이어)에는 미리보기 표시하지 않음
-        if (unit.team == Team.Player) { highlighter.Clear(); return; }
+        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) { highlighter?.Clear(); return; }
+        if (unit == null || unit.team == Team.Player) { highlighter?.Clear(); return; } // 아군(플레이어)에는 미리보기 표시하지 않음
 
         var origin = unit.Cell;                            // 유닛의 현재 셀
-        bool odd = SkillLibrary.IsOddColumn(origin);       // 컬럼 홀짝
-        var cells = currentSkill.GetAreaCells(origin, odd);
-
-        // 해당 유닛이 서 있는 맵(타일맵)을 기준으로 하이라이트
+        var cells = currentSkillSO.GetAreaCells(origin, SkillLibrary.IsOddColumn(origin));
         var map = unit.CurrentMap;
-        highlighter.ShowCells(map, cells);
 
         // 범위 내 유닛 수집 → 패널 하이라이트
+        highlighter.ShowCells(map, cells);
         var victims = GetUnitsInArea(map, cells);
         StatusPanel?.HighlightUnits(victims);
     }
@@ -756,10 +730,10 @@ public class BattleManager : MonoBehaviour
     // 현재 선택된 스킬의 범위를 "타일 기준"으로 미리보기
     public void PreviewSkillAreaOnTile(Tilemap map, Vector3Int originCell)
     {
-        if (currentSkill.GetAreaCells == null) return;
+        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Tile) { highlighter?.Clear(); return; }
+        if (map == null) { highlighter?.Clear(); return; }
 
-        bool odd = SkillLibrary.IsOddColumn(originCell);
-        var cells = currentSkill.GetAreaCells(originCell, odd);
+        var cells = currentSkillSO.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
         highlighter.ShowCells(map, cells);
 
         // 범위 내 유닛 수집 → 패널 하이라이트
@@ -769,21 +743,139 @@ public class BattleManager : MonoBehaviour
 
     public void ConfirmSkillOnUnit(BattleUnit target)
     {
-        if (currentSkill.GetAreaCells == null || target == null) return;
-        if (!IsPlayerTurn || acting == null) return;
+        if (!IsPlayerTurn || acting == null || target == null) return;
+        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
 
         // 미리보기 정리
         ClearPreview();
-
-        StartCoroutine(Co_GapCloseThenResolveOnTarget(currentSkill, acting, target));
+        StartCoroutine(Co_GapCloseThenResolveOnTargetSO(currentSkillSO, acting, target));
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int originCell)
     {
-        if (currentSkill.GetAreaCells == null || map == null) return;
-        if (!IsPlayerTurn || acting == null) return;
+        if (!IsPlayerTurn || acting == null || map == null) return;
+        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Tile) return;
 
         ClearPreview();
-        StartCoroutine(Co_ProjectileSkillThenFinish(currentSkill, map, originCell, acting));
+        StartCoroutine(Co_ProjectileSkillThenFinishSO(currentSkillSO, map, originCell, acting));
+    }
+
+    IEnumerator Co_GapCloseThenResolveOnTargetSO(SkillAsset skill, BattleUnit caster, BattleUnit target)
+    {
+        state = BattleState.Resolving;
+
+        Vector3 originalW = caster.transform.position;
+
+        // 1) 타겟 앞 점프(연출)
+        if (TryGetFrontCellOfTarget(caster, target, out var frontCell))
+        {
+            Vector3 frontW = provider.EnemyFloor.GetCellCenterWorld(frontCell);
+            yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
+        }
+
+        // 2) 공격 모션 중 임팩트 타이밍에 해결
+        bool impactTriggered = false;
+        bool resolved = false;
+
+        System.Action impact = null;
+        impact = () =>
+        {
+            caster.OnAttackImpact -= impact;
+            impactTriggered = true;
+            // SO 해결(대개 즉시 종료, 필요 시 내부에서 추가 이펙트)
+            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => { resolved = true; }));
+        };
+
+        caster.OnAttackImpact += impact;
+        yield return caster.AnimateAttack(target);
+
+        if (!impactTriggered)
+        {
+            // 임팩트 못받았으면 여기서 직접 해결하고, 완료 표시
+            yield return skill.ResolveOnUnit(this, caster, target);
+            resolved = true;
+        }
+
+        // 임팩트로 시작했다면, 해결 완료까지 대기(타임아웃 가드)
+        float timeout = 1.5f;
+        while (!resolved && (timeout > 0f)) { timeout -= Time.deltaTime; yield return null; }
+
+        // 3) 원위치 복귀
+        caster.transform.position = originalW;
+
+        // 4) (임시) 시전 후 이동 정책: legacyId 경로 유지
+        if (caster != null && !caster.IsDead)
+        {
+            if (TryComputePostMoveDestinationLegacy(skill.legacyId, caster, out var destCell))
+                yield return Co_MoveUnitSmooth(caster, caster.CurrentMap, destCell, postMoveDuration);
+        }
+
+        FinishActionAfterSkill();
+    }
+
+    IEnumerator Co_ProjectileSkillThenFinishSO(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
+    {
+        state = BattleState.Resolving;
+
+        bool castEnded = false;
+        bool projEnded = false;
+
+        // 1) 캐스터 모션 종료 훅
+        System.Action onCastEnd = null;
+        onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
+        caster.OnAttackEnded += onCastEnd;
+
+        // 2) 발사 타이밍 훅: 투사체 생성 + 도착 시 SO 해결
+        System.Action onFire = null;
+        onFire = () =>
+        {
+            caster.OnAttackImpact -= onFire;
+
+            if (projectilePrefab != null)
+            {
+                var startW = caster.transform.position;
+                var targetW = map.GetCellCenterWorld(cell);
+                var go = Instantiate(projectilePrefab, startW, Quaternion.identity);
+                var pc = go.GetComponent<ProjectileController>();
+                if (pc != null)
+                {
+                    pc.Init(startW, targetW,
+                        () => StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () => { projEnded = true; })),
+                        speedUnitsPerSec: 3f);
+                }
+                else
+                {
+                    StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, () =>
+                    {
+                        StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () => { projEnded = true; }));
+                    }));
+                }
+            }
+            else
+            {
+                StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () => { projEnded = true; }));
+            }
+        };
+        caster.OnAttackImpact += onFire;
+
+        // 3) 원거리 모션
+        yield return caster.AnimateRanged();
+
+        // 4) 두 조건 모두 충족 대기
+        float timeout = 2f;
+        while (!(castEnded && projEnded) && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
+        // 5) (임시) 시전 후 이동
+        if (caster != null && !caster.IsDead)
+        {
+            if (TryComputePostMoveDestinationLegacy(skill.legacyId, caster, out var destCell))
+                yield return Co_MoveUnitSmooth(caster, caster.CurrentMap, destCell, postMoveDuration);
+        }
+
+        FinishActionAfterSkill();
     }
 
     // 스킬 범위를 계산해, 같은 맵에 있는 유닛들 중 해당 셀에 위치한 유닛에게 피해 적용
@@ -818,7 +910,7 @@ public class BattleManager : MonoBehaviour
         return true;
     }
 
-    IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
+    public IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
     {
         // 맵 경계 바깥 셀 제외(있으면)
         var valid = new HashSet<Vector3Int>(cells
@@ -835,56 +927,30 @@ public class BattleManager : MonoBehaviour
 
     // 이동 보간 시간(인스펙터에서 조절 가능)
     [SerializeField] float postMoveDuration = 0.1f;
-
-    // 스킬 해결 → (필요 시) 이동 애니메 → 종료
-    IEnumerator Co_ResolveSkillThenFinish(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        // 상태 잠금
-        state = BattleState.Resolving;
-
-        // 1) 범위/피해 적용 (기존 ResolveSkillAtCell의 로직과 동일)
-        var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
-        var victims = GetUnitsInArea(map, area);
-        ExecuteSkillDamage(caster, victims, def);
-
-        // 2) 스킬1/2 후 이동 목적지 계산
-        if (caster != null && !caster.IsDead)
-        {
-            if (TryComputePostMoveDestination(def, caster, out var destCell))
-            {
-                // 3) 보간 이동
-                yield return Co_MoveUnitSmooth(caster, caster.CurrentMap, destCell, postMoveDuration);
-            }
-        }
-
-        // 4) 종료 처리(토큰 소모/턴 진행/패널 닫기 등)
-        FinishActionAfterSkill();
-    }
+    
     // 목적지 계산: 스킬2=앞(NW), 스킬1=뒤(SE), 최대 2칸, 워커블만
-    bool TryComputePostMoveDestination(SkillDefinition def, BattleUnit caster, out Vector3Int dest)
+    bool TryComputePostMoveDestinationLegacy(SkillId id, BattleUnit caster, out Vector3Int dest)
     {
         dest = caster.Cell;
 
-        if (def.id != SkillId.Skill1 && def.id != SkillId.Skill2) return false;
+        if (id != SkillId.Skill1 && id != SkillId.Skill2) return false;
 
-        // 절대 대각 방향(축좌표): 앞=NW(0,-1), 뒤=SE(0,+1)
-        var stepAx = (def.id == SkillId.Skill2) ? new Vector2Int(0, -1) : new Vector2Int(0, 1);
-
+        var stepAx = (id == SkillId.Skill2) ? new Vector2Int(0, -1) : new Vector2Int(0, 1);
         var map = caster.CurrentMap;
         var curAx = SkillLibrary.ToAxial(caster.Cell);
         var last = caster.Cell;
 
-        for (int i = 0; i < 2; i++) // 최대 2칸
+        for (int i = 0; i < 2; i++)
         {
             curAx = new Vector2Int(curAx.x + stepAx.x, curAx.y + stepAx.y);
             var next = SkillLibrary.ToOffset(curAx);
-
-            if (!IsWalkableCell(map, next)) break; // 타일 없거나 점유 중이면 중단
+            if (!IsWalkableCell(map, next)) break;
             last = next;
         }
 
-        if (last != caster.Cell) { dest = last; return true; }
-        return false;
+        if (last == caster.Cell) return false;
+        dest = last;
+        return true;
     }
 
     IEnumerator Co_MoveUnitSmooth(BattleUnit unit, Tilemap map, Vector3Int toCell, float duration)
@@ -928,7 +994,7 @@ public class BattleManager : MonoBehaviour
     }
 
 
-    void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillDefinition def)
+    public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillDefinition def)
     {
         if (caster == null) return;
 
@@ -957,9 +1023,11 @@ public class BattleManager : MonoBehaviour
         ClearPreview();
         // 스킬 실행 완료 → 패널 닫기 + 스킬 선택 해제
         CloseSkillPanel();   // 이벤트까지 함께 발행됨
-        currentSkill = default;
         // 스킬은 '공격'으로 간주하여 행동 토큰 소모 로직 재사용
         OnActionConsumed(BattleAction.Attack);
+
+        currentSkill = default;           // 레거시
+        currentSkillSO = null;            // SO도 클리어
     }
 
 
@@ -1090,6 +1158,17 @@ public class BattleManager : MonoBehaviour
         }
 
         FinishActionAfterSkill();
+    }
+    // 유틸 래퍼 추가
+    IEnumerator Co_ResolveUnitThenFlag(SkillAsset skill, BattleUnit caster, BattleUnit target, System.Action done)
+    {
+        yield return skill.ResolveOnUnit(this, caster, target);
+        done?.Invoke();
+    }
+    IEnumerator Co_ResolveTileThenFlag(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster, System.Action done)
+    {
+        yield return skill.ResolveOnTile(this, map, cell, caster);
+        done?.Invoke();
     }
     IEnumerator FallbackProjectile(Vector3 start, Vector3 end, float time, System.Action done)
     {

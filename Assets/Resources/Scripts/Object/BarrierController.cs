@@ -43,7 +43,7 @@ public class BarrierController : MonoBehaviour
     {
         if (!isOpen || !playerInRange || hasLoaded) return;
 
-        if (Input.GetKeyDown(KeyCode.C))
+        if (Input.GetKeyDown(KeyCode.E))
         {
             LoadNextMap();
             Debug.Log("[Barrier] ƒ˚¡Ó∏ ¿∏∑Œ ¿Ãµø«‘");

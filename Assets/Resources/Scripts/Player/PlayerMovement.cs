@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEngine.UIElements;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -18,11 +17,9 @@ public class PlayerMovement : MonoBehaviour
 
     private Rigidbody2D rb;
     private List<Vector3> path = new();
-    private int currentPathIndex = 0;
     private Vector2 input = Vector2.zero;
 
     private Direction inputDir;
-    private bool isMouseMove = false;
     public bool isPushMode { private set; get; }
     private Direction pendingDirectionKey = Direction.None;
     private PushObject selectedBox = null;
@@ -69,7 +66,7 @@ public class PlayerMovement : MonoBehaviour
         {
             input = Vector2.zero;
 
-            if (Input.GetKeyDown(KeyCode.C))
+            if (Input.GetKeyDown(KeyCode.E))
             {
                 animator.SetInteger("Move", 0);
                 selectedBox?.SetHighlight(false);
@@ -97,18 +94,9 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        // 마우스 우클릭 이동
-        if (Input.GetMouseButton(1))
-        {
-            Vector3 screenPos = Input.mousePosition;
-            screenPos.z = -Camera.main.transform.position.z;
-            Vector3 worldPos = Camera.main.ScreenToWorldPoint(screenPos);
-            SetTargetPosition(worldPos);
-        }
-
         // 키 입력 이동 (화살표 키만 허용)
-        float h = Input.GetKey(KeyCode.LeftArrow) ? -1f : Input.GetKey(KeyCode.RightArrow) ? 1f : 0f;
-        float v = Input.GetKey(KeyCode.UpArrow) ? 1f : Input.GetKey(KeyCode.DownArrow) ? -1f : 0f;
+        float h = Input.GetKey(KeyCode.A) ? -1f : Input.GetKey(KeyCode.D) ? 1f : 0f;
+        float v = Input.GetKey(KeyCode.W) ? 1f : Input.GetKey(KeyCode.S) ? -1f : 0f;
 
         input = new Vector2(h, v).normalized;
 
@@ -127,11 +115,10 @@ public class PlayerMovement : MonoBehaviour
             }
 
             path.Clear();
-            isMouseMove = false;
         }
 
         // 밀기 모드 진입
-        if (!isPushMode && (Input.GetKeyDown(KeyCode.C) && selectedBox != null))
+        if (!isPushMode && (Input.GetKeyDown(KeyCode.E) && selectedBox != null))
         {
             if (contactBoxes.Count > 0)
             {
@@ -146,7 +133,7 @@ public class PlayerMovement : MonoBehaviour
 
         // 선택된 푸시 오브젝트가 없고, 포커스된 상자가 있을 때만 열기
         if (!isPushMode && selectedBox == null && highlightedChest != null
-        && Input.GetKeyDown(KeyCode.C))
+        && Input.GetKeyDown(KeyCode.E))
         {
             highlightedChest.OpenChest();
             highlightedChest = null; // 열렸으니 참조 해제
@@ -164,30 +151,6 @@ public class PlayerMovement : MonoBehaviour
         }
 
         animator.SetInteger("Move", (path.Count > 0 || input.sqrMagnitude > 0f) ? 1 : 0);
-
-        // 마우스 이동 처리
-        if (path.Count > 0)
-        {
-            Vector3 targetWorld = path[currentPathIndex];
-            Vector2 newPos = Vector2.MoveTowards(rb.position, targetWorld, defaultMoveSpeed * Time.fixedDeltaTime);
-            rb.MovePosition(newPos);
-
-            // 마우스 이동 flipX 적용
-            float dx = targetWorld.x - rb.position.x;
-            if (Mathf.Abs(dx) > 0.01f)
-                spriterenderer.flipX = dx > 0;
-
-            if (Vector2.Distance(rb.position, targetWorld) < 0.05f)
-            {
-                currentPathIndex++;
-                if (currentPathIndex >= path.Count)
-                {
-                    path.Clear();
-                    isMouseMove = false;
-                }
-            }
-            return;
-        }
 
         // 키 이동 처리
         if (input.sqrMagnitude > 0f)
@@ -282,10 +245,10 @@ public class PlayerMovement : MonoBehaviour
 
     Direction GetHexDirectionArrowKey()
     {
-        bool up = Input.GetKey(KeyCode.UpArrow);
-        bool down = Input.GetKey(KeyCode.DownArrow);
-        bool left = Input.GetKeyDown(KeyCode.LeftArrow);
-        bool right = Input.GetKeyDown(KeyCode.RightArrow);
+        bool up = Input.GetKey(KeyCode.W);
+        bool down = Input.GetKey(KeyCode.S);
+        bool left = Input.GetKeyDown(KeyCode.A);
+        bool right = Input.GetKeyDown(KeyCode.D);
 
         if (up && left) return Direction.NW;
         if (up && right) return Direction.NE;
@@ -319,17 +282,6 @@ public class PlayerMovement : MonoBehaviour
             Direction.SE => odd ? new Vector3Int(1, -1, 0) : new Vector3Int(0, -1, 0),
             _ => Vector3Int.zero,
         };
-    }
-
-    void SetTargetPosition(Vector3 worldTarget)
-    {
-        Vector3Int cell = floorTilemap.WorldToCell(worldTarget);
-        if (!floorTilemap.cellBounds.Contains(cell) || !IsWalkableCell(cell)) return;
-
-        Vector3 cellCenter = floorTilemap.GetCellCenterWorld(cell);
-        path = FindPath(transform.position, cellCenter);
-        currentPathIndex = 0;
-        isMouseMove = path.Count > 0;
     }
 
     public void ClearPath() => path.Clear();
@@ -382,88 +334,6 @@ public class PlayerMovement : MonoBehaviour
         // 퍼즐 박스 위치 갱신 및 목표 체크 호출
         Shared.PuzzleManager?.ExecutePush(box, fromCell, fromCell + dir);
         isPerformingPush = false;
-    }
-
-    List<Vector3> FindPath(Vector3 startPos, Vector3 targetPos)
-    {
-        Vector3Int start = floorTilemap.WorldToCell(startPos);
-        Vector3Int goal = floorTilemap.WorldToCell(targetPos);
-
-        var openList = new List<Vector3Int> { start };
-        var closedList = new HashSet<Vector3Int>();
-        var cameFrom = new Dictionary<Vector3Int, Vector3Int>();
-        var gScore = new Dictionary<Vector3Int, float> { [start] = 0f };
-        var fScore = new Dictionary<Vector3Int, float> { [start] = HexDistance(start, goal) };
-
-        while (openList.Count > 0)
-        {
-            Vector3Int current = openList.OrderBy(n => fScore.GetValueOrDefault(n, float.MaxValue)).First();
-            if (current == goal)
-            {
-                var newPath = new List<Vector3>();
-                while (cameFrom.ContainsKey(current))
-                {
-                    newPath.Insert(0, floorTilemap.GetCellCenterWorld(current));
-                    current = cameFrom[current];
-                }
-                return newPath;
-            }
-
-            openList.Remove(current);
-            closedList.Add(current);
-
-            foreach (Vector3 neighborWorld in GetNeighbors(current))
-            {
-                Vector3Int neighbor = floorTilemap.WorldToCell(neighborWorld);
-                if (closedList.Contains(neighbor)) continue;
-
-                float moveCost = (Mathf.Abs(neighbor.x - current.x) + Mathf.Abs(neighbor.y - current.y) > 1) ? 1.4f : 1f;
-                float tentativeG = gScore[current] + moveCost;
-
-                if (!openList.Contains(neighbor)) openList.Add(neighbor);
-                else if (tentativeG >= gScore.GetValueOrDefault(neighbor, float.MaxValue)) continue;
-
-                cameFrom[neighbor] = current;
-                gScore[neighbor] = tentativeG;
-                fScore[neighbor] = tentativeG + HexDistance(neighbor, goal);
-            }
-        }
-
-        Debug.LogWarning("경로를 찾을 수 없습니다.");
-        return new List<Vector3>();
-    }
-
-    List<Vector3> GetNeighbors(Vector3Int current)
-    {
-        var results = new List<Vector3>();
-        Vector3Int[] dirs = {
-            new Vector3Int(1, 0, 0), new Vector3Int(-1, 0, 0),
-            new Vector3Int(0, 1, 0), new Vector3Int(0, -1, 0),
-            new Vector3Int(1, -1, 0), new Vector3Int(-1, 1, 0),
-        };
-
-        foreach (var d in dirs)
-        {
-            var cell = current + d;
-            if (!floorTilemap.cellBounds.Contains(cell) || !IsWalkableCell(cell) || HasImpassableObject(cell))
-                continue;
-
-            if (Mathf.Abs(d.x) == 1 && Mathf.Abs(d.y) == 1)
-            {
-                var c1 = current + new Vector3Int(d.x, 0, 0);
-                var c2 = current + new Vector3Int(0, d.y, 0);
-                if (!floorTilemap.cellBounds.Contains(c1) || !IsWalkableCell(c1) || HasImpassableObject(c1)
-                    || !floorTilemap.cellBounds.Contains(c2) || !IsWalkableCell(c2) || HasImpassableObject(c2))
-                    continue;
-            }
-            results.Add(floorTilemap.GetCellCenterWorld(cell));
-        }
-        return results;
-    }
-
-    int HexDistance(Vector3Int a, Vector3Int b)
-    {
-        return (Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y) + Mathf.Abs((a.x + a.y) - (b.x + b.y))) / 2;
     }
 
     bool HasImpassableObject(Vector3Int cell)

@@ -45,6 +45,7 @@ public class BattleInput : MonoBehaviour
         if (provider == null || provider.PlayerFloor == null || provider.EnemyFloor == null) return;
 
         HandleGameSpeedToggle();
+        if (HandleHudToggleEarly()) return; //HUD 상태 관리
         if (GamePause.IsPaused) return;
 
         HandleMouseInput();
@@ -73,10 +74,7 @@ public class BattleInput : MonoBehaviour
         hudCtrl?.Show();    //HUD가 꺼진 상태에서 마우스 클릭이 확인될 시 켜짐
 
         // 스킬 타겟팅(플레이어 턴 + Targeting + 스킬 선택됨) 중이면 레거시 우회
-        bool canTargetSkill = (battle != null
-                              && battle.IsPlayerTurn
-                              && battle.IsTargeting
-                              && battle.currentSkill.GetAreaCells != null);
+        bool canTargetSkill = (battle.IsPlayerTurn && battle.IsTargeting && battle.currentSkillSO != null);
         if (canTargetSkill) return;
 
         Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
@@ -108,17 +106,15 @@ public class BattleInput : MonoBehaviour
     {
         // === 스킬 관련 입력 공통 게이트 ===
         bool canSelectSkillNow = (battle != null
-                      && battle.IsPlayerTurn
-                      && battle.isSelectingSkill);      // Attack으로 패널 열린 상태
+            && battle.IsPlayerTurn
+            && battle.isSelectingSkill);      // Attack으로 패널 열린 상태
         bool canTargetSkill = (battle != null
-                   && battle.IsPlayerTurn
-                   && battle.IsTargeting                // Targeting 상태
-                   && battle.currentSkill.GetAreaCells != null); // 스킬 선택됨
+            && battle.IsPlayerTurn
+            && battle.IsTargeting
+            && battle.currentSkillSO != null);
 
-        if (HandleHudToggleEarly()) return; //HUD 상태 관리
-
-        // 우클릭/X로 취소(선택사항)
-        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.X))
+        // 우클릭/Q로 취소(선택사항)
+        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Q))
         {
             // 스킬 타겟팅 중(선택됨) → '스킬만 해제', 패널 유지 (1단계 취소)
             if (canTargetSkill)
@@ -137,52 +133,21 @@ public class BattleInput : MonoBehaviour
             battle?.CancelCurrentAction();
         }
 
-        // === 액션 단축키 (플레이어 턴에만 동작; 내부에서도 가드) ===
-        //if (Input.GetKeyDown(KeyCode.W))// 공격(W)
-        //{
-        //    battle?.CancelCurrentAction();
-        //    battle?.OnClickAttack(); 
-        //}
-
-        //if (Input.GetKeyDown(KeyCode.Z)) // 이동(Z)
-        //{
-        //    battle?.CancelCurrentAction();
-        //    battle?.CloseSkillPanel();   // 입력단에서도 한 번 더 닫기
-        //    battle?.OnClickMove();
-        //}
-
-        //if (Input.GetKeyDown(KeyCode.E)) // 턴 종료(E)
-        //{
-        //    battle?.CancelCurrentAction();
-        //    battle?.OnClickEndTurn(); // 수동 종료(회복 판단용)
-        //}
-
         if (Input.GetKeyDown(KeyCode.F1))   // 도망가기(F1)
         {
             battle?.CancelCurrentAction(); // 진행 중이던 선택 취소
             battle?.OnClickEscape();       // 전투 즉시 종료 & 복귀
         }
 
-
-        if (canSelectSkillNow && Input.GetKeyDown(KeyCode.Alpha1)) { battle?.SelectSkill(0); }
-        if (canSelectSkillNow && Input.GetKeyDown(KeyCode.Alpha2)) { battle?.SelectSkill(1); }
-        if (canSelectSkillNow && Input.GetKeyDown(KeyCode.Alpha3)) { battle?.SelectSkill(2); }
-        if (canSelectSkillNow && Input.GetKeyDown(KeyCode.Alpha4)) { battle?.SelectSkill(3); }
-        if (canSelectSkillNow && Input.GetKeyDown(KeyCode.Alpha5)) { battle?.SelectSkill(4); }
-
         // === C 키로 확정 (Unit 스킬일 때만) ===
-        if (canTargetSkill && battle.currentSkill.targetMode == SkillTargetMode.Unit && Input.GetKeyDown(KeyCode.C))
+        if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Unit && Input.GetKeyDown(KeyCode.E))
         {
-            battle.ConfirmTarget(); // BattleManager 쪽에서 스킬 확정으로 연결되도록 이미 수정한 그 함수
+            battle.ConfirmTarget();
         }
-
-        // === 방향키로 타겟 순환 (Unit 스킬일 때만) ===
-        if (canTargetSkill && battle.currentSkill.targetMode == SkillTargetMode.Unit)
+        else if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Tile && Input.GetKeyDown(KeyCode.E))
         {
-            if (Input.GetKeyDown(KeyCode.RightArrow))
-                battle.CycleTarget(+1);    // AGI 내림차순 리스트에서 다음 대상
-            else if (Input.GetKeyDown(KeyCode.LeftArrow))
-                battle.CycleTarget(-1);    // 역방향
+            var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
+            if (map != null) battle.ConfirmSkillOnTile(map, battle.selectedCell);
         }
 
         // === 스킬 타겟팅 중 호버 미리보기 ===
@@ -191,7 +156,7 @@ public class BattleInput : MonoBehaviour
             Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
             world.z = 0f;
 
-            if (battle.currentSkill.targetMode == SkillTargetMode.Unit)
+            if (battle.currentSkillSO != null && battle.currentSkillSO.targetMode == SkillTargetMode.Unit)
             {
                 // 마우스가 가리키는 적 유닛이 있다면 '선택' 자체를 그 유닛으로 갱신
                 var hit = Physics2D.Raycast(world, Vector2.zero, 0.01f, unitMask);
@@ -242,7 +207,7 @@ public class BattleInput : MonoBehaviour
             Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
             world.z = 0f;
 
-            if (battle.currentSkill.targetMode == SkillTargetMode.Unit)
+            if (battle.currentSkillSO != null && battle.currentSkillSO.targetMode == SkillTargetMode.Unit)
             {
                 // 유닛 레이캐스트로 확정
                 var hit = Physics2D.Raycast(world, Vector2.zero, 0.01f, unitMask);
@@ -275,7 +240,7 @@ public class BattleInput : MonoBehaviour
     bool HandleHudToggleEarly()
     {
         // 1) LeftControl로 토글
-        if (Input.GetKeyDown(KeyCode.LeftControl))
+        if (Input.GetKeyDown(KeyCode.Tab))
         {
             hudCtrl?.Toggle();
             return true; // 같은 프레임에 다른 입력 소비 방지
@@ -284,7 +249,7 @@ public class BattleInput : MonoBehaviour
         // 2) HUD가 꺼져있을 때 아무 키/마우스 버튼 입력으로 즉시 복귀
         if (hudCtrl != null && !hudCtrl.IsVisible)
         {
-            if (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.Escape))
+            if (Input.GetKeyDown(KeyCode.Tab) /*|| Input.GetKeyDown(KeyCode.Escape)*/)
             {
                 return true;
             }

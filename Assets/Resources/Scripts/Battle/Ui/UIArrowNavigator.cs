@@ -11,13 +11,12 @@ public class UIArrowNavigator : MonoBehaviour
     [SerializeField] private List<Button> buttons = new List<Button>();
 
     [Header("Keys")]
-    [SerializeField] private KeyCode leftKey = KeyCode.LeftArrow;
-    [SerializeField] private KeyCode rightKey = KeyCode.RightArrow;
-    [SerializeField] private KeyCode confirmKey = KeyCode.C;  // 요구사항: C 확정
+    private KeyCode leftKey = KeyCode.A;
+    private KeyCode rightKey = KeyCode.D;
+    private KeyCode confirmKey = KeyCode.E;  // 확정키
 
     [Header("Behavior")]
     [SerializeField] private bool autoFocusOnEnable = true;
-    [SerializeField] private bool loop = true;
     [Tooltip("마우스/다른 스크립트로 선택된 버튼도 하이라이트가 따라가도록 갱신")]
     [SerializeField] private bool followExternalSelection = true;
 
@@ -37,11 +36,13 @@ public class UIArrowNavigator : MonoBehaviour
     void Awake()
     {
         if (autoRebuildOnEnable) BuildHighlightCache();
+        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();   //기본 UI 네비게이션 끄기
     }
 
     void OnEnable()
     {
         if (autoRebuildOnEnable) BuildHighlightCache();
+        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
         // 패널이 켜질 때 첫 유효 버튼으로 포커스
         index = FirstActiveIndex();
         if (autoFocusOnEnable) Focus();    // EventSystem에 선택 반영
@@ -140,13 +141,14 @@ public class UIArrowNavigator : MonoBehaviour
         int n = buttons.Count;
         if (n == 0) return 0;
 
-        for (int step = 1; step <= n; step++)
+        // 감싸지 않고 경계에서 멈춤
+        int i = index + dir;
+        while (i >= 0 && i < n)
         {
-            int i = ((index + dir * step) % n + n) % n;
             if (IsUsable(buttons[i])) return i;
-            if (!loop && (i < 0 || i >= n)) break;
+            i += dir; // 다음 유효 버튼까지 직선 탐색
         }
-        return index;
+        return index; // 더 이상 갈 곳 없으면 제자리
     }
 
     void Focus()

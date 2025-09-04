@@ -30,7 +30,7 @@ public class PortalController : MonoBehaviour
 
     void Update()
     {
-        if (playerInRange && Input.GetKeyDown(KeyCode.C))
+        if (playerInRange && Input.GetKeyDown(KeyCode.E))
         {
             // 페이드 전환 호출
             Shared.SceneTransitionManager.FadeToScene(targetScene);

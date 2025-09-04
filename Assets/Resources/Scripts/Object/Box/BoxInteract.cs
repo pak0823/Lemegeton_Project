@@ -7,7 +7,7 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     private ExplorationPersistId pid;
     public Animator animator;
     public GameObject targetMarker;   //인식 표시
-    private bool isPlayerNear = false;
+    public bool isPlayerNear = false;
     [SerializeField] private bool isOpened = false;
     private bool _applyOpenOnStart = false;  // 복원 시 다음 프레임에 반영
 
