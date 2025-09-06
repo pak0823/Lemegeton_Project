@@ -8,7 +8,7 @@ public class Skill_Ring_R1 : SkillAsset
 {
     private void OnEnable() { targetMode = SkillTargetMode.Tile; legacyId = SkillId.Skill4; }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
         yield return originCell; // center
         var ax = SkillLibrary.OffsetToAxial(originCell);
@@ -27,7 +27,7 @@ public class Skill_Ring_R1 : SkillAsset
     {
         var area = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
         var victims = bm.GetUnitsInArea(map, area);
-        bm.ExecuteSkillDamage(caster, victims, new SkillDefinition { id = legacyId });
+        bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
         yield break;
     }
 }

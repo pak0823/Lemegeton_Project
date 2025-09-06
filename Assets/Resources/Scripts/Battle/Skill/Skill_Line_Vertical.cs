@@ -10,7 +10,7 @@ public class Skill_Line_Vertical : SkillAsset
 
     private void OnEnable() { targetMode = SkillTargetMode.Unit; legacyId = SkillId.Skill1; }// 시전 후 이동 
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
         // axial deltas: (0,±k)
         var ax = SkillLibrary.OffsetToAxial(originCell);
@@ -27,7 +27,7 @@ public class Skill_Line_Vertical : SkillAsset
         var map = target.CurrentMap;
         var area = GetAreaCells(target.Cell, SkillLibrary.IsOddColumn(target.Cell));
         var hits = bm.GetUnitsInArea(map, area);
-        bm.ExecuteSkillDamage(caster, hits, new SkillDefinition { id = legacyId });
+        bm.ExecuteSkillDamage(caster, hits, this, map, target.Cell);
         yield break;
     }
 

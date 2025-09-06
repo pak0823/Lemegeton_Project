@@ -9,7 +9,7 @@ public class Skill_Line_Horizontal : SkillAsset
 {
     private void OnEnable() { targetMode = SkillTargetMode.Unit; legacyId = SkillId.Skill1; }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
         // {W, SELF, E}
         var ax = SkillLibrary.OffsetToAxial(originCell);
@@ -24,7 +24,7 @@ public class Skill_Line_Horizontal : SkillAsset
         var map = target.CurrentMap;
         var area = GetAreaCells(target.Cell, SkillLibrary.IsOddColumn(target.Cell));
         var victims = bm.GetUnitsInArea(map, area);
-        bm.ExecuteSkillDamage(caster, victims, new SkillDefinition { id = legacyId });
+        bm.ExecuteSkillDamage(caster, victims, this, map, target.Cell);
         yield break;
     }
 

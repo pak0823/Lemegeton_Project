@@ -368,7 +368,7 @@ public class BattleManager : MonoBehaviour
             if (target != null && !target.IsDead)
             {
                 target.PlayHit();
-                target.TakeDamage(attacker.AttackDamage);
+                target.TakeDamage(attacker.PhysicalDamage);
             }
         };
         attacker.OnAttackImpact += impact;
@@ -378,7 +378,7 @@ public class BattleManager : MonoBehaviour
         {
             Debug.LogWarning("[Attack] 임팩트 이벤트 없음 → 폴백으로 데미지 적용");
             target.PlayHit();
-            target.TakeDamage(attacker.AttackDamage);
+            target.TakeDamage(attacker.PhysicalDamage);
         }
 
         OnActionConsumed(act); // 공격 1회 소비 → 남은 토큰 판단
@@ -679,6 +679,14 @@ public class BattleManager : MonoBehaviour
     {
         if (skill == null) return;
 
+        // NEW: MP 부족 사전 차단
+        if (!acting.HasMP(skill.mpCost))
+        {
+            Debug.Log($"[Skill] MP 부족: {skill.displayName} (필요 {skill.mpCost})");
+            //EmitActionLabel?.Invoke(acting, $"MP {skill.mpCost} 필요"); // 카드 라벨 등
+            return; // 타겟팅 진입 안 함
+        }
+
         // 스킬 타겟팅 모드로 진입
         state = BattleState.Targeting;
         highlighter?.Clear();
@@ -746,6 +754,9 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || acting == null || target == null) return;
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
 
+        // 최종 사전 체크
+        if (!acting.HasMP(currentSkillSO.mpCost)) { EmitActionLabel?.Invoke(acting, "MP 부족"); return; }
+
         // 미리보기 정리
         ClearPreview();
         StartCoroutine(Co_GapCloseThenResolveOnTargetSO(currentSkillSO, acting, target));
@@ -779,9 +790,15 @@ public class BattleManager : MonoBehaviour
         System.Action impact = null;
         impact = () =>
         {
-            caster.OnAttackImpact -= impact;
-            impactTriggered = true;
-            // SO 해결(대개 즉시 종료, 필요 시 내부에서 추가 이펙트)
+            // 임팩트 순간 최종 차감
+            if (!caster.TryConsumeMP(skill.mpCost))
+            {
+                Debug.Log("[Skill] 임팩트 시 MP 부족 → 취소");
+                // 비용 차감 실패: 아무것도 일으키지 않고 종료
+                return;
+            }
+
+            // 차감 성공 → 스킬 해결
             StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => { resolved = true; }));
         };
 
@@ -829,6 +846,14 @@ public class BattleManager : MonoBehaviour
         onFire = () =>
         {
             caster.OnAttackImpact -= onFire;
+
+            // 발사 순간 최종 차감
+            if (!caster.TryConsumeMP(skill.mpCost))
+            {
+                Debug.Log("[Skill] 발사 시 MP 부족 → 취소");
+                projEnded = true; // 종료 플래그만 세우고 끝
+                return;
+            }
 
             if (projectilePrefab != null)
             {
@@ -888,7 +913,7 @@ public class BattleManager : MonoBehaviour
         var victims = GetUnitsInArea(map, area);
 
         // 3) 피해 적용 (임시: 적 유닛만 타격, 피해량은 캐스터의 일반 공격력 사용)
-        ExecuteSkillDamage(caster, victims, def);
+        //ExecuteSkillDamage(caster, victims, def);
         // 효과음/VFX 등은 여기에서
     }
 
@@ -994,20 +1019,25 @@ public class BattleManager : MonoBehaviour
     }
 
 
-    public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillDefinition def)
+    public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
     {
-        if (caster == null) return;
+        if (caster == null || source == null) return;
 
         // (임시) 아군/적 팀 구분
         foreach (var v in victims)
         {
             if (v == null) continue;
-            if (IsEnemyOf(caster, v))        // 팀 판별 유틸은 프로젝트에 맞게 교체
+            if (IsEnemyOf(caster, v))
             {
-                // 임시 피해량: 캐스터의 기본 공격력(없다면 1)
-                int damage = Mathf.Max(1, caster.AttackDamage);
+                var ctx = new SkillRuntime
+                {
+                    map = map,
+                    originCell = originCell,
+                    casterCell = caster.Cell,
+                    targetCell = v.Cell
+                };
+                int damage = Mathf.Max(1, source.ComputeDamage(caster, v, ctx));
                 v.TakeDamage(damage);
-                // (선택) 맞은 유닛 하이라이트/히트 VFX 등 추가 가능
             }
         }
     }
@@ -1051,8 +1081,10 @@ public class BattleManager : MonoBehaviour
         var frontAx = new Vector2Int(tAx.x + stepAx.x, tAx.y + stepAx.y);
         var candidate = SkillLibrary.ToOffset(frontAx);
 
+        var map = target.CurrentMap;
+
         // 실제로 이동하는 건 아니고 '연출용 좌표'로만 쓸 거라 HasTile 정도만 체크
-        if (provider != null && provider.EnemyFloor != null && provider.EnemyFloor.HasTile(candidate))
+        if (map != null && map.HasTile(candidate))
         {
             frontCell = candidate;
             return true;

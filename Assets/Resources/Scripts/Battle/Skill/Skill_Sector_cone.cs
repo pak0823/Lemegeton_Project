@@ -22,7 +22,7 @@ public class Skill_Sector_cone : SkillAsset
         legacyId = SkillId.Skill1; // 1/2만 이동 트리거 → 이동 없음
     }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
         var originAx = SkillLibrary.OffsetToAxial(originCell);
         foreach (var d in axialDeltas)
@@ -49,7 +49,7 @@ public class Skill_Sector_cone : SkillAsset
         var map = target.CurrentMap;
         var cells = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
         var victims = bm.GetUnitsInArea(map, cells);
-        bm.ExecuteSkillDamage(caster, victims, new SkillDefinition { id = legacyId });
+        bm.ExecuteSkillDamage(caster, victims, this, map, target.Cell);
         yield break;
     }
 }

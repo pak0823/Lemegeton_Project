@@ -103,12 +103,12 @@ public class GameSpeedController : MonoBehaviour
         // 아이콘/라벨 업데이트
         UpdateVisuals();
 
-        if (s == 0f)
-            Debug.Log("[Speed] 정지");
-        else
-        {
-            Debug.Log($"[Speed] {s:0}배속");
-        }
+        //if (s == 0f)
+        //    Debug.Log("[Speed] 정지");
+        //else
+        //{
+        //    Debug.Log($"[Speed] {s:0}배속");
+        //}
             
     }
     // 특정 속도값의 인덱스를 찾기

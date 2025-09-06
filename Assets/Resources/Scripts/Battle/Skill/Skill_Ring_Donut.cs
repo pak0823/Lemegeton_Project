@@ -15,7 +15,7 @@ public class Skill_Ring_Donut : SkillAsset
         legacyId = SkillId.Skill3; // 시전 후 이동 없음
     }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
         var center = SkillLibrary.OffsetToAxial(originCell);
         // 중심 포함 여부를 원하면 아래 라인 주석 해제
@@ -35,7 +35,7 @@ public class Skill_Ring_Donut : SkillAsset
     {
         var area = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
         var hits = bm.GetUnitsInArea(map, area);
-        bm.ExecuteSkillDamage(caster, hits, new SkillDefinition { id = legacyId });
+        bm.ExecuteSkillDamage(caster, hits, this, map, originCell);
         yield break;
     }
 

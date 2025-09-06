@@ -10,6 +10,9 @@ public class BattleInput : MonoBehaviour
     public LayerMask unitMask;
     public GameSpeedController speedCtrl; // GameSpeedController 할당
     public HudController hudCtrl;   //HUD 컨트롤러 할당
+
+    bool wasTargetingPrev = false;
+    bool suppressLMBOnce = false;
     #endregion
 
     #region Internal References
@@ -113,6 +116,20 @@ public class BattleInput : MonoBehaviour
             && battle.IsTargeting
             && battle.currentSkillSO != null);
 
+        bool isTargetingNow = canTargetSkill;
+
+        if (!wasTargetingPrev && isTargetingNow)
+        {
+            // 스킬 선택으로 Targeting 들어온 '첫 프레임' → 그 프레임의 좌클릭은 무시
+            suppressLMBOnce = true;
+        }
+        if (!Input.GetMouseButton(0))
+        {
+            // 마우스 버튼이 올라간 뒤에야 다음 좌클릭을 허용
+            if (suppressLMBOnce) suppressLMBOnce = false;
+        }
+        wasTargetingPrev = isTargetingNow;
+
         // 우클릭/Q로 취소(선택사항)
         if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Q))
         {
@@ -139,7 +156,7 @@ public class BattleInput : MonoBehaviour
             battle?.OnClickEscape();       // 전투 즉시 종료 & 복귀
         }
 
-        // === C 키로 확정 (Unit 스킬일 때만) ===
+        // === E 키로 확정 (Unit 스킬일 때만) ===
         if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Unit && Input.GetKeyDown(KeyCode.E))
         {
             battle.ConfirmTarget();
@@ -183,26 +200,18 @@ public class BattleInput : MonoBehaviour
             else
             {
                 var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
-
                 if (map != null)
                 {
-                    var cell = map.WorldToCell(world);
-                    if (map.HasTile(cell))
+                    if (TryCell(map, world, out var cell))
                     {
-                        // 마우스가 타일 위 → 내부 커서 갱신 + 프리뷰
+                        // 내부 커서만 동기화 + 프리뷰만
                         battle.selectedCell = cell;
-                        battle.PreviewSkillAreaOnTile(map, cell);
-                    }
-                    else
-                    {
-                        // 마우스가 타일 밖 → 내부 커서 기준으로 프리뷰 유지
-                        battle.PreviewSkillAreaOnTile(map, battle.selectedCell);
+                        battle.PreviewSkillAreaOnTile(map, cell); // ← 프리뷰
                     }
                 }
             }
         }
-
-            if (canTargetSkill && Input.GetMouseButtonDown(0)) // 좌클릭 확정
+        if (canTargetSkill && !suppressLMBOnce && Input.GetMouseButtonDown(0)) // 좌클릭 확정(첫 클릭 무시)
         {
             Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
             world.z = 0f;
@@ -223,14 +232,16 @@ public class BattleInput : MonoBehaviour
             }
             else // SkillTargetMode.Tile
             {
-                // 현재 전장 타일맵을 기준으로 셀 확정
                 var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
-
                 if (map != null)
                 {
-                    // 마우스 위치와 무관하게 내부 커서 기준으로 확정
-                    battle.ConfirmSkillOnTile(map, battle.selectedCell);
+                    if (TryCell(map, world, out var cell))
+                    {
+                        battle.selectedCell = cell; // 내부 커서 동기화
+                        battle.ConfirmSkillOnTile(map, cell);     // 확정
                         return;
+                    }
+                    // 타일맵 밖 클릭이면 아무 것도 하지 않음(실행 X)
                 }
             }
         }

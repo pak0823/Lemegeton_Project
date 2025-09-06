@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
-
+using UnityEngine.EventSystems;
 public class SkillPanelUI : MonoBehaviour
 {
     [Header("Refs")]
@@ -58,7 +58,20 @@ public class SkillPanelUI : MonoBehaviour
 
                 btn.onClick.RemoveAllListeners();
                 int capture = i;
-                btn.onClick.AddListener(() => battle.SelectSkill(capture));
+                btn.onClick.AddListener(() =>
+                {
+                    // 하이라이트를 먼저 현재 버튼으로 고정
+                    var nav = (panel != null ? panel.GetComponent<UIArrowNavigator>() : null)
+                                ?? GetComponentInChildren<UIArrowNavigator>(true);
+                    if (nav != null) nav.SelectIndexImmediate(capture);
+
+                    // EventSystem에도 선택으로 알려주고 싶다면
+                    if (EventSystem.current != null)
+                        EventSystem.current.SetSelectedGameObject(btn.gameObject);
+
+                    // 기존 배틀 호출(이 시점에서 Targeting 진입 → 잠금이 걸려도 OK)
+                    battle.SelectSkill(capture);
+                });
             }
             else btn.gameObject.SetActive(false);
         }

@@ -29,6 +29,16 @@ public class UIArrowNavigator : MonoBehaviour
     [Header("Unity 기본 네비게이션(Selectable Navigation) 끄기")]
     [SerializeField] private bool disableUnitySelectableNavigation = true;
 
+    [Header("Lock Settings")]
+    [SerializeField] private bool lockAfterConfirm = true;   // 확정(버튼 onClick) 직후 잠금
+    [SerializeField] private bool lockWhileTargeting = true; // 전투가 타겟팅/프리뷰 상태면 잠금
+    [SerializeField] private BattleManager battle;           // (SkillPanel 쪽만) 인스펙터에 할당
+    private bool navLocked = false;
+
+    // 외부에서 제어할 수 있도록 메서드 노출
+    //public void LockNavigation() { navLocked = true; }
+    //public void UnlockNavigation() { navLocked = false; }
+
     private int index = 0;
     private readonly List<GameObject> highlightCache = new List<GameObject>();
     private GameObject lastSelectedGO; // 외부 선택 추적용
@@ -37,17 +47,21 @@ public class UIArrowNavigator : MonoBehaviour
     {
         if (autoRebuildOnEnable) BuildHighlightCache();
         if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();   //기본 UI 네비게이션 끄기
+        if(Shared.UIArrowNavigator == null)
+            Shared.UIArrowNavigator = this;
     }
 
     void OnEnable()
     {
         if (autoRebuildOnEnable) BuildHighlightCache();
         if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
+        navLocked = false;           // 패널이 새로 열릴 때는 항상 잠금 해제 상태로 시작
         // 패널이 켜질 때 첫 유효 버튼으로 포커스
         index = FirstActiveIndex();
         if (autoFocusOnEnable) Focus();    // EventSystem에 선택 반영
         UpdateHighlight();                 // 하이라이트 갱신
         lastSelectedGO = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
+        battle = Shared.BattleManager;
     }
 
     void Update()
@@ -55,6 +69,31 @@ public class UIArrowNavigator : MonoBehaviour
         // 패널이 꺼져 있거나, HUD CanvasGroup이 꺼져 있으면 동작 안함
         if (!gameObject.activeInHierarchy) return;
         if (!IsInteractableByCanvasGroup(this.gameObject)) return;
+
+        // 전투 상태로 잠금 (예: 스킬 선택 후 범위 표시/타겟팅 진입)
+        if (lockWhileTargeting && battle != null)
+        {
+            if(battle.IsTargeting)
+            {
+                navLocked = true;
+            }
+            else
+            {
+                // 타깃팅이 끝났다면(= 취소/확정 이후 상태 복귀) 잠금 해제
+                if (navLocked)
+                {
+                    navLocked = false;
+                    UpdateHighlight(); // 하이라이트 한번 갱신(선택 상태 표시 복구)
+                }
+            }
+        }
+
+        // 잠금 상태에서는 '마우스 외부 선택 추적'과 '좌/우/확정' 모두 무시
+        if (navLocked)
+        {
+            // 하이라이트는 현재 선택에 그대로 고정
+            return;
+        }
 
         bool handledKey = false;
 
@@ -76,6 +115,8 @@ public class UIArrowNavigator : MonoBehaviour
         else if (Input.GetKeyDown(confirmKey))
         {
             var b = GetButton(index);
+            // 확정 직후 잠금
+            if (lockAfterConfirm) navLocked = true;
             b?.onClick?.Invoke();
             handledKey = true;
         }
@@ -125,6 +166,13 @@ public class UIArrowNavigator : MonoBehaviour
 
         index = FirstActiveIndex();
         if (refocus) { Focus(); UpdateHighlight(); }
+    }
+    public void SelectIndexImmediate(int i, bool focus = true, bool updateHighlight = true)
+    {
+        if (i < 0 || i >= buttons.Count) return;
+        index = i;
+        if (focus) Focus();          // EventSystem 선택까지 반영
+        if (updateHighlight) UpdateHighlight();
     }
 
     // === Core ===

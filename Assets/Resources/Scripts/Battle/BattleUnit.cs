@@ -21,17 +21,21 @@ public class BattleUnit : MonoBehaviour
     public float atbPerSecond; // 초당 ATB 충전 속도
 
     [Header("Resource Stats")]
-    public int AttackDamage = 1;
+    public int PhysicalDamage = 1;
+    public int MagicDamage = 1;
     public int MaxHP = 100;     //최대 HP
     public int MaxMP = 100;     //최대 MP
     public int MaxRage = 100;       //최대 분노 게이지
+
+    [System.Serializable]
+    public struct AttrMod { public AttackAttr attr; public float mult; } // 예: (Strike, 1.2f)
+    public AttrMod[] resistTable;
 
     public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
 
     public int HP { get; private set; }
     public int MP { get; private set; }
     public int Rage { get; private set; }
-
     #endregion
 
     #region Visual
@@ -48,7 +52,6 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Map & Position
-    //public int MoveRange = 3;
     public Tilemap CurrentMap; // 팀에 따라 Player_Tilemap or Enemy_Tilemap
     public Vector3Int Cell { get; private set; }
     #endregion
@@ -82,7 +85,8 @@ public class BattleUnit : MonoBehaviour
         if (data != null)
         {
             team = data.team;
-            AttackDamage = data.AttackDamage;
+            PhysicalDamage = data.PhysicalDamage;
+            MagicDamage = data.MagicDamage;
             MaxHP = data.MaxHP;
             MaxMP = data.MaxMP;
             MaxRage = data.MaxRage;
@@ -90,6 +94,8 @@ public class BattleUnit : MonoBehaviour
         }
 
         HP = Mathf.Clamp(HP == 0 ? MaxHP : HP, 0, MaxHP); // 씬 배치 중 수동 값 보호
+        MP = Mathf.Clamp(MP == 0 ? MaxMP : MP, 0, MaxMP);
+        Rage = Mathf.Clamp(Rage, 0, MaxRage);
     }
     #endregion
 
@@ -162,8 +168,6 @@ public class BattleUnit : MonoBehaviour
     #region Attack
     public IEnumerator AnimateAttack(BattleUnit target) //근접공격 애니메이션
     {
-        if (target != null)
-
         if (animator) animator.SetTrigger("Attack");
 
         bool ended = false;
@@ -216,6 +220,21 @@ public class BattleUnit : MonoBehaviour
         }
     }
     #endregion
+
+    public bool HasMP(int cost) => cost <= 0 || MP >= cost;
+    public bool TryConsumeMP(int cost)
+    {
+        if (cost <= 0) return true;
+        if (MP < cost) return false;
+        MP = Mathf.Max(0, MP - cost);
+        return true;
+    }
+    // (선택) 회복도 필요하면:
+    //public void GainMP(int amount)
+    //{
+    //    if (amount <= 0) return;
+    //    MP = Mathf.Clamp(MP + amount, 0, MaxMP);
+    //}
 
 
 
