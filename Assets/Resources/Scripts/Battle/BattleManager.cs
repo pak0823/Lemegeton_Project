@@ -25,8 +25,12 @@ public class BattleManager : MonoBehaviour
     int remainingActions = 0; // 남은 토큰
     readonly HashSet<BattleAction> usedActions = new(); // 이번 턴에 사용한 행동(중복 금지)
 
-    public Highlighter highlighter;
+    [Header("Highlighters")]
+    public Highlighter moveHighlighter;   // 이동 미리보기
+    public Highlighter skillHighlighter;    // 스킬 범위 미리보기
     IBattleMapProvider provider;
+    int _skillPreviewHold = 0;            // 웹 캐스팅 등 스킬 프리뷰 유지용
+
     bool initialized = false; // 중복 Init 방지
     public bool IsPlayerTurn => acting != null && acting.team == Team.Player;
     public bool IsTargeting => state == BattleState.Targeting;
@@ -48,6 +52,7 @@ public class BattleManager : MonoBehaviour
     public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
     public event OnATBChangedDelegate OnATBChanged;
     readonly System.Random rng = new System.Random();// 소난수 발생기
+    public static event System.Action<BattleUnit> OnAnyUnitTurnStarted;
 
     // === AGI 변화 감지용 ===
     float _lastMinAGI, _lastMaxAGI, _lastAGISum;
@@ -73,7 +78,7 @@ public class BattleManager : MonoBehaviour
 
     //유닛 스킬 표시용
     public event System.Action<BattleUnit, string> OnUnitActionLabel; // (유닛, 라벨)
-    void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
+    public void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
     #endregion
 
     UnitStatusPanelUI StatusPanel
@@ -117,13 +122,13 @@ public class BattleManager : MonoBehaviour
 
     #region Initialization
 
-    void Init()
+    void Init() //초기 세팅
     {
         var units = FindObjectsOfType<BattleUnit>().ToList();
         if (units.Count == 0) return;
 
-        float minAGI = units.Min(u => u.AGI);
-        float maxAGI = units.Max(u => u.AGI);
+        float minAGI = units.Min(u => u.EffectiveAGI);
+        float maxAGI = units.Max(u => u.EffectiveAGI);
 
         foreach (var u in units)
         {
@@ -137,11 +142,37 @@ public class BattleManager : MonoBehaviour
             u.OnDied += HandleUnitDied;
         }
 
+        //적마다 다음에 쓸 스킬을 미리 선정하고 UI에 띄움
+        foreach (var u in units)
+        {
+            if (u.team != Team.Enemy) continue;
+            var ai = u.GetComponent<EnemyAI>();
+            if (ai == null) continue;
+
+            var next = ai.PlanNextSkill();// 다음 턴용 스킬 선정           
+            EmitActionLabel(u, next != null ? next.displayName : "");  // 카드에 “예정 스킬명” 표시
+        }
+
         // AGI 스냅샷 저장
         _lastMinAGI = minAGI;
         _lastMaxAGI = maxAGI;
-        _lastAGISum = units.Sum(u => u.AGI);
+        _lastAGISum = units.Sum(u => u.EffectiveAGI);
         _lastAGICount = units.Count;
+
+        // 상태가 바뀌면 ATB 재계산
+        foreach (var u in units)
+        {
+            var sc = u.GetComponent<StatusController>();
+            if (sc != null)
+            {
+                sc.OnStatusChanged += RecomputeATBSpeedsFromLiveUnits; // 기존
+                if (logAGIOnStatusChange)
+                {
+                    var unitCapture = u; // 클로저 캡처 주의: 루프 변수 복사
+                    sc.OnStatusChanged += () => LogUnitAGI(unitCapture, "StatusChanged");
+                }
+            }
+        }
 
         initialized = true;
     }
@@ -155,9 +186,9 @@ public class BattleManager : MonoBehaviour
         // === AGI 변화 감지(실시간) ===
         {
             var alive = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
-            float curMin = (alive.Count > 0) ? alive.Min(u => u.AGI) : 0f;
-            float curMax = (alive.Count > 0) ? alive.Max(u => u.AGI) : 0f;
-            float curSum = (alive.Count > 0) ? alive.Sum(u => u.AGI) : 0f;
+            float curMin = (alive.Count > 0) ? alive.Min(u => u.EffectiveAGI) : 0f;
+            float curMax = (alive.Count > 0) ? alive.Max(u => u.EffectiveAGI) : 0f;
+            float curSum = (alive.Count > 0) ? alive.Sum(u => u.EffectiveAGI) : 0f;
             int curCnt = alive.Count;
 
             if (curCnt != _lastAGICount
@@ -193,7 +224,7 @@ public class BattleManager : MonoBehaviour
                 // 우선순위: Overfill(desc) → AGI(desc) → tiny random
                 var selected = candidates
                     .OrderByDescending(u => u.Overfill)    // 1) 프레임 내 과충전량이 많은 순
-                    .ThenByDescending(u => u.AGI)          // 2) AGI 높은 순
+                    .ThenByDescending(u => u.EffectiveAGI)          // 2) AGI 높은 순
                     .ThenBy(u => rng.NextDouble())         // 3) 아주 작은 난수
                     .First();
 
@@ -202,6 +233,19 @@ public class BattleManager : MonoBehaviour
                 StartTurn(acting);
             }
         }
+    }
+
+    [Header("Debug/Logs")]
+    [SerializeField] bool logAGIOnTurnStart = true;
+    [SerializeField] bool logAGIOnStatusChange = false;
+
+    void LogUnitAGI(BattleUnit u, string reason)
+    {
+        if (u == null) return;
+        var sc = u.GetComponent<StatusController>();
+        int stacks = (sc != null) ? sc.GetStacks(StatusId.Slow) : 0;            // GetStacks
+        float mult = (sc != null) ? sc.GetAgilityMultiplier() : 1f;             // GetAgilityMultiplier
+        Debug.Log($"[AGI:{reason}] {u.team}/{u.name}  base={u.AGI:0.##}  slowStacks={stacks}  mult={mult:0.##}  effective={u.EffectiveAGI:0.##}");
     }
 
 
@@ -213,9 +257,26 @@ public class BattleManager : MonoBehaviour
         acting = unit;
         remainingActions = baseActionsPerTurn;
         usedActions.Clear();
-        highlighter?.Clear();
+        ClearAllPreviews();
         ClearTargetSelection();
         manualEndRequested = false;
+        OnAnyUnitTurnStarted?.Invoke(unit);
+
+        var sc = unit.GetComponent<StatusController>();
+        if (sc != null) sc.OnTurnStart();
+        if (logAGIOnTurnStart) LogUnitAGI(unit, "TurnStart");
+
+        // 캐스팅 성공 턴 소비 처리
+        if (unit.team == Team.Enemy)
+        {
+            var ecs = unit.GetComponent<EnemyCastState>();
+            if (ecs != null && ecs.TryTakeReady(out var pending))   // 준비된 캐스팅 성공 확인
+            {
+                // 적 행동 루틴 대신, '웹 발사→생성→소비' 코루틴 실행
+                StartCoroutine(Co_EnemyFireWebThenConsume(unit, pending));
+                return; // EnemyTurnRoutine 시작하지 않음
+            }
+        }
 
         // 모든 ATB 정지
         atbPaused = true;
@@ -223,16 +284,16 @@ public class BattleManager : MonoBehaviour
         if (unit.team == Team.Player)
         {
             state = BattleState.ActionSelect; // 플레이어 입력 허용
-            Debug.Log($"[PlayerTurn] {unit.name} 턴 시작 → ATB 정지");
+            //Debug.Log($"[PlayerTurn] {unit.name} 턴 시작 → ATB 정지");
         }
         else
         {
             state = BattleState.Resolving; // 입력 잠금
-            Debug.Log($"[EnemyTurn] {unit.name} 턴 시작 → ATB 정지");
+            //Debug.Log($"[EnemyTurn] {unit.name} 턴 시작 → ATB 정지");
             StartCoroutine(EnemyTurnRoutine(unit));
         }
 
-        UpdateTurnIndicator();
+        //UpdateTurnIndicator();
     }
 
     // === 생존 유닛들의 현재 AGI 범위로 전원의 ATB 속도 재계산 ===
@@ -241,15 +302,15 @@ public class BattleManager : MonoBehaviour
         var alive = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
         if (alive.Count == 0) return;
 
-        float min = alive.Min(u => u.AGI);
-        float max = alive.Max(u => u.AGI);
+        float min = alive.Min(u => u.EffectiveAGI);
+        float max = alive.Max(u => u.EffectiveAGI);
         foreach (var u in alive)
             u.InitializeATB(min, max); // atbPerSecond만 갱신(ATB 값은 그대로)
 
         // 스냅샷 갱신
         _lastMinAGI = min;
         _lastMaxAGI = max;
-        _lastAGISum = alive.Sum(u => u.AGI);
+        _lastAGISum = alive.Sum(u => u.EffectiveAGI);
         _lastAGICount = alive.Count;
     }
 
@@ -267,11 +328,11 @@ public class BattleManager : MonoBehaviour
         EndPlayerTurn();             // 종료 로직은 한 군데로 집약
     }
 
-    void UpdateTurnIndicator() //임시 테스트용 턴 확인
-    {
-        if (acting == null) { Debug.Log("[Turn] (없음)"); return; }
-        Debug.Log($"[Turn] {acting.team} - {acting.name}");
-    }
+    //void UpdateTurnIndicator() //임시 테스트용 턴 확인
+    //{
+    //    if (acting == null) { Debug.Log("[Turn] (없음)"); return; }
+    //    Debug.Log($"[Turn] {acting.team} - {acting.name}");
+    //}
     #endregion
 
     #region Movement
@@ -282,12 +343,12 @@ public class BattleManager : MonoBehaviour
 
         // 스킬 패널/선택 상태 정리
         CloseSkillPanel();       // 패널 열려있으면 닫기
-        highlighter?.Clear();    // 남아있을지 모를 프리뷰 정리
+        ClearAllPreviews();    // 남아있을지 모를 프리뷰 정리
         ClearTargetSelection();  // 타겟 마커 숨김
 
         state = BattleState.Moving;
         moveOptions = grid.GetAdjacentWalkable(acting.team, acting.Cell).ToList();
-        highlighter?.ShowCells(acting.CurrentMap, moveOptions);
+        ShowMovePreview(acting.CurrentMap, moveOptions);
     }
 
     public void OnTileClicked(Tilemap clickedMap, Vector3Int clickedCell)
@@ -300,7 +361,7 @@ public class BattleManager : MonoBehaviour
             {
                 state = BattleState.Resolving; // 입력 잠금
                 StartCoroutine(Co_MoveThenConsume(acting, clickedMap, clickedCell, BattleAction.Move));
-                highlighter?.Clear();
+                ClearAllPreviews();
                 moveOptions.Clear();
                 return;
             }
@@ -333,7 +394,7 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || acting == null) return; // 적 턴 금지
         if (usedActions.Contains(BattleAction.Attack) || remainingActions <= 0) return; // 중복/토큰 없음
 
-        highlighter?.Clear();
+        ClearAllPreviews();
         ClearTargetSelection();
         OpenSkillPanel();
     }
@@ -352,7 +413,7 @@ public class BattleManager : MonoBehaviour
         if (acting == null) return;
 
         state = BattleState.Resolving;
-        highlighter?.Clear();
+        ClearAllPreviews();
         Debug.Log("공격 시작 → 임팩트에서 데미지 1회 적용");
         StartCoroutine(Co_AttackThenConsume(acting, target, BattleAction.Attack));
     }
@@ -422,7 +483,7 @@ public class BattleManager : MonoBehaviour
     // 플레이어 턴 종료 처리
     void EndPlayerTurn()
     {
-        highlighter?.Clear();
+        ClearAllPreviews();
         ClearTargetSelection();
 
         if (manualEndRequested && usedActions.Count == 0)
@@ -445,7 +506,7 @@ public class BattleManager : MonoBehaviour
         // 타겟팅 중(스킬 선택됨) → '스킬만 해제', 패널은 유지
         if (state == BattleState.Targeting && currentSkillSO != null)
         {
-            ClearPreview();
+            ClearSkillPreview();
             ClearTargetSelection();
             currentSkillSO = null;
             state = BattleState.ActionSelect;
@@ -454,7 +515,7 @@ public class BattleManager : MonoBehaviour
         }
         if (state == BattleState.Moving)
         {
-            ClearPreview();
+            ClearMovePreview();
             ClearTargetSelection();
             state = BattleState.ActionSelect;
             return;
@@ -462,7 +523,7 @@ public class BattleManager : MonoBehaviour
         // 그밖의 상황에서 패널이 열려 있다면(= 취소 2회째) 패널 닫기
         if (isSelectingSkill)
         {
-            ClearPreview();
+            ClearAllPreviews();
             CloseSkillPanel();
             state = BattleState.ActionSelect;
             return;
@@ -475,7 +536,7 @@ public class BattleManager : MonoBehaviour
     {
         targetCycle = FindObjectsOfType<BattleUnit>()
             .Where(u => u.team == Team.Enemy && !u.IsDead)
-            .OrderByDescending(u => u.AGI)
+            .OrderByDescending(u => u.EffectiveAGI)
             .ToList();
         targetIndex = -1;
         selectedTarget = null;
@@ -523,7 +584,7 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || !IsTargeting || selectedTarget == null) return;
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
 
-        ClearPreview();
+        ClearSkillPreview();
         StartCoroutine(Co_GapCloseThenResolveOnTargetSO(currentSkillSO, acting, selectedTarget));
     }
 
@@ -570,12 +631,12 @@ public class BattleManager : MonoBehaviour
         if (!anyEnemy) 
         { 
             Debug.Log("[Battle] 승리!");
-            //Shared.SceneTransitionManager.ReturnToSavedPoint();
+            Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
         else if (!anyPlayer) 
         { 
             Debug.Log("[Battle] 패배...");
-            //Shared.SceneTransitionManager.ReturnToSavedPoint();
+            Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
     }
     #endregion
@@ -585,47 +646,112 @@ public class BattleManager : MonoBehaviour
     {
         yield return new WaitForSeconds(0.5f); // 살짝 텀
 
-        // 행동 순서 예시: 공격 우선, 이동 가능 시 이동
+        // 생존 플레이어 수집
         var players = FindObjectsOfType<BattleUnit>()
-                        .Where(u => u.team == Team.Player && !u.IsDead)
-                        .ToList();
+            .Where(u => u.team == Team.Player && !u.IsDead)
+            .ToList();
         if (players.Count == 0) { EndEnemyTurn(enemy); yield break; }
 
-        BattleUnit target = players
-            .OrderBy(u => grid.CrossMapDistance(provider.PlayerFloor, enemy.CurrentMap, enemy.Cell, u.CurrentMap, u.Cell))
-            .First();
+        // TODO(도발 연동 자리): 도발 대상 우선 선택 훅
+        // var tauntTarget = FindTauntTarget(players);
+        // BattleUnit target = tauntTarget ?? players[Random.Range(0, players.Count)];
 
-        int RandPartten = Random.Range(0, 11);
-        Debug.Log("RandPartten:" + RandPartten);
-        if (RandPartten < 6)
+        BattleUnit target = players[Random.Range(0, players.Count)]; // 랜덤 1인 지정
+
+        // 미리 선정해둔 스킬을 꺼내서 사용
+        SkillAsset so = null;
+        var ai = enemy.GetComponent<EnemyAI>();
+        if (ai != null) so = ai.ConsumePlannedSkillOrPick();
+
+        if (so != null)
         {
-            ResolveAttack(target); // 공격
-            yield return new WaitUntil(() => state != BattleState.Resolving);
-        }
-        else
-        {
-            // 이동
-            var candidates = grid.GetAdjacentWalkable(enemy.team, enemy.Cell).ToList();
-            if (candidates.Count > 0)
+            // 이미 표시 중인 예정 스킬명이 실행됨
+            if (so.targetMode == SkillTargetMode.Unit)
             {
-                var best = candidates
-                    .OrderBy(c => grid.CrossMapDistance(
-                    provider.PlayerFloor, // 기준 맵
-                    enemy.CurrentMap, // fromMap
-                    enemy.Cell, // fromCell (현재 위치)
-                    target.CurrentMap, // toMap
-                    c)).First(); // toCell (이동 후보)
-                yield return enemy.AnimateMoveTo(enemy.CurrentMap, best);
-                enemy.MoveTo(enemy.CurrentMap, best);
+                yield return StartCoroutine(so.ResolveOnUnit(this, enemy, target));
+                FinishActionAfterSkill();
+                yield break;
+            }
+            else if(so.targetMode == SkillTargetMode.Tile)
+            {
+                //Tile지정 스킬 추가 예정
+                yield break;
             }
         }
 
+        // so가 없으면 (null) 기본 종료/대기 등
         EndEnemyTurn(enemy);
     }
+
+    // === Enemy AI Helpers ===
+    // 적 유닛 대상형 스킬 실행
+    IEnumerator Co_EnemyResolveSkillOnUnit_NoMove(SkillDefinition def, BattleUnit caster, BattleUnit target)
+    {
+        state = BattleState.Resolving;
+
+        bool impactDone = false;
+        System.Action impact = null;
+        impact = () =>
+        {
+            caster.OnAttackImpact -= impact;
+            impactDone = true;
+            // 대상 유닛의 셀을 원점으로 범위 계산/피해 적용
+            ResolveSkillAtCell(def, target.CurrentMap, target.Cell, caster);
+        };
+        caster.OnAttackImpact += impact;
+
+        yield return caster.AnimateAttack(target); // 제자리 근접 모션
+
+        if (!impactDone) // 애니 이벤트 누락 대비
+            ResolveSkillAtCell(def, target.CurrentMap, target.Cell, caster);
+
+        FinishActionAfterSkill(); // 토큰 소모/턴 진행(공격으로 간주)
+    }
+
+    IEnumerator Co_EnemyFireWebThenConsume(BattleUnit caster, EnemyCastState.PendingCast p) //실뿜기 스킬 실행 루틴
+    {
+        state = BattleState.Resolving;
+
+        // 1) 캐스팅 루프 종료 → 2) 발사 애니
+        caster.SetCasting(false);
+        yield return caster.AnimateShootWeb();  // 없으면 Ranged 폴백
+
+        // 3) 실제 거미줄 생성
+        if (p.trapPrefab != null && p.map != null)
+        {
+            var wpos = p.map.GetCellCenterWorld(p.cell);
+            var trap = Instantiate(p.trapPrefab, wpos, Quaternion.identity);
+            trap.Init(p.map, p.cell, p.owner);
+        }
+
+        // 4) 프리뷰 토큰/홀드 해제 (토큰 ID는 EnemyCastState가 갖고 있으니 도우미 추가 권장)
+        // 간단히: 스킬 오버레이를 싹 지우고 싶다면:
+        ClearSkillPreview();
+
+        var ecs = caster.GetComponent<EnemyCastState>();
+        ecs?.ClearPreviewAndFinalize(this);   // 토큰 삭제 + 홀드 해제 + pending 정리
+
+        // 5) 행동 토큰 소비로 턴 종료
+        OnActionConsumed(BattleAction.Attack);
+    }
+
+
 
     void EndEnemyTurn(BattleUnit enemy)
     {
         enemyRoutine = null;
+
+        // 캐스팅 중이면 다음 스킬 선점/라벨 갱신 금지
+        var ecs = enemy.GetComponent<EnemyCastState>();
+        if (ecs == null || !ecs.IsCasting)
+        {
+            var ai = enemy.GetComponent<EnemyAI>();
+            if (ai != null)
+            {
+                var next = ai.PlanNextSkill();  // 다음 턴용 스킬 미리 선정 + 라벨 갱신
+                EmitActionLabel(enemy, next != null ? next.displayName : "");
+            }
+        }
 
         enemy.ResetATB();
         if (acting == enemy) acting = null;
@@ -644,7 +770,7 @@ public class BattleManager : MonoBehaviour
 
         // 진행 중이던 선택/표시 정리
         CancelCurrentAction();      // Moving/Targeting 상태면 ActionSelect로 되돌림
-        highlighter?.Clear();
+        ClearAllPreviews();
         ClearTargetSelection();
 
         Debug.Log("[Battle] 도망가기 → 탐험으로 복귀");
@@ -689,7 +815,7 @@ public class BattleManager : MonoBehaviour
 
         // 스킬 타겟팅 모드로 진입
         state = BattleState.Targeting;
-        highlighter?.Clear();
+        ClearAllPreviews();
         ClearTargetSelection(); // 기존 선택/마커 초기화
 
         //Debug.Log($"[Skill] Select: {skill.name} (mode: {skill.targetMode}) → Targeting");
@@ -722,15 +848,15 @@ public class BattleManager : MonoBehaviour
     // 현재 선택된 스킬의 범위를 "유닛 기준"으로 미리보기
     public void PreviewSkillAreaOnUnit(BattleUnit unit)
     {
-        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) { highlighter?.Clear(); return; }
-        if (unit == null || unit.team == Team.Player) { highlighter?.Clear(); return; } // 아군(플레이어)에는 미리보기 표시하지 않음
+        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) { ClearAllPreviews(); return; }
+        if (unit == null || unit.team == Team.Player) { ClearAllPreviews(); return; } // 아군(플레이어)에는 미리보기 표시하지 않음
 
         var origin = unit.Cell;                            // 유닛의 현재 셀
         var cells = currentSkillSO.GetAreaCells(origin, SkillLibrary.IsOddColumn(origin));
         var map = unit.CurrentMap;
 
         // 범위 내 유닛 수집 → 패널 하이라이트
-        highlighter.ShowCells(map, cells);
+        skillHighlighter.ShowCells(map, cells);
         var victims = GetUnitsInArea(map, cells);
         StatusPanel?.HighlightUnits(victims);
     }
@@ -738,11 +864,11 @@ public class BattleManager : MonoBehaviour
     // 현재 선택된 스킬의 범위를 "타일 기준"으로 미리보기
     public void PreviewSkillAreaOnTile(Tilemap map, Vector3Int originCell)
     {
-        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Tile) { highlighter?.Clear(); return; }
-        if (map == null) { highlighter?.Clear(); return; }
+        if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Tile) { ClearAllPreviews(); return; }
+        if (map == null) { ClearAllPreviews(); return; }
 
         var cells = currentSkillSO.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
-        highlighter.ShowCells(map, cells);
+        skillHighlighter.ShowCells(map, cells);
 
         // 범위 내 유닛 수집 → 패널 하이라이트
         var victims = GetUnitsInArea(map, cells);
@@ -755,10 +881,10 @@ public class BattleManager : MonoBehaviour
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
 
         // 최종 사전 체크
-        if (!acting.HasMP(currentSkillSO.mpCost)) { EmitActionLabel?.Invoke(acting, "MP 부족"); return; }
+        //if (!acting.HasMP(currentSkillSO.mpCost)) { EmitActionLabel?.Invoke(acting, "MP 부족"); return; } -- 수정해야함
 
         // 미리보기 정리
-        ClearPreview();
+        ClearSkillPreview();
         StartCoroutine(Co_GapCloseThenResolveOnTargetSO(currentSkillSO, acting, target));
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int originCell)
@@ -766,7 +892,7 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || acting == null || map == null) return;
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Tile) return;
 
-        ClearPreview();
+        ClearSkillPreview();
         StartCoroutine(Co_ProjectileSkillThenFinishSO(currentSkillSO, map, originCell, acting));
     }
 
@@ -790,6 +916,10 @@ public class BattleManager : MonoBehaviour
         System.Action impact = null;
         impact = () =>
         {
+            // 중복 방지 플래그 & 구독 해제
+            impactTriggered = true;
+            caster.OnAttackImpact -= impact;
+
             // 임팩트 순간 최종 차감
             if (!caster.TryConsumeMP(skill.mpCost))
             {
@@ -804,6 +934,8 @@ public class BattleManager : MonoBehaviour
 
         caster.OnAttackImpact += impact;
         yield return caster.AnimateAttack(target);
+
+        caster.OnAttackImpact -= impact;    //애니가 끝났는데도 핸들러가 남아있을 수 있으니 한 번 더 해제
 
         if (!impactTriggered)
         {
@@ -1038,6 +1170,7 @@ public class BattleManager : MonoBehaviour
                 };
                 int damage = Mathf.Max(1, source.ComputeDamage(caster, v, ctx));
                 v.TakeDamage(damage);
+                Debug.Log("damage:"+ damage);
             }
         }
     }
@@ -1050,7 +1183,7 @@ public class BattleManager : MonoBehaviour
     void FinishActionAfterSkill()
     {
         // 하이라이트/선택 상태 정리
-        ClearPreview();
+        ClearSkillPreview();
         // 스킬 실행 완료 → 패널 닫기 + 스킬 선택 해제
         CloseSkillPanel();   // 이벤트까지 함께 발행됨
         // 스킬은 '공격'으로 간주하여 행동 토큰 소모 로직 재사용
@@ -1062,11 +1195,36 @@ public class BattleManager : MonoBehaviour
 
 
     // 타겟팅 취소/종료 시 미리보기 지우기
-    public void ClearPreview()
+    public void ShowMovePreview(Tilemap baseMap, IEnumerable<Vector3Int> cells)
+    => moveHighlighter?.ShowCells(baseMap, cells);
+    public void ShowSkillPreview(Tilemap baseMap, IEnumerable<Vector3Int> cells)
+        => skillHighlighter?.ShowCells(baseMap, cells);
+
+    public void ClearMovePreview()
+        => moveHighlighter?.ClearTransient();
+    public void HoldSkillPreview()
+        => _skillPreviewHold++;
+    public void ReleaseSkillPreview()
+        => _skillPreviewHold = Mathf.Max(0, _skillPreviewHold - 1);
+    public void ClearSkillPreview()
     {
-        if (highlighter != null) highlighter.Clear();
-        StatusPanel?.ClearHighlights();
+        if (_skillPreviewHold == 0)
+            skillHighlighter?.ClearTransient();
     }
+    public void ClearAllPreviews()
+    {
+        ClearMovePreview();
+        ClearSkillPreview(); // (hold 중이면 지워지지 않음)
+    }
+
+    // === 지속(토큰) 스킬 프리뷰 API ===
+    public int CreateSkillPreviewToken() => skillHighlighter != null ? skillHighlighter.CreateGroup() : 0;
+
+    public void SetSkillPreviewForToken(int token, Tilemap map, IEnumerable<Vector3Int> cells)
+        => skillHighlighter?.SetGroupCells(token, map, cells);
+
+    public void ClearSkillPreviewToken(int token)
+        => skillHighlighter?.ClearGroup(token);
 
 
     bool TryGetFrontCellOfTarget(BattleUnit caster, BattleUnit target, out Vector3Int frontCell) //근접 공격 시 타겟 앞 타일로 이동
@@ -1207,5 +1365,21 @@ public class BattleManager : MonoBehaviour
         float t = 0f;
         while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); yield return null; }
         done?.Invoke();
+    }
+    // UI 구독 재발송
+    public void RebroadcastPlannedActionLabels()
+    {
+        var enemies = FindObjectsOfType<BattleUnit>()
+            .Where(u => u.team == Team.Enemy && !u.IsDead);
+
+        foreach (var u in enemies)
+        {
+            var ai = u.GetComponent<EnemyAI>();
+            if (ai == null) continue;
+
+            // 이미 뽑아둔 plannedSkill이 없으면 뽑아서 써줌
+            var so = ai.plannedSkill ?? ai.PlanNextSkill();
+            EmitActionLabel(u, so != null ? so.displayName : "");
+        }
     }
 }

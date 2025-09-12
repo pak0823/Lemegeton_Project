@@ -2529,6 +2529,7 @@ GameObject:
   - component: {fileID: 1106969537}
   - component: {fileID: 1106969536}
   - component: {fileID: 1106969535}
+  - component: {fileID: 1106969538}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -2579,7 +2580,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 3
+  orthographic size: 2.5
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -2610,6 +2611,26 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1106969538
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1106969534}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6a160d838ff8b4b4693ac20007e008c7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_AssetsPPU: 100
+  m_RefResolutionX: 640
+  m_RefResolutionY: 360
+  m_UpscaleRT: 1
+  m_PixelSnapping: 0
+  m_CropFrameX: 1
+  m_CropFrameY: 1
+  m_StretchFill: 0
 --- !u!1 &1156702535
 GameObject:
   m_ObjectHideFlags: 0
@@ -3204,6 +3225,7 @@ Transform:
   - {fileID: 1798596442}
   - {fileID: 2127981943}
   - {fileID: 1668103364}
+  - {fileID: 2025663759}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1631145610
@@ -3294,7 +3316,7 @@ GameObject:
   - component: {fileID: 1668103365}
   - component: {fileID: 1668103367}
   m_Layer: 0
-  m_Name: Overlay
+  m_Name: Overlay_Skill
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4216,6 +4238,142 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2003001669}
   m_CullTransparentMesh: 1
+--- !u!1 &2025663758
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2025663759}
+  - component: {fileID: 2025663762}
+  - component: {fileID: 2025663761}
+  - component: {fileID: 2025663760}
+  m_Layer: 0
+  m_Name: Overlay_Move
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2025663759
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2025663758}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1594126588}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2025663760
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2025663758}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe866ca877fcbc1429aa2aa9d8fdb5c5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  overlayMap: {fileID: 2025663762}
+  highlightTile: {fileID: 11400000, guid: f336df5911e1e414c89c498338ea1513, type: 2}
+  clipToBaseMap: 0
+--- !u!483693784 &2025663761
+TilemapRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2025663758}
+  m_Enabled: 1
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 0
+  m_ReflectionProbeUsage: 0
+  m_RayTracingMode: 0
+  m_RayTraceProcedural: 0
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: a96c603a741221e40a67722d93dae35a, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 0
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: -531108771
+  m_SortingLayer: 1
+  m_SortingOrder: 2
+  m_ChunkSize: {x: 32, y: 32, z: 32}
+  m_ChunkCullingBounds: {x: 0, y: 0, z: 0}
+  m_MaxChunkCount: 16
+  m_MaxFrameAge: 16
+  m_SortOrder: 2
+  m_Mode: 0
+  m_DetectChunkCullingBounds: 0
+  m_MaskInteraction: 0
+--- !u!1839735485 &2025663762
+Tilemap:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2025663758}
+  m_Enabled: 1
+  m_Tiles: {}
+  m_AnimatedTiles: {}
+  m_TileAssetArray: []
+  m_TileSpriteArray: []
+  m_TileMatrixArray: []
+  m_TileColorArray: []
+  m_TileObjectToInstantiateArray: []
+  m_AnimationFrameRate: 1
+  m_Color: {r: 1, g: 1, b: 1, a: 0.72156864}
+  m_Origin: {x: 0, y: 0, z: 0}
+  m_Size: {x: 0, y: 0, z: 1}
+  m_TileAnchor: {x: 0, y: 0, z: 0}
+  m_TileOrientation: 0
+  m_TileOrientationMatrix:
+    e00: 1
+    e01: 0
+    e02: 0
+    e03: 0
+    e10: 0
+    e11: 1
+    e12: 0
+    e13: 0
+    e20: 0
+    e21: 0
+    e22: 1
+    e23: 0
+    e30: 0
+    e31: 0
+    e32: 0
+    e33: 1
 --- !u!1 &2052989061
 GameObject:
   m_ObjectHideFlags: 0
@@ -4365,6 +4523,7 @@ MonoBehaviour:
   playerRowY: 20
   enemyRowY: -20
   extraSpacing: 0
+  allowOverlap: 1
   barWidth: 700
 --- !u!114 &2052989069
 MonoBehaviour:
@@ -4931,6 +5090,10 @@ PrefabInstance:
       propertyPath: m_SortingLayerID
       value: -531108771
       objectReference: {fileID: 0}
+    - target: {fileID: 3539867349293679966, guid: 10fba0e6943448448be72478fcc0262c, type: 3}
+      propertyPath: m_ChunkCullingBounds.y
+      value: 0.019999921
+      objectReference: {fileID: 0}
     - target: {fileID: 7954545540395502672, guid: 10fba0e6943448448be72478fcc0262c, type: 3}
       propertyPath: m_Name
       value: Player_Tilemap
@@ -5346,6 +5509,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1543269463555958427, guid: 1e2e1d75228f58b43b4fc1533de883af, type: 3}
     - target: {fileID: 3604632207186200263, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
+      propertyPath: moveHighlighter
+      value: 
+      objectReference: {fileID: 2025663760}
+    - target: {fileID: 3604632207186200263, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
       propertyPath: postMoveDuration
       value: 0.3
       objectReference: {fileID: 0}
@@ -5353,6 +5520,10 @@ PrefabInstance:
       propertyPath: projectilePrefab
       value: 
       objectReference: {fileID: 1543269463555958427, guid: 691b833b72266f84d9cd2e94f86aff23, type: 3}
+    - target: {fileID: 3604632207186200263, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
+      propertyPath: skillHighlighter
+      value: 
+      objectReference: {fileID: 1668103367}
     - target: {fileID: 8282321106037221778, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -5409,6 +5580,10 @@ PrefabInstance:
     - target: {fileID: 4840063669809508275, guid: c2de95d83dcb2f447b4668bfd43ea33e, type: 3}
       propertyPath: m_Name
       value: Enemy_Tilemap
+      objectReference: {fileID: 0}
+    - target: {fileID: 5650651621884162942, guid: c2de95d83dcb2f447b4668bfd43ea33e, type: 3}
+      propertyPath: m_ChunkCullingBounds.y
+      value: 0.019999921
       objectReference: {fileID: 0}
     - target: {fileID: 7004394464791277107, guid: c2de95d83dcb2f447b4668bfd43ea33e, type: 3}
       propertyPath: m_LocalPosition.x

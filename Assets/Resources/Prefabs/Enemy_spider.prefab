@@ -12,6 +12,8 @@ GameObject:
   - component: {fileID: 9021479161038635338}
   - component: {fileID: 2058906734517487583}
   - component: {fileID: 2087388201126019929}
+  - component: {fileID: 7018354712488126287}
+  - component: {fileID: 8545122426598709057}
   - component: {fileID: 818578259192460252}
   m_Layer: 0
   m_Name: Enemy_spider
@@ -124,14 +126,45 @@ MonoBehaviour:
   team: 1
   AGI: 1
   atbPerSecond: 0
-  AttackDamage: 1
-  AttackRange: 2
+  PhysicalDamage: 1
+  MagicDamage: 1
   MaxHP: 100
-  UnitIcon: {fileID: 21300000, guid: 5679e6af0fc3003409b02012d359c7b0, type: 3}
+  MaxMP: 100
+  MaxRage: 100
+  resistTable: []
   animator: {fileID: 0}
   spriteRenderer: {fileID: 0}
   moveDuration: 0.18
   CurrentMap: {fileID: 0}
+--- !u!114 &7018354712488126287
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8001065956883458275}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b30a875dcc0eda24f97e5ec981cce41e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  soSkills:
+  - skill: {fileID: 11400000, guid: 380e13f2157ad7041b590b69dfb1640b, type: 2}
+    weight: 0.5
+  - skill: {fileID: 11400000, guid: c67d635dea9f22a45abe68570fa46c70, type: 2}
+    weight: 0.5
+--- !u!114 &8545122426598709057
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8001065956883458275}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a990ef9c8d4ceb45860efaed2783311, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!61 &818578259192460252
 BoxCollider2D:
   m_ObjectHideFlags: 0

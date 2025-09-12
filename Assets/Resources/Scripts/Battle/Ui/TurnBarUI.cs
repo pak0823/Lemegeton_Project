@@ -18,6 +18,9 @@ public class TurnBarUI : MonoBehaviour
     [Tooltip("아이콘 간 추가 간격(아이콘 너비에 더해짐)")]
     public float extraSpacing = 0f;
 
+    [Tooltip("체크 시 아이콘 간격 보정 없이 '겹치도록' 배치합니다.")]
+    public bool allowOverlap = false;
+
     public float barWidth;      // 현재 바 너비
     Dictionary<BattleUnit, Image> unitIcons = new();
 
@@ -113,6 +116,28 @@ public class TurnBarUI : MonoBehaviour
 
         // 원하는 위치 기준으로 정렬
         row.Sort((a, b) => a.desired.CompareTo(b.desired));
+
+        //  겹침 허용
+        if (allowOverlap)
+        {
+            for (int i = 0; i < row.Count; i++)
+            {
+                var it = row[i];
+
+                float minX = it.width * it.pivot;
+                float maxX = barWidth - it.width * (1f - it.pivot);
+                float x = Mathf.Clamp(it.desired, minX, maxX);
+
+                it.rt.anchoredPosition = new Vector2(x, it.y);
+
+                // 오른쪽(더 뒤 순번)일수록 위로 올리려면
+                it.rt.SetSiblingIndex(Mathf.Min(barImage.childCount - 1, i));
+
+                // 반대로 왼쪽이 위로 오게 하려면:
+                //it.rt.SetSiblingIndex(Mathf.Min(barImage.childCount - 1, row.Count - 1 - i));
+            }
+            return;
+        }
 
         // 좌→우로 진행하며 겹치지 않게 '오른쪽으로' 민다
         for (int i = 0; i < row.Count; i++)

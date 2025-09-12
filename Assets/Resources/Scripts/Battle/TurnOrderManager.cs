@@ -19,7 +19,7 @@ public class TurnOrderManager : MonoBehaviour
         // 죽은 유닛 제외 + AGI 정렬(동률은 소수점 난수로 타이브레이크)
         order.AddRange(units
             .Where(u => u != null && !u.IsDead)
-            .OrderByDescending(u => u.AGI + (float)rng.NextDouble() * 0.01f));
+            .OrderByDescending(u => u.EffectiveAGI + (float)rng.NextDouble() * 0.01f));
 
         index = 0;
     }

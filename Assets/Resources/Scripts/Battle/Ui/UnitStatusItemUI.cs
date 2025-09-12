@@ -108,6 +108,9 @@ public class UnitStatusItemUI : MonoBehaviour
         if (hpText) hpText.text = unit.HP.ToString();  // 매 프레임 현재 HP 갱신
         if (mpText) mpText.text = unit.MP.ToString();  // 매 프레임 현재 HP 갱신
         if (rageText) rageText.text = unit.Rage.ToString();  // 매 프레임 현재 HP 갱신
+
+        var sc = unit != null ? unit.GetComponent<StatusController>() : null;
+        SetStatusTags(sc != null ? sc.GetStatusTags() : System.Array.Empty<string>());
     }
 
     void CacheOriginalColors()

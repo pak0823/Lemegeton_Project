@@ -27,11 +27,16 @@ public class BattleUnit : MonoBehaviour
     public int MaxMP = 100;     //최대 MP
     public int MaxRage = 100;       //최대 분노 게이지
 
+    //Event
+    public event System.Action<int> OnDamaged;
+
     [System.Serializable]
     public struct AttrMod { public AttackAttr attr; public float mult; } // 예: (Strike, 1.2f)
     public AttrMod[] resistTable;
 
     public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
+
+
 
     public int HP { get; private set; }
     public int MP { get; private set; }
@@ -101,7 +106,7 @@ public class BattleUnit : MonoBehaviour
 
     public void InitializeATB(float minAGI, float maxAGI)
     {
-        float normalized = (AGI - minAGI) / Mathf.Max(0.01f, maxAGI - minAGI);
+        float normalized = (EffectiveAGI - minAGI) / Mathf.Max(0.01f, maxAGI - minAGI);
         float turnTime = Mathf.Lerp(12f, 6f, normalized); // 6~12초
         atbPerSecond = MaxATB / turnTime;
     }
@@ -120,6 +125,16 @@ public class BattleUnit : MonoBehaviour
             Overfill = 0f;
 
         ATB = Mathf.Min(100f, raw);
+    }
+
+    public float EffectiveAGI
+    {
+        get
+        {
+            var sc = GetComponent<StatusController>();
+            float mul = (sc != null) ? sc.GetAgilityMultiplier() : 1f;
+            return AGI * mul;
+        }
     }
 
     // 턴이 끝났을 때 ATB 초기화
@@ -219,6 +234,36 @@ public class BattleUnit : MonoBehaviour
             yield return null;
         }
     }
+
+    public void SetCasting(bool on) //캐스팅 애니메이션 실행
+    {
+        if (animator) animator.SetBool("Casting", on);
+    }
+
+    public IEnumerator AnimateShootWeb()    //실뿜기 애니메이션 실행 - Spider
+    {
+        if (animator)
+        {
+            if (HasParam("ShootWeb")) animator.SetTrigger("ShootWeb");
+            else animator.SetTrigger("Ranged");
+        }
+
+        bool ended = false;
+        Action onEnd = () => ended = true;
+        OnAttackEnded += onEnd;
+
+        float timeout = 2f;
+        while (!ended && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
+
+        OnAttackEnded -= onEnd;
+    }
+
+    bool HasParam(string name)
+    {
+        if (!animator) return false;
+        foreach (var p in animator.parameters) if (p.name == name) return true;
+        return false;
+    }
     #endregion
 
     public bool HasMP(int cost) => cost <= 0 || MP >= cost;
@@ -246,7 +291,11 @@ public class BattleUnit : MonoBehaviour
 
     public IEnumerator PlayDieAndWait(float maxWait = 1.5f)
     {
-        if (animator) animator.SetTrigger("Die");
+        if (animator)
+        {
+            if (team == Team.Player)
+                animator.SetTrigger("Die");
+        }
         yield return new WaitForSeconds(maxWait); // 간단 대기
     }
     #endregion
@@ -257,10 +306,11 @@ public class BattleUnit : MonoBehaviour
     public void TakeDamage(int amount)
     {
         HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
+        OnDamaged?.Invoke(amount);
 
         if (HP == 0) //죽었을 시
         {
-            if (animator) animator.SetBool("Warning", false);
+            if (animator && Team.Player == team) animator.SetBool("Warning", false);
             OnDied?.Invoke(this);
         }
         else if (HP == 1) // 위험처리할 Hp에 도달할 시

@@ -60,7 +60,6 @@
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\2022.3.60f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Skill_Ring_Donut.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\TargetMarker.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionDisplay.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\GameSpeedController.cs" />
@@ -74,14 +73,17 @@
     <Compile Include="Assets\Resources\Scripts\Object\Trap\TrapPersist.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\Shared.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\UIManager.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\WebTrapController.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\Enum.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\EnemyCastState.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Skill_Ring_Donut.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\BarrierController.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\SkillPanelUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\SkillAsset.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\IBattleMapProvider.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Enemy\WebCastWebTrap.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\HudController.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PushObject.cs" />
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Skill_Line_Horizontal.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\TilemapDebugger.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\IExplorationPersistable.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\ExplorationPersistId.cs" />
@@ -89,18 +91,22 @@
     <Compile Include="Assets\Resources\Scripts\Player\PlayerDebuffController.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\ActionPanelUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Player\PlayerMovement.cs" />
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Skill_Sector_cone.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Enemy\SingleStrike.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\EnemySkill.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionData.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\StatusController.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\UnitData.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PortalController.cs" />
     <Compile Include="Assets\Resources\Scripts\TestCode.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\MapObjectSpawner.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattleMapManager.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\EnemyAI.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\Box\BoxInteract.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\Interface.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattleInput.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\BoxGoal.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PuzzleBox.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Skill_Ring_R1.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageDataBase.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\ProjectileController.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionButtonManager.cs" />
@@ -111,16 +117,17 @@
     <Compile Include="Assets\Resources\Scripts\UI\TimerUi.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\PuzzleManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\ObjectGaugeManager.cs" />
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Skill_Ring_R1.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\UI_Lobby.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\MapManager.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Skill_Line_Horizontal.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\MapToggleManager.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Skill_Line_Vertical.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattleUnit.cs" />
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Skill_Line_Vertical.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\TurnOrderManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageQuizMapData.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\SceneTransitionManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\TurnBarUI.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Skill_Sector_cone.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UIArrowNavigator.cs" />
   </ItemGroup>
   <ItemGroup>

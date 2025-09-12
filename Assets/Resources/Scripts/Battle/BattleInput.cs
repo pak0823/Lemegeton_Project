@@ -142,7 +142,7 @@ public class BattleInput : MonoBehaviour
             // 타겟팅 아님 + 스킬 패널 열림 → 패널 닫기 (2단계 취소)
             if (battle != null && battle.isSelectingSkill)
             {
-                battle.ClearPreview();
+                battle.ClearSkillPreview();
                 battle.CloseSkillPanel();
                 return;
             }
@@ -194,7 +194,7 @@ public class BattleInput : MonoBehaviour
                     if (battle.SelectedTarget != null)
                         battle.PreviewSkillAreaOnUnit(battle.SelectedTarget);
                     else
-                        battle.ClearPreview();
+                        battle.ClearSkillPreview();
                 }
             }
             else

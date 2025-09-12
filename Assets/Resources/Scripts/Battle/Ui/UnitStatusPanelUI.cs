@@ -30,6 +30,7 @@ public class UnitStatusPanelUI : MonoBehaviour
     {
         BuildOnce();
         if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // 기술명 라벨 업데이트
+        if (battle != null) battle.RebroadcastPlannedActionLabels(); //구독 직후 한 번 더 현재 예정 라벨을 요청
     }
 
     void OnDestroy()
