@@ -11,6 +11,9 @@ public class BattleUnit : MonoBehaviour
     [Header("Data")]
     public UnitData data; // 유닛 데이터 참조
 
+    [Header("FX / Projectile")]
+    public ProjectileController defaultProjectilePrefab;  // ← 유닛 기본 투사체
+
     [Header("Runtime Stats")]
     public Team team;
     public float AGI;
@@ -26,9 +29,6 @@ public class BattleUnit : MonoBehaviour
     public int MaxHP = 100;     //최대 HP
     public int MaxMP = 100;     //최대 MP
     public int MaxRage = 100;       //최대 분노 게이지
-
-    //Event
-    public event System.Action<int> OnDamaged;
 
     [System.Serializable]
     public struct AttrMod { public AttackAttr attr; public float mult; } // 예: (Strike, 1.2f)
@@ -62,6 +62,7 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Events
+    public event System.Action<int> OnDamaged;  //피격 이벤트
     public event Action<BattleUnit> OnDied; // 사망 이벤트
     #endregion
 

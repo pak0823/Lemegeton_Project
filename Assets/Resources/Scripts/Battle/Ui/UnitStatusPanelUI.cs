@@ -30,7 +30,6 @@ public class UnitStatusPanelUI : MonoBehaviour
     {
         BuildOnce();
         if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // 기술명 라벨 업데이트
-        if (battle != null) battle.RebroadcastPlannedActionLabels(); //구독 직후 한 번 더 현재 예정 라벨을 요청
     }
 
     void OnDestroy()
@@ -70,7 +69,8 @@ public class UnitStatusPanelUI : MonoBehaviour
         var item = Instantiate(prefab, parent);
         item.Bind(u);
         item.SetHighlighted(false);
-       
+        item.SetSkillLabel(""); // 초기 라벨 비우기
+
         // 초기 상태가 이미 죽어있다면(예외 케이스), Player만 회색 유지
         if (u.team == Team.Player && u.IsDead) item.SetDeadStyle(true);
 

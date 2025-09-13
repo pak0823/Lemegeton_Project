@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using System.Linq;
 
 public class UnitStatusItemUI : MonoBehaviour
 {
@@ -32,13 +33,17 @@ public class UnitStatusItemUI : MonoBehaviour
     Color _nameOrigColor;
     bool _nameColorCached;
 
+    [Header("Status Icons")]
+    public Sprite slowIcon; // 필요시 다른 아이콘도 추가
+
 
     Color[] _originalColors;
     bool _highlighted;
     bool _isDead;
     Sprite _pendingOverlaySprite;         // SetHighlighted에서 전달받아 보관
 
-    BattleUnit unit;
+    BattleUnit Battleunit;
+    StatusController StatusController;
 
     private void Awake()
     {
@@ -48,7 +53,7 @@ public class UnitStatusItemUI : MonoBehaviour
 
     public void Bind(BattleUnit u)
     {
-        unit = u;
+        Battleunit = u;
 
         if (nameText)
         {
@@ -62,7 +67,7 @@ public class UnitStatusItemUI : MonoBehaviour
             ApplyNameAlpha(); // 현재 dead 상태에 맞춰 이름 알파 적용
         }
 
-            if (hpBar)
+        if (hpBar)
         {
             hpBar.minValue = 0;
             hpBar.maxValue = Mathf.Max(1, u.MaxHP);
@@ -86,31 +91,57 @@ public class UnitStatusItemUI : MonoBehaviour
         if (hpText) hpText.text = (u != null ? u.HP : 0).ToString();  // 현재 HP 텍스트 세팅
         if (mpText) mpText.text = (u != null ? u.MP : 0).ToString();  // 현재 MP 텍스트 세팅
         if (rageText) rageText.text = (u != null ? u.Rage : 0).ToString();  // 현재 Rage 텍스트 세팅
+
+        StatusController = u ? u.GetComponent<StatusController>() : null;
+        if (StatusController != null) StatusController.OnStatusChanged += HandleStatusChanged;
+        if (Battleunit != null) Battleunit.OnDied += HandleUnitDied;
+        HandleStatusChanged(); // 초기 1회
+    }
+
+    void OnDestroy()
+    {
+        if (StatusController != null) StatusController.OnStatusChanged -= HandleStatusChanged;
+    }
+    void HandleUnitDied(BattleUnit dead)
+    {
+        ClearStatusChips();                 // 자식 프리팹 전부 Destroy
+        if (statusTagRoot != null)
+            statusTagRoot.gameObject.SetActive(false); // (선택) 루트 자체 숨김
+    }
+    void HandleStatusChanged()
+    {
+        if (StatusController == null) return;
+        SetStatusViews(StatusController.GetStatusViews());
+    }
+    void ClearStatusChips()
+    {
+        if (!statusTagRoot) return;
+        for (int i = statusTagRoot.childCount - 1; i >= 0; i--)
+            Destroy(statusTagRoot.GetChild(i).gameObject);
     }
 
     void Update()
     {
-        if (unit == null) return;
+        if (Battleunit == null) return;
 
-        if (hpBar) hpBar.value = unit.HP;
+        if (hpBar) hpBar.value = Battleunit.HP;
 
         if (mpBar)
         {
-            mpBar.maxValue = Mathf.Max(1, unit.MaxMP);
-            mpBar.value = unit.MP;
+            mpBar.maxValue = Mathf.Max(1, Battleunit.MaxMP);
+            mpBar.value = Battleunit.MP;
         }
         if (rageBar)
         {
-            rageBar.maxValue = Mathf.Max(1, unit.MaxRage);
-            rageBar.value = unit.Rage;
+            rageBar.maxValue = Mathf.Max(1, Battleunit.MaxRage);
+            rageBar.value = Battleunit.Rage;
         }
 
-        if (hpText) hpText.text = unit.HP.ToString();  // 매 프레임 현재 HP 갱신
-        if (mpText) mpText.text = unit.MP.ToString();  // 매 프레임 현재 HP 갱신
-        if (rageText) rageText.text = unit.Rage.ToString();  // 매 프레임 현재 HP 갱신
+        if (hpText) hpText.text = Battleunit.HP.ToString();  // 매 프레임 현재 HP 갱신
+        if (mpText) mpText.text = Battleunit.MP.ToString();  // 매 프레임 현재 HP 갱신
+        if (rageText) rageText.text = Battleunit.Rage.ToString();  // 매 프레임 현재 HP 갱신
 
-        var sc = unit != null ? unit.GetComponent<StatusController>() : null;
-        SetStatusTags(sc != null ? sc.GetStatusTags() : System.Array.Empty<string>());
+        var sc = Battleunit != null ? Battleunit.GetComponent<StatusController>() : null;
     }
 
     void CacheOriginalColors()
@@ -195,6 +226,50 @@ public class UnitStatusItemUI : MonoBehaviour
             }
         }
     }
+    public void SetStatusViews(IEnumerable<StatusController.StatusView> views)
+    {
+        if (!statusTagRoot || !statusTagPrefab) return;
+
+        // 기존 칩 제거
+        for (int i = statusTagRoot.childCount - 1; i >= 0; i--)
+            Destroy(statusTagRoot.GetChild(i).gameObject);
+
+        if (views == null) return;
+
+        foreach (var v in views)
+        {
+            var go = Instantiate(statusTagPrefab, statusTagRoot);
+
+            // 아이콘 지정 (필요하면 이름 "Icon"을 가진 Image를 찾음)
+            var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(img => img.name == "Icon");
+            if (icon != null)
+            {
+                icon.sprite = GetIcon(v.id);
+                icon.enabled = icon.sprite != null;
+            }
+
+            // 텍스트 2개 지정
+            var texts = go.GetComponentsInChildren<Text>(true);
+            var turnText = texts.FirstOrDefault(t => t.name == "Text_Turn");
+            var stackText = texts.FirstOrDefault(t => t.name == "Text_Stack");
+
+            if (turnText) turnText.text = Mathf.Max(0, v.remainingTurns).ToString(); // 남은 턴
+            if (stackText) stackText.text = Mathf.Max(0, v.stacks).ToString();        // 스택 수
+
+            // 필요 시 1스택/0턴일 때 숨김 처리하고 싶다면:
+            // if (stackText) stackText.gameObject.SetActive(v.stacks > 1);
+            // if (turnText)  turnText.gameObject.SetActive(v.remainingTurns > 0);
+        }
+    }
+    Sprite GetIcon(StatusId id)
+    {
+        switch (id)
+        {
+            case StatusId.Slow: return slowIcon;
+            default: return null;
+        }
+    }
+
     // === 외부 이벤트 훅 ===
     public void SetSkillLabel(string label)
     {

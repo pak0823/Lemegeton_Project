@@ -6,8 +6,8 @@ public class ProjectileController : MonoBehaviour
 {
     [SerializeField] float travelTime = 0.35f;
     [SerializeField] float arcHeight = 0.6f;
-    [SerializeField] GameObject explosionPrefab;
-    [SerializeField] float explosionDuration = 0.25f;
+    [SerializeField] GameObject usePrefab;
+    [SerializeField] float prefabDuration = 0.25f;
 
     private Vector3 start;
     private Vector3 target;
@@ -44,10 +44,10 @@ public class ProjectileController : MonoBehaviour
         }
 
         // 폭발
-        if (explosionPrefab != null)
+        if (usePrefab != null)
         {
-            var fx = Instantiate(explosionPrefab, target, Quaternion.identity);
-            Destroy(fx, explosionDuration);
+            var fx = Instantiate(usePrefab, target, Quaternion.identity);
+            Destroy(fx, prefabDuration);
         }
 
         onArrive?.Invoke(); // 여기서 범위피해 적용 등을 호출하도록 함

@@ -8,6 +8,8 @@ using UnityEngine.Tilemaps;
 public class WebCastWebTrap : SkillAsset
 {
     [Header("Web Trap")]
+    public ProjectileController projectilePrefab;   // 스킬 전용 투사체 지정
+    public float projectileSpeed = 3f;
     public WebTrapController trapPrefab; // 프리팹 필요(간단한 스프라이트/빈 오브젝트여도 OK)
     public string previewTagText = "WEB-CAST"; // 상태패널 등 라벨용(선택)
 
@@ -38,7 +40,9 @@ public class WebCastWebTrap : SkillAsset
             bm = bm,
             map = map,
             cell = cell,
-            trapPrefab = trapPrefab
+            trapPrefab = trapPrefab,
+            projectilePrefab = projectilePrefab,
+            projectileSpeed = projectileSpeed
         });
 
         // 캐스팅 제스처(원거리 포즈 등)
@@ -63,7 +67,9 @@ public class WebCastWebTrap : SkillAsset
         //    bm = bm,
         //    map = map,
         //    cell = originCell,
-        //    trapPrefab = trapPrefab
+        //    trapPrefab = trapPrefab,
+        //    projectilePrefab = projectilePrefab,
+        //    projectileSpeed = projectileSpeed
         //});
 
         //yield return caster.AnimateRanged();

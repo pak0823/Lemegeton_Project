@@ -142,17 +142,6 @@ public class BattleManager : MonoBehaviour
             u.OnDied += HandleUnitDied;
         }
 
-        //적마다 다음에 쓸 스킬을 미리 선정하고 UI에 띄움
-        foreach (var u in units)
-        {
-            if (u.team != Team.Enemy) continue;
-            var ai = u.GetComponent<EnemyAI>();
-            if (ai == null) continue;
-
-            var next = ai.PlanNextSkill();// 다음 턴용 스킬 선정           
-            EmitActionLabel(u, next != null ? next.displayName : "");  // 카드에 “예정 스킬명” 표시
-        }
-
         // AGI 스냅샷 저장
         _lastMinAGI = minAGI;
         _lastMaxAGI = maxAGI;
@@ -659,9 +648,11 @@ public class BattleManager : MonoBehaviour
         BattleUnit target = players[Random.Range(0, players.Count)]; // 랜덤 1인 지정
 
         // 미리 선정해둔 스킬을 꺼내서 사용
-        SkillAsset so = null;
         var ai = enemy.GetComponent<EnemyAI>();
-        if (ai != null) so = ai.ConsumePlannedSkillOrPick();
+        SkillAsset so = (ai != null) ? ai.ConsumePlannedSkillOrPick() : null;
+
+        // 턴이 시작된 지금, 이 턴에 쓸 스킬명을 방송
+        if (so != null) EmitActionLabel(enemy, so.displayName);
 
         if (so != null)
         {
@@ -712,26 +703,74 @@ public class BattleManager : MonoBehaviour
     {
         state = BattleState.Resolving;
 
-        // 1) 캐스팅 루프 종료 → 2) 발사 애니
+        // 캐스팅 루프 종료 → 발사 애니
         caster.SetCasting(false);
-        yield return caster.AnimateShootWeb();  // 없으면 Ranged 폴백
 
-        // 3) 실제 거미줄 생성
-        if (p.trapPrefab != null && p.map != null)
+        // 발사 타이밍을 '임팩트 이벤트'로 맞춘다
+        bool fired = false;
+        bool arrived = false;
+
+        //어떤 투사체를 쓸지 결정
+        ProjectileController projPrefab =
+              p.projectilePrefab
+           ?? caster.defaultProjectilePrefab
+           ?? null; // (BM 전역을 유지하고 싶다면 ?? this.projectilePrefab)
+
+        // 투사체 발사 → 도착 시 트랩 생성
+        Vector3 startW = caster.transform.position;
+        Vector3 targetW = p.map.GetCellCenterWorld(p.cell);
+
+        System.Action onFire = null;
+        onFire = () =>
         {
-            var wpos = p.map.GetCellCenterWorld(p.cell);
-            var trap = Instantiate(p.trapPrefab, wpos, Quaternion.identity);
-            trap.Init(p.map, p.cell, p.owner);
-        }
+            // 한 번만
+            caster.OnAttackImpact -= onFire;
+            if (fired) return;
+            fired = true;
 
-        // 4) 프리뷰 토큰/홀드 해제 (토큰 ID는 EnemyCastState가 갖고 있으니 도우미 추가 권장)
-        // 간단히: 스킬 오버레이를 싹 지우고 싶다면:
+            System.Action onArrive = () =>
+            {
+                if (p.trapPrefab != null && p.map != null)
+                {
+                    // 같은 타일내에 이미 거미줄이 있으면 제거
+                    WebTrapController.RemoveAt(p.map, p.cell);
+
+                    // 새 거미줄 생성
+                    var trap = Instantiate(p.trapPrefab, targetW, Quaternion.identity);
+                    trap.Init(p.map, p.cell, p.owner);
+                }
+                arrived = true;
+            };
+
+            if (projPrefab != null)
+            {
+                var go = Instantiate(projPrefab, startW, Quaternion.identity);
+                var pc = go.GetComponent<ProjectileController>();
+                if (pc != null) pc.Init(startW, targetW, onArrive, p.projectileSpeed);
+                else onArrive(); // 컴포넌트 누락 폴백
+            }
+            else
+            {
+                // 프리팹이 없으면 바로 생성(연출 생략)
+                onArrive();
+            }
+        };
+        caster.OnAttackImpact += onFire;   // 임팩트에서 발사하도록 훅 연결
+
+        // 발사 모션 시작
+        yield return caster.AnimateShootWeb();  // 애니 끝까지 대기 (발사는 이미 중간에 실행됨)
+
+        // 투사체 도착까지 대기(안전 타임아웃)
+        float timeout = 3f;
+        while (!arrived && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
+
+        // 프리뷰 토큰/홀드 해제
         ClearSkillPreview();
 
         var ecs = caster.GetComponent<EnemyCastState>();
         ecs?.ClearPreviewAndFinalize(this);   // 토큰 삭제 + 홀드 해제 + pending 정리
 
-        // 5) 행동 토큰 소비로 턴 종료
+        // 행동 토큰 소비로 턴 종료
         OnActionConsumed(BattleAction.Attack);
     }
 
@@ -745,12 +784,9 @@ public class BattleManager : MonoBehaviour
         var ecs = enemy.GetComponent<EnemyCastState>();
         if (ecs == null || !ecs.IsCasting)
         {
+            EmitActionLabel(enemy, ""); // 라벨 비우기
             var ai = enemy.GetComponent<EnemyAI>();
-            if (ai != null)
-            {
-                var next = ai.PlanNextSkill();  // 다음 턴용 스킬 미리 선정 + 라벨 갱신
-                EmitActionLabel(enemy, next != null ? next.displayName : "");
-            }
+            if (ai != null) ai.PlanNextSkill();  // 다음 턴용 스킬 미리 선정
         }
 
         enemy.ResetATB();
@@ -842,8 +878,8 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    // 포인티드-탑 헥사: x(컬럼) 홀짝 판단 (Step 3에서 쓸 예정, 지금도 사용 가능)
-    bool IsOddColumn(Vector3Int cell) => Mathf.Abs(cell.x) % 2 == 1;
+    //// 포인티드-탑 헥사: x(컬럼) 홀짝 판단 (Step 3에서 쓸 예정, 지금도 사용 가능)
+    //bool IsOddColumn(Vector3Int cell) => Mathf.Abs(cell.x) % 2 == 1;
 
     // 현재 선택된 스킬의 범위를 "유닛 기준"으로 미리보기
     public void PreviewSkillAreaOnUnit(BattleUnit unit)
@@ -1367,19 +1403,19 @@ public class BattleManager : MonoBehaviour
         done?.Invoke();
     }
     // UI 구독 재발송
-    public void RebroadcastPlannedActionLabels()
-    {
-        var enemies = FindObjectsOfType<BattleUnit>()
-            .Where(u => u.team == Team.Enemy && !u.IsDead);
+    //public void RebroadcastPlannedActionLabels()
+    //{
+    //    var enemies = FindObjectsOfType<BattleUnit>()
+    //        .Where(u => u.team == Team.Enemy && !u.IsDead);
 
-        foreach (var u in enemies)
-        {
-            var ai = u.GetComponent<EnemyAI>();
-            if (ai == null) continue;
+    //    foreach (var u in enemies)
+    //    {
+    //        var ai = u.GetComponent<EnemyAI>();
+    //        if (ai == null) continue;
 
-            // 이미 뽑아둔 plannedSkill이 없으면 뽑아서 써줌
-            var so = ai.plannedSkill ?? ai.PlanNextSkill();
-            EmitActionLabel(u, so != null ? so.displayName : "");
-        }
-    }
+    //        // 이미 뽑아둔 plannedSkill이 없으면 뽑아서 써줌
+    //        var so = ai.plannedSkill ?? ai.PlanNextSkill();
+    //        EmitActionLabel(u, so != null ? so.displayName : "");
+    //    }
+    //}
 }

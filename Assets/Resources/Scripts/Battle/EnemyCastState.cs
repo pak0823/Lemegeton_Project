@@ -11,6 +11,8 @@ public class EnemyCastState : MonoBehaviour
         public Tilemap map;
         public Vector3Int cell;
         public WebTrapController trapPrefab;
+        public ProjectileController projectilePrefab;  // 스킬/유닛이 선택한 투사체
+        public float projectileSpeed = 3f;        // 투사체의 속도
     }
 
     PendingCast _pending;
@@ -61,10 +63,10 @@ public class EnemyCastState : MonoBehaviour
         if (_pending == null) return;        // 캐스팅 중이 아닐 때는 무시
         _interrupted = true;
 
-        // 1) 캐스팅 루프 즉시 종료
+        // 캐스팅 루프 즉시 종료
         _pending.owner?.SetCasting(false);
 
-        // 2) 프리뷰 제거
+        // 프리뷰 제거
         if (_skillPreviewToken != 0)
         {
             _pending.bm?.ClearSkillPreviewToken(_skillPreviewToken);
@@ -72,16 +74,14 @@ public class EnemyCastState : MonoBehaviour
         }
         _pending.bm?.ReleaseSkillPreview();
 
-        // 3) 다음 턴 예정 스킬 라벨로 즉시 갱신
-        var ai = _pending.owner.GetComponent<EnemyAI>();
-        if (ai != null)
-        {
-            var next = ai.PlanNextSkill();
-            // ↓ BattleManager가 라벨 이벤트를 내보내도록 public 메서드 필요(아래 B에서 공개)
-            _pending.bm?.EmitActionLabel(_pending.owner, next != null ? next.displayName : "");
-        }
+        // 라벨 비우기
+        _pending.bm?.EmitActionLabel(_pending.owner, "");
 
-        // 4) 펜딩 정리(다음 턴 시작 시 중복 처리 방지)
+        // 다음 턴에 쓸 스킬은 미리 Plan만 해둬도 됨
+        var ai = _pending.owner.GetComponent<EnemyAI>();
+        if (ai != null) ai.PlanNextSkill();
+
+        // 펜딩 정리(다음 턴 시작 시 중복 처리 방지)
         _pending = null;
         _interrupted = false;
     }

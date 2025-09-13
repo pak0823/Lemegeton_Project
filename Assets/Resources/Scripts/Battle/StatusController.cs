@@ -30,8 +30,45 @@ public class StatusEntry
 
 public class StatusController : MonoBehaviour
 {
-    readonly Dictionary<StatusId, StatusEntry> _map = new();
+    readonly Dictionary<StatusId, StatusEntry> _map = new Dictionary<StatusId, StatusEntry>();
     public event Action OnStatusChanged;
+
+    BattleUnit _owner;
+
+    public struct StatusView
+    {
+        public StatusId id;
+        public int stacks;
+        public int remainingTurns;
+
+        public StatusView(StatusId id, int stacks, int remaining)
+        {
+            this.id = id;
+            this.stacks = stacks;
+            this.remainingTurns = remaining;
+        }
+    }
+
+    void OnEnable()
+    {
+        _owner = GetComponent<BattleUnit>();
+        if (_owner != null) _owner.OnDied += OnOwnerDied;
+    }
+
+    void OnDisable()
+    {
+        if (_owner != null) _owner.OnDied -= OnOwnerDied;
+    }
+    void OnOwnerDied(BattleUnit dead)
+    {
+        ClearAllStatuses();           // 모든 버프/디버프 제거
+    }
+
+    public void ClearAllStatuses()
+    {
+        _map.Clear();                 // 내부 상태 사전 비우기
+        OnStatusChanged?.Invoke();    // UI/ATB 등 갱신 트리거
+    }
 
     public void ApplyWithTurnContext(StatusId id, int stacks, int durationTurns, bool appliedDuringOwnersTurn)
     {
@@ -102,17 +139,15 @@ public class StatusController : MonoBehaviour
     }
 
     /// <summary>UI 표시에 사용할 태그 문자열.</summary>
-    public string[] GetStatusTags()
+
+    public StatusView[] GetStatusViews()
     {
-        var tags = new List<string>();
+        var list = new List<StatusView>();
         foreach (var kv in _map)
         {
-            switch (kv.Key)
-            {
-                case StatusId.Slow: tags.Add($"Slow x{kv.Value.stacks}"); break;
-                default: tags.Add(kv.Key.ToString()); break;
-            }
+            var e = kv.Value;
+            list.Add(new StatusView(kv.Key, e.stacks, e.remainingTurns));
         }
-        return tags.ToArray();
+        return list.ToArray();
     }
 }

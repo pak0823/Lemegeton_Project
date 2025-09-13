@@ -12,6 +12,9 @@ public class WebTrapController : MonoBehaviour
     bool _armed = false;
     static BattleUnit s_currentTurnUnit;
 
+    public Tilemap Map => _map;
+    public Vector3Int Cell => _cell;
+
     public void Init(Tilemap map, Vector3Int cell, BattleUnit owner)
     {
         _map = map;
@@ -62,5 +65,14 @@ public class WebTrapController : MonoBehaviour
         {
             Destroy(gameObject);
         }
+    }
+
+    public static void RemoveAt(Tilemap map, Vector3Int cell)
+    {
+        // 같은 타일에 이미 깔려 있는 거미줄 모두 제거
+        var olds = FindObjectsOfType<WebTrapController>()
+            .Where(t => t != null && t._map == map && t._cell == cell)
+            .ToList();
+        foreach (var ot in olds) UnityEngine.Object.Destroy(ot.gameObject);
     }
 }
