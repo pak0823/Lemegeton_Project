@@ -1071,8 +1071,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 4288937988594880752}
+  - component: {fileID: 8951797830519594336}
   m_Layer: 5
-  m_Name: Buff
+  m_Name: ChipRoot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1094,9 +1095,35 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -45.5, y: -9.7}
-  m_SizeDelta: {x: 40, y: 40}
+  m_AnchoredPosition: {x: -150.4, y: -9.7}
+  m_SizeDelta: {x: 250, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &8951797830519594336
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8272257397779581451}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 0
+    m_Bottom: 0
+  m_ChildAlignment: 5
+  m_Spacing: 10
+  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandHeight: 0
+  m_ChildControlWidth: 0
+  m_ChildControlHeight: 0
+  m_ChildScaleWidth: 0
+  m_ChildScaleHeight: 0
+  m_ReverseArrangement: 0
 --- !u!1 &8490594900992537080
 GameObject:
   m_ObjectHideFlags: 0
@@ -1137,9 +1164,9 @@ RectTransform:
   - {fileID: 4263187000764798568}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: -960, y: -540}
   m_SizeDelta: {x: 100, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &161541607544447090
@@ -1162,8 +1189,14 @@ MonoBehaviour:
   rageBar: {fileID: 1728300466695294274}
   rageText: {fileID: 8719927846600685444}
   skillNameText: {fileID: 0}
-  statusTagRoot: {fileID: 4288937988594880752}
-  statusTagPrefab: {fileID: 4661654445311234339, guid: 5c80b515d1db74d479a1439be30dadcb, type: 3}
+  chipRoot: {fileID: 4288937988594880752}
+  chipLayout: {fileID: 8951797830519594336}
+  visualDB: {fileID: 0}
+  stateChipPrefab: {fileID: 4661654445311234339, guid: d2ec7a88e8b51b944b50ff2765f664c9, type: 3}
+  defaultIcon: {fileID: 21300064, guid: 0eaf9fe6c11160f438c2d72544ae3270, type: 3}
+  stackVisualDB: {fileID: 0}
+  stackChipPrefab: {fileID: 4661654445311234339, guid: 5c80b515d1db74d479a1439be30dadcb, type: 3}
+  defaultDebuffIcon: {fileID: 21300064, guid: 0eaf9fe6c11160f438c2d72544ae3270, type: 3}
   highlightOverlay: {fileID: 3639878798159197973}
   defaultHighlightSprite: {fileID: 0}
   tintTargets:
@@ -1171,7 +1204,6 @@ MonoBehaviour:
   highlightTint: {r: 1, g: 1, b: 0.5, a: 1}
   deadNameAlpha: 0.4
   deadHighlightSprite: {fileID: 0}
-  slowIcon: {fileID: 21300054, guid: 0eaf9fe6c11160f438c2d72544ae3270, type: 3}
 --- !u!1 &8568289292447308330
 GameObject:
   m_ObjectHideFlags: 0

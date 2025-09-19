@@ -1,7 +1,8 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Linq;
+using static StatusController;
 
 public class UnitStatusItemUI : MonoBehaviour
 {
@@ -15,12 +16,21 @@ public class UnitStatusItemUI : MonoBehaviour
     public Text rageText;         // 현재 Rage 숫자 표시
     public Text skillNameText;  // 적 전용(적 카드에만 배치)
 
-    [Header("Buff/Debuff Tags")]
-    public Transform statusTagRoot;     // 상태칩 부모
-    public GameObject statusTagPrefab;  // 상태칩 프리팹(Text or Image+Text)
+
+    [SerializeField] private Transform chipRoot;                 // 공용 칩 루트 (오른쪽 정렬)
+    [SerializeField] private HorizontalLayoutGroup chipLayout;   // ChipRoot에 붙은 LayoutGroup
+
+    [Header("Visual DB (ScriptableObject)")]
+    [SerializeField] private UnitStateVisualDB visualDB;
+    [SerializeField] private GameObject stateChipPrefab;
+    [SerializeField] private Sprite defaultIcon;           // 매핑 없을 때 대체
+
+    [Header("Stackable Status (중첩 디버프)")]
+    [SerializeField] private StackableStatusVisualDB stackVisualDB; 
+    [SerializeField] private GameObject stackChipPrefab;// 아이콘 칩 프리팹(둔화에서 쓰던 것)
+    [SerializeField] private Sprite defaultDebuffIcon;
 
     [Header("Highlight (둘 중 하나/둘 다 가능)")]
-    [Tooltip("카드 전체 위에 얹을 오버레이 이미지(비활성으로 두고 시작). 없으면 비워두기")]
     public Image highlightOverlay;                 // 예: 전체를 덮는 Image
     public Sprite defaultHighlightSprite;          // (선택) 기본 하이라이트 스프라이트
     public List<Graphic> tintTargets = new List<Graphic>(); //오버레이가 없을 때 색상으로 강조하고 싶은 Graphic들
@@ -33,10 +43,6 @@ public class UnitStatusItemUI : MonoBehaviour
     Color _nameOrigColor;
     bool _nameColorCached;
 
-    [Header("Status Icons")]
-    public Sprite slowIcon; // 필요시 다른 아이콘도 추가
-
-
     Color[] _originalColors;
     bool _highlighted;
     bool _isDead;
@@ -44,6 +50,10 @@ public class UnitStatusItemUI : MonoBehaviour
 
     BattleUnit Battleunit;
     StatusController StatusController;
+
+    // 패널에서 주입 가능하도록 열어둠
+    public void SetVisualDB(UnitStateVisualDB db) => visualDB = db;
+    public void SetStackVisualDB(StackableStatusVisualDB db) => stackVisualDB = db;
 
     private void Awake()
     {
@@ -93,31 +103,23 @@ public class UnitStatusItemUI : MonoBehaviour
         if (rageText) rageText.text = (u != null ? u.Rage : 0).ToString();  // 현재 Rage 텍스트 세팅
 
         StatusController = u ? u.GetComponent<StatusController>() : null;
-        if (StatusController != null) StatusController.OnStatusChanged += HandleStatusChanged;
         if (Battleunit != null) Battleunit.OnDied += HandleUnitDied;
-        HandleStatusChanged(); // 초기 1회
     }
 
     void OnDestroy()
     {
-        if (StatusController != null) StatusController.OnStatusChanged -= HandleStatusChanged;
+        if (Battleunit != null) Battleunit.OnDied -= HandleUnitDied;
     }
     void HandleUnitDied(BattleUnit dead)
     {
-        ClearStatusChips();                 // 자식 프리팹 전부 Destroy
-        if (statusTagRoot != null)
-            statusTagRoot.gameObject.SetActive(false); // (선택) 루트 자체 숨김
+        ClearChildren(chipRoot);
+        if (chipRoot) chipRoot.gameObject.SetActive(false);
     }
-    void HandleStatusChanged()
+    static void ClearChildren(Transform root)
     {
-        if (StatusController == null) return;
-        SetStatusViews(StatusController.GetStatusViews());
-    }
-    void ClearStatusChips()
-    {
-        if (!statusTagRoot) return;
-        for (int i = statusTagRoot.childCount - 1; i >= 0; i--)
-            Destroy(statusTagRoot.GetChild(i).gameObject);
+        if (!root) return;
+        for (int i = root.childCount - 1; i >= 0; i--)
+            Destroy(root.GetChild(i).gameObject);
     }
 
     void Update()
@@ -140,8 +142,6 @@ public class UnitStatusItemUI : MonoBehaviour
         if (hpText) hpText.text = Battleunit.HP.ToString();  // 매 프레임 현재 HP 갱신
         if (mpText) mpText.text = Battleunit.MP.ToString();  // 매 프레임 현재 HP 갱신
         if (rageText) rageText.text = Battleunit.Rage.ToString();  // 매 프레임 현재 HP 갱신
-
-        var sc = Battleunit != null ? Battleunit.GetComponent<StatusController>() : null;
     }
 
     void CacheOriginalColors()
@@ -226,47 +226,89 @@ public class UnitStatusItemUI : MonoBehaviour
             }
         }
     }
-    public void SetStatusViews(IEnumerable<StatusController.StatusView> views)
+
+    public void RefreshFromControllers(UnitStateController usc, StatusController sc)
     {
-        if (!statusTagRoot || !statusTagPrefab) return;
-
-        // 기존 칩 제거
-        for (int i = statusTagRoot.childCount - 1; i >= 0; i--)
-            Destroy(statusTagRoot.GetChild(i).gameObject);
-
-        if (views == null) return;
-
-        foreach (var v in views)
-        {
-            var go = Instantiate(statusTagPrefab, statusTagRoot);
-
-            // 아이콘 지정 (필요하면 이름 "Icon"을 가진 Image를 찾음)
-            var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(img => img.name == "Icon");
-            if (icon != null)
-            {
-                icon.sprite = GetIcon(v.id);
-                icon.enabled = icon.sprite != null;
-            }
-
-            // 텍스트 2개 지정
-            var texts = go.GetComponentsInChildren<Text>(true);
-            var turnText = texts.FirstOrDefault(t => t.name == "Text_Turn");
-            var stackText = texts.FirstOrDefault(t => t.name == "Text_Stack");
-
-            if (turnText) turnText.text = Mathf.Max(0, v.remainingTurns).ToString(); // 남은 턴
-            if (stackText) stackText.text = Mathf.Max(0, v.stacks).ToString();        // 스택 수
-
-            // 필요 시 1스택/0턴일 때 숨김 처리하고 싶다면:
-            // if (stackText) stackText.gameObject.SetActive(v.stacks > 1);
-            // if (turnText)  turnText.gameObject.SetActive(v.remainingTurns > 0);
-        }
+        var states = usc != null ? usc.GetAll() : null;            // SelfState 집합
+        var stacks = sc != null ? sc.GetStatusViews() : null;     // 중첩 디버프 뷰들
+        RefreshChips(states, stacks);
     }
-    Sprite GetIcon(StatusId id)
+
+    public void RefreshChips(IReadOnlyCollection<UnitStateId> states, IEnumerable<StatusView> stacks)
     {
-        switch (id)
+        if (!chipRoot) return;
+
+        // 0) 초기화
+        for (int i = chipRoot.childCount - 1; i >= 0; i--)
+            Destroy(chipRoot.GetChild(i).gameObject);
+
+        // 1) 상태칩을 먼저 만들어 '맨 오른쪽'에 고정
+        GameObject rightmostState = null;
+        if (states != null && states.Count > 0)
         {
-            case StatusId.Slow: return slowIcon;
-            default: return null;
+            foreach (var s in states)
+            {
+                var go = Instantiate(stateChipPrefab, chipRoot);
+                // ─ 아이콘 세팅(기존 코드 그대로) ─
+                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
+                var sprite = visualDB ? (visualDB.GetIcon(s) ?? defaultIcon) : defaultIcon;
+                var color = visualDB ? visualDB.GetColor(s) : Color.white;
+                if (icon) { icon.sprite = sprite; icon.color = color; icon.enabled = (sprite != null); }
+                // 상태칩은 텍스트 숨김
+                var texts = go.GetComponentsInChildren<Text>(true);
+                var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
+                var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
+                if (tTurn) tTurn.gameObject.SetActive(false);
+                if (tStack) tStack.gameObject.SetActive(false);
+
+                go.transform.SetAsLastSibling();  // ★ 맨 오른쪽으로
+                rightmostState = go;              // 여러 개면 마지막 것이 맨 오른쪽
+            }
+        }
+
+        // 2) 중첩칩을 ‘상태칩 바로 왼쪽’부터 생성
+        if (stacks != null)
+        {
+            // 생성 순서대로 오른쪽→왼쪽이 되려면: 오른쪽에 가까울수록 '더 먼저 생성된 것'
+            // => 최신순으로 먼저 붙이고, 오래된 것이 나중에 들어가 상태칩에 더 가까워지도록 역순 삽입
+            var list = stacks.ToList();
+            for (int i = list.Count - 1; i >= 0; --i)   // newest → oldest 순으로 루프
+            {
+                var v = list[i];
+                var go = Instantiate(stackChipPrefab, chipRoot);
+                // ─ 아이콘/텍스트 세팅(기존 코드 그대로) ─
+                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(ii => ii.name == "Icon");
+                var tStk = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Stack");
+                var tTurn = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Turn");
+
+                var entry = stackVisualDB ? stackVisualDB.Get(v.id) : null;
+                var sprite = entry?.icon ?? defaultDebuffIcon;
+                var color = entry?.tint ?? Color.white;
+
+                if (icon) { icon.sprite = sprite; icon.color = color; icon.enabled = (sprite != null); }
+                if (tStk) { tStk.gameObject.SetActive(entry?.showStacks ?? true); if (tStk.gameObject.activeSelf) tStk.text = v.stacks.ToString(); }
+                if (tTurn) { tTurn.gameObject.SetActive(entry?.showTurns ?? true); if (tTurn.gameObject.activeSelf) tTurn.text = v.remainingTurns > 0 ? v.remainingTurns + "" : "∞"; }
+
+                if (rightmostState)
+                {
+                    // 상태칩 바로 왼쪽 위치로 삽입(형제 인덱스 고정)
+                    int idx = rightmostState.transform.GetSiblingIndex();
+                    go.transform.SetSiblingIndex(idx);
+                }
+                else
+                {
+                    // 상태칩이 없을 때는 그냥 오른쪽 정렬에서 오른쪽으로 붙음
+                    go.transform.SetAsLastSibling();
+                }
+            }
+        }
+
+        // 3) 레이아웃 즉시 갱신
+        var rt = chipRoot as RectTransform;
+        if (rt)
+        {
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
         }
     }
 
@@ -274,21 +316,5 @@ public class UnitStatusItemUI : MonoBehaviour
     public void SetSkillLabel(string label)
     {
         if (skillNameText) skillNameText.text = label ?? "";
-    }
-
-    public void SetStatusTags(IEnumerable<string> tags)
-    {
-        if (!statusTagRoot || !statusTagPrefab) return;
-
-        for (int i = statusTagRoot.childCount - 1; i >= 0; i--)
-            Destroy(statusTagRoot.GetChild(i).gameObject);
-
-        if (tags == null) return;
-        foreach (var t in tags)
-        {
-            var go = Instantiate(statusTagPrefab, statusTagRoot);
-            var txt = go.GetComponentInChildren<Text>();
-            if (txt) txt.text = t;
-        }
     }
 }

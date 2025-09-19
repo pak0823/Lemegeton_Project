@@ -33,23 +33,23 @@ public class SingleStrike : SkillAsset
         if (players.Count == 0) yield break;
 
         // 둔화 보유자 우선 선정
-        BattleUnit actualTarget = target; // 기본 = BM이 건네준 대상
         var slowed = players.Where(u => {
             var sc = u.GetComponent<StatusController>();
             return sc != null && sc.Has(StatusId.Slow);
         }).ToList();
 
+
+        // 둔화 보유자가 있다면 그중에서 '적대감 최상위'
+        // 없다면 전체 플레이어 중 '적대감 최상위'
+        BattleUnit actualTarget = null;
         if (slowed.Count > 0)
-        {
-            // 둔화 대상이 하나 이상이면 그중에서 무작위 1인 우선 공격
-            actualTarget = slowed[Random.Range(0, slowed.Count)];
-        }
+            actualTarget = SkillAsset.PickHighestHostility(slowed);
         else
-        {
-            // 둔화 대상이 없다면 기존 타겟이 null/사망일 수 있으므로 보정
-            if (actualTarget == null || actualTarget.IsDead)
-                actualTarget = players[Random.Range(0, players.Count)];
-        }
+            actualTarget = SkillAsset.PickHighestHostility(players);
+
+        // 보정(혹시 null이면 랜덤 보정)
+        if (actualTarget == null)
+            actualTarget = players[Random.Range(0, players.Count)];
 
         if (actualTarget == null || actualTarget.IsDead) yield break;
 

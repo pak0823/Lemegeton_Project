@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum StatusId { Slow = 1 }
+public enum StatusId { None = 0 ,Slow = 1 }
 
 public static class DebuffTuning
 {

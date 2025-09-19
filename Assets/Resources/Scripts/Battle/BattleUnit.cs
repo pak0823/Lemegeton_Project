@@ -23,20 +23,13 @@ public class BattleUnit : MonoBehaviour
     public bool IsTurnReady => ATB >= 100f; // ATB가 최대가 되어 행동 가능 상태
     public float atbPerSecond; // 초당 ATB 충전 속도
 
-    [Header("Resource Stats")]
-    public int PhysicalDamage = 1;
-    public int MagicDamage = 1;
-    public int MaxHP = 100;     //최대 HP
-    public int MaxMP = 100;     //최대 MP
-    public int MaxRage = 100;       //최대 분노 게이지
-
     [System.Serializable]
     public struct AttrMod { public AttackAttr attr; public float mult; } // 예: (Strike, 1.2f)
     public AttrMod[] resistTable;
 
     public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
 
-
+    [SerializeField] private bool debugLogStats = false; //스탯 확인 임시용 - 사용 후 제거하기
 
     public int HP { get; private set; }
     public int MP { get; private set; }
@@ -66,12 +59,124 @@ public class BattleUnit : MonoBehaviour
     public event Action<BattleUnit> OnDied; // 사망 이벤트
     #endregion
 
+    #region ----- State-based Stat System -----
+    [Header("State-based Stat DB (Shared)")]
+    [SerializeField] private StateStatModifierDB stateStatDB;
+
+    // 베이스 스탯(인스펙터/데이터로 세팅)
+    [SerializeField] private int basePhysicalDamage = 1;
+    [SerializeField] private int baseMagicDamage = 1;
+    [SerializeField] private int baseMaxHP = 100;
+    [SerializeField] private int baseMaxMP = 100;
+    [SerializeField] private int baseMaxRage = 100;
+    [SerializeField] private int baseHostility = 10;
+
+    // (선택) 방어/이속 등 확장 필드가 있다면 같은 패턴으로 추가
+    [SerializeField] private int baseDefense = 0;
+    [SerializeField] private int baseSpeed = 0;
+
+    // 상태 컨트롤러 캐시/보정 캐시
+    UnitStateController _usc;
+    bool _statCacheDirty = true;
+
+    struct StatMult
+    {
+        public float atk, mag, def, spd;
+        public int hpAdd, mpAdd;
+        public float hostilityGain, hostilityDecay;
+
+        public float hostilityStatMul;
+        public int hostilityStatAdd;
+
+        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, def = 1f, spd = 1f, hpAdd = 0, mpAdd = 0, hostilityStatMul = 1f, hostilityStatAdd = 0 };
+
+        public void Apply(StateStatModifierDB.Entry e)
+        {
+            if (e == null) return;
+            atk *= Mathf.Max(0f, e.atkMultiplier);
+            mag *= Mathf.Max(0f, e.magMultiplier);
+            def *= Mathf.Max(0f, e.defMultiplier);
+            spd *= Mathf.Max(0f, e.spdMultiplier);
+            hpAdd += e.hpFlatAdd;
+            mpAdd += e.mpFlatAdd;
+            hostilityStatMul *= Mathf.Max(0f, e.hostilityStatMultiplier);
+            hostilityStatAdd += e.hostilityStatFlatAdd;
+        }
+    }
+    StatMult _cachedMult = StatMult.Identity;
+
+    void InvalidateStatCache() 
+    { 
+        _statCacheDirty = true;
+        // 최대치가 줄어들 땐 현재값도 즉시 맞추기
+        HP = Mathf.Min(HP, MaxHP);
+        MP = Mathf.Min(MP, MaxMP);
+
+        if (debugLogStats)
+        {
+            // Mult getter를 한 번 읽으면 즉시 재평가됨(캐시 갱신)
+            var _ = Mult;
+
+            Debug.Log(
+                $"[STAT] {name} " +
+                $"ATK={PhysicalDamage}  MAG={MagicDamage}  DEF={Defense}  SPD={Speed}  " +
+                $"HOSTILITY(스탯)={Hostility}  " +
+                $"HP={HP}/{MaxHP}  MP={MP}/{MaxMP}"
+            );
+        }
+    }
+
+    StatMult Mult
+    {
+        get
+        {
+            if (_statCacheDirty)
+            {
+                _cachedMult = StatMult.Identity;
+                if (_usc != null && stateStatDB != null)
+                {
+                    var states = _usc.GetAll(); // 현재 활성 상태 목록
+                    if (states != null)
+                    {
+                        foreach (var s in states)
+                            _cachedMult.Apply(stateStatDB.Get(s));
+                    }
+                }
+                _statCacheDirty = false;
+            }
+            return _cachedMult;
+        }
+    }
+
+    // === 외부에서 그대로 쓰던 이름을 '프로퍼티'로 유지 (상태 보정 반영) ===
+    public int PhysicalDamage => Mathf.Max(1, Mathf.RoundToInt(basePhysicalDamage * Mult.atk));
+    public int MagicDamage => Mathf.Max(1, Mathf.RoundToInt(baseMagicDamage * Mult.mag));
+    public int MaxHP => baseMaxHP + Mult.hpAdd;
+    public int MaxMP => baseMaxMP + Mult.mpAdd;
+    public int MaxRage => baseMaxRage;
+    public int Hostility => Mathf.RoundToInt(baseHostility * Mult.hostilityStatMul) + Mult.hostilityStatAdd;
+
+    // (선택) 방어/속도 등
+    public int Defense => Mathf.RoundToInt(baseDefense * Mult.def);
+    public int Speed => Mathf.RoundToInt(baseSpeed * Mult.spd);
+    #endregion
+
     #region Unity Callbacks
     void Awake()
     {
         if (!animator) animator = GetComponent<Animator>();
         if (!spriteRenderer) spriteRenderer = GetComponent<SpriteRenderer>();
-        ApplyData(); // 데이터 반영(최우선)
+
+        _usc = GetComponent<UnitStateController>();
+        // 상태 변경 시 캐시 무효화(이벤트가 있다면 구독)
+        if (_usc != null) _usc.OnStatesChanged += InvalidateStatCache;
+
+        ApplyData(); // 데이터 반영(HP/MP 초기화 포함)
+    }
+
+    void OnDestroy()
+    {
+        if (_usc != null) _usc.OnStatesChanged -= InvalidateStatCache;
     }
 
     void Start()
@@ -91,15 +196,20 @@ public class BattleUnit : MonoBehaviour
         if (data != null)
         {
             team = data.team;
-            PhysicalDamage = data.PhysicalDamage;
-            MagicDamage = data.MagicDamage;
-            MaxHP = data.MaxHP;
-            MaxMP = data.MaxMP;
-            MaxRage = data.MaxRage;
+            basePhysicalDamage = data.PhysicalDamage;
+            baseMagicDamage = data.MagicDamage;
+            baseMaxHP = data.MaxHP;
+            baseMaxMP = data.MaxMP;
+            baseMaxRage = data.MaxRage;
             AGI = data.AGI;
+            baseHostility = data.Hostility;
         }
 
-        HP = Mathf.Clamp(HP == 0 ? MaxHP : HP, 0, MaxHP); // 씬 배치 중 수동 값 보호
+        // 상태 반영된 최대치가 필요하므로 먼저 캐시 무효화
+        InvalidateStatCache();
+
+        // 현재값 초기화/보정
+        HP = Mathf.Clamp(HP == 0 ? MaxHP : HP, 0, MaxHP);
         MP = Mathf.Clamp(MP == 0 ? MaxMP : MP, 0, MaxMP);
         Rage = Mathf.Clamp(Rage, 0, MaxRage);
     }
@@ -314,24 +424,30 @@ public class BattleUnit : MonoBehaviour
             if (animator && Team.Player == team) animator.SetBool("Warning", false);
             OnDied?.Invoke(this);
         }
-        else if (HP == 1) // 위험처리할 Hp에 도달할 시
+        else if (HP <= (MaxHP * 0.3f)) // 최대체력의 30% Hp보다 작거나 같을 때
         {
             if (animator) animator.SetBool("Warning", true);
         }
 
-        Debug.Log($"{name} HP={HP}");
+        Debug.Log($"Damaged: {name} damage={amount}");
     }
 
     public void Heal(int amount)
     {
-        if (amount <= 0) return;
+        if (amount <= 0 && amount > -1) return;
+
         int before = HP;
+        int Max_ThrPer = (int)(MaxHP * 0.3f);
+        int Max_tenPer = (int)(MaxHP * 0.1f);
+
+        if (amount == -1) amount = Max_tenPer;  //수동 턴 종료일 때의 회복량
+
         HP = Mathf.Min(MaxHP, HP + amount);
 
-        if(HP > 1)  //회복 후 위험상태에서 벗어났을 시
+        if(HP > Max_ThrPer)  //회복 후 위험상태에서 벗어났을 시
             if (animator) animator.SetBool("Warning", false);
 
-        if (HP != before) Debug.Log($"{name} Heal +{HP - before} → {HP}/{MaxHP}");
+        //if (HP != before) Debug.Log($"{name} Heal +{HP - before} → {HP}/{MaxHP}");
     }
     #endregion
 

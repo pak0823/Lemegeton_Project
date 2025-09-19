@@ -16,6 +16,10 @@ public class UnitStatusPanelUI : MonoBehaviour
     [Header("Highlight")]
     public Sprite defaultHighlightSprite;
 
+    [SerializeField] private UnitStateVisualDB sharedUnitStateDB;
+    [SerializeField] private StackableStatusVisualDB sharedStackVisualDB;
+
+
 
     public enum UnitSort { AsFound, NameAsc, YPosDesc, AgiDesc }    //정렬 방식
     [SerializeField] UnitSort enemySort = UnitSort.AsFound;  // 적 정렬 기준
@@ -70,6 +74,31 @@ public class UnitStatusPanelUI : MonoBehaviour
         item.Bind(u);
         item.SetHighlighted(false);
         item.SetSkillLabel(""); // 초기 라벨 비우기
+
+        if (sharedUnitStateDB) item.SetVisualDB(sharedUnitStateDB);
+        if (sharedStackVisualDB) item.SetStackVisualDB(sharedStackVisualDB);
+
+        var usc = u.GetComponent<UnitStateController>();
+        var sc = u.GetComponent<StatusController>();
+
+        // 초기 렌더
+        item.RefreshFromControllers(usc, sc);
+
+        // 이벤트 구독(둘 다 같은 콜백으로)
+        if (usc != null)
+        {
+            usc.OnStatesChanged += () =>
+            {
+                if (u) item.RefreshFromControllers(usc, sc);
+            };
+        }
+        if (sc != null)
+        {
+            sc.OnStatusChanged += () =>
+            {
+                if (u) item.RefreshFromControllers(usc, sc);
+            };
+        }
 
         // 초기 상태가 이미 죽어있다면(예외 케이스), Player만 회색 유지
         if (u.team == Team.Player && u.IsDead) item.SetDeadStyle(true);
@@ -133,12 +162,5 @@ public class UnitStatusPanelUI : MonoBehaviour
         if (u == null) return;
         if (!views.TryGetValue(u, out var v)) return;
         v.SetSkillLabel(label);
-    }
-
-    // === 외부 버프/디버프 갱신 공개 API ===
-    public void SetStatusTags(BattleUnit u, IEnumerable<string> tags)
-    {
-        if (!views.TryGetValue(u, out var v)) return;
-        v.SetStatusTags(tags);
     }
 }

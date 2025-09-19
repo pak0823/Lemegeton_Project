@@ -163,7 +163,7 @@ public class BattleInput : MonoBehaviour
         }
         else if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Tile && Input.GetKeyDown(KeyCode.E))
         {
-            var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
+            var map = battle.CurrentSkillTargetMap ?? (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
             if (map != null) battle.ConfirmSkillOnTile(map, battle.selectedCell);
         }
 
@@ -199,7 +199,7 @@ public class BattleInput : MonoBehaviour
             }
             else
             {
-                var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
+                var map = battle.CurrentSkillTargetMap ?? (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
                 if (map != null)
                 {
                     if (TryCell(map, world, out var cell))
@@ -232,7 +232,7 @@ public class BattleInput : MonoBehaviour
             }
             else // SkillTargetMode.Tile
             {
-                var map = (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
+                var map = battle.CurrentSkillTargetMap ?? (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
                 if (map != null)
                 {
                     if (TryCell(map, world, out var cell))

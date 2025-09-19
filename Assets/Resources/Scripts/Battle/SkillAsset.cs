@@ -1,11 +1,19 @@
 // SkillAsset.cs
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
 public enum DamageSchool { Physical, Magical }  //근력, 총명
 public enum AttackAttr { None, Pierce, Strike, Slash /* etc */ }
+public enum TargetPriorityMode
+{
+    None,
+    RandomSurvivor,
+    HighestHostility,
+    PreferredStatusThenHighestHostility,  // 예: Slow 우선 → 그 안에서 적대감 최고
+}
 
 public struct SkillRuntime
 {
@@ -61,5 +69,34 @@ public abstract class SkillAsset : ScriptableObject
         }
 
         return Mathf.Max(1, Mathf.RoundToInt(baseStat * mult));
+    }
+
+    /// <summary>컬렉션에서 '적대감(Hostility)'이 가장 높은 플레이어 유닛을 선택. 동률이면 랜덤.</summary>
+    public static BattleUnit PickHighestHostility(IEnumerable<BattleUnit> candidates)
+    {
+        if (candidates == null) return null;
+        // 생존한 플레이어만
+        var list = candidates.Where(u => u != null && u.team == Team.Player && !u.IsDead).ToList();
+        if (list.Count == 0) return null;
+
+        int max = list.Max(u => Mathf.Max(0, u.Hostility));
+        var top = list.Where(u => Mathf.Max(0, u.Hostility) == max).ToList();
+
+        return top[Random.Range(0, top.Count)];
+    }
+    public static BattleUnit PickPreferredStatusThenHighestHostility(
+    IEnumerable<BattleUnit> candidates, StatusId preferred)
+    {
+        if (candidates == null) return null;
+        var list = candidates.Where(u => u && u.team == Team.Player && !u.IsDead).ToList();
+        if (list.Count == 0) return null;
+
+        var slowed = list.Where(u => {
+            var sc = u.GetComponent<StatusController>();
+            return sc != null && sc.Has(preferred);
+        }).ToList();
+
+        if (slowed.Count > 0) return PickHighestHostility(slowed);
+        return PickHighestHostility(list);
     }
 }

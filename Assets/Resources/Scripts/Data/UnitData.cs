@@ -10,6 +10,7 @@ public class UnitData : ScriptableObject
     public int PhysicalDamage = 0;  //근력
     public int MagicDamage = 0; //총명
     public int AGI = 0; //민첩
+    public int Hostility = 0; //적대감
 
     [Header("Skills (per character)")]
     public SkillAsset[] skills; // 에디터에서 캐릭터별로 할당

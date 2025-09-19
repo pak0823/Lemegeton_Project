@@ -44,6 +44,9 @@ public class BattleManager : MonoBehaviour
     List<BattleUnit> targetCycle = new(); // 적 리스트(AGI desc)
     int targetIndex = -1; // 현재 인덱스
     BattleUnit selectedTarget; // 현재 선택된 대상
+    private Tilemap currentSkillTargetMap;  //스킬이 지정한 맵
+    public Tilemap CurrentSkillTargetMap => currentSkillTargetMap;
+
 
     // === 수동 종료 감지용 ===
     bool manualEndRequested = false;
@@ -302,26 +305,12 @@ public class BattleManager : MonoBehaviour
         _lastAGISum = alive.Sum(u => u.EffectiveAGI);
         _lastAGICount = alive.Count;
     }
-
-    //public void SetAGI(float newAGI) // 호출하여 명시적인 강제 재계산 필요시 사용
-    //{
-    //    AGI = newAGI;
-    //    var bm = Shared.BattleManager ?? FindObjectOfType<BattleManager>();
-    //    if (bm != null) bm.RecomputeATBSpeedsFromLiveUnits();
-    //}
-
     public void OnClickEndTurn()
     {
         if (acting == null || acting.team != Team.Player) return;
         manualEndRequested = true;   // 회복 판정용 플래그만 남김
         EndPlayerTurn();             // 종료 로직은 한 군데로 집약
     }
-
-    //void UpdateTurnIndicator() //임시 테스트용 턴 확인
-    //{
-    //    if (acting == null) { Debug.Log("[Turn] (없음)"); return; }
-    //    Debug.Log($"[Turn] {acting.team} - {acting.name}");
-    //}
     #endregion
 
     #region Movement
@@ -360,7 +349,7 @@ public class BattleManager : MonoBehaviour
             if (state == BattleState.Targeting
                 && currentSkillSO != null
                 && currentSkillSO.targetMode == SkillTargetMode.Tile
-                && clickedMap == provider.EnemyFloor)
+                && clickedMap == (currentSkillTargetMap ?? provider.EnemyFloor))
             {
                 ConfirmSkillOnTile(clickedMap, clickedCell);
             }
@@ -477,8 +466,8 @@ public class BattleManager : MonoBehaviour
 
         if (manualEndRequested && usedActions.Count == 0)
         {
-            acting.Heal(1);
-            Debug.Log("[EndPlayerTurn] 행동 없이 수동 종료 → HP +1 회복");
+            acting.Heal(-1);
+            //Debug.Log("[EndPlayerTurn] 행동 없이 수동 종료 → HP회복");
         }
 
         manualEndRequested = false;
@@ -498,6 +487,7 @@ public class BattleManager : MonoBehaviour
             ClearSkillPreview();
             ClearTargetSelection();
             currentSkillSO = null;
+            currentSkillTargetMap = null;
             state = BattleState.ActionSelect;
             if (!isSelectingSkill) OpenSkillPanel();
             return;
@@ -819,8 +809,18 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || acting == null) return;
         isSelectingSkill = true;
 
-        var list = acting?.data?.skills ?? System.Array.Empty<SkillAsset>();
-        OnSkillPanelPopulateSO?.Invoke(list);
+        var raw = acting?.data?.skills ?? System.Array.Empty<SkillAsset>();
+        // 표시용은 상태 기반으로 해석된 SO를 전달 → 버튼 라벨이 즉시 반영됨
+        var view = new SkillAsset[raw.Length];
+        for (int i = 0; i < raw.Length; i++)
+        {
+            var s = raw[i];
+            if (s is ISkillForStateResolver resolver)
+                view[i] = resolver.ResolveForCaster(acting) ?? s;
+            else view[i] = s;
+        }
+
+        OnSkillPanelPopulateSO?.Invoke(view);
         OnSkillPanelToggled?.Invoke(true);
     }
     public void CloseSkillPanel()
@@ -834,14 +834,21 @@ public class BattleManager : MonoBehaviour
         var list = acting?.data?.skills;
         if (list == null || index < 0 || index >= list.Length) return;
 
-        currentSkillSO = list[index]; // SkillAsset
+        var picked = list[index];
+
+        // 상태 기반 스킬 치환(어댑터/라우터가 있으면 실제 사용할 SO로 교체)
+        if (picked is ISkillForStateResolver resolver)
+            picked = resolver.ResolveForCaster(acting) ?? picked;
+
+        currentSkillSO = picked;
+
         EnterSkillTargeting(currentSkillSO);
     }
     private void EnterSkillTargeting(SkillAsset skill)
     {
         if (skill == null) return;
 
-        // NEW: MP 부족 사전 차단
+        // MP 부족 사전 차단
         if (!acting.HasMP(skill.mpCost))
         {
             Debug.Log($"[Skill] MP 부족: {skill.displayName} (필요 {skill.mpCost})");
@@ -849,12 +856,17 @@ public class BattleManager : MonoBehaviour
             return; // 타겟팅 진입 안 함
         }
 
+        if (skill is ISelfCastSkill self && self.SelfCastOnSelect)
+        {
+            StartCoroutine(skill.ResolveOnUnit(this, acting, acting));
+            FinishActionAfterSkill(); // 프로젝트의 기존 "행동 종료" 루틴 호출
+            return;
+        }
+
         // 스킬 타겟팅 모드로 진입
         state = BattleState.Targeting;
         ClearAllPreviews();
         ClearTargetSelection(); // 기존 선택/마커 초기화
-
-        //Debug.Log($"[Skill] Select: {skill.name} (mode: {skill.targetMode}) → Targeting");
 
         // Unit 타겟형이면: AGI 내림차순 사이클 구성 후 첫 타겟으로 마커 표시
         if (skill.targetMode == SkillTargetMode.Unit)
@@ -865,21 +877,25 @@ public class BattleManager : MonoBehaviour
         }
         else // Tile 타겟형: 내부 타일 커서를 1회 세팅하고 프리뷰 유지
         {
-            var map = provider?.EnemyFloor;
+            currentSkillTargetMap = (skill as ITargetMapProvider)?.GetTargetMap(this, acting) ?? provider?.EnemyFloor;
+            var map = currentSkillTargetMap;
+
             if (map != null)
             {
                 var cam = Camera.main;
                 var world = cam ? cam.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
                 world.z = 0f;
-                var hover = map.WorldToCell(world);          
-                selectedCell = map.HasTile(hover) ? hover : new Vector3Int(-2, -2, 0);  // 마우스가 타일 위면 그 타일, 아니면 기본(-2,-2)
-                PreviewSkillAreaOnTile(map, selectedCell); // 즉시 프리뷰
+                var hover = map.WorldToCell(world);
+                //selectedCell = map.HasTile(hover) ? hover : new Vector3Int(-2, -2, 0);  // 마우스가 타일 위면 그 타일, 아니면 기본(-2,-2)
+                //PreviewSkillAreaOnTile(map, selectedCell); // 즉시 프리뷰
+                if (map.HasTile(hover))
+                {
+                    selectedCell = hover;
+                    PreviewSkillAreaOnTile(map, selectedCell);
+                }
             }
         }
     }
-
-    //// 포인티드-탑 헥사: x(컬럼) 홀짝 판단 (Step 3에서 쓸 예정, 지금도 사용 가능)
-    //bool IsOddColumn(Vector3Int cell) => Mathf.Abs(cell.x) % 2 == 1;
 
     // 현재 선택된 스킬의 범위를 "유닛 기준"으로 미리보기
     public void PreviewSkillAreaOnUnit(BattleUnit unit)
@@ -975,8 +991,15 @@ public class BattleManager : MonoBehaviour
 
         if (!impactTriggered)
         {
-            // 임팩트 못받았으면 여기서 직접 해결하고, 완료 표시
-            yield return skill.ResolveOnUnit(this, caster, target);
+            if (!caster.TryConsumeMP(skill.mpCost))
+            {
+                Debug.Log("[Skill] 임팩트 미수신 폴백 시 MP 부족 → 취소");
+            }
+            else
+            {
+                yield return skill.ResolveOnUnit(this, caster, target);
+            }
+
             resolved = true;
         }
 
@@ -1003,17 +1026,19 @@ public class BattleManager : MonoBehaviour
 
         bool castEnded = false;
         bool projEnded = false;
+        bool fired = false; // 임팩트(발사) 수신 여부
 
-        // 1) 캐스터 모션 종료 훅
+        // 캐스터 모션 종료 훅
         System.Action onCastEnd = null;
         onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
         caster.OnAttackEnded += onCastEnd;
 
-        // 2) 발사 타이밍 훅: 투사체 생성 + 도착 시 SO 해결
+        // 발사 타이밍 훅: 투사체 생성 + 도착 시 SO 해결
         System.Action onFire = null;
         onFire = () =>
         {
             caster.OnAttackImpact -= onFire;
+            fired = true; // 임팩트 수신
 
             // 발사 순간 최종 차감
             if (!caster.TryConsumeMP(skill.mpCost))
@@ -1050,10 +1075,26 @@ public class BattleManager : MonoBehaviour
         };
         caster.OnAttackImpact += onFire;
 
-        // 3) 원거리 모션
+        // 원거리 모션
         yield return caster.AnimateRanged();
 
-        // 4) 두 조건 모두 충족 대기
+        // 임팩트 이벤트를 못 받았을 때: 여기서 직접 MP 차감 후 즉시 해결
+        if (!fired && !projEnded)
+        {
+            if (!caster.TryConsumeMP(skill.mpCost))
+            {
+                Debug.Log("[Skill] 임팩트 미수신 폴백 시 MP 부족 → 취소");
+                projEnded = true;
+            }
+            else
+            {
+                yield return skill.ResolveOnTile(this, map, cell, caster);
+                projEnded = true;
+            }
+        }
+
+
+        // 두 조건 모두 충족 대기
         float timeout = 2f;
         while (!(castEnded && projEnded) && timeout > 0f)
         {
@@ -1061,7 +1102,7 @@ public class BattleManager : MonoBehaviour
             yield return null;
         }
 
-        // 5) (임시) 시전 후 이동
+        // 시전 후 이동
         if (caster != null && !caster.IsDead)
         {
             if (TryComputePostMoveDestinationLegacy(skill.legacyId, caster, out var destCell))
@@ -1227,6 +1268,7 @@ public class BattleManager : MonoBehaviour
 
         currentSkill = default;           // 레거시
         currentSkillSO = null;            // SO도 클리어
+        currentSkillTargetMap = null;
     }
 
 
@@ -1246,11 +1288,14 @@ public class BattleManager : MonoBehaviour
     {
         if (_skillPreviewHold == 0)
             skillHighlighter?.ClearTransient();
+
+        StatusPanel?.ClearHighlights();
     }
     public void ClearAllPreviews()
     {
         ClearMovePreview();
         ClearSkillPreview(); // (hold 중이면 지워지지 않음)
+        StatusPanel?.ClearHighlights();
     }
 
     // === 지속(토큰) 스킬 프리뷰 API ===
@@ -1402,20 +1447,4 @@ public class BattleManager : MonoBehaviour
         while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); yield return null; }
         done?.Invoke();
     }
-    // UI 구독 재발송
-    //public void RebroadcastPlannedActionLabels()
-    //{
-    //    var enemies = FindObjectsOfType<BattleUnit>()
-    //        .Where(u => u.team == Team.Enemy && !u.IsDead);
-
-    //    foreach (var u in enemies)
-    //    {
-    //        var ai = u.GetComponent<EnemyAI>();
-    //        if (ai == null) continue;
-
-    //        // 이미 뽑아둔 plannedSkill이 없으면 뽑아서 써줌
-    //        var so = ai.plannedSkill ?? ai.PlanNextSkill();
-    //        EmitActionLabel(u, so != null ? so.displayName : "");
-    //    }
-    //}
 }

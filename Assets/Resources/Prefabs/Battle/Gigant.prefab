@@ -12,8 +12,9 @@ GameObject:
   - component: {fileID: 4654936499690926897}
   - component: {fileID: 5631013543525740198}
   - component: {fileID: 5663047674990348099}
-  - component: {fileID: 5810025859650402768}
+  - component: {fileID: 8458781244985957482}
   - component: {fileID: 2430715871809997961}
+  - component: {fileID: 5810025859650402768}
   m_Layer: 8
   m_Name: Gigant
   m_TagString: Untagged
@@ -131,11 +132,36 @@ MonoBehaviour:
   MaxHP: 100
   MaxMP: 100
   MaxRage: 100
+  Hostility: 0
   resistTable: []
   animator: {fileID: 0}
   spriteRenderer: {fileID: 0}
   moveDuration: 0.18
   CurrentMap: {fileID: 0}
+--- !u!114 &8458781244985957482
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4504373230467071322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57f24ff342b94c54883deff0f80c341f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &2430715871809997961
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4504373230467071322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a990ef9c8d4ceb45860efaed2783311, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!61 &5810025859650402768
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -181,15 +207,3 @@ BoxCollider2D:
   serializedVersion: 2
   m_Size: {x: 0.36, y: 0.10187346}
   m_EdgeRadius: 0
---- !u!114 &2430715871809997961
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4504373230467071322}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5a990ef9c8d4ceb45860efaed2783311, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
