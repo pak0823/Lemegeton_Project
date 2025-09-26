@@ -67,10 +67,10 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
 
     int CalcHealAmount(BattleUnit caster, BattleUnit target)
     {
-        // 간단: 마법공격력 * 배수. 필요하면 라우터/상태/장비에 따른 보정도 추가 가능
+        // 마법공격력 * 배수. 필요하면 라우터/상태/장비에 따른 보정도 추가 가능
         int baseStat = Mathf.Max(1, caster.MagicDamage);
         float mult = Mathf.Max(0f, power);
-        return Mathf.Max(1, Mathf.RoundToInt(baseStat * mult));
+        return Mathf.Max(1, Mathf.FloorToInt(baseStat * mult));
     }
 
     void HealArea(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int centerCell)

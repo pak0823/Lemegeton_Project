@@ -69,7 +69,7 @@ public class BattleUnit : MonoBehaviour
     [SerializeField] private int baseMaxHP = 100;
     [SerializeField] private int baseMaxMP = 100;
     [SerializeField] private int baseMaxRage = 100;
-    [SerializeField] private int baseHostility = 10;
+    [SerializeField] private float baseHostility = 10.0f;
 
     // (선택) 방어/이속 등 확장 필드가 있다면 같은 패턴으로 추가
     [SerializeField] private int baseDefense = 0;
@@ -86,9 +86,9 @@ public class BattleUnit : MonoBehaviour
         public float hostilityGain, hostilityDecay;
 
         public float hostilityStatMul;
-        public int hostilityStatAdd;
+        public float hostilityStatAdd;
 
-        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, def = 1f, spd = 1f, hpAdd = 0, mpAdd = 0, hostilityStatMul = 1f, hostilityStatAdd = 0 };
+        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, def = 1f, spd = 1f, hpAdd = 0, mpAdd = 0, hostilityStatMul = 1.0f, hostilityStatAdd = 0 };
 
         public void Apply(StateStatModifierDB.Entry e)
         {
@@ -154,7 +154,7 @@ public class BattleUnit : MonoBehaviour
     public int MaxHP => baseMaxHP + Mult.hpAdd;
     public int MaxMP => baseMaxMP + Mult.mpAdd;
     public int MaxRage => baseMaxRage;
-    public int Hostility => Mathf.RoundToInt(baseHostility * Mult.hostilityStatMul) + Mult.hostilityStatAdd;
+    public float Hostility => (baseHostility * Mult.hostilityStatMul) + Mult.hostilityStatAdd;
 
     // (선택) 방어/속도 등
     public int Defense => Mathf.RoundToInt(baseDefense * Mult.def);

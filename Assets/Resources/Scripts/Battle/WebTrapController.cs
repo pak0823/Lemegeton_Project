@@ -46,8 +46,7 @@ public class WebTrapController : MonoBehaviour
             var sc = target.GetComponent<StatusController>();
             if (sc == null) sc = target.gameObject.AddComponent<StatusController>();
 
-            bool appliedDuringOwnersTurn = (s_currentTurnUnit == target);
-            sc.ApplyWithTurnContext(StatusId.Slow, 1, 1, appliedDuringOwnersTurn); // µ–»≠ 1¡ﬂ√∏, 1≈œ
+            sc.ApplyWithTurnContext(StatusId.Slow, 1, 1); // µ–»≠ 1¡ﬂ√∏, 1≈œ
 
             Destroy(gameObject); // πﬂµø »ƒ ¡¶∞≈
         }

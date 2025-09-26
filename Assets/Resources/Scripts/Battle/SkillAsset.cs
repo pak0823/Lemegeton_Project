@@ -79,7 +79,7 @@ public abstract class SkillAsset : ScriptableObject
         var list = candidates.Where(u => u != null && u.team == Team.Player && !u.IsDead).ToList();
         if (list.Count == 0) return null;
 
-        int max = list.Max(u => Mathf.Max(0, u.Hostility));
+        float max = list.Max(u => Mathf.Max(0, u.Hostility));
         var top = list.Where(u => Mathf.Max(0, u.Hostility) == max).ToList();
 
         return top[Random.Range(0, top.Count)];

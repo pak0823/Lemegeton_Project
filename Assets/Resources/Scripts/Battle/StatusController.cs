@@ -18,7 +18,6 @@ public class StatusEntry
     public StatusId id;
     public int stacks;
     public int remainingTurns;
-    public bool skipNextStartTick;
 
     public StatusEntry(StatusId id, int stacks, int duration)
     {
@@ -70,10 +69,8 @@ public class StatusController : MonoBehaviour
         OnStatusChanged?.Invoke();    // UI/ATB 등 갱신 트리거
     }
 
-    public void ApplyWithTurnContext(StatusId id, int stacks, int durationTurns, bool appliedDuringOwnersTurn)
+    public void ApplyWithTurnContext(StatusId id, int stacks, int durationTurns)
     {
-        bool skip = !appliedDuringOwnersTurn; // 적 턴 중 부여 → 다음 자신의 턴 시작 1회 스킵
-
         if (_map.TryGetValue(id, out var e))
         {
             // 스택 증가 + 최대 6중첩 캡
@@ -81,16 +78,11 @@ public class StatusController : MonoBehaviour
 
             // 지속시간은 '새로 부여된 둔화' 기준으로 리셋
             e.remainingTurns = durationTurns;
-
-            // 스킵 플래그도 새 부여 기준으로 갱신
-            e.skipNextStartTick = skip;
         }
         else
         {
-            _map[id] = new StatusEntry(id, Mathf.Min(stacks, DebuffTuning.SlowMaxStacks), durationTurns)
-            {
-                skipNextStartTick = skip
-            };
+            // 새로 부여된 상태를 추가
+            _map[id] = new StatusEntry(id, Mathf.Min(stacks, DebuffTuning.SlowMaxStacks), durationTurns);
         }
 
         OnStatusChanged?.Invoke();
@@ -125,12 +117,8 @@ public class StatusController : MonoBehaviour
             var e = kv.Value;
             if (e.remainingTurns > 0)
             {
-                if (e.skipNextStartTick) { e.skipNextStartTick = false; /* 이번엔 스킵 */ }
-                else
-                {
-                    e.remainingTurns--;
-                    if (e.remainingTurns <= 0) toRemove.Add(kv.Key);
-                }
+                e.remainingTurns--;
+                if (e.remainingTurns <= 0) toRemove.Add(kv.Key);
                 changed = true;
             }
         }

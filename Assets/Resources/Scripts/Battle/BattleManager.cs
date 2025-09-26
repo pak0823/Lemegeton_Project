@@ -167,6 +167,7 @@ public class BattleManager : MonoBehaviour
         }
 
         initialized = true;
+        ParametricDamageSkill.ClearFrontlineCache();    // 전방 집합 캐시 초기화
     }
 
     #endregion
@@ -907,9 +908,20 @@ public class BattleManager : MonoBehaviour
         var cells = currentSkillSO.GetAreaCells(origin, SkillLibrary.IsOddColumn(origin));
         var map = unit.CurrentMap;
 
+        // 맵 경계 바깥 셀은 제외
+        var validCells = cells.Where(c => map.HasTile(c)).ToList();
+
+        if (validCells.Count == 0)
+        {
+            // 유효한 셀이 없으면 하이라이트/유닛 강조도 지움
+            skillHighlighter?.ClearTransient();
+            StatusPanel?.ClearHighlights();
+            return;
+        }
+
         // 범위 내 유닛 수집 → 패널 하이라이트
-        skillHighlighter.ShowCells(map, cells);
-        var victims = GetUnitsInArea(map, cells);
+        skillHighlighter.ShowCells(map, validCells);
+        var victims = GetUnitsInArea(map, validCells);
         StatusPanel?.HighlightUnits(victims);
     }
 
@@ -920,10 +932,21 @@ public class BattleManager : MonoBehaviour
         if (map == null) { ClearAllPreviews(); return; }
 
         var cells = currentSkillSO.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
-        skillHighlighter.ShowCells(map, cells);
+
+        // 맵 경계 바깥 셀은 제외
+        var validCells = cells.Where(c => map.HasTile(c)).ToList();
+
+        if (validCells.Count == 0)
+        {
+            skillHighlighter?.ClearTransient();
+            StatusPanel?.ClearHighlights();
+            return;
+        }
+
+        skillHighlighter.ShowCells(map, validCells);
 
         // 범위 내 유닛 수집 → 패널 하이라이트
-        var victims = GetUnitsInArea(map, cells);
+        var victims = GetUnitsInArea(map, validCells);
         StatusPanel?.HighlightUnits(victims);
     }
 
@@ -1009,14 +1032,6 @@ public class BattleManager : MonoBehaviour
 
         // 3) 원위치 복귀
         caster.transform.position = originalW;
-
-        // 4) (임시) 시전 후 이동 정책: legacyId 경로 유지
-        if (caster != null && !caster.IsDead)
-        {
-            if (TryComputePostMoveDestinationLegacy(skill.legacyId, caster, out var destCell))
-                yield return Co_MoveUnitSmooth(caster, caster.CurrentMap, destCell, postMoveDuration);
-        }
-
         FinishActionAfterSkill();
     }
 
@@ -1100,13 +1115,6 @@ public class BattleManager : MonoBehaviour
         {
             timeout -= Time.deltaTime;
             yield return null;
-        }
-
-        // 시전 후 이동
-        if (caster != null && !caster.IsDead)
-        {
-            if (TryComputePostMoveDestinationLegacy(skill.legacyId, caster, out var destCell))
-                yield return Co_MoveUnitSmooth(caster, caster.CurrentMap, destCell, postMoveDuration);
         }
 
         FinishActionAfterSkill();

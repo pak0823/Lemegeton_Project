@@ -18,6 +18,16 @@ public class ParametricDamageSkill : SkillAsset
         LineDiagU7 //(1시 7시 방향 대각선 7칸)
     }
 
+    // 6개 축 방향(표준 축좌표 단위벡터)
+    static readonly Vector2Int[] AX_DIRS = new[]{
+    new Vector2Int( 1,  0), // E
+    new Vector2Int( 1, -1), // NE
+    new Vector2Int( 0, -1), // NW
+    new Vector2Int(-1,  0), // W
+    new Vector2Int(-1,  1), // SW
+    new Vector2Int( 0,  1), // SE
+};
+
     [Header("Targeting")]
     public TargetPriorityMode priorityMode = TargetPriorityMode.RandomSurvivor;
     public StatusId preferredStatus = StatusId.Slow; // 우선 상태(예: Slow)
@@ -50,6 +60,8 @@ public class ParametricDamageSkill : SkillAsset
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }  // 선택값 반영
 #endif
+
+    public static void ClearFrontlineCache() => _frontlineCache.Clear();
 
     void OnEnable()
     {
@@ -139,62 +151,100 @@ public class ParametricDamageSkill : SkillAsset
         return mult;
     }
 
-    // 공통 상수 (축 방향)
-    static readonly Vector2Int DIR_NE = new Vector2Int(1, -1);
-    static readonly Vector2Int DIR_SW = new Vector2Int(-1, 1);
+    [SerializeField] private bool useManualFrontier = true;
 
+    // 1열 수동 경계
+    [SerializeField] private List<Vector3Int> manualFrontierPlayer;
+    [SerializeField] private List<Vector3Int> manualFrontierEnemy;
+
+    // 2열 수동 지정(있으면 자동 확장 대신 이걸 우선 사용)
+    [SerializeField] private List<Vector3Int> manualSecondLayerPlayer;
+    [SerializeField] private List<Vector3Int> manualSecondLayerEnemy;
+    [SerializeField] private AxialDir playerFrontlineDir = AxialDir.SW; // 플레이어 전방축
+    [SerializeField] private AxialDir enemyFrontlineDir = AxialDir.NE; // 적 전방축
+    public enum AxialDir { E, NE, NW, W, SW, SE }
+    Vector2Int DirToAx(AxialDir d) => AX_DIRS[(int)d];
     // 맵별/팀별/깊이별 캐시
     static readonly Dictionary<(Tilemap, int, int), HashSet<Vector3Int>> _frontlineCache
-      = new();
+        = new Dictionary<(Tilemap, int, int), HashSet<Vector3Int>>();
 
-    // team: 0=Player, 1=Enemy (enum 캐스팅), depth: frontlineDepth
     HashSet<Vector3Int> GetFrontlineSet(Tilemap map, Team team, int depth)
     {
         if (!map || depth <= 0) return null;
         var key = (map, (int)team, depth);
         if (_frontlineCache.TryGetValue(key, out var cached)) return cached;
 
-        // 1) 팀별 전진 방향 f 선정
-        Vector2Int f = (team == Team.Player) ? DIR_SW : DIR_NE;
-
-        // 2) 맵 내 모든 유효 타일 수집(+축좌표로 변환)
+        // 맵 존재 타일 수집
         var b = map.cellBounds;
-        var cells = new List<(Vector3Int off, Vector2Int ax)>(128);
+        var all = new HashSet<Vector3Int>();
         for (int y = b.yMin; y < b.yMax; y++)
             for (int x = b.xMin; x < b.xMax; x++)
-            {
-                var c = new Vector3Int(x, y, 0);
-                if (!map.HasTile(c)) continue;
-                var ax = SkillLibrary.OffsetToAxial(c);
-                cells.Add((c, ax));
-            }
-        if (cells.Count == 0) return null;
+            { var c = new Vector3Int(x, y, 0); if (map.HasTile(c)) all.Add(c); }
 
-        // 3) f축으로의 스칼라 투영 t = q*f.x + r*f.y
-        int tMin = int.MaxValue, tMax = int.MinValue;
-        var tMap = new Dictionary<Vector3Int, int>(cells.Count);
-        foreach (var e in cells)
+        // 전방축 f (이미 수동축 SW/NE를 쓰고 계신다면 그대로)
+        Vector2Int f = (team == Team.Player) ? DirToAx(playerFrontlineDir)
+                                             : DirToAx(enemyFrontlineDir);
+
+        // 1) 1열: 수동 경계 우선, 없으면 자동 frontier
+        var frontier = new HashSet<Vector3Int>();
+        var srcFront = (team == Team.Player) ? manualFrontierPlayer : manualFrontierEnemy;
+        if (useManualFrontier && srcFront != null && srcFront.Count > 0)
         {
-            int t = e.ax.x * f.x + e.ax.y * f.y;
-            tMap[e.off] = t;
-            if (t < tMin) tMin = t;
-            if (t > tMax) tMax = t;
+            foreach (var c in srcFront) if (map.HasTile(c)) frontier.Add(c);
+        }
+        else
+        {
+            // 자동 frontier: f로 한 칸 나가면 타일 없음
+            foreach (var c in all)
+            {
+                var ax = SkillLibrary.OffsetToAxial(c);
+                var axF = new Vector2Int(ax.x + f.x, ax.y + f.y);
+                var offF = SkillLibrary.AxialToOffset(axF);
+                if (!map.HasTile(offF)) frontier.Add(c);
+            }
         }
 
-        // 여기서 컷오프 방향만 교정
-        int edge = (team == Team.Player) ? tMax : tMin;
+        // 최종 결과에 1열 추가
+        var result = new HashSet<Vector3Int>(frontier);
 
-        // 앞 depth 레이어 범위
-        int lo = (team == Team.Player) ? edge - (depth - 1) : edge;
-        int hi = (team == Team.Player) ? edge : edge + (depth - 1);
-
-        var result = new HashSet<Vector3Int>();
-        foreach (var kv in tMap)
-            if (kv.Value >= lo && kv.Value <= hi)
-                result.Add(kv.Key);
+        if (depth >= 2)
+        {
+            // 2) 2열: 수동 2열이 있으면 우선 사용
+            var secondManual = (team == Team.Player) ? manualSecondLayerPlayer : manualSecondLayerEnemy;
+            if (secondManual != null && secondManual.Count > 0)
+            {
+                foreach (var c in secondManual) if (map.HasTile(c)) result.Add(c);
+            }
+            else
+            {
+                // 없으면 기존처럼 -f로 1열에서 한 칸 안쪽 확장
+                var layer = new HashSet<Vector3Int>(frontier);
+                var next = new HashSet<Vector3Int>();
+                foreach (var c in layer)
+                {
+                    var ax = SkillLibrary.OffsetToAxial(c);
+                    var axBk = new Vector2Int(ax.x - f.x, ax.y - f.y); // -f
+                    var offBk = SkillLibrary.AxialToOffset(axBk);
+                    if (map.HasTile(offBk)) next.Add(offBk);
+                }
+                foreach (var n in next) result.Add(n);
+            }
+        }
 
         _frontlineCache[key] = result;
         return result;
+    }
+
+
+    [SerializeField] private bool debugFrontlineDump = false;
+    void DebugLogFrontline(Tilemap map, Team team, int depth)
+    {
+        var set = GetFrontlineSet(map, team, depth);
+        if (set == null) { Debug.Log($"[Frontline] (null) team={team} depth={depth}"); return; }
+        var list = set.ToList();
+        list.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        Debug.Log($"[Frontline] team={team} depth={depth} tiles={list.Count}\n" +
+                  string.Join(", ", list.Select(c => $"({c.x},{c.y})")));
     }
 
     bool IsInFrontline(BattleUnit u, int depth)
@@ -214,6 +264,12 @@ public class ParametricDamageSkill : SkillAsset
 
         int baseStat = (damageSchool == DamageSchool.Physical) ? caster.PhysicalDamage : caster.MagicDamage;
 
+        if (debugFrontlineDump)
+        {
+            DebugLogFrontline(caster.CurrentMap, caster.team, frontlineDepth);
+            Debug.Log($"[Frontline] caster={caster.name} pos=({caster.Cell.x},{caster.Cell.y}) inFront={IsInFrontline(caster, frontlineDepth)}");
+        }
+
         foreach (var v in victims)
         {
             float mult = GetMultiplierFor(v);        // 상태기반 추가 배수(옵션)
@@ -222,7 +278,12 @@ public class ParametricDamageSkill : SkillAsset
                 mult *= Mathf.Max(0f, frontlineMultiplier);
 
             float finalPower = power * mult;
-            int dmg = Mathf.Max(1, Mathf.RoundToInt(baseStat * finalPower));
+            // raw 계산을 먼저 하고 음수면 0으로 클램프해서 음수 Floor 문제 방지
+            float raw = Mathf.Max(0f, baseStat * finalPower);
+            // 소수점 내림(Floor) 적용
+            int floored = Mathf.FloorToInt(raw);
+            // 최소 데미지 보장
+            int dmg = Mathf.Max(0, floored);
             v.PlayHit();
             v.TakeDamage(dmg);
         }
