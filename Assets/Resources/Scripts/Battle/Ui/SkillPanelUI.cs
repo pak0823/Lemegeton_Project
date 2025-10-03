@@ -73,7 +73,12 @@ public class SkillPanelUI : MonoBehaviour
                     battle.SelectSkill(capture);
                 });
             }
-            else btn.gameObject.SetActive(false);
+            else
+            {
+                if((buttons.Length - 1) > i)
+                    btn.gameObject.SetActive(false);
+            }
+            
         }
     }
 

@@ -1,5 +1,7 @@
 using UnityEngine;
 
+public enum ISBOSS { None, Boss }  //보스 구별
+
 [CreateAssetMenu(menuName = "Battle/UnitData", fileName = "UnitData")]
 public class UnitData : ScriptableObject
 {
@@ -11,6 +13,9 @@ public class UnitData : ScriptableObject
     public int MagicDamage = 0; //총명
     public int AGI = 0; //민첩
     public int Hostility = 0; //적대감
+
+    [Header("Boss Check")]
+    public ISBOSS isBoss = ISBOSS.None;
 
     [Header("Skills (per character)")]
     public SkillAsset[] skills; // 에디터에서 캐릭터별로 할당

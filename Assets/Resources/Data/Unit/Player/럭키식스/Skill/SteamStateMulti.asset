@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 492f0b7ae9548a84098a9e4545fd6b7c, type: 3}
+  m_Name: SteamStateMulti
+  m_EditorClassIdentifier: 
+  displayName: StateMulti
+  icon: {fileID: 0}
+  school: 0
+  attribute: 0
+  power: 1
+  mpCost: 0
+  targetMode: 0
+  legacyId: 4
+  rules:
+  - name: "\uC99D\uAE30\uAE30\uAD00 \uAC00\uB3D9"
+    requireAll: 02000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 89087ab064d71c74390b3252740b76da, type: 2}
+    overrideAreaPreset: 0
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: "\uAC00\uB3D9 \uC911\uC9C0"
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  defaultSkill: {fileID: 11400000, guid: 74f200cb10b277249bd2f481b4a54056, type: 2}

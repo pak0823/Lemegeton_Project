@@ -42,6 +42,19 @@ public class TurnOrderManager : MonoBehaviour
             return order[index];
         }
     }
+
+    public void Clear()
+    {
+        // 턴 순서 목록 자체를 비우고 인덱스 초기화
+        order.Clear();
+        index = 0;
+    }
+
+    //씬에서 바로 재빌드
+    public void RebuildFromScene()
+    {
+        BuildOrder(FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead));
+    }
     #endregion
 
     #region Turn Progression

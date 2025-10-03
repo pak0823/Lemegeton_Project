@@ -84,6 +84,20 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
         {
             int amount = CalcHealAmount(caster, u);
             u.Heal(amount);
+
+            float healthMultiplier = 1 + (1 - ((float)caster.HP / caster.MaxHP));
+            Debug.Log($"healthMultiplier: {healthMultiplier}");
+
+            float statusMultiplier = caster.HostilityGenerationMultiplier;
+            Debug.Log($"statusMultiplier: {statusMultiplier}");
+
+            // 최종 적대감 생성량 계산
+            float hostilityGained = amount * healthMultiplier * statusMultiplier;
+
+            // 캐스터(플레이어)의 적대감 증가
+            caster.AddHostility(hostilityGained);
+
+            Debug.Log($"{caster.name}이(가) {u.name}에게 {amount} 회복을 시켜 적대감 {hostilityGained} 획득! (현재 총 적대감: {caster.Hostility})");
         }
     }
 

@@ -78,7 +78,7 @@ SpriteRenderer:
   m_SortingLayerID: 1554359489
   m_SortingLayer: 2
   m_SortingOrder: 0
-  m_Sprite: {fileID: 21300000, guid: 53f9425c3ddc30947bb9094c4b63a4bd, type: 3}
+  m_Sprite: {fileID: 1203093003, guid: 66b221c8c5cd57f499dd9fbde267723f, type: 3}
   m_Color: {r: 1, g: 0.3529412, b: 0.4745098, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -127,17 +127,21 @@ MonoBehaviour:
   team: 0
   AGI: 0
   atbPerSecond: 0
-  PhysicalDamage: 1
-  MagicDamage: 1
-  MaxHP: 100
-  MaxMP: 100
-  MaxRage: 100
-  Hostility: 0
   resistTable: []
+  debugLogStats: 0
   animator: {fileID: 0}
   spriteRenderer: {fileID: 0}
   moveDuration: 0.18
   CurrentMap: {fileID: 0}
+  stateStatDB: {fileID: 0}
+  basePhysicalDamage: 1
+  baseMagicDamage: 1
+  baseMaxHP: 100
+  baseMaxMP: 100
+  baseMaxRage: 100
+  baseHostility: 10
+  baseDefense: 0
+  baseSpeed: 0
 --- !u!114 &4122717466495211808
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -197,8 +201,8 @@ BoxCollider2D:
   m_Offset: {x: 0, y: 0.05093673}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0}
-    oldSize: {x: 0.32, y: 0.32}
+    pivot: {x: 0.5, y: 0.33333334}
+    oldSize: {x: 0.48, y: 0.48}
     newSize: {x: 0.36, y: 0.58}
     adaptiveTilingThreshold: 0.5
     drawMode: 0

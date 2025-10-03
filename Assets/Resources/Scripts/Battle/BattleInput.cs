@@ -10,6 +10,7 @@ public class BattleInput : MonoBehaviour
     public LayerMask unitMask;
     public GameSpeedController speedCtrl; // GameSpeedController 할당
     public HudController hudCtrl;   //HUD 컨트롤러 할당
+    public TestCode TestCode; //임시 옵션창 관련 스크립트
 
     bool wasTargetingPrev = false;
     bool suppressLMBOnce = false;
@@ -47,6 +48,11 @@ public class BattleInput : MonoBehaviour
         // 맵 준비 전이면 입력 무시
         if (provider == null || provider.PlayerFloor == null || provider.EnemyFloor == null) return;
 
+        if (Input.GetKeyDown(KeyCode.Escape))   // 옵션(esc)
+        {
+            TestCode?.ShowPanel();
+        }
+
         HandleGameSpeedToggle();
         if (HandleHudToggleEarly()) return; //HUD 상태 관리
         if (GamePause.IsPaused) return;
@@ -59,6 +65,8 @@ public class BattleInput : MonoBehaviour
     #region Input Handlers
     void HandleGameSpeedToggle()
     {
+        if (TestCode != null && TestCode.isShow) return; // 옵션창이 켜져 있으면 입력 무시
+
         for (int i = 0; i < speedBinds.Length; i++)
         {
             var (key, idx) = speedBinds[i];
@@ -250,7 +258,9 @@ public class BattleInput : MonoBehaviour
 
     bool HandleHudToggleEarly()
     {
-        // 1) LeftControl로 토글
+        if (TestCode != null && TestCode.isShow) return false; // 옵션창이 켜져 있으면 입력 무시
+
+        // Tab 키로 토글
         if (Input.GetKeyDown(KeyCode.Tab))
         {
             hudCtrl?.Toggle();
@@ -260,7 +270,7 @@ public class BattleInput : MonoBehaviour
         // 2) HUD가 꺼져있을 때 아무 키/마우스 버튼 입력으로 즉시 복귀
         if (hudCtrl != null && !hudCtrl.IsVisible)
         {
-            if (Input.GetKeyDown(KeyCode.Tab) /*|| Input.GetKeyDown(KeyCode.Escape)*/)
+            if (Input.GetKeyDown(KeyCode.Tab))
             {
                 return true;
             }

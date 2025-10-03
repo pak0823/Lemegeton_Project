@@ -10,9 +10,6 @@ public class HudController : MonoBehaviour
     [Header("HUD Root (공통 부모, 반드시 CanvasGroup 부착)")]
     [SerializeField] private CanvasGroup hudRoot;
 
-    //[Header("추가로 함께 토글할 CanvasGroup들 (HUDRoot 밖 버튼/바 포함)")]
-    //[SerializeField] private List<CanvasGroup> extraCanvasGroups = new List<CanvasGroup>();
-
     [Header("추가로 함께 토글할 GameObject들 (CanvasGroup 없을 때만)")]
     [SerializeField] private List<GameObject> extraGameObjects = new List<GameObject>();
 
@@ -74,18 +71,6 @@ public class HudController : MonoBehaviour
             hudRoot.blocksRaycasts = show;
         }
 
-        //// 추가 CanvasGroup들도 동일하게 처리(상태값 불변)
-        //if (extraCanvasGroups != null)
-        //{
-        //    foreach (var cg in extraCanvasGroups)
-        //    {
-        //        if (!cg) continue;
-        //        cg.alpha = show ? 1f : 0f;
-        //        cg.interactable = show;
-        //        cg.blocksRaycasts = show;
-        //    }
-        //}
-
         // CanvasGroup이 전혀 없는 단순 GO는 SetActive로 처리(상태 영향 없을 때만 사용)
         if (extraGameObjects != null)
         {
@@ -98,8 +83,10 @@ public class HudController : MonoBehaviour
         // 속도 제어 연동
         if (initialized && !isInitial && speedCtrl != null)
         {
-            if (!show) speedCtrl.PauseRemember();   // HUD 숨김 → 일시정지(배속 기억)
-            else speedCtrl.ResumeRemembered(); // HUD 표시 → 기억한 배속으로 재생
+            if (!show)
+                speedCtrl.RequestPause();   // HUD 숨김 → 일시정지 요청
+            else
+                speedCtrl.ReleasePause(); // HUD 표시 → 일시정지 해제 요청
         }
     }
 }

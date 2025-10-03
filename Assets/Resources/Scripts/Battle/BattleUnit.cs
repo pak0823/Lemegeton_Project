@@ -11,11 +11,15 @@ public class BattleUnit : MonoBehaviour
     [Header("Data")]
     public UnitData data; // 유닛 데이터 참조
 
+    [Header("BattleManager")]
+    BattleManager battleManager;
+
     [Header("FX / Projectile")]
     public ProjectileController defaultProjectilePrefab;  // ← 유닛 기본 투사체
 
     [Header("Runtime Stats")]
     public Team team;
+    public ISBOSS isBoss;
     public float AGI;
     [NonSerialized] public float ATB = 0f; // 0~100
     public float Overfill { get; private set; } = 0f; // ATB가 그 프레임에 100을 넘기면 얼마큼 넘었는지 저장(동시턴 우선순위 1순위)
@@ -69,7 +73,6 @@ public class BattleUnit : MonoBehaviour
     [SerializeField] private int baseMaxHP = 100;
     [SerializeField] private int baseMaxMP = 100;
     [SerializeField] private int baseMaxRage = 100;
-    [SerializeField] private float baseHostility = 10.0f;
 
     // (선택) 방어/이속 등 확장 필드가 있다면 같은 패턴으로 추가
     [SerializeField] private int baseDefense = 0;
@@ -85,10 +88,9 @@ public class BattleUnit : MonoBehaviour
         public int hpAdd, mpAdd;
         public float hostilityGain, hostilityDecay;
 
-        public float hostilityStatMul;
-        public float hostilityStatAdd;
+        public float hostilityGenerationMultiplier;
 
-        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, def = 1f, spd = 1f, hpAdd = 0, mpAdd = 0, hostilityStatMul = 1.0f, hostilityStatAdd = 0 };
+        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, def = 1f, spd = 1f, hpAdd = 0, mpAdd = 0, hostilityGenerationMultiplier = 1.0f};
 
         public void Apply(StateStatModifierDB.Entry e)
         {
@@ -99,8 +101,7 @@ public class BattleUnit : MonoBehaviour
             spd *= Mathf.Max(0f, e.spdMultiplier);
             hpAdd += e.hpFlatAdd;
             mpAdd += e.mpFlatAdd;
-            hostilityStatMul *= Mathf.Max(0f, e.hostilityStatMultiplier);
-            hostilityStatAdd += e.hostilityStatFlatAdd;
+            hostilityGenerationMultiplier *= Mathf.Max(0f, e.hostilityStatMultiplier);
         }
     }
     StatMult _cachedMult = StatMult.Identity;
@@ -119,10 +120,12 @@ public class BattleUnit : MonoBehaviour
 
             Debug.Log(
                 $"[STAT] {name} " +
-                $"ATK={PhysicalDamage}  MAG={MagicDamage}  DEF={Defense}  SPD={Speed}  " +
+                $"ATK={PhysicalDamage}  MAG={MagicDamage} " +
                 $"HOSTILITY(스탯)={Hostility}  " +
                 $"HP={HP}/{MaxHP}  MP={MP}/{MaxMP}"
             );
+            //DEF ={ Defense}SPD ={ Speed}
+            
         }
     }
 
@@ -154,7 +157,20 @@ public class BattleUnit : MonoBehaviour
     public int MaxHP => baseMaxHP + Mult.hpAdd;
     public int MaxMP => baseMaxMP + Mult.mpAdd;
     public int MaxRage => baseMaxRage;
-    public float Hostility => (baseHostility * Mult.hostilityStatMul) + Mult.hostilityStatAdd;
+    public float Hostility { get; private set; } = 1.0f; // 전투 시작 시 기본 적대감 (0으로 시작하면 첫 타겟팅이 불가능하므로 1 등으로 설정)
+    public void AddHostility(float amount)
+    {
+        Hostility = Mathf.Max(0, Hostility + amount); // 적대감은 0 밑으로 내려가지 않도록 합니다.
+    }
+
+    public void ResetHostility()
+    {
+        Hostility = 1.0f; // 전투 시작 시 기본값과 동일하게 맞춰줍니다.
+    }
+
+    // 상태 효과가 적용된 최종 적대감 '생성량' 배율 (예: 도발 상태일 때 2.0f)
+    public float HostilityGenerationMultiplier => Mult.hostilityGenerationMultiplier;
+
 
     // (선택) 방어/속도 등
     public int Defense => Mathf.RoundToInt(baseDefense * Mult.def);
@@ -172,6 +188,11 @@ public class BattleUnit : MonoBehaviour
         if (_usc != null) _usc.OnStatesChanged += InvalidateStatCache;
 
         ApplyData(); // 데이터 반영(HP/MP 초기화 포함)
+    }
+    void OnEnable()
+    {
+        if (battleManager == null) battleManager = FindObjectOfType<BattleManager>();
+        if (battleManager != null) battleManager.OnWaveStarted += HandleWaveStarted;
     }
 
     void OnDestroy()
@@ -202,7 +223,7 @@ public class BattleUnit : MonoBehaviour
             baseMaxMP = data.MaxMP;
             baseMaxRage = data.MaxRage;
             AGI = data.AGI;
-            baseHostility = data.Hostility;
+            isBoss = data.isBoss;
         }
 
         // 상태 반영된 최대치가 필요하므로 먼저 캐시 무효화
@@ -288,6 +309,11 @@ public class BattleUnit : MonoBehaviour
     {
         Cell = toCell;
         transform.position = map.GetCellCenterWorld(toCell);
+    }
+
+    void HandleWaveStarted()
+    {
+        ResetHostility();   //적의 초기화
     }
     #endregion
 

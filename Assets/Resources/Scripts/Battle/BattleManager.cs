@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.UIElements;
 
 public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, EndTurn }
 public enum BattleAction { Move, Attack }
@@ -37,8 +38,19 @@ public class BattleManager : MonoBehaviour
     public BattleUnit SelectedTarget => selectedTarget;
     Coroutine enemyRoutine; // 코루틴 핸들
 
+    [Header("Waves")]
+    [SerializeField] WaveSet waveSet;
+    [SerializeField] int currentWaveIndex = -1;
+    [SerializeField] private Transform enemyRoot;
+    public int CurrentWave => currentWaveIndex + 1; //현재 웨이브
+    public int TotalWaves => waveSet ? waveSet.waves.Count : 0; //총 웨이브
+    private GameObject _spawnedEnemyLayout;
+    bool isWaveTransitioning = false;
+    public event System.Action<int, int, string> OnWaveChanged; // (cur,total,label)
+    public event System.Action OnWaveStarted;   // 웨이브 시작 알림
 
-        // === 타겟 선택(표시/순환) ===
+
+    // === 타겟 선택(표시/순환) ===
     [Header("Targeting")]
     public TargetMarker targetMarker; // 인스펙터에 배치한 TargetMarker 할당
     List<BattleUnit> targetCycle = new(); // 적 리스트(AGI desc)
@@ -61,6 +73,7 @@ public class BattleManager : MonoBehaviour
     float _lastMinAGI, _lastMaxAGI, _lastAGISum;
     int _lastAGICount;
     const float AGI_EPS = 0.0001f;
+    public event System.Action OnATBReset; // 턴바 강제 초기화 신호
 
     [Header("Skill Runtime")]
     public bool isSelectingSkill = false;          // 스킬 선택 패널이 열렸는지
@@ -127,12 +140,25 @@ public class BattleManager : MonoBehaviour
 
     void Init() //초기 세팅
     {
-        var units = FindObjectsOfType<BattleUnit>().ToList();
-        if (units.Count == 0) return;
+
+        if (!waveSet || waveSet.waves == null || waveSet.waves.Count == 0)  //웨이브 없을 시 일반 초기화
+        {
+            RebindAllUnitsAndInitATB();
+        }
+        else //웨이브 모드일 땐 여기서 바로 0번 웨이브 로드
+        {
+            LoadWave(0);
+        }
+    }
+
+    // 씬 내 모든 BattleUnit(플레이어+적)을 재바인드하고 ATB/구독을 초기화
+    private void RebindAllUnitsAndInitATB()
+    {
+        var units = FindObjectsOfType<BattleUnit>(true).ToList();
 
         float minAGI = units.Min(u => u.EffectiveAGI);
         float maxAGI = units.Max(u => u.EffectiveAGI);
-
+        
         foreach (var u in units)
         {
             var map = (u.team == Team.Player) ? provider.PlayerFloor : provider.EnemyFloor;
@@ -142,10 +168,10 @@ public class BattleManager : MonoBehaviour
             grid.SetOccupied(u.team, u.Cell, true);
             u.InitializeATB(minAGI, maxAGI);
 
+            u.OnDied -= HandleUnitDied;
             u.OnDied += HandleUnitDied;
         }
 
-        // AGI 스냅샷 저장
         _lastMinAGI = minAGI;
         _lastMaxAGI = maxAGI;
         _lastAGISum = units.Sum(u => u.EffectiveAGI);
@@ -160,7 +186,7 @@ public class BattleManager : MonoBehaviour
                 sc.OnStatusChanged += RecomputeATBSpeedsFromLiveUnits; // 기존
                 if (logAGIOnStatusChange)
                 {
-                    var unitCapture = u; // 클로저 캡처 주의: 루프 변수 복사
+                    var unitCapture = u; // 루프 변수 복사
                     sc.OnStatusChanged += () => LogUnitAGI(unitCapture, "StatusChanged");
                 }
             }
@@ -168,6 +194,33 @@ public class BattleManager : MonoBehaviour
 
         initialized = true;
         ParametricDamageSkill.ClearFrontlineCache();    // 전방 집합 캐시 초기화
+    }
+
+    /// <summary>모든 유닛 ATB 0, 진행상태/큐 초기화 후 UI에 리셋 신호</summary>
+    void ResetATBAndTurnOrder()
+    {
+        // 1) 모든 유닛 ATB 0
+        foreach (var u in FindObjectsOfType<BattleUnit>())
+        {
+            if (!u || u.IsDead) continue;
+            u.ResetATB();
+        }
+
+        // 2) 진행 상태 초기화
+        acting = null;
+        state = BattleState.Idle;
+        atbPaused = false; // 리셋 후 즉시 진행
+
+        // 3) 턴 오더 매니저가 있으면 큐/예정행동 초기화
+        var tom = FindObjectOfType<TurnOrderManager>();
+        if (tom != null)
+        {
+            tom.Clear();
+            tom.RebuildFromScene(); // 웨이브의 새 유닛들 기준으로 큐 재구성
+        }
+
+        // 4) UI에 "전체 ATB 리셋" 알림 → 턴바 0으로 재배치
+        OnATBReset?.Invoke();
     }
 
     #endregion
@@ -228,6 +281,8 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+
+
     [Header("Debug/Logs")]
     [SerializeField] bool logAGIOnTurnStart = true;
     [SerializeField] bool logAGIOnStatusChange = false;
@@ -238,7 +293,103 @@ public class BattleManager : MonoBehaviour
         var sc = u.GetComponent<StatusController>();
         int stacks = (sc != null) ? sc.GetStacks(StatusId.Slow) : 0;            // GetStacks
         float mult = (sc != null) ? sc.GetAgilityMultiplier() : 1f;             // GetAgilityMultiplier
-        Debug.Log($"[AGI:{reason}] {u.team}/{u.name}  base={u.AGI:0.##}  slowStacks={stacks}  mult={mult:0.##}  effective={u.EffectiveAGI:0.##}");
+    }
+
+    // Grid 점유 해제 시도(맵/그리드 레퍼런스에 맞춰 구현)
+    private void TryReleaseGridOccupy(BattleUnit u)
+    {
+        if (u == null || grid == null) return;
+        var map = grid.GetMap(u.team);                     // 팀에 맞는 타일맵
+        if (map == null) return;
+        Vector3Int cell = u.Cell;                          // 유닛이 기억하는 셀(없다면 map.WorldToCell(u.transform.position))
+        grid.SetOccupied(u.team, cell, false);             // 점유 해제
+    }
+
+    // 프리팹 인스턴스 → 유닛 재바인드/ATB 초기화 → UI 이벤트
+    private void LoadWave(int index)
+    {
+        if (waveSet == null || waveSet.waves == null || index < 0 || index >= waveSet.waves.Count)
+        {
+            Debug.LogWarning($"[Battle] LoadWave({index}) out of range. Treat as final victory.");
+            Shared.SceneTransitionManager.ReturnToSavedPoint();
+            return;
+        }
+
+        CleanupEnemiesAndLayouts();
+        currentWaveIndex = index;
+
+        var w = waveSet.waves[index];
+        if (w.enemyLayoutPrefab)
+        {
+            _spawnedEnemyLayout = Instantiate(
+            w.enemyLayoutPrefab,
+            enemyRoot ? enemyRoot : transform
+                        );
+        }
+
+        // 방금 스폰된 적 + 기존 플레이어 유닛까지 모두 다시 바인드/초기화
+        RebindAllUnitsAndInitATB();
+
+        OnWaveStarted?.Invoke();   //웨이브 시작 이벤트 발행
+
+        // UI 알림
+        OnWaveChanged?.Invoke(CurrentWave, TotalWaves, w.label);
+        Debug.Log($"[Battle] Wave {CurrentWave}/{TotalWaves} 시작 - {w.label}");
+
+        // 웨이브 로드가 끝난 시점에 ATB/턴 상태를 완전 초기화(0에서 출발)
+        ResetATBAndTurnOrder();
+
+    }
+
+    // 이전 웨이브 잔재(적 유닛/레이아웃/점유) 정리
+    private void CleanupEnemiesAndLayouts()
+    {
+        // 1) 기존에 스폰한 적 레이아웃 프리팹 제거
+        if (_spawnedEnemyLayout)
+        {
+            // 자식에 BattleUnit이 있을 수 있으므로 먼저 죽이거나 점유 해제
+            var enemyUnits = _spawnedEnemyLayout.GetComponentsInChildren<BattleUnit>(true);
+            foreach (var u in enemyUnits)
+            {
+                if (u == null) continue;         // 이미 파괴됨
+                if (u.IsDead) continue;          // 죽는 중/죽은 유닛 → Co_DieThenDestroy가 처리
+                TryReleaseGridOccupy(u);
+                if (u.gameObject != null) Destroy(u.gameObject);
+            }
+            Destroy(_spawnedEnemyLayout);
+            _spawnedEnemyLayout = null;
+        }
+
+        // 2) 혹시 남아있는 적 유닛(레이아웃 밖 스폰분)도 정리
+        var leftovers = FindObjectsOfType<BattleUnit>()
+                    .Where(u => u.team == Team.Enemy).ToList();
+        foreach (var u in leftovers)
+        {
+            TryReleaseGridOccupy(u);
+            Destroy(u.gameObject);
+        }
+    }
+
+    void AdvanceToNextWave()
+    {
+        if (isWaveTransitioning) return; // 중복 방지
+        isWaveTransitioning = true;
+        StartCoroutine(Co_NextWave());
+    }
+    IEnumerator Co_NextWave()
+    {
+        // 잠깐 연출/페이드 등
+        yield return new WaitForSeconds(0.75f);
+        int nextIndex = currentWaveIndex + 1;
+        if (waveSet == null || waveSet.waves == null || nextIndex < 0 || nextIndex >= TotalWaves)
+        {
+            isWaveTransitioning = false;
+            Debug.Log("[Battle] 승리! (모든 웨이브 완료)");
+            Shared.SceneTransitionManager.ReturnToSavedPoint();
+            yield break;
+        }
+        LoadWave(nextIndex);
+        isWaveTransitioning = false;
     }
 
 
@@ -385,43 +536,6 @@ public class BattleManager : MonoBehaviour
         if (target == null || target.team == acting.team) return;
 
         ConfirmSkillOnUnit(target);
-    }
-
-    void ResolveAttack(BattleUnit target)
-    {
-        if (acting == null) return;
-
-        state = BattleState.Resolving;
-        ClearAllPreviews();
-        Debug.Log("공격 시작 → 임팩트에서 데미지 1회 적용");
-        StartCoroutine(Co_AttackThenConsume(acting, target, BattleAction.Attack));
-    }
-
-    IEnumerator Co_AttackThenConsume(BattleUnit attacker, BattleUnit target, BattleAction act)
-    {
-        bool impactDone = false;
-        System.Action impact = null; 
-        impact = () =>
-        {
-            attacker.OnAttackImpact -= impact;
-            impactDone = true;
-            if (target != null && !target.IsDead)
-            {
-                target.PlayHit();
-                target.TakeDamage(attacker.PhysicalDamage);
-            }
-        };
-        attacker.OnAttackImpact += impact;
-        yield return attacker.AnimateAttack(target);
-
-        if (!impactDone && target != null && !target.IsDead)
-        {
-            Debug.LogWarning("[Attack] 임팩트 이벤트 없음 → 폴백으로 데미지 적용");
-            target.PlayHit();
-            target.TakeDamage(attacker.PhysicalDamage);
-        }
-
-        OnActionConsumed(act); // 공격 1회 소비 → 남은 토큰 판단
     }
     #endregion
 
@@ -587,17 +701,42 @@ public class BattleManager : MonoBehaviour
             atbPaused = false; // ATB 충전 재개
             state = BattleState.Idle;
         }
-        Debug.Log($"[Die] {dead.name}");
+        //Debug.Log($"[Die] {dead.name}");
 
-        // 사망 연출 대기 후 제거
+        // 중복 구독 방지
+        dead.OnDied -= HandleUnitDied;
+
         StartCoroutine(Co_DieThenDestroy(dead));
-        CheckBattleEnd(); // 전투 종료 판정
     }
 
     IEnumerator Co_DieThenDestroy(BattleUnit u)
     {
-        yield return u.PlayDieAndWait(1.0f); // 필요시 시간 조정 or 이벤트로 대체
-        Destroy(u.gameObject);// 오브젝트 제거
+        if (u == null) { CheckBattleEnd(); yield break; }
+
+        // 1) 사망 연출을 "수동 이터레이션"으로 소비 (중간 파괴에 안전)
+        var routine = u.PlayDieAndWait(1.0f);
+        if (routine != null)
+        {
+            // u가 중간에 파괴되거나 routine이 끝나면 루프 종료
+            while (u != null)
+            {
+                // 다음 프레임으로 진행할 수 없으면 종료
+                if (!routine.MoveNext()) break;
+
+                // 현재 yield 값 전달
+                yield return routine.Current;
+
+                // 중간에 오브젝트가 파괴되면 자연 종료
+                if (u == null || u.gameObject == null) break;
+            }
+        }
+
+        // 2) 최종 파괴(여러 경로로 Destroy가 한 번 더 호출돼도 안전)
+        if (u != null && u.gameObject != null)
+            Destroy(u.gameObject);
+
+        // 3) 사망 정리가 끝난 뒤 전투 종료 판정
+        CheckBattleEnd();
     }
     #endregion
 
@@ -608,13 +747,20 @@ public class BattleManager : MonoBehaviour
         bool anyPlayer = units.Any(u => u.team == Team.Player && !u.IsDead);
         bool anyEnemy = units.Any(u => u.team == Team.Enemy && !u.IsDead);
 
-        if (!anyEnemy) 
-        { 
-            Debug.Log("[Battle] 승리!");
+        if (!anyEnemy)
+        {
+            // 다음 웨이브가 있으면 진행, 없으면 최종 승리
+            if (isWaveTransitioning) return;
+            if (waveSet && CurrentWave < TotalWaves)
+            {
+                AdvanceToNextWave();
+                return;
+            }
+            Debug.Log("[Battle] 승리! (최종 웨이브 완료)");
             Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
-        else if (!anyPlayer) 
-        { 
+        else if (!anyPlayer)
+        {
             Debug.Log("[Battle] 패배...");
             Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
@@ -631,10 +777,6 @@ public class BattleManager : MonoBehaviour
             .Where(u => u.team == Team.Player && !u.IsDead)
             .ToList();
         if (players.Count == 0) { EndEnemyTurn(enemy); yield break; }
-
-        // TODO(도발 연동 자리): 도발 대상 우선 선택 훅
-        // var tauntTarget = FindTauntTarget(players);
-        // BattleUnit target = tauntTarget ?? players[Random.Range(0, players.Count)];
 
         BattleUnit target = players[Random.Range(0, players.Count)]; // 랜덤 1인 지정
 
@@ -711,45 +853,53 @@ public class BattleManager : MonoBehaviour
         Vector3 startW = caster.transform.position;
         Vector3 targetW = p.map.GetCellCenterWorld(p.cell);
 
-        System.Action onFire = null;
-        onFire = () =>
+        void FireOnce()
         {
-            // 한 번만
-            caster.OnAttackImpact -= onFire;
             if (fired) return;
             fired = true;
 
-            System.Action onArrive = () =>
+            void OnArrive()
             {
                 if (p.trapPrefab != null && p.map != null)
                 {
-                    // 같은 타일내에 이미 거미줄이 있으면 제거
                     WebTrapController.RemoveAt(p.map, p.cell);
-
-                    // 새 거미줄 생성
                     var trap = Instantiate(p.trapPrefab, targetW, Quaternion.identity);
                     trap.Init(p.map, p.cell, p.owner);
                 }
                 arrived = true;
-            };
+            }
 
             if (projPrefab != null)
             {
                 var go = Instantiate(projPrefab, startW, Quaternion.identity);
                 var pc = go.GetComponent<ProjectileController>();
-                if (pc != null) pc.Init(startW, targetW, onArrive, p.projectileSpeed);
-                else onArrive(); // 컴포넌트 누락 폴백
+                if (pc != null) pc.Init(startW, targetW, OnArrive, p.projectileSpeed);
+                else OnArrive();
             }
             else
             {
-                // 프리팹이 없으면 바로 생성(연출 생략)
-                onArrive();
+                OnArrive();
             }
-        };
-        caster.OnAttackImpact += onFire;   // 임팩트에서 발사하도록 훅 연결
+        }
+
+        System.Action onFire = null;
+        onFire = () =>
+        {
+            caster.OnAttackImpact -= onFire; // 반드시 해제
+            FireOnce();
+        }
+        ;
+        caster.OnAttackImpact += onFire;
 
         // 발사 모션 시작
         yield return caster.AnimateShootWeb();  // 애니 끝까지 대기 (발사는 이미 중간에 실행됨)
+
+        // 애니 중 임팩트 이벤트가 안 왔다면, 애니 종료 시 1회 강제 발사
+        if (!fired)
+        {
+            caster.OnAttackImpact -= onFire; // 혹시 남았으면 해제
+            FireOnce();
+        }
 
         // 투사체 도착까지 대기(안전 타임아웃)
         float timeout = 3f;
@@ -764,8 +914,6 @@ public class BattleManager : MonoBehaviour
         // 행동 토큰 소비로 턴 종료
         OnActionConsumed(BattleAction.Attack);
     }
-
-
 
     void EndEnemyTurn(BattleUnit enemy)
     {
@@ -954,6 +1102,7 @@ public class BattleManager : MonoBehaviour
     {
         if (!IsPlayerTurn || acting == null || target == null) return;
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
+        if (IsPlayerTurn && target.team == Team.Player) return; // 유닛 공격 시 아군을 대상으로 하지 못하게 방지
 
         // 최종 사전 체크
         //if (!acting.HasMP(currentSkillSO.mpCost)) { EmitActionLabel?.Invoke(acting, "MP 부족"); return; } -- 수정해야함
@@ -1137,19 +1286,15 @@ public class BattleManager : MonoBehaviour
     // === 유닛 점유/워커블 헬퍼 ===
     bool IsCellOccupied(Tilemap map, Vector3Int cell)
     {
-        foreach (var unit in FindObjectsOfType<BattleUnit>())
-        {
-            if (unit == null || unit.IsDead) continue;
-            if (unit.CurrentMap == map && unit.Cell == cell) return true;
-        }
-        return false;
+        // 맵→팀 판별 규칙이 명확하면 팀별로 조회
+        var team = (map == provider?.PlayerFloor) ? Team.Player : Team.Enemy;
+        return grid != null && grid.IsOccupied(team, cell);
     }
     bool IsWalkableCell(Tilemap map, Vector3Int cell)
     {
-        // 맵에 타일이 있어야 하고, 유닛이 점유하고 있지 않아야 한다
         if (!map.HasTile(cell)) return false;
-        if (IsCellOccupied(map, cell)) return false;
-        return true;
+        var team = (map == provider?.PlayerFloor) ? Team.Player : Team.Enemy;
+        return grid != null && !grid.IsOccupied(team, cell);
     }
 
     public IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
@@ -1166,75 +1311,6 @@ public class BattleManager : MonoBehaviour
                 yield return u;
         }
     }
-
-    // 이동 보간 시간(인스펙터에서 조절 가능)
-    [SerializeField] float postMoveDuration = 0.1f;
-    
-    // 목적지 계산: 스킬2=앞(NW), 스킬1=뒤(SE), 최대 2칸, 워커블만
-    bool TryComputePostMoveDestinationLegacy(SkillId id, BattleUnit caster, out Vector3Int dest)
-    {
-        dest = caster.Cell;
-
-        if (id != SkillId.Skill1 && id != SkillId.Skill2) return false;
-
-        var stepAx = (id == SkillId.Skill2) ? new Vector2Int(0, -1) : new Vector2Int(0, 1);
-        var map = caster.CurrentMap;
-        var curAx = SkillLibrary.ToAxial(caster.Cell);
-        var last = caster.Cell;
-
-        for (int i = 0; i < 2; i++)
-        {
-            curAx = new Vector2Int(curAx.x + stepAx.x, curAx.y + stepAx.y);
-            var next = SkillLibrary.ToOffset(curAx);
-            if (!IsWalkableCell(map, next)) break;
-            last = next;
-        }
-
-        if (last == caster.Cell) return false;
-        dest = last;
-        return true;
-    }
-
-    IEnumerator Co_MoveUnitSmooth(BattleUnit unit, Tilemap map, Vector3Int toCell, float duration)
-    {
-        var fromCell = unit.Cell;
-        var startPos = unit.transform.position;
-        var endPos = map.GetCellCenterWorld(toCell);
-        endPos.z = startPos.z;
-
-        // 점유 해제(이동 시작)
-        grid.SetOccupied(unit.team, fromCell, false);
-
-        // --- 애니메이션 준비 ---
-        var anim = unit.GetComponentInChildren<Animator>();
-        if (anim != null)
-        {
-            anim.ResetTrigger("Idle");
-            anim.SetBool("IsMoving", true);
-            Vector2 dir = (endPos - startPos);
-            // 루트모션을 쓰지 않는 구성(Transform 직접 보간) 기준
-        }
-
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.deltaTime / Mathf.Max(0.0001f, duration);
-            unit.transform.position = Vector3.Lerp(startPos, endPos, Mathf.Clamp01(t));
-            yield return null;
-        }
-
-        // 좌표/맵 필드 갱신
-        unit.MoveTo(map, toCell);
-
-        // 점유 설정(이동 완료)
-        grid.SetOccupied(unit.team, unit.Cell, true);
-
-        if (anim != null)
-        {
-            anim.SetBool("IsMoving", false);
-        }
-    }
-
 
     public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
     {

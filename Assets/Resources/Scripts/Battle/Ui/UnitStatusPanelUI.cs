@@ -28,17 +28,23 @@ public class UnitStatusPanelUI : MonoBehaviour
     void Awake()
     {
         if (!battle) battle = FindObjectOfType<BattleManager>();
+        if (battle != null) battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
     }
 
     void Start()
     {
         BuildOnce();
         if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // 기술명 라벨 업데이트
+
+        //아군 카드가 하나도 없으면 즉시 보강
+        if (!views.Keys.Any(k => k && k.team == Team.Player))
+            BuildOnce();
     }
 
     void OnDestroy()
     {
         if (battle != null) battle.OnUnitActionLabel -= HandleActionLabel;
+        if (battle != null) battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
         foreach (var kv in views)
             if (kv.Key) kv.Key.OnDied -= OnUnitDied; // 핸들러명 변경
     }
@@ -57,15 +63,15 @@ public class UnitStatusPanelUI : MonoBehaviour
 
     void BuildOnce()
     {
-        if (views.Count > 0) return;
-
+        // 현재 씬의 생존 유닛 조회
         var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
 
         var enemies = Sort(units.Where(u => u.team == Team.Enemy), enemySort);
         var allies = Sort(units.Where(u => u.team == Team.Player), playerSort);
 
-        foreach (var u in enemies) SpawnCard(enemyParent, enemyItemPrefab, u);
-        foreach (var u in allies) SpawnCard(playerParent, playerItemPrefab, u);
+        // 이미 만들어진 카드가 있어도 없는 것만 채워 넣음
+        foreach (var u in enemies) if (!views.ContainsKey(u)) SpawnCard(enemyParent, enemyItemPrefab, u);
+        foreach (var u in allies) if (!views.ContainsKey(u)) SpawnCard(playerParent, playerItemPrefab, u);
     }
     void SpawnCard(RectTransform parent, UnitStatusItemUI prefab, BattleUnit u)
     {
@@ -140,6 +146,37 @@ public class UnitStatusPanelUI : MonoBehaviour
         if (!views.ContainsKey(u)) return;
         Destroy(views[u].gameObject);
         views.Remove(u);
+    }
+
+
+    // 웨이브 변경 시 적 카드 재구성
+    void HandleWaveChanged_RebuildEnemies(int cur, int total, string _)
+    {
+        var toRemove = views
+        .Where(kv =>
+            (kv.Key != null && kv.Key.team == Team.Enemy) ||
+            (kv.Key == null && kv.Value != null && kv.Value.transform != null &&
+              enemyParent != null && kv.Value.transform.IsChildOf(enemyParent)))
+        .Select(kv => kv.Key)
+        .ToList();
+
+        foreach (var key in toRemove)
+        {
+            var view = views[key];
+            if (view) Destroy(view.gameObject);
+            views.Remove(key);
+        }
+
+        // 2) 현재 씬의 '생존 적'만 다시 카드 생성
+        var enemies = Sort(
+        FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead && u.team == Team.Enemy),
+        enemySort
+            );
+        foreach (var u in enemies)
+        {
+            if (views.ContainsKey(u)) continue; // 이미 있으면 스킵(이론상 없음)
+            SpawnCard(enemyParent, enemyItemPrefab, u);
+        }
     }
 
     // 범위 안의 유닛만 하이라이트

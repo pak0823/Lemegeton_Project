@@ -78,7 +78,7 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_Sprite: {fileID: 21300000, guid: 557b7dab3553edf44b3d6d76faacb353, type: 3}
+  m_Sprite: {fileID: 659564825, guid: 1d5cd8d3b6f5594408bfd8844681d20d, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -123,19 +123,25 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   data: {fileID: 0}
+  defaultProjectilePrefab: {fileID: 0}
   team: 1
   AGI: 1
   atbPerSecond: 0
-  PhysicalDamage: 1
-  MagicDamage: 1
-  MaxHP: 100
-  MaxMP: 100
-  MaxRage: 100
   resistTable: []
+  debugLogStats: 0
   animator: {fileID: 0}
   spriteRenderer: {fileID: 0}
   moveDuration: 0.18
   CurrentMap: {fileID: 0}
+  stateStatDB: {fileID: 0}
+  basePhysicalDamage: 1
+  baseMagicDamage: 1
+  baseMaxHP: 100
+  baseMaxMP: 100
+  baseMaxRage: 100
+  baseHostility: 10
+  baseDefense: 0
+  baseSpeed: 0
 --- !u!114 &7018354712488126287
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -153,6 +159,7 @@ MonoBehaviour:
     weight: 0.5
   - skill: {fileID: 11400000, guid: c67d635dea9f22a45abe68570fa46c70, type: 2}
     weight: 0.5
+  plannedSkill: {fileID: 0}
 --- !u!114 &8545122426598709057
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -201,7 +208,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 0.48, y: 0.48}
+    oldSize: {x: 1, y: 1}
     newSize: {x: 0.48, y: 0.48}
     adaptiveTilingThreshold: 0.5
     drawMode: 0

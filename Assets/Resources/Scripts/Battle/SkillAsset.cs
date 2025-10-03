@@ -71,19 +71,54 @@ public abstract class SkillAsset : ScriptableObject
         return Mathf.Max(1, Mathf.RoundToInt(baseStat * mult));
     }
 
-    /// <summary>컬렉션에서 '적대감(Hostility)'이 가장 높은 플레이어 유닛을 선택. 동률이면 랜덤.</summary>
-    public static BattleUnit PickHighestHostility(IEnumerable<BattleUnit> candidates)
+    public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> potentialTargets)
     {
-        if (candidates == null) return null;
-        // 생존한 플레이어만
-        var list = candidates.Where(u => u != null && u.team == Team.Player && !u.IsDead).ToList();
-        if (list.Count == 0) return null;
+        if (potentialTargets == null || potentialTargets.Count == 0) return null;
+        if (potentialTargets.Count == 1) return potentialTargets[0];
 
-        float max = list.Max(u => Mathf.Max(0, u.Hostility));
-        var top = list.Where(u => Mathf.Max(0, u.Hostility) == max).ToList();
+        // 모든 대상의 Hostility 합계 계산
+        float totalHostility = 0f;
+        foreach (var unit in potentialTargets)
+        {
+            totalHostility += unit.Hostility;
+        }
 
-        return top[Random.Range(0, top.Count)];
+        // 합계가 0 이하면 (모두 적대감이 0), 랜덤으로 한 명 선택
+        if (totalHostility <= 0)
+        {
+            return potentialTargets[Random.Range(0, potentialTargets.Count)];
+        }
+
+        // 0 ~ totalHostility 사이의 랜덤 값 선택
+        float randomPoint = Random.Range(0, totalHostility);
+
+        // 랜덤 값에서 각 유닛의 Hostility를 빼나가다가 0 이하가 되면 해당 유닛 선택
+        foreach (var unit in potentialTargets)
+        {
+            randomPoint -= unit.Hostility;
+            if (randomPoint <= 0)
+            {
+                return unit;
+            }
+        }
+
+        // 만약의 경우(부동소수점 오류 등)를 대비해 마지막 유닛을 반환
+        return potentialTargets[potentialTargets.Count - 1];
     }
+
+    /// <summary>컬렉션에서 '적대감(Hostility)'이 가장 높은 플레이어 유닛을 선택. 동률이면 랜덤.</summary>
+    //public static BattleUnit PickHighestHostility(IEnumerable<BattleUnit> candidates)
+    //{
+    //    if (candidates == null) return null;
+    //    // 생존한 플레이어만
+    //    var list = candidates.Where(u => u != null && u.team == Team.Player && !u.IsDead).ToList();
+    //    if (list.Count == 0) return null;
+
+    //    float max = list.Max(u => Mathf.Max(0, u.Hostility));
+    //    var top = list.Where(u => Mathf.Max(0, u.Hostility) == max).ToList();
+
+    //    return top[Random.Range(0, top.Count)];
+    //}
     public static BattleUnit PickPreferredStatusThenHighestHostility(
     IEnumerable<BattleUnit> candidates, StatusId preferred)
     {
@@ -91,12 +126,13 @@ public abstract class SkillAsset : ScriptableObject
         var list = candidates.Where(u => u && u.team == Team.Player && !u.IsDead).ToList();
         if (list.Count == 0) return null;
 
-        var slowed = list.Where(u => {
+        var slowed = list.Where(u =>
+        {
             var sc = u.GetComponent<StatusController>();
             return sc != null && sc.Has(preferred);
         }).ToList();
 
-        if (slowed.Count > 0) return PickHighestHostility(slowed);
-        return PickHighestHostility(list);
-    }
+        if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
+        return PickTargetByWeightedHostility(list);
+}
 }

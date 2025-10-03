@@ -1,9 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class TestCode : MonoBehaviour
 {
+    public GameObject OptionPanel;
+    [SerializeField] private GameSpeedController speedCtrl;
+    public bool isShow = false;
+
+
     public void StartGame()
     {
         Shared.SceneTransitionManager.FadeToScene("TestScene");
@@ -21,5 +27,16 @@ public class TestCode : MonoBehaviour
 #endif
     }
 
+    public void ShowPanel()
+    {
+        isShow = !isShow;
+
+        if (isShow)
+            speedCtrl.RequestPause();   // 옵션창 열림 → 일시정지 요청
+        else
+            speedCtrl.ReleasePause(); // 옵션창 닫힘 → 일시정지 해제 요청
+
+        OptionPanel.SetActive(isShow);
+    }
 
 }

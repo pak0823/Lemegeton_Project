@@ -11,8 +11,8 @@ public class UIArrowNavigator : MonoBehaviour
     [SerializeField] private List<Button> buttons = new List<Button>();
 
     [Header("Keys")]
-    private KeyCode leftKey = KeyCode.A;
-    private KeyCode rightKey = KeyCode.D;
+    private KeyCode UpKey = KeyCode.W;
+    private KeyCode DownKey = KeyCode.S;
     private KeyCode confirmKey = KeyCode.E;  // 확정키
 
     [Header("Behavior")]
@@ -98,14 +98,14 @@ public class UIArrowNavigator : MonoBehaviour
         bool handledKey = false;
 
         // 키보드 네비게이션
-        if (Input.GetKeyDown(rightKey))
+        if (Input.GetKeyDown(DownKey))
         {
             index = NextIndex(+1);
             Focus();
             UpdateHighlight();
             handledKey = true;
         }
-        else if (Input.GetKeyDown(leftKey))
+        else if (Input.GetKeyDown(UpKey))
         {
             index = NextIndex(-1);
             Focus();

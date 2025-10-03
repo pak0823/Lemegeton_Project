@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5158325106566958107}
   - component: {fileID: 4900254980834201070}
+  - component: {fileID: 510998164140399152}
   m_Layer: 0
   m_Name: GameSpeed
   m_TagString: Untagged
@@ -44,7 +45,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a8238afec914fa4d9f237b177d0a535, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  speeds:
-  - 1
-  - 2
-  - 3
+  buttonImage: {fileID: 0}
+  speedIcons: []
+  label: {fileID: 0}
+  uiGroup: {fileID: 0}
+  speedButton: {fileID: 0}
+  optionButton: {fileID: 0}
+--- !u!225 &510998164140399152
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4406973171158256715}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0

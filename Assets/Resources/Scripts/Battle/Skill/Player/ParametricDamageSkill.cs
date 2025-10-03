@@ -129,7 +129,7 @@ public class ParametricDamageSkill : SkillAsset
         switch (priorityMode)
         {
             case TargetPriorityMode.HighestHostility:
-                return PickHighestHostility(players);
+                return PickTargetByWeightedHostility(players);
 
             case TargetPriorityMode.PreferredStatusThenHighestHostility:
                 return PickPreferredStatusThenHighestHostility(players, preferredStatus);
@@ -235,18 +235,6 @@ public class ParametricDamageSkill : SkillAsset
         return result;
     }
 
-
-    [SerializeField] private bool debugFrontlineDump = false;
-    void DebugLogFrontline(Tilemap map, Team team, int depth)
-    {
-        var set = GetFrontlineSet(map, team, depth);
-        if (set == null) { Debug.Log($"[Frontline] (null) team={team} depth={depth}"); return; }
-        var list = set.ToList();
-        list.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
-        Debug.Log($"[Frontline] team={team} depth={depth} tiles={list.Count}\n" +
-                  string.Join(", ", list.Select(c => $"({c.x},{c.y})")));
-    }
-
     bool IsInFrontline(BattleUnit u, int depth)
     {
         if (!u || !u.CurrentMap) return false;
@@ -264,15 +252,9 @@ public class ParametricDamageSkill : SkillAsset
 
         int baseStat = (damageSchool == DamageSchool.Physical) ? caster.PhysicalDamage : caster.MagicDamage;
 
-        if (debugFrontlineDump)
-        {
-            DebugLogFrontline(caster.CurrentMap, caster.team, frontlineDepth);
-            Debug.Log($"[Frontline] caster={caster.name} pos=({caster.Cell.x},{caster.Cell.y}) inFront={IsInFrontline(caster, frontlineDepth)}");
-        }
-
         foreach (var v in victims)
         {
-            float mult = GetMultiplierFor(v);        // 상태기반 추가 배수(옵션)
+            float mult = GetMultiplierFor(v);        // 상태기반 추가 배수
 
             if (useFrontlineBonus && IsInFrontline(caster, frontlineDepth))
                 mult *= Mathf.Max(0f, frontlineMultiplier);
@@ -284,9 +266,30 @@ public class ParametricDamageSkill : SkillAsset
             int floored = Mathf.FloorToInt(raw);
             // 최소 데미지 보장
             int dmg = Mathf.Max(0, floored);
+
+            // 체력 비례 배율 계산(대미지 적용 전 hp로 계산해야함)
+            float healthMultiplier = 1 + (1 - ((float)v.HP / v.MaxHP));
+            Debug.Log($"healthMultiplier: {healthMultiplier}");
+
             v.PlayHit();
             v.TakeDamage(dmg);
+
+            float scaling = v.isBoss == ISBOSS.Boss ? 2.0f : 1.0f;
+
+            // 상태 효과에 따른 배율 가져오기
+            float statusMultiplier = caster.HostilityGenerationMultiplier;
+            //Debug.Log($"statusMultiplier: {statusMultiplier}");
+
+            // 최종 적대감 생성량 계산
+            float hostilityGained = dmg * healthMultiplier * scaling * statusMultiplier;
+
+            // 캐스터(플레이어)의 적대감 증가
+            caster.AddHostility(hostilityGained);
+
+            Debug.Log($"{caster.name}이(가) {v.name}에게 {dmg} 피해를 입혀 적대감 {hostilityGained} 획득! (현재 총 적대감: {caster.Hostility})");
         }
+
+        
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)

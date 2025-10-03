@@ -43,9 +43,9 @@ public class SingleStrike : SkillAsset
         // 없다면 전체 플레이어 중 '적대감 최상위'
         BattleUnit actualTarget = null;
         if (slowed.Count > 0)
-            actualTarget = SkillAsset.PickHighestHostility(slowed);
+            actualTarget = SkillAsset.PickTargetByWeightedHostility(slowed);
         else
-            actualTarget = SkillAsset.PickHighestHostility(players);
+            actualTarget = SkillAsset.PickTargetByWeightedHostility(players);
 
         // 보정(혹시 null이면 랜덤 보정)
         if (actualTarget == null)

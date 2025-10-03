@@ -4,12 +4,14 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.UI;
 using static UnityEditor.Progress;
+using static UnityEngine.Rendering.VirtualTexturing.Debugging;
 
 public class TurnBarUI : MonoBehaviour
 {
     [Header("UI Settings")]
     public RectTransform barImage;          // 바(이미지)의 RectTransform
     public GameObject unitIconPrefab;  // 아이콘 프리팹(Anchor=Left, Pivot=Center 권장)
+    [SerializeField] private Text wavelabel;    //wave 텍스트
 
     [Tooltip("플레이어/적 아이콘 Y 오프셋")]
     public float playerRowY = 20f;
@@ -24,23 +26,38 @@ public class TurnBarUI : MonoBehaviour
     public float barWidth;      // 현재 바 너비
     Dictionary<BattleUnit, Image> unitIcons = new();
 
+    BattleManager battle;
+
     void Start()
     {
-        var battle = FindObjectOfType<BattleManager>();
+        battle = FindObjectOfType<BattleManager>();
         barWidth = barImage.rect.width;
 
         if (battle != null)
         {
             battle.OnATBChanged += OnATBChanged_RelayoutAll;
             InitializeIcons();
-            // 최초 1회 전체 그리기
-            RelayoutAll();
+            RelayoutAll();// 최초 1회 전체 그리기
+
+            battle.OnWaveChanged += WaveHandle;
+            WaveHandle(battle.CurrentWave, battle.TotalWaves, null); // 초기 웨이브 표시 누락 방지
+
+            // 웨이브 변경 시 아이콘 전부 재생성
+            battle.OnWaveChanged += (_, __, ___) =>
+            {
+                RebuildIconsFromScene();
+                RelayoutAll();
+            };
+
+            battle.OnATBReset += HandleATBResetToZero;
         }
     }
     void OnDestroy()
     {
-        var battle = FindObjectOfType<BattleManager>();
-        if (battle != null) battle.OnATBChanged -= OnATBChanged_RelayoutAll;
+        if (!battle) return;
+        battle.OnATBChanged -= OnATBChanged_RelayoutAll;
+        battle.OnWaveChanged -= WaveHandle;
+        battle.OnATBReset -= HandleATBResetToZero;
     }
 
     void InitializeIcons()
@@ -58,6 +75,33 @@ public class TurnBarUI : MonoBehaviour
             rt.anchoredPosition = new Vector2(0f, u.team == Team.Player ? playerRowY : enemyRowY);
 
             // 사망 이벤트 구독 → 제거
+            u.OnDied += RemoveUnitIcon;
+        }
+    }
+
+    // 현재 씬의 유닛을 기준으로 아이콘 사전 동기화
+    void RebuildIconsFromScene()
+    {
+        // 1) 사라진 유닛 정리
+        foreach (var kv in unitIcons.ToArray())
+        {
+            var unit = kv.Key;
+            if (unit == null)
+            {
+                if (kv.Value) Destroy(kv.Value.gameObject);
+                unitIcons.Remove(unit);
+            }
+        }
+        // 2) 존재하지만 아이콘이 없는 유닛 추가
+        foreach (var u in FindObjectsOfType<BattleUnit>())
+        {
+            if (unitIcons.ContainsKey(u)) continue;
+            var iconGO = Instantiate(unitIconPrefab, barImage);
+            var img = iconGO.GetComponent<Image>();
+            if (u.data != null) img.sprite = u.data.UnitIcon;
+            unitIcons[u] = img;
+            var rt = img.rectTransform;
+            rt.anchoredPosition = new Vector2(0f, u.team == Team.Player ? playerRowY : enemyRowY);
             u.OnDied += RemoveUnitIcon;
         }
     }
@@ -185,6 +229,22 @@ public class TurnBarUI : MonoBehaviour
         }
     }
 
+    void HandleATBResetToZero()
+    {
+        // 현재 아이콘 구성(웨이브 교체로 갱신된 상태)을 0 지점으로 이동
+        foreach (var kv in unitIcons.ToArray())
+        {
+            var unit = kv.Key;
+            var img = kv.Value;
+            if (!img) continue;
+            // 행(Y)은 유지, X만 0으로
+            var rt = img.rectTransform;
+            rt.anchoredPosition = new Vector2(0f, rt.anchoredPosition.y);
+        }
+        // 내부 레이아웃 계산 로직이 있다면 한 번 더 강제
+        RelayoutAll();
+    }
+
 
     // 유닛 사망 시 아이콘 제거
     void RemoveUnitIcon(BattleUnit unit)
@@ -193,6 +253,13 @@ public class TurnBarUI : MonoBehaviour
 
         Destroy(unitIcons[unit].gameObject);
         unitIcons.Remove(unit);
+    }
+
+    // Wave 텍스트 표시
+    private void WaveHandle(int cur, int total, string waveLabel)
+    {
+        if (!wavelabel) return;
+        wavelabel.text = $"{cur}/{total}";
     }
 
     struct Item

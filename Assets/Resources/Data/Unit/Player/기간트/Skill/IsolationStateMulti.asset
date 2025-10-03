@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 492f0b7ae9548a84098a9e4545fd6b7c, type: 3}
+  m_Name: IsolationStateMulti
+  m_EditorClassIdentifier: 
+  displayName: IsolationStateMulti
+  icon: {fileID: 0}
+  school: 0
+  attribute: 0
+  power: 1
+  mpCost: 0
+  targetMode: 0
+  legacyId: 0
+  rules:
+  - name: "\uC1C4\uAD6D"
+    requireAll: 03000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: c1517217f3ddec8469577e137c856df3, type: 2}
+    overrideAreaPreset: 0
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: "\uAC1C\uAD6D"
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  defaultSkill: {fileID: 11400000, guid: 0f3dcaafc80f9934181fcf8424199a00, type: 2}
