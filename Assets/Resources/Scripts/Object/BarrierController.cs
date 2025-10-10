@@ -97,6 +97,7 @@ public class BarrierController : MonoBehaviour
 
         Shared.PuzzleManager?.ClearMaps();
         Shared.MapToggleManager.currentStage = stageIndex;
+        StartCoroutine(Shared.SceneTransitionManager.FadeCoroutine());
         Shared.MapToggleManager.EnterQuizMap();
     }
 }

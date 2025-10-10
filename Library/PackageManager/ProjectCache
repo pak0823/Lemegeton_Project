@@ -5,22 +5,22 @@ m_ProjectFiles:
     m_ContentTrackingEnabled: 1
     m_ModificationDate:
       serializedVersion: 2
-      ticks: 638853267268631971
-    m_Hash: 581809775
+      ticks: 638956833019995957
+    m_Hash: 2202925319
   m_LockFileStatus:
     m_FilePath: C:/Users/ziwoo/Documents/GitHub/Lemegeton_Project/Packages/packages-lock.json
     m_PathExists: 1
     m_ContentTrackingEnabled: 1
     m_ModificationDate:
       serializedVersion: 2
-      ticks: 638853267268667077
-    m_Hash: 2452668082
+      ticks: 638956833312370922
+    m_Hash: 2100987329
 m_EmbeddedPackageManifests:
   m_ManifestsStatus: {}
 m_LocalPackages:
   m_LocalFileStatus: []
 m_ProjectPath: C:/Users/ziwoo/Documents/GitHub/Lemegeton_Project/Packages
-m_EditorVersion: 2022.3.60f1 (5f63fdee6d95)
+m_EditorVersion: 2022.3.62f2 (7670c08855a9)
 m_ResolvedPackages:
 - packageId: com.unity.collab-proxy@2.8.2
   testable: 0
@@ -123,10 +123,18 @@ m_ResolvedPackages:
     - 2.7.1
     - 2.8.1
     - 2.8.2
+    - 2.9.1
+    - 2.9.2
+    - 2.9.3
+    - 2.10.0
     compatible:
     - 2.7.1
     - 2.8.1
     - 2.8.2
+    - 2.9.1
+    - 2.9.2
+    - 2.9.3
+    - 2.10.0
     recommended: 2.7.1
     deprecated: []
   dependencies: []
@@ -222,11 +230,11 @@ m_ResolvedPackages:
     version: default
   resolvedDependencies:
   - name: com.unity.2d.animation
-    version: 9.1.3
+    version: 9.2.0
   - name: com.unity.2d.common
-    version: 8.0.4
+    version: 8.1.0
   - name: com.unity.burst
-    version: 1.8.19
+    version: 1.8.21
   - name: com.unity.mathematics
     version: 1.2.6
   - name: com.unity.modules.jsonserialize
@@ -248,11 +256,11 @@ m_ResolvedPackages:
   - name: com.unity.ext.nunit
     version: 1.0.6
   - name: com.unity.2d.pixel-perfect
-    version: 5.0.3
+    version: 5.1.0
   - name: com.unity.2d.psdimporter
-    version: 8.0.5
+    version: 8.1.0
   - name: com.unity.2d.spriteshape
-    version: 9.0.5
+    version: 9.1.0
   - name: com.unity.modules.physics2d
     version: 1.0.0
   - name: com.unity.2d.tilemap
@@ -264,7 +272,7 @@ m_ResolvedPackages:
   - name: com.unity.ugui
     version: 1.0.0
   - name: com.unity.2d.aseprite
-    version: 1.1.8
+    version: 1.1.9
   keywords: []
   registry:
     id: main
@@ -293,12 +301,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.ide.rider@3.0.34
+- packageId: com.unity.ide.rider@3.0.36
   testable: 0
   isDirectDependency: 1
-  version: 3.0.34
+  version: 3.0.36
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.ide.rider@3.0.34
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.ide.rider@3.0.36
   assetPath: Packages/com.unity.ide.rider
   name: com.unity.ide.rider
   displayName: JetBrains Rider Editor
@@ -361,12 +369,15 @@ m_ResolvedPackages:
     - 3.0.34
     - 3.0.35
     - 3.0.36
+    - 3.0.37
+    - 3.0.38
     compatible:
-    - 3.0.34
-    - 3.0.35
     - 3.0.36
-    recommended: 3.0.36
-    deprecated: []
+    - 3.0.37
+    - 3.0.38
+    recommended: 3.0.38
+    deprecated:
+    - 3.0.37
   dependencies:
   - name: com.unity.ext.nunit
     version: 1.0.6
@@ -384,16 +395,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638651995659960000
+  datePublishedTicks: 638799562419060000
   documentationUrl: https://docs.unity3d.com/Packages/com.unity.ide.rider@3.0/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/com.unity.ide.rider.git
-    revision: 700eb86ebc7b9f72d760e2e1c740fc5e2fd6a54b
+    revision: b5315083ab3861d21f6ab2ed0d9514daf04bf208
     path: 
   unityLifecycle:
-    version: 3.0.34
+    version: 3.0.36
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -448,10 +459,12 @@ m_ResolvedPackages:
     - 2.0.21
     - 2.0.22
     - 2.0.23
+    - 2.0.25
     compatible:
     - 2.0.22
     - 2.0.23
-    recommended: 2.0.23
+    - 2.0.25
+    recommended: 2.0.25
     deprecated: []
   dependencies:
   - name: com.unity.test-framework
@@ -769,6 +782,7 @@ m_ResolvedPackages:
     - 3.2.0-pre.10
     - 3.2.0-pre.11
     - 3.2.0-pre.12
+    - 3.2.0-pre.13
     - 4.0.0-pre.1
     - 4.0.0-pre.2
     compatible:
@@ -787,6 +801,7 @@ m_ResolvedPackages:
     - 3.2.0-pre.10
     - 3.2.0-pre.11
     - 3.2.0-pre.12
+    - 3.2.0-pre.13
     - 4.0.0-pre.1
     - 4.0.0-pre.2
     recommended: 3.0.9
@@ -834,12 +849,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.timeline@1.7.6
+- packageId: com.unity.timeline@1.7.7
   testable: 0
   isDirectDependency: 1
-  version: 1.7.6
+  version: 1.7.7
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.timeline@1.7.6
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.timeline@1.7.7
   assetPath: Packages/com.unity.timeline
   name: com.unity.timeline
   displayName: Timeline
@@ -848,7 +863,7 @@ m_ResolvedPackages:
     email: 
     url: 
   category: 
-  type: assets
+  type: 
   description: Use Unity Timeline to create cinematic content, game-play sequences,
     audio sequences, and complex particle effects.
   status: 0
@@ -943,8 +958,8 @@ m_ResolvedPackages:
     - 1.8.6
     - 1.8.7
     - 1.8.8
+    - 1.8.9
     compatible:
-    - 1.7.6
     - 1.7.7
     - 1.8.0
     - 1.8.1
@@ -955,6 +970,7 @@ m_ResolvedPackages:
     - 1.8.6
     - 1.8.7
     - 1.8.8
+    - 1.8.9
     recommended: 1.7.7
     deprecated: []
   dependencies:
@@ -991,16 +1007,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638326112840000000
+  datePublishedTicks: 638767785867400000
   documentationUrl: https://docs.unity3d.com/Packages/com.unity.timeline@1.7/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/com.unity.timeline.git
-    revision: 02f49ada64a9f88044207cf42ba407dc634ef8e6
+    revision: 36c3480685dcb744f098f1a1efe0623247ffab49
     path: 
   unityLifecycle:
-    version: 1.7.6
+    version: 1.7.7
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -3196,12 +3212,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.2d.animation@9.1.3
+- packageId: com.unity.2d.animation@9.2.0
   testable: 0
   isDirectDependency: 0
-  version: 9.1.3
+  version: 9.2.0
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.animation@9.1.3
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.animation@9.2.0
   assetPath: Packages/com.unity.2d.animation
   name: com.unity.2d.animation
   displayName: 2D Animation
@@ -3356,15 +3372,16 @@ m_ResolvedPackages:
     - 12.0.0
     - 12.0.1
     - 12.0.2
+    - 13.0.0
+    - 13.0.1
     compatible:
-    - 9.1.3
     - 9.2.0
     - 9.2.1
-    recommended: 9.1.3
+    recommended: 9.2.1
     deprecated: []
   dependencies:
   - name: com.unity.2d.common
-    version: 8.0.4
+    version: 8.1.0
   - name: com.unity.2d.sprite
     version: 1.0.0
   - name: com.unity.collections
@@ -3375,9 +3392,9 @@ m_ResolvedPackages:
     version: 1.0.0
   resolvedDependencies:
   - name: com.unity.2d.common
-    version: 8.0.4
+    version: 8.1.0
   - name: com.unity.burst
-    version: 1.8.19
+    version: 1.8.21
   - name: com.unity.mathematics
     version: 1.2.6
   - name: com.unity.modules.jsonserialize
@@ -3411,16 +3428,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638647709295660000
-  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.animation@9.1/manual/index.html
+  datePublishedTicks: 638786485509930000
+  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.animation@9.2/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/2d.git
-    revision: 8a1c28ecd445416882b23beb7707d3d60b153f79
+    revision: 854e7c330168787e9d4ea0311c42dadc256cb889
     path: 
   unityLifecycle:
-    version: 9.1.3
+    version: 9.2.0
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -3428,12 +3445,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.2d.pixel-perfect@5.0.3
+- packageId: com.unity.2d.pixel-perfect@5.1.0
   testable: 0
   isDirectDependency: 0
-  version: 5.0.3
+  version: 5.1.0
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.pixel-perfect@5.0.3
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.pixel-perfect@5.1.0
   assetPath: Packages/com.unity.2d.pixel-perfect
   name: com.unity.2d.pixel-perfect
   displayName: 2D Pixel Perfect
@@ -3442,7 +3459,7 @@ m_ResolvedPackages:
     email: 
     url: 
   category: 
-  type: tool
+  type: 
   description: 'The 2D Pixel Perfect package contains the Pixel Perfect Camera component
     which ensures your pixel art remains crisp and clear at different resolutions,
     and stable in motion.
@@ -3475,13 +3492,18 @@ m_ResolvedPackages:
     - 5.0.2
     - 5.0.3
     - 5.1.0
+    - 5.1.1
     compatible:
-    - 5.0.3
     - 5.1.0
-    recommended: 5.0.3
+    - 5.1.1
+    recommended: 5.1.1
     deprecated: []
-  dependencies: []
-  resolvedDependencies: []
+  dependencies:
+  - name: com.unity.modules.imgui
+    version: 1.0.0
+  resolvedDependencies:
+  - name: com.unity.modules.imgui
+    version: 1.0.0
   keywords:
   - pixel
   - perfect
@@ -3497,16 +3519,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638023910590000000
-  documentationUrl: 
+  datePublishedTicks: 638775664687690000
+  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.pixel-perfect@5.1/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/2d.git
-    revision: 6dea8ac5bd6953acd64f1ac9d470912954b0c015
+    revision: 9ead9de91ee9fdb290bfcc223d793a449e7f8370
     path: 
   unityLifecycle:
-    version: 5.0.3
+    version: 5.1.0
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -3514,12 +3536,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.2d.psdimporter@8.0.5
+- packageId: com.unity.2d.psdimporter@8.1.0
   testable: 0
   isDirectDependency: 0
-  version: 8.0.5
+  version: 8.1.0
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.psdimporter@8.0.5
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.psdimporter@8.1.0
   assetPath: Packages/com.unity.2d.psdimporter
   name: com.unity.2d.psdimporter
   displayName: 2D PSD Importer
@@ -3528,7 +3550,7 @@ m_ResolvedPackages:
     email: 
     url: 
   category: 2D
-  type: assets
+  type: 
   description: A ScriptedImporter for importing Adobe Photoshop PSB (Photoshop Big)
     file format. The ScriptedImporter is currently targeted for users who wants to
     create multi Sprite character animation using Unity 2D Animation Package.
@@ -3624,24 +3646,24 @@ m_ResolvedPackages:
     - 10.1.1
     - 11.0.0
     - 11.0.1
+    - 12.0.0
     compatible:
-    - 8.0.5
     - 8.1.0
     - 8.1.1
-    recommended: 8.0.5
+    recommended: 8.1.1
     deprecated: []
   dependencies:
   - name: com.unity.2d.common
-    version: 8.0.2
+    version: 8.1.0
   - name: com.unity.2d.sprite
     version: 1.0.0
   - name: com.unity.2d.animation
-    version: 9.1.1
+    version: 9.2.0
   resolvedDependencies:
   - name: com.unity.2d.common
-    version: 8.0.4
+    version: 8.1.0
   - name: com.unity.burst
-    version: 1.8.19
+    version: 1.8.21
   - name: com.unity.mathematics
     version: 1.2.6
   - name: com.unity.modules.jsonserialize
@@ -3657,7 +3679,7 @@ m_ResolvedPackages:
   - name: com.unity.modules.imgui
     version: 1.0.0
   - name: com.unity.2d.animation
-    version: 9.1.3
+    version: 9.2.0
   - name: com.unity.collections
     version: 1.2.4
   - name: com.unity.test-framework
@@ -3678,16 +3700,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638515171920000000
-  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.psdimporter@8.0/manual/index.html
+  datePublishedTicks: 638786485526070000
+  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.psdimporter@8.1/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/2d.git
-    revision: c76edf174a772eda3d3152a9d38ad8c364cce43e
+    revision: 854e7c330168787e9d4ea0311c42dadc256cb889
     path: 
   unityLifecycle:
-    version: 8.0.5
+    version: 8.1.0
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -3754,12 +3776,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.2d.spriteshape@9.0.5
+- packageId: com.unity.2d.spriteshape@9.1.0
   testable: 0
   isDirectDependency: 0
-  version: 9.0.5
+  version: 9.1.0
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.spriteshape@9.0.5
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.spriteshape@9.1.0
   assetPath: Packages/com.unity.2d.spriteshape
   name: com.unity.2d.spriteshape
   displayName: 2D SpriteShape
@@ -3873,24 +3895,24 @@ m_ResolvedPackages:
     - 11.0.0
     - 12.0.0
     - 12.0.1
+    - 13.0.0
     compatible:
-    - 9.0.5
     - 9.1.0
     - 9.1.1
-    recommended: 9.0.5
+    recommended: 9.1.1
     deprecated: []
   dependencies:
   - name: com.unity.2d.common
-    version: 8.0.4
+    version: 8.1.0
   - name: com.unity.mathematics
     version: 1.1.0
   - name: com.unity.modules.physics2d
     version: 1.0.0
   resolvedDependencies:
   - name: com.unity.2d.common
-    version: 8.0.4
+    version: 8.1.0
   - name: com.unity.burst
-    version: 1.8.19
+    version: 1.8.21
   - name: com.unity.mathematics
     version: 1.2.6
   - name: com.unity.modules.jsonserialize
@@ -3924,16 +3946,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638647709311310000
-  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.spriteshape@9.0/manual/index.html
+  datePublishedTicks: 638786485546140000
+  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.spriteshape@9.1/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/2d.git
-    revision: 8a1c28ecd445416882b23beb7707d3d60b153f79
+    revision: 854e7c330168787e9d4ea0311c42dadc256cb889
     path: 
   unityLifecycle:
-    version: 9.0.5
+    version: 9.1.0
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -4093,6 +4115,8 @@ m_ResolvedPackages:
     - 4.3.1
     - 5.0.0
     - 5.0.1
+    - 6.0.0
+    - 6.0.1
     compatible:
     - 3.1.3
     recommended: 3.1.3
@@ -4152,12 +4176,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.2d.aseprite@1.1.8
+- packageId: com.unity.2d.aseprite@1.1.9
   testable: 0
   isDirectDependency: 0
-  version: 1.1.8
+  version: 1.1.9
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.aseprite@1.1.8
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.aseprite@1.1.9
   assetPath: Packages/com.unity.2d.aseprite
   name: com.unity.2d.aseprite
   displayName: 2D Aseprite Importer
@@ -4189,6 +4213,7 @@ m_ResolvedPackages:
     - 1.1.7
     - 1.1.8
     - 1.1.9
+    - 1.1.10
     - 1.2.0
     - 1.2.1
     - 1.2.2
@@ -4197,10 +4222,13 @@ m_ResolvedPackages:
     - 1.2.5
     - 2.0.0
     - 2.0.1
+    - 2.0.2
+    - 3.0.0
+    - 3.0.1
     compatible:
-    - 1.1.8
     - 1.1.9
-    recommended: 1.1.9
+    - 1.1.10
+    recommended: 1.1.10
     deprecated: []
   dependencies:
   - name: com.unity.2d.common
@@ -4213,9 +4241,9 @@ m_ResolvedPackages:
     version: 1.0.0
   resolvedDependencies:
   - name: com.unity.2d.common
-    version: 8.0.4
+    version: 8.1.0
   - name: com.unity.burst
-    version: 1.8.19
+    version: 1.8.21
   - name: com.unity.mathematics
     version: 1.2.6
   - name: com.unity.modules.jsonserialize
@@ -4246,16 +4274,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638725312306540000
+  datePublishedTicks: 638796223739820000
   documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.aseprite@1.1/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/AsepriteImporter.git
-    revision: 02487451b5735520a22cdd8423415415e5cc8484
+    revision: b3f5769982eceb8fffc54aaa15576646bb8dc938
     path: 
   unityLifecycle:
-    version: 1.1.8
+    version: 1.1.9
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -4263,12 +4291,12 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.2d.common@8.0.4
+- packageId: com.unity.2d.common@8.1.0
   testable: 0
   isDirectDependency: 0
-  version: 8.0.4
+  version: 8.1.0
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.common@8.0.4
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.2d.common@8.1.0
   assetPath: Packages/com.unity.2d.common
   name: com.unity.2d.common
   displayName: 2D Common
@@ -4352,11 +4380,12 @@ m_ResolvedPackages:
     - 10.0.0
     - 11.0.0
     - 11.0.1
+    - 12.0.0
+    - 12.0.1
     compatible:
-    - 8.0.4
     - 8.1.0
     - 8.1.1
-    recommended: 8.0.4
+    recommended: 8.1.1
     deprecated: []
   dependencies:
   - name: com.unity.burst
@@ -4371,7 +4400,7 @@ m_ResolvedPackages:
     version: 1.0.0
   resolvedDependencies:
   - name: com.unity.burst
-    version: 1.8.19
+    version: 1.8.21
   - name: com.unity.mathematics
     version: 1.2.6
   - name: com.unity.modules.jsonserialize
@@ -4398,16 +4427,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638647709261720000
-  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.common@8.0/manual/index.html
+  datePublishedTicks: 638786485477740000
+  documentationUrl: https://docs.unity3d.com/Packages/com.unity.2d.common@8.1/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/2d.git
-    revision: 8a1c28ecd445416882b23beb7707d3d60b153f79
+    revision: 854e7c330168787e9d4ea0311c42dadc256cb889
     path: 
   unityLifecycle:
-    version: 8.0.4
+    version: 8.1.0
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -4455,10 +4484,12 @@ m_ResolvedPackages:
     - 1.2.6
     - 1.3.1
     - 1.3.2
+    - 1.3.3
     compatible:
     - 1.2.6
     - 1.3.1
     - 1.3.2
+    - 1.3.3
     recommended: 1.2.6
     deprecated: []
   dependencies: []
@@ -4589,6 +4620,8 @@ m_ResolvedPackages:
     - 2.5.7
     - 2.6.0-exp.2
     - 2.6.0-pre.3
+    - 2.6.0-pre.4
+    - 2.6.2
     compatible:
     - 1.2.4
     - 1.3.1
@@ -4621,7 +4654,9 @@ m_ResolvedPackages:
     - 2.5.7
     - 2.6.0-exp.2
     - 2.6.0-pre.3
-    recommended: 2.5.7
+    - 2.6.0-pre.4
+    - 2.6.2
+    recommended: 2.6.2
     deprecated: []
   dependencies:
   - name: com.unity.burst
@@ -4630,7 +4665,7 @@ m_ResolvedPackages:
     version: 1.1.31
   resolvedDependencies:
   - name: com.unity.burst
-    version: 1.8.19
+    version: 1.8.21
   - name: com.unity.mathematics
     version: 1.2.6
   - name: com.unity.modules.jsonserialize
@@ -4666,18 +4701,18 @@ m_ResolvedPackages:
   unityLifecycle:
     version: 1.2.4
     nextVersion: 
-    recommendedVersion: 2.5.1
+    recommendedVersion: 2.6.2
     isDeprecated: 0
     deprecationMessage: 
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-- packageId: com.unity.burst@1.8.19
+- packageId: com.unity.burst@1.8.21
   testable: 0
   isDirectDependency: 0
-  version: 1.8.19
+  version: 1.8.21
   source: 1
-  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.burst@1.8.19
+  resolvedPath: C:\Users\ziwoo\Documents\GitHub\Lemegeton_Project\Library\PackageCache\com.unity.burst@1.8.21
   assetPath: Packages/com.unity.burst
   name: com.unity.burst
   displayName: Burst
@@ -4831,13 +4866,15 @@ m_ResolvedPackages:
     - 1.8.21
     - 1.8.22
     - 1.8.23
+    - 1.8.24
+    - 1.8.25
     compatible:
-    - 1.8.19
-    - 1.8.20
     - 1.8.21
     - 1.8.22
     - 1.8.23
-    recommended: 1.8.23
+    - 1.8.24
+    - 1.8.25
+    recommended: 1.8.25
     deprecated: []
   dependencies:
   - name: com.unity.mathematics
@@ -4860,16 +4897,16 @@ m_ResolvedPackages:
     configSource: 0
   hideInEditor: 1
   isAssetStorePackage: 0
-  datePublishedTicks: 638731397665570000
+  datePublishedTicks: 638797336625580000
   documentationUrl: https://docs.unity3d.com/Packages/com.unity.burst@1.8/manual/index.html
   hasRepository: 1
   repository:
     type: git
     url: https://github.cds.internal.unity3d.com/unity/burst.git
-    revision: 6498e90e8843e51fdb3a37b709a1f1e4b86d3e57
+    revision: 941bff0925baa46012a2eff522313c170bf36c7a
     path: 
   unityLifecycle:
-    version: 1.8.19
+    version: 1.8.21
     nextVersion: 
     recommendedVersion: 
     isDeprecated: 0
@@ -4877,4 +4914,4 @@ m_ResolvedPackages:
   isDeprecated: 0
   deprecationMessage: 
   fingerprint: 
-m_BuiltInPackagesHash: 55161b0a7783798f026faea39699e9f86a6c85ee
+m_BuiltInPackagesHash: 589add9c3ae0bc06545f5c61253b1928f3e64fad

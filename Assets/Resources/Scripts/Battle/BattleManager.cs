@@ -39,8 +39,12 @@ public class BattleManager : MonoBehaviour
     Coroutine enemyRoutine; // 코루틴 핸들
 
     [Header("Waves")]
-    [SerializeField] WaveSet waveSet;
+    [SerializeField] WaveSet waveSet;   // 수동 연결 시 우선
+    [SerializeField] StageDatabase stageDB;              // 인스펙터에 연결 or Resources 로드
+    [SerializeField] bool autoAssignWaveSet = true;      // 자동할당 토글
+    [SerializeField] BattleContext debugContext = BattleContext.TrapEncounter; // 에디터 테스트용
     [SerializeField] int currentWaveIndex = -1;
+    [SerializeField] int debugStageNumber = -1;          // 에디터 테스트용
     [SerializeField] private Transform enemyRoot;
     public int CurrentWave => currentWaveIndex + 1; //현재 웨이브
     public int TotalWaves => waveSet ? waveSet.waves.Count : 0; //총 웨이브
@@ -113,6 +117,11 @@ public class BattleManager : MonoBehaviour
         if (provider != null) provider.OnMapsReady += Init;
         else { Debug.LogWarning("[BattleManager] BattleMapManager not ready in Awake. Will retry in Start."); }
         if (Shared.BattleManager == null) Shared.BattleManager = this;
+
+        if (autoAssignWaveSet && waveSet == null)
+        {
+            AutoResolveWaveSet();
+        }
     }
 
     void Start()
@@ -390,6 +399,52 @@ public class BattleManager : MonoBehaviour
         }
         LoadWave(nextIndex);
         isWaveTransitioning = false;
+    }
+
+    void AutoResolveWaveSet()
+    {
+        // 1) StageDB 확보 (인스펙터 없으면 Resources: Resources/DB/StageDatabase.asset)
+        if (stageDB == null) stageDB = Resources.Load<StageDatabase>("DB/StageDatabase");
+
+        // 2) 스테이지/맥락 결정: 런타임 컨텍스트 → (폴백) 디버그 값
+        int stageNo = StageRuntimeContext.Instance != null && StageRuntimeContext.Instance.CurrentStageNumber >= 0
+            ? StageRuntimeContext.Instance.CurrentStageNumber
+            : debugStageNumber;
+
+        var ctx = StageRuntimeContext.Instance != null
+            ? StageRuntimeContext.Instance.CurrentBattleContext
+            : debugContext;
+
+        if (stageDB == null || stageNo < 0)
+        {
+            Debug.LogWarning("[Battle] StageDB or StageNo missing. Use scene-placed units.");
+            return;
+        }
+
+        // 3) StageNormalMapData 찾기
+        StageNormalMapData found = null;
+        foreach (var s in stageDB.normalStages)
+        { // Database에 배열이 이미 존재합니다 :contentReference[oaicite:3]{index=3}
+            if (s != null && s.stageNumber == stageNo) { found = s; break; }
+        }
+
+        if (found == null)
+        {
+            Debug.LogWarning($"[Battle] StageNormalMapData not found for stage {stageNo}");
+            return;
+        }
+
+        // 4) 맥락에 맞는 WaveSet 선택
+        waveSet = (ctx == BattleContext.TrapEncounter) ? found.trapEncounterWave : found.postPuzzleWave;
+
+        if (waveSet != null)
+        {
+            Debug.Log($"[Battle] WaveSet auto-assigned: Stage {stageNo}, {ctx} → {waveSet.name}");
+        }
+        else
+        {
+            Debug.LogWarning($"[Battle] WaveSet not assigned in StageNormalMapData (stage {stageNo}, {ctx}). Fallback to scene-placed units.");
+        }
     }
 
 
@@ -757,12 +812,20 @@ public class BattleManager : MonoBehaviour
                 return;
             }
             Debug.Log("[Battle] 승리! (최종 웨이브 완료)");
-            Shared.SceneTransitionManager.ReturnToSavedPoint();
+
+            if(Shared.PuzzleManager.IsPuzzleComplete)
+                Shared.SceneTransitionManager.FadeToScene("EndScene");
+            else
+                Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
         else if (!anyPlayer)
         {
             Debug.Log("[Battle] 패배...");
-            Shared.SceneTransitionManager.ReturnToSavedPoint();
+
+            if (Shared.PuzzleManager.IsPuzzleComplete)
+                Shared.SceneTransitionManager.FadeToScene("EndScene");
+            else
+                Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
     }
     #endregion

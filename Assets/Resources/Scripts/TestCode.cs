@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,13 +11,13 @@ public class TestCode : MonoBehaviour
     public bool isShow = false;
 
 
-    public void StartGame()
+    public void StartGame() // - TitleScene에서 사용중
     {
-        Shared.SceneTransitionManager.FadeToScene("TestScene");
+        Shared.SceneTransitionManager.FadeToScene("ExplorationScene");
         Debug.Log("인게임 씬으로 이동");
     }
 
-    public void QuitGame()
+    public void QuitGame()  // - TitleScene에서 사용중
     {
         // 빌드된 애플리케이션에서는 실제로 종료
         Application.Quit();
@@ -27,7 +28,7 @@ public class TestCode : MonoBehaviour
 #endif
     }
 
-    public void ShowPanel()
+    public void ShowPanel() // - BattleScene에서 사용중
     {
         isShow = !isShow;
 
@@ -37,6 +38,11 @@ public class TestCode : MonoBehaviour
             speedCtrl.ReleasePause(); // 옵션창 닫힘 → 일시정지 해제 요청
 
         OptionPanel.SetActive(isShow);
+    }
+
+    public void OnBtnReturnTitle()  // - EndScene에서 사용중
+    {
+        Shared.SceneTransitionManager.FadeToScene("TitleScene");
     }
 
 }

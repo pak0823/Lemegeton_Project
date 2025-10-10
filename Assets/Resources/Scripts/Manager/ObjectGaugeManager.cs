@@ -1,4 +1,5 @@
 using System.Collections;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
@@ -14,6 +15,10 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
     [Tooltip("게이지 임계치 (0~1) 이상일 때 이벤트 발생")]
     public float thresholdPercent = 0.66f;
     public UnityEvent onThresholdReached;
+
+    [Header("전투 진입 컨텍스트(스테이지 번호 전달)")]
+    [SerializeField] private StageNormalMapData currentStageData; // 인스펙터에서 현재 스테이지 데이터 연결
+    [SerializeField] private int stageNumberOverride = -1;        // 데이터가 없으면 임시로 넘길 번호
 
     private int totalBoxes;
     private int openedBoxes;
@@ -193,6 +198,17 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
 
         // 씬 전환 전에 게이지 초기화
         awarenessGauge = 0;
+        // 전투씬 진입 직전: 스테이지/맥락 세팅
+        if (StageRuntimeContext.Instance == null)
+            new GameObject("StageRuntimeContext").AddComponent<StageRuntimeContext>();
+        
+        int stageNo = (currentStageData != null) ? currentStageData.stageNumber :
+        (stageNumberOverride >= 0 ? stageNumberOverride : -1);
+        if (stageNo < 0)
+            Debug.LogWarning("[ObjectGaugeManager] stage number not set. (currentStageData or stageNumberOverride)");
+        
+        StageRuntimeContext.Instance.SetStageNumber(stageNo);
+        StageRuntimeContext.Instance.SetBattleContext(BattleContext.TrapEncounter);
         Shared.SceneTransitionManager.FadeToScene("BattleScene");
     }
     #endregion

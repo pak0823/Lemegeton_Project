@@ -64,6 +64,26 @@ public class SceneTransitionManager : MonoBehaviour
             yield return null;
         }
     }
+    public IEnumerator FadeCoroutine() //단순히 페이드 아웃 -> 페이드 인
+    {
+        // 페이드 아웃 (alpha 0 → 1)
+        float t = 0f;
+        while (t < fadeDuration)
+        {
+            t += Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+
+        // 페이드 인 (alpha 1 → 0)
+        t = fadeDuration;
+        while (t > 0f)
+        {
+            t -= Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+    }
 
     public void SaveReturnPoint(string sceneName, Vector3 worldPos)
     {

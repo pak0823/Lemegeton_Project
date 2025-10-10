@@ -45,6 +45,8 @@ public class MapToggleManager : MonoBehaviour
 
     public void ExitQuizMap()
     {
+        StartCoroutine(Shared.SceneTransitionManager.FadeCoroutine());
+
         if (activeQuizMap != null)
         {
             Destroy(activeQuizMap);
@@ -60,7 +62,7 @@ public class MapToggleManager : MonoBehaviour
 
     GameObject GetRandomQuizMapPrefab()
     {
-        var stageData = stageDB.stages.FirstOrDefault(s => s.stageNumber == currentStage);
+        var stageData = stageDB.quizStages.FirstOrDefault(s => s.stageNumber == currentStage);
         if (stageData == null || stageData.quizMapPrefabs.Length == 0)
             return null;
 

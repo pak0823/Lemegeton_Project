@@ -9,7 +9,7 @@ namespace UnityEditor.Tilemaps
 {
     /// <summary>Stores the selection made on a GridLayout.</summary>
     [MovedFrom(true, "UnityEditor", "UnityEditor")]
-    [HelpURL("https://docs.unity3d.com/Manual/TilemapPainting-SelectionTool.html#GridSelect")]
+    [HelpURL("TilemapPainting-SelectionTool")]
     [Serializable]
     public class GridSelection : ScriptableObject
     {

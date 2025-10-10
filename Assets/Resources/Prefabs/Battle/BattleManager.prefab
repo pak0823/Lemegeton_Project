@@ -51,8 +51,28 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   baseActionsPerTurn: 1
-  highlighter: {fileID: 0}
+  moveHighlighter: {fileID: 0}
+  skillHighlighter: {fileID: 0}
+  waveSet: {fileID: 0}
+  stageDB: {fileID: 11400000, guid: 6fd2b071ba2ba6f47b2c09afbee70079, type: 2}
+  autoAssignWaveSet: 1
+  debugContext: 0
+  currentWaveIndex: -1
+  debugStageNumber: -1
+  enemyRoot: {fileID: 0}
   targetMarker: {fileID: 0}
+  isSelectingSkill: 0
+  currentSkill:
+    id: 0
+    name: 
+    targetMode: 0
+  selectedCell: {x: 0, y: 0, z: 0}
+  currentSkillSO: {fileID: 0}
+  projectilePrefab: {fileID: 0}
+  jumpDuration: 0.08
+  jumpArc: 0.15
+  logAGIOnTurnStart: 1
+  logAGIOnStatusChange: 0
 --- !u!114 &1763922186415620678
 MonoBehaviour:
   m_ObjectHideFlags: 0
