@@ -15,7 +15,10 @@ public class BattleUnit : MonoBehaviour
     BattleManager battleManager;
 
     [Header("FX / Projectile")]
-    public ProjectileController defaultProjectilePrefab;  // ← 유닛 기본 투사체
+    public ProjectileController defaultProjectilePrefab;  // 유닛 기본 투사체
+
+    public bool IsRetreated { get; private set; } = false;  //도주 확인용
+    
 
     [Header("Runtime Stats")]
     public Team team;
@@ -61,6 +64,7 @@ public class BattleUnit : MonoBehaviour
     #region Events
     public event System.Action<int> OnDamaged;  //피격 이벤트
     public event Action<BattleUnit> OnDied; // 사망 이벤트
+    public event System.Action<BattleUnit> OnRetreated; //도주 이벤트
     #endregion
 
     #region ----- State-based Stat System -----
@@ -216,6 +220,7 @@ public class BattleUnit : MonoBehaviour
     {
         if (data != null)
         {
+            name = data.DisplayName;
             team = data.team;
             basePhysicalDamage = data.PhysicalDamage;
             baseMagicDamage = data.MagicDamage;
@@ -418,7 +423,12 @@ public class BattleUnit : MonoBehaviour
     //    MP = Mathf.Clamp(MP + amount, 0, MaxMP);
     //}
 
-
+    public void Retreat()
+    {
+        if (IsRetreated || IsDead) return;
+        IsRetreated = true;
+        OnRetreated?.Invoke(this);
+    }
 
     #region Hit / Death
     public void PlayHit()

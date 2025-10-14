@@ -1,5 +1,8 @@
+using Project.UI;
 using Unity.Burst.CompilerServices;
+using UnityEditor.VersionControl;
 using UnityEngine;
+using UnityEngine.LowLevel;
 using UnityEngine.Tilemaps;
 
 public class BattleInput : MonoBehaviour
@@ -10,10 +13,11 @@ public class BattleInput : MonoBehaviour
     public LayerMask unitMask;
     public GameSpeedController speedCtrl; // GameSpeedController 할당
     public HudController hudCtrl;   //HUD 컨트롤러 할당
-    public TestCode TestCode; //임시 옵션창 관련 스크립트
+    public OptionsMenuUI optionsMenuUI; //임시 옵션창 관련 스크립트
 
     bool wasTargetingPrev = false;
     bool suppressLMBOnce = false;
+    private int _rebindTries = 0; //재바인딩 시도 카운터(디버그용)
     #endregion
 
     #region Internal References
@@ -46,11 +50,13 @@ public class BattleInput : MonoBehaviour
     void Update()
     {
         // 맵 준비 전이면 입력 무시
-        if (provider == null || provider.PlayerFloor == null || provider.EnemyFloor == null) return;
+        //if (provider == null || provider.PlayerFloor == null || provider.EnemyFloor == null) return;
+
+        if (!EnsureProviders()) return; // 맵/프로바이더 준비 보장
 
         if (Input.GetKeyDown(KeyCode.Escape))   // 옵션(esc)
         {
-            TestCode?.ShowPanel();
+            //optionsMenuUI?.ShowPanel();
         }
 
         HandleGameSpeedToggle();
@@ -62,10 +68,47 @@ public class BattleInput : MonoBehaviour
     }
     #endregion
 
-    #region Input Handlers
-    void HandleGameSpeedToggle()
+    bool EnsureProviders()
     {
-        if (TestCode != null && TestCode.isShow) return; // 옵션창이 켜져 있으면 입력 무시
+        // provider + 그가 제공하는 Floor 타일맵 + 카메라가 준비됐는지 확인
+        bool ok = (provider != null
+                           && provider.PlayerFloor != null
+                           && provider.EnemyFloor != null
+                           && cam != null);
+        if (ok) return true;
+
+        // 1) provider 재획득 (현재 구조와 동일한 경로로)
+        if (provider == null)
+            provider = Shared.battleMapManager as IBattleMapProvider
+                                   ?? FindObjectOfType<BattleMapManager>(true);
+
+        // 2) 카메라 재획득
+        if (cam == null) cam = Camera.main;
+
+        _rebindTries++;
+        if (_rebindTries == 1 || _rebindTries % 60 == 0)
+        {
+            var pf = provider != null ? provider.PlayerFloor != null : false;
+            var ef = provider != null ? provider.EnemyFloor != null : false;
+            Debug.Log($"[BattleInput] Rebind #{_rebindTries} -> provider:{provider != null}, PF:{pf}, EF:{ef}, cam:{cam != null}");
+        }
+
+        return (provider != null
+                && provider.PlayerFloor != null
+                && provider.EnemyFloor != null
+                && cam != null);
+    }
+
+    public void RebindProviders()
+    {
+        _rebindTries = 0;     // 로그 스팸 방지
+        EnsureProviders();    // 즉시 1회 재바인딩 시도
+    }
+
+#region Input Handlers
+void HandleGameSpeedToggle()
+    {
+        //if (optionsMenuUI != null && optionsMenuUI.isShow) return; // 옵션창이 켜져 있으면 입력 무시
 
         for (int i = 0; i < speedBinds.Length; i++)
         {
@@ -258,7 +301,7 @@ public class BattleInput : MonoBehaviour
 
     bool HandleHudToggleEarly()
     {
-        if (TestCode != null && TestCode.isShow) return false; // 옵션창이 켜져 있으면 입력 무시
+        //if (optionsMenuUI != null && optionsMenuUI.isShow) return false; // 옵션창이 켜져 있으면 입력 무시
 
         // Tab 키로 토글
         if (Input.GetKeyDown(KeyCode.Tab))

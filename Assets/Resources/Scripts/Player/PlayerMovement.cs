@@ -66,7 +66,7 @@ public class PlayerMovement : MonoBehaviour
         {
             input = Vector2.zero;
 
-            if (Input.GetKeyDown(KeyCode.E))
+            if (Input.GetKeyDown(KeyCode.F))
             {
                 animator.SetInteger("Move", 0);
                 selectedBox?.SetHighlight(false);
@@ -118,7 +118,7 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // 밀기 모드 진입
-        if (!isPushMode && (Input.GetKeyDown(KeyCode.E) && selectedBox != null))
+        if (!isPushMode && (Input.GetKeyDown(KeyCode.F) && selectedBox != null))
         {
             if (contactBoxes.Count > 0)
             {
@@ -133,7 +133,7 @@ public class PlayerMovement : MonoBehaviour
 
         // 선택된 푸시 오브젝트가 없고, 포커스된 상자가 있을 때만 열기
         if (!isPushMode && selectedBox == null && highlightedChest != null
-        && Input.GetKeyDown(KeyCode.E))
+        && Input.GetKeyDown(KeyCode.F))
         {
             highlightedChest.OpenChest();
             highlightedChest = null; // 열렸으니 참조 해제

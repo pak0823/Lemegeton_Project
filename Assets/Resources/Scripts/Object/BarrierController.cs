@@ -37,6 +37,10 @@ public class BarrierController : MonoBehaviour
             Shared.ObjectGaugeManager.onThresholdReached.AddListener(Open);
 
         Close();
+
+        ObjectGaugeManager og = Shared.ObjectGaugeManager;
+        if (og != null && og.GetGaugePercent() >= og.thresholdPercent)
+            Open();
     }
 
     void Update()
@@ -97,7 +101,12 @@ public class BarrierController : MonoBehaviour
 
         Shared.PuzzleManager?.ClearMaps();
         Shared.MapToggleManager.currentStage = stageIndex;
-        StartCoroutine(Shared.SceneTransitionManager.FadeCoroutine());
+
+        //StartCoroutine(Shared.SceneTransitionManager.RunWithFade(() =>
+        //{
+        //    // 페이드 아웃이 완료된 정확한 타이밍에 전환 실행
+           
+        //}));
         Shared.MapToggleManager.EnterQuizMap();
     }
 }

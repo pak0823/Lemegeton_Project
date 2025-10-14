@@ -46,7 +46,11 @@ public class UnitStatusPanelUI : MonoBehaviour
         if (battle != null) battle.OnUnitActionLabel -= HandleActionLabel;
         if (battle != null) battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
         foreach (var kv in views)
-            if (kv.Key) kv.Key.OnDied -= OnUnitDied; // 핸들러명 변경
+            if (kv.Key)
+            {
+                kv.Key.OnDied -= OnUnitDied; //사망 이벤트 구독 해제
+                kv.Key.OnRetreated -= OnUnitRetreated;  //도주 이벤트 구독 해제
+            }
     }
 
     // === 정렬 함수 추가 ===
@@ -111,6 +115,7 @@ public class UnitStatusPanelUI : MonoBehaviour
 
         views[u] = item;
         u.OnDied += OnUnitDied; //사망 이벤트 구독
+        u.OnRetreated += OnUnitRetreated; //도주 이벤트 구독
     }
     //public void Resort()  // 현재 views에 있는 유닛만 대상으로 정렬해 재배치
     //{
@@ -139,6 +144,12 @@ public class UnitStatusPanelUI : MonoBehaviour
             item.SetDeadStyle(true);
             // 필요 시 상태칩/라벨 업데이트 등 추가 작업 가능
         }
+    }
+    void OnUnitRetreated(BattleUnit u)
+    {
+        if (u == null) return;
+        if (u.team == Team.Enemy) return;
+        RemoveView(u);
     }
 
     void RemoveView(BattleUnit u)

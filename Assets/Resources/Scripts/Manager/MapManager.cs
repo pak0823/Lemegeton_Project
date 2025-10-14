@@ -61,13 +61,11 @@ public class MapManager : MonoBehaviour
 
         SetupMapToggle(floorMap, wallMap);
 
-        var snap = (Shared.SceneTransitionManager != null) ? Shared.SceneTransitionManager.explorationSnapshot : null;
+        var snap = Shared.SceneTransitionManager?.explorationSnapshot;
         if (snap != null && snap.objects != null && snap.objects.Count > 0)
         {
             // 스냅샷대로 재생성 + 상태 복원
             ApplyExplorationSnapshot(snap, floorMap, wallMap);
-            // 다음 맵에선 다시 랜덤 스폰
-            Shared.SceneTransitionManager.explorationSnapshot = null;
         }
         else
         {
@@ -208,11 +206,6 @@ public class MapManager : MonoBehaviour
         if (objectgauge != null)
         {
             objectgauge.SetObjectGaugeFromSnapshot(snap.totalBoxes, snap.openedBoxes, snap.triggeredTraps, snap.thresholdReached);
-        }
-
-        // 스냅샷 1회성 소모(다음 새맵에선 랜덤 스폰 정상화)
-        {
-            Shared.SceneTransitionManager.explorationSnapshot = null;
         }
     }
 

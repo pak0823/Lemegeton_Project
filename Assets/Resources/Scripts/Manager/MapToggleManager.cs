@@ -45,8 +45,6 @@ public class MapToggleManager : MonoBehaviour
 
     public void ExitQuizMap()
     {
-        StartCoroutine(Shared.SceneTransitionManager.FadeCoroutine());
-
         if (activeQuizMap != null)
         {
             Destroy(activeQuizMap);

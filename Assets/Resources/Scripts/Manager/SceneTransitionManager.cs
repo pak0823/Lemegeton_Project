@@ -1,6 +1,9 @@
 using System.Collections;
-using UnityEngine.SceneManagement;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class SceneTransitionManager : MonoBehaviour
 {
@@ -20,10 +23,17 @@ public class SceneTransitionManager : MonoBehaviour
     [Header("탐험 스냅샷")]
     public ExplorationSnapshot explorationSnapshot;
     public bool HasExplorationSnapshot => explorationSnapshot != null;
+    private bool _isReturning = false;        // 복귀 중복 실행 가드
 
     public void SaveExplorationSnapshot(ExplorationSnapshot snap)
     {
         explorationSnapshot = snap;
+        Debug.Log($"[STM] Snapshot saved. objs={(snap?.objects?.Count ?? 0)}");
+    }
+    public void ClearExplorationSnapshot()
+    {
+        explorationSnapshot = null;
+        Debug.Log("[STM] Snapshot cleared (before leaving exploration).");
     }
 
     private void Awake()
@@ -64,26 +74,6 @@ public class SceneTransitionManager : MonoBehaviour
             yield return null;
         }
     }
-    public IEnumerator FadeCoroutine() //단순히 페이드 아웃 -> 페이드 인
-    {
-        // 페이드 아웃 (alpha 0 → 1)
-        float t = 0f;
-        while (t < fadeDuration)
-        {
-            t += Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
-            yield return null;
-        }
-
-        // 페이드 인 (alpha 1 → 0)
-        t = fadeDuration;
-        while (t > 0f)
-        {
-            t -= Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
-            yield return null;
-        }
-    }
 
     public void SaveReturnPoint(string sceneName, Vector3 worldPos)
     {
@@ -98,6 +88,8 @@ public class SceneTransitionManager : MonoBehaviour
             Debug.LogWarning("[Return] 저장된 복귀 지점이 없습니다.");
             return;
         }
+        if (_isReturning) return;             // 중복 가드
+        _isReturning = true;
         StartCoroutine(ReturnCoroutine());
     }
 
@@ -141,5 +133,6 @@ public class SceneTransitionManager : MonoBehaviour
 
         // 1회성 컨텍스트 정리
         pendingReturnScene = null;
+        _isReturning = false;   // 가드 해제
     }
 }

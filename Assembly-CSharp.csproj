@@ -63,9 +63,11 @@
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\TargetMarker.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionDisplay.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\GameSpeedController.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Ui\PopupManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\Trap\TrapBehavior.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattleManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UnitStatusPanelUI.cs" />
+    <Compile Include="Assets\Resources\Scripts\UI\ExplorationResetUi.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\DebuffData.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\UI_Departure.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\TileCounter.cs" />
@@ -75,6 +77,7 @@
     <Compile Include="Assets\Resources\Scripts\Common\Shared.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\UIManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\WebTrapController.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Ui\ConfirmationPopup.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\StateConditionalMulti.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\Enum.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\UnitStateController.cs" />
@@ -90,9 +93,11 @@
     <Compile Include="Assets\Resources\Scripts\Object\PushObject.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\TilemapDebugger.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\IExplorationPersistable.cs" />
+    <Compile Include="Assets\Resources\Scripts\UI\ExplorationTimerUi.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\ExplorationPersistId.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattlegridManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Player\PlayerDebuffController.cs" />
+    <Compile Include="Assets\Resources\Scripts\UI\SceneUIProfile.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\ActionPanelUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Player\PlayerMovement.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\StackableStatusVisualDB.cs" />
@@ -102,10 +107,10 @@
     <Compile Include="Assets\Resources\Scripts\Battle\StatusController.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\UnitData.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PortalController.cs" />
-    <Compile Include="Assets\Resources\Scripts\TestCode.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\MapObjectSpawner.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattleMapManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\EnemyAI.cs" />
+    <Compile Include="Assets\Resources\Scripts\UI\TitleMenuUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\ParametricHealSkill.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageRuntimeContext.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\Box\BoxInteract.cs" />
@@ -114,15 +119,15 @@
     <Compile Include="Assets\Resources\Scripts\Battle\BattleInput.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\BoxGoal.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PuzzleBox.cs" />
+    <Compile Include="Assets\Resources\Scripts\UI\ISceneUiModule.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageDataBase.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\ProjectileController.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionButtonManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\SkillLibrary.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UnitStatusItemUI.cs" />
-    <Compile Include="Assets\Resources\Scripts\UI\TestUi.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\Highlighter.cs" />
+    <Compile Include="Assets\Resources\Scripts\UI\SceneUIOrchestrator.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\WaveSet.cs" />
-    <Compile Include="Assets\Resources\Scripts\UI\TimerUi.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\PuzzleManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\ObjectGaugeManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\ParametricDamageSkill.cs" />
@@ -135,6 +140,7 @@
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UnitStateVisualDB.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\SceneTransitionManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\TurnBarUI.cs" />
+    <Compile Include="Assets\Resources\Scripts\OptionsMenuUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\SelfStateSkill.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UIArrowNavigator.cs" />
   </ItemGroup>

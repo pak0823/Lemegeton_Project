@@ -684,6 +684,7 @@ GameObject:
   - component: {fileID: 989505366}
   - component: {fileID: 989505365}
   - component: {fileID: 989505369}
+  - component: {fileID: 989505370}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -789,6 +790,27 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   resetButton: {fileID: 1921683534}
+--- !u!114 &989505370
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 989505364}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db541ea6e0dc1aa4a9bfa41849569bfd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  profile: {fileID: 11400000, guid: 37af229a0d2f8d84c8c6ffb4a2f7b624, type: 2}
+  hud: {fileID: 0}
+  turnBar: {fileID: 0}
+  skillPanel: {fileID: 0}
+  actionPanel: {fileID: 0}
+  timerUI: {fileID: 1132280161}
+  explorationReset: {fileID: 989505369}
+  titleMenu: {fileID: 0}
+  handlePauseInput: 1
 --- !u!1 &1045021265
 GameObject:
   m_ObjectHideFlags: 0

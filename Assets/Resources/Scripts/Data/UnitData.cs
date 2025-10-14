@@ -5,6 +5,7 @@ public enum ISBOSS { None, Boss }  //보스 구별
 [CreateAssetMenu(menuName = "Battle/UnitData", fileName = "UnitData")]
 public class UnitData : ScriptableObject
 {
+    public string DisplayName;
     public Team team = Team.Player;   // Player / Enemy
     public int MaxHP = 0;    //최대 HP
     public int MaxMP = 0;     //최대 MP

@@ -31,6 +31,7 @@ public class GameSpeedController : MonoBehaviour
     void Awake()
     {
         baseFixedDeltaTime = Time.fixedDeltaTime;
+        Shared.GameSpeedController = this;
         Apply(); // Ω√¿€¿∫ 1x
     }
 

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor.VersionControl;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UIElements;
@@ -52,6 +53,7 @@ public class BattleManager : MonoBehaviour
     bool isWaveTransitioning = false;
     public event System.Action<int, int, string> OnWaveChanged; // (cur,total,label)
     public event System.Action OnWaveStarted;   // 웨이브 시작 알림
+    private bool _battleEndedOnce = false; // 중복 승리 처리 방지
 
 
     // === 타겟 선택(표시/순환) ===
@@ -136,7 +138,8 @@ public class BattleManager : MonoBehaviour
         {
             Init();
         }
-            
+
+        StartCoroutine(Co_RebindBattleInputWhenMapsReady());
     }
 
     void OnDisable()
@@ -158,6 +161,24 @@ public class BattleManager : MonoBehaviour
         {
             LoadWave(0);
         }
+    }
+    // BattleMapManager(IBattleMapProvider)가 실제로 Floor들을 채운 '이후' 1회만 BattleInput에 통지
+    System.Collections.IEnumerator Co_RebindBattleInputWhenMapsReady()
+    {
+        var provider = Shared.battleMapManager as IBattleMapProvider;
+        // provider가 아직 안 잡힌 프레임도 있을 수 있으니 안전 폴링
+        while (provider == null)
+        {
+            yield return null;
+            provider = Shared.battleMapManager as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>(true) as IBattleMapProvider;
+        }
+        // Floor들이 실제로 세팅될 때까지 대기
+        while (provider.PlayerFloor == null || provider.EnemyFloor == null)
+            yield return null;
+
+        // 맵 준비 완료 → BattleInput에 단 한 번 rebind 지시
+        if (Shared.battleInput != null)
+            Shared.battleInput.RebindProviders();
     }
 
     // 씬 내 모든 BattleUnit(플레이어+적)을 재바인드하고 ATB/구독을 초기화
@@ -393,6 +414,8 @@ public class BattleManager : MonoBehaviour
         if (waveSet == null || waveSet.waves == null || nextIndex < 0 || nextIndex >= TotalWaves)
         {
             isWaveTransitioning = false;
+            if (_battleEndedOnce) yield break;          // 이미 종료 처리됐으면 무시
+            _battleEndedOnce = true;                    // 가드
             Debug.Log("[Battle] 승리! (모든 웨이브 완료)");
             Shared.SceneTransitionManager.ReturnToSavedPoint();
             yield break;
@@ -811,15 +834,20 @@ public class BattleManager : MonoBehaviour
                 AdvanceToNextWave();
                 return;
             }
+
+            if (_battleEndedOnce) return;              // 중복 가드
+            _battleEndedOnce = true;                   // 가드
             Debug.Log("[Battle] 승리! (최종 웨이브 완료)");
 
-            if(Shared.PuzzleManager.IsPuzzleComplete)
+            if (Shared.PuzzleManager.IsPuzzleComplete)
                 Shared.SceneTransitionManager.FadeToScene("EndScene");
             else
                 Shared.SceneTransitionManager.ReturnToSavedPoint();
         }
         else if (!anyPlayer)
         {
+            if (_battleEndedOnce) return;              // ★ 중복 가드
+            _battleEndedOnce = true;                   // ★ 가드
             Debug.Log("[Battle] 패배...");
 
             if (Shared.PuzzleManager.IsPuzzleComplete)
@@ -1000,19 +1028,66 @@ public class BattleManager : MonoBehaviour
     #endregion
 
     // 도망가기(버튼/F1 공용)
-    public void OnClickEscape()
+    public async void OnClickEscape()
     {
         // 플레이어 턴에서만 허용, 해 resolving 중(피해 계산 등)에는 금지
         if (acting == null || acting.team != Team.Player) return;
         if (state == BattleState.Resolving) return;
 
-        // 진행 중이던 선택/표시 정리
-        CancelCurrentAction();      // Moving/Targeting 상태면 ActionSelect로 되돌림
+        Debug.Log("이스케이프 버튼 클릭 실행됨");
+        // 공통 확인 팝업
+        string unitName = GetUnitLabel(acting);
+        string safeName = unitName.Replace("<", "&lt;").Replace(">", "&gt;"); // 간단 이스케이프
+        string msg = $"<color=#C60004>{safeName}</color> 유닛을 전투에서 제외합니다. 진행할까요?";
+        bool ok = await PopupManager.Instance.ConfirmAsync(msg, "퇴각", "취소");
+        if (!ok) return;
+
+        Debug.Log("이스케이프 팝업창 열림");
+
+        // 진행 중이던 선택/표시 정리 및 퇴각 처리
+        CancelCurrentAction();
         ClearAllPreviews();
         ClearTargetSelection();
+        RetreatCurrentUnit(acting);
+    }
 
-        Debug.Log("[Battle] 도망가기 → 탐험으로 복귀");
-        Shared.SceneTransitionManager.ReturnToSavedPoint(); // 저장된 씬/좌표로 페이드 복귀
+    private string GetUnitLabel(BattleUnit u)
+    {
+        // 프로젝트에 따라 이름 필드가 다를 수 있어요:
+        // DisplayName / UnitName / CharacterName 등 사용 중인 것을 우선적으로 반환
+        if (!string.IsNullOrEmpty(u.name)) return u.name;
+        if (!string.IsNullOrEmpty(u.name)) return u.name;
+        // 없으면 GameObject 이름 fallback
+        return u.name;
+    }
+
+    void RetreatCurrentUnit(BattleUnit u)
+    {
+        if (u == null) return;
+
+        // 1) 그리드 점유 해제
+        TryReleaseGridOccupy(u);
+
+        // 2) 턴 오더에서 제거 (현재/이후 턴에서 사라지도록)
+        var tom = FindObjectOfType<TurnOrderManager>();
+        tom?.Remove(u); // 이미 제공됨
+
+        // 3) HUD/턴바/기타 UI에 알림
+        u.Retreat(); // UnitStatusPanelUI / TurnBarUI가 이 이벤트로 자기 UI를 제거
+
+        // 4) 유닛 오브젝트 제거
+        Destroy(u.gameObject);
+
+        // 5) 현재 턴 정리 및 ATB 재개
+        if (u == acting)
+        {
+            acting = null;
+            atbPaused = false;
+            state = BattleState.Idle;
+        }
+
+        // 6) 전투 종료 체크(전원 퇴각/전멸 등)
+        CheckBattleEnd();
     }
 
 

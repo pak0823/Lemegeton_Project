@@ -74,8 +74,9 @@ public class TurnBarUI : MonoBehaviour
             // 초기 Y를 팀별로 분리
             rt.anchoredPosition = new Vector2(0f, u.team == Team.Player ? playerRowY : enemyRowY);
 
-            // 사망 이벤트 구독 → 제거
+            // 사망,도주 이벤트 구독 → 제거
             u.OnDied += RemoveUnitIcon;
+            u.OnRetreated += RemoveUnitIcon;
         }
     }
 

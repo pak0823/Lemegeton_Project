@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using static UnityEditor.PlayerSettings;
 
 // 맵 내 전체 상자 개수 대비
 // 열린 상자 + 발동된 함정 수를 게이지로 계산
@@ -148,33 +149,29 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
             awarenessGaugeText.text = $"인지 게이지: {awarenessGauge}/{awarenessMax}";
     }
 
+    #endregion
+
+    private bool isTransitioningToBattle = false; //재진입 가드
+
     private IEnumerator StartBattleRoutine()
     {
-        if (battleNoticeUI != null)
-        {
-            battleNoticeUI.SetActive(true);
-            IsBattleNoticeActive = true; // 입력 차단 시작
-            if (Shared.PlayerMovement != null)
-                Shared.PlayerMovement.HaltImmediately(); //이동 중인 값이 있으면 강제 리셋
+        if (isTransitioningToBattle) yield break;
+        isTransitioningToBattle = true;
 
-            yield return new WaitForSeconds(battleNoticeDuration);
-            battleNoticeUI.SetActive(false);
-            IsBattleNoticeActive = false; // 입력 차단 종료
-        }
+        // 입력/이동 정지 → 한 프레임 동기화 → 바로 스냅샷
+        IsBattleNoticeActive = true;
+        if (Shared.PlayerMovement != null) Shared.PlayerMovement.HaltImmediately();
+        yield return new WaitForEndOfFrame();          // (1프레임 안정화)
 
-        yield return null;
-        yield return new WaitForEndOfFrame();
+        Shared.SceneTransitionManager.ClearExplorationSnapshot();   // 이전 스냅샷 비우기
 
-        //탐험 스냅샷 저장
+        // 현재 상태로 새 스냅샷 저장
         var snap = new ExplorationSnapshot();
-        // 씬 내 모든 IExplorationPersistable 수집
         foreach (var mb in FindObjectsOfType<MonoBehaviour>(true))
         {
             if (mb is IExplorationPersistable ip)
                 snap.objects.Add(ip.SaveState());
         }
-
-        // Object 게이지 값
         snap.totalBoxes = totalBoxes;
         snap.openedBoxes = openedBoxes;
         snap.triggeredTraps = triggeredTraps;
@@ -182,36 +179,44 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
         Shared.SceneTransitionManager.SaveExplorationSnapshot(snap);
         Debug.Log($"[Snapshot] saved: objs={snap.objects.Count}, boxes {openedBoxes}/{totalBoxes}, traps={triggeredTraps}");
 
-        // 전투 진입 직전, 복귀 컨텍스트 저장
+        // 복귀 지점 저장(스냅샷 뒤로 이동)
         string sceneName = SceneManager.GetActiveScene().name;
         Vector3 pos = (Shared.PlayerMovement != null)
-            ? Shared.PlayerMovement.transform.position
-            : (Shared.MapToggleManager != null
-                ? Shared.MapToggleManager.GetPlayerStartPosition()
-                : Vector3.zero);
-
+                    ? Shared.PlayerMovement.transform.position
+                    : (Shared.MapToggleManager != null
+                        ? Shared.MapToggleManager.GetPlayerStartPosition()
+                        : Vector3.zero);
         Shared.SceneTransitionManager.SaveReturnPoint(sceneName, pos);
+
+        // 배틀 배너 보여주기
+        if (battleNoticeUI != null)
+        {
+            battleNoticeUI.SetActive(true);
+            IsBattleNoticeActive = true; // 입력 차단 시작
+            yield return new WaitForSeconds(battleNoticeDuration);
+            battleNoticeUI.SetActive(false);
+            IsBattleNoticeActive = false; // 입력 차단 종료
+        }
 
         var traps = snap.objects.FindAll(o => o.kind == "Trap");
         var trig = traps.FindAll(o => o.b1 || !o.b2);
         Debug.Log($"[Snapshot] traps saved triggered-or-inactive = {trig.Count}/{traps.Count}");
 
-        // 씬 전환 전에 게이지 초기화
+        // 게이지 초기화 및 컨텍스트
         awarenessGauge = 0;
-        // 전투씬 진입 직전: 스테이지/맥락 세팅
         if (StageRuntimeContext.Instance == null)
             new GameObject("StageRuntimeContext").AddComponent<StageRuntimeContext>();
-        
-        int stageNo = (currentStageData != null) ? currentStageData.stageNumber :
-        (stageNumberOverride >= 0 ? stageNumberOverride : -1);
+
+        int stageNo = (currentStageData != null) ? currentStageData.stageNumber
+                  : (stageNumberOverride >= 0 ? stageNumberOverride : -1);
         if (stageNo < 0)
             Debug.LogWarning("[ObjectGaugeManager] stage number not set. (currentStageData or stageNumberOverride)");
-        
+
         StageRuntimeContext.Instance.SetStageNumber(stageNo);
         StageRuntimeContext.Instance.SetBattleContext(BattleContext.TrapEncounter);
         Shared.SceneTransitionManager.FadeToScene("BattleScene");
+        isTransitioningToBattle = false;
     }
-    #endregion
 
     public void SetObjectGaugeFromSnapshot(int total, int opened, int traps, bool reached)
     {
