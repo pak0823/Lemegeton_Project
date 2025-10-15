@@ -17,6 +17,9 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     private Color originalColor;
     private bool isHighlighted = false;
 
+    [Header("확률 설명 (상자 열 때)")]
+    public WeightedDescriptionsSO openDescriptions;
+
     // 인식된 상자 확인
     private bool isFocused = false;
 
@@ -86,6 +89,28 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
         isOpened = true;
         animator.SetBool("IsOpen", isOpened);
         Shared.ObjectGaugeManager.IncrementChest();
+
+        int idx = openDescriptions ? openDescriptions.PickIndex() : -1;
+        if (idx >= 0 && idx < openDescriptions.entries.Length)
+        {
+            switch (idx)
+            {
+                case 0: /* 40% 케이스 로직 */ break;
+                case 1: /* 30% 케이스 로직 */ break;
+                case 2: Shared.ObjectGaugeManager.TryIncrementAwarenessByChest(); break;    //20% 확률로 인지 게이지 증가
+                case 3: /* 10% 케이스 로직 */ break;
+                default: /* 예외 처리(프리셋이 더 길어질 수도) */ break;
+            }
+
+            // 문구도 띄우고 싶다면
+            var text = openDescriptions.entries[idx].text;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                Shared.descriptionDialogUI?.Show(text);
+                Shared.interactionHintUI?.HideAll();
+            }
+                
+        }
 
         // 열린 뒤에는 포커스/하이라이트/안내 UI 정리
         SetHighlight(false);

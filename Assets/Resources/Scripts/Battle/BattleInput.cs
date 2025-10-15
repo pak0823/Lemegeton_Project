@@ -31,6 +31,11 @@ public class BattleInput : MonoBehaviour
     (KeyCode.Alpha3, 2),   // x3
     (KeyCode.BackQuote, 3) // 정지(물결/백틱 키)
 };
+    [Header("InputKey")]
+    [SerializeField] private KeyCode battle_CancelKey = KeyCode.Q; //전투 선택 취소 키
+    [SerializeField] private KeyCode battle_CurrentKey = KeyCode.E;    //전투 선택 확정 키
+    [SerializeField] private KeyCode battle_HudKey = KeyCode.Tab;   //HUD 토글 키
+    [SerializeField] private KeyCode battle_Escape = KeyCode.F1;    //도주 키
 
     #region Unity Callbacks
     void Awake()
@@ -53,11 +58,6 @@ public class BattleInput : MonoBehaviour
         //if (provider == null || provider.PlayerFloor == null || provider.EnemyFloor == null) return;
 
         if (!EnsureProviders()) return; // 맵/프로바이더 준비 보장
-
-        if (Input.GetKeyDown(KeyCode.Escape))   // 옵션(esc)
-        {
-            //optionsMenuUI?.ShowPanel();
-        }
 
         HandleGameSpeedToggle();
         if (HandleHudToggleEarly()) return; //HUD 상태 관리
@@ -182,7 +182,7 @@ void HandleGameSpeedToggle()
         wasTargetingPrev = isTargetingNow;
 
         // 우클릭/Q로 취소(선택사항)
-        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.Q))
+        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(battle_CancelKey))
         {
             // 스킬 타겟팅 중(선택됨) → '스킬만 해제', 패널 유지 (1단계 취소)
             if (canTargetSkill)
@@ -201,18 +201,18 @@ void HandleGameSpeedToggle()
             battle?.CancelCurrentAction();
         }
 
-        if (Input.GetKeyDown(KeyCode.F1))   // 도망가기(F1)
+        if (Input.GetKeyDown(battle_Escape))   // 도망가기(F1)
         {
             battle?.CancelCurrentAction(); // 진행 중이던 선택 취소
             battle?.OnClickEscape();       // 전투 즉시 종료 & 복귀
         }
 
         // === E 키로 확정 (Unit 스킬일 때만) ===
-        if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Unit && Input.GetKeyDown(KeyCode.E))
+        if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Unit && Input.GetKeyDown(battle_CurrentKey))
         {
             battle.ConfirmTarget();
         }
-        else if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Tile && Input.GetKeyDown(KeyCode.E))
+        else if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Tile && Input.GetKeyDown(battle_CurrentKey))
         {
             var map = battle.CurrentSkillTargetMap ?? (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
             if (map != null) battle.ConfirmSkillOnTile(map, battle.selectedCell);
@@ -304,7 +304,7 @@ void HandleGameSpeedToggle()
         //if (optionsMenuUI != null && optionsMenuUI.isShow) return false; // 옵션창이 켜져 있으면 입력 무시
 
         // Tab 키로 토글
-        if (Input.GetKeyDown(KeyCode.Tab))
+        if (Input.GetKeyDown(battle_HudKey))
         {
             hudCtrl?.Toggle();
             return true; // 같은 프레임에 다른 입력 소비 방지
@@ -313,7 +313,7 @@ void HandleGameSpeedToggle()
         // 2) HUD가 꺼져있을 때 아무 키/마우스 버튼 입력으로 즉시 복귀
         if (hudCtrl != null && !hudCtrl.IsVisible)
         {
-            if (Input.GetKeyDown(KeyCode.Tab))
+            if (Input.GetKeyDown(battle_HudKey))
             {
                 return true;
             }

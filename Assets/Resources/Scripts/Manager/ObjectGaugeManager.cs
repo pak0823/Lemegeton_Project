@@ -28,7 +28,6 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
 
     [Header("인지 게이지")]
     public int awarenessMax = 5;
-    public float chestIncrementChance = 0.2f;
     public Text awarenessGaugeText;
     public GameObject battleNoticeUI;
     public float battleNoticeDuration = 3f;
@@ -68,9 +67,6 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
         openedBoxes++;
         Debug.Log($"[ObjectGaugeManager] 개봉된 상자 수: {openedBoxes}");
         CheckThreshold();
-
-        // 인지 게이지 확률 증가
-        TryIncrementAwarenessByChest();
     }
 
     // 함정 발동 시 호출
@@ -111,15 +107,14 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
     #endregion
 
     #region 인지 게이지
-    private void TryIncrementAwarenessByChest()
+    public void TryIncrementAwarenessByChest()  //box개봉 시 인지게이지 상승
     {
         if (battleTriggered) return;
-
-        if (Random.value <= chestIncrementChance)
-            IncrementAwareness();
+        
+        IncrementAwareness();
     }
 
-    public void IncrementAwarenessByTrap()
+    public void IncrementAwarenessByTrap()  //함점 발동 시 인지게이지 상승
     {
         if (battleTriggered) return;
         IncrementAwareness();

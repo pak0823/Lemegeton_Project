@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 5407155221246448368}
   - component: {fileID: 4328342510322156514}
   - component: {fileID: 3795675926742572059}
+  - component: {fileID: 3268988184693661188}
   m_Layer: 0
   m_Name: Cobweb
   m_TagString: Untagged
@@ -146,6 +147,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   debuffData: {fileID: 11400000, guid: 591443af9e9f37f4ba71a998437c77c0, type: 2}
   applyOnce: 1
+  triggerDescriptions: {fileID: 11400000, guid: c04e5213b591e8f479b85db6a5b294d2, type: 2}
 --- !u!114 &3795675926742572059
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -160,3 +162,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   isTriggered: 0
   isActive: 1
+--- !u!114 &3268988184693661188
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2053914866989125264}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cf54e93c3f77ec24fa6e7cee91149f34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  description: .
+  enableHintOnContact: 1

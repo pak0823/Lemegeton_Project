@@ -58,7 +58,11 @@ namespace Project.UI
             if (!handlePauseInput || profile == null) return;
             if (profile.pauseAvailable && Input.GetKeyDown(profile.pauseKey))
             {
-                SendMessage("OnPauseKeyPressed", SendMessageOptions.DontRequireReceiver);
+                var mgr = UiModalManager.Instance;
+                if (mgr != null) mgr.OnEscape(optionsMenu);
+                else BroadcastMessage("OnPauseKeyPressed", SendMessageOptions.DontRequireReceiver); // Æú¹é
+
+                //SendMessage("OnPauseKeyPressed", SendMessageOptions.DontRequireReceiver);
             }
         }
 

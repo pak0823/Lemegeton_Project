@@ -12,6 +12,9 @@ public class TrapBehavior : MonoBehaviour
     private Quaternion initialRotation;
     private TrapPersist TrapPersist;
 
+    [Header("확률 설명 (트랩 발동 시)")]
+    public WeightedDescriptionsSO triggerDescriptions;
+
     private static List<TrapBehavior> allTraps = new();
     public static IReadOnlyList<TrapBehavior> AllTraps => allTraps;
 
@@ -46,11 +49,7 @@ public class TrapBehavior : MonoBehaviour
         var controller = other.GetComponent<PlayerDebuffController>();
         if (controller != null && debuffData != null)
         {
-            // 플레이어가 밟은 경우: 디버프 + Persist 상태 마킹 + 통계 + 종료 일원화
-            controller.ApplyDebuff(debuffData);
-            TrapPersist?.MarkTriggered();
-            Shared.ObjectGaugeManager.RegisterTrapTriggeredByPlayer(); // 인지+트랩 카운트
-            TriggerTrap();
+            TriggerTrap(other);
             return;
         }
 
@@ -60,12 +59,12 @@ public class TrapBehavior : MonoBehaviour
             // 박스가 활성화시킨 경우도 동일하게 Persist/통계를 남기고 종료 처리
             TrapPersist?.MarkTriggered();
             Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
-            TriggerTrap();
+            TriggerTrap(other);
             return;
         }
     }
 
-    public void TriggerTrap()
+    public void TriggerTrap(Collider2D player)
     {
         if (isTriggered) return;
 
@@ -73,5 +72,36 @@ public class TrapBehavior : MonoBehaviour
 
         if (applyOnce)
             gameObject.SetActive(false); // Destroy 대신 비활성화로 처리
+
+        var current = player.GetComponent<PlayerDebuffController>();
+        if (current == null) return;  //플레이어 작동이 아닐 시
+        
+
+        int idx = triggerDescriptions ? triggerDescriptions.PickIndex() : -1;
+        if (idx >= 0 && idx < triggerDescriptions.entries.Length)
+        {
+            switch (idx)
+            {
+                case 0:
+                    current.ApplyDebuff(debuffData);
+                    TrapPersist?.MarkTriggered();
+                    break;
+                case 1: Shared.ObjectGaugeManager.RegisterTrapTriggeredByPlayer(); break;
+                case 2: /* 20% 케이스 로직 */ break;
+                case 3:
+                    current.ApplyDebuff(debuffData);
+                    TrapPersist?.MarkTriggered();
+                    break;
+                default: /* 프리셋 확장 대비 */ break;
+            }
+
+            var text = triggerDescriptions.entries[idx].text;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                Shared.descriptionDialogUI?.Show(text);
+                Shared.interactionHintUI?.HideAll();
+            }
+                
+        }
     }
 }

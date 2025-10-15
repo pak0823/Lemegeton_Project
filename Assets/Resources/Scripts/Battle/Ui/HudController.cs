@@ -47,18 +47,19 @@ public class HudController : MonoBehaviour
     {
         IsVisible = !IsVisible;
         Apply(IsVisible, false);
+        Debug.Log("IsVisible: " + IsVisible);
     }
 
     public void Show()
     {
         IsVisible = true;
-        Apply(true, false);
+        Apply(IsVisible, false);
     }
 
     public void Hide()
     {
         IsVisible = false;
-        Apply(false, false);
+        Apply(IsVisible, false);
     }
 
     void Apply(bool show, bool isInitial)

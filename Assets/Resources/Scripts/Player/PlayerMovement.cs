@@ -31,6 +31,15 @@ public class PlayerMovement : MonoBehaviour
     private PlayerDebuffController PlayerDebuffController;
 
     private BoxInteract highlightedChest = null;
+    Collider2D _lastHintTarget;     // 마지막으로 힌트를 띄우게 한 대상
+    DescriptionData _lastDescData;  // 그 대상의 설명 데이터(있으면)
+
+    [SerializeField] private KeyCode surveyKey = KeyCode.F; //탐험 조사 키
+    [SerializeField] private KeyCode communicationKey = KeyCode.E; //탐험 소통 키
+    [SerializeField] private KeyCode upDirectionKey = KeyCode.W; //탐험 위 방향키
+    [SerializeField] private KeyCode downDirectionKey = KeyCode.S; //탐험 아래 방향키
+    [SerializeField] private KeyCode leftDirectionKey = KeyCode.A; //탐험 왼쪽 방향키
+    [SerializeField] private KeyCode rightDirectionKey = KeyCode.D; //탐험 오른쪽 방향키
 
     void Awake()
     {
@@ -41,6 +50,7 @@ public class PlayerMovement : MonoBehaviour
         animator = GetComponent<Animator>();
 
         activeMoveSpeed = defaultMoveSpeed;
+        Shared.interactionHintUI?.BindFollow(this.transform);
     }
 
     void Update()
@@ -57,16 +67,20 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
+        HandleSurveyKeyPreAction();
+
         inputDir = GetHexDirectionArrowKey();
 
         if (!isPushMode)
             HandlePushDetection();
 
+        HandleCommunicationKey();
+
         if (isPushMode)
         {
             input = Vector2.zero;
 
-            if (Input.GetKeyDown(KeyCode.F))
+            if (Input.GetKeyDown(surveyKey))
             {
                 animator.SetInteger("Move", 0);
                 selectedBox?.SetHighlight(false);
@@ -91,12 +105,14 @@ public class PlayerMovement : MonoBehaviour
                     Debug.Log("[Push] 해당 방향으로는 밀 수 없습니다.");
                 }
             }
+
+            HandleCommunicationKey();
             return;
         }
 
         // 키 입력 이동 (화살표 키만 허용)
-        float h = Input.GetKey(KeyCode.A) ? -1f : Input.GetKey(KeyCode.D) ? 1f : 0f;
-        float v = Input.GetKey(KeyCode.W) ? 1f : Input.GetKey(KeyCode.S) ? -1f : 0f;
+        float h = Input.GetKey(leftDirectionKey) ? -1f : Input.GetKey(rightDirectionKey) ? 1f : 0f;
+        float v = Input.GetKey(upDirectionKey) ? 1f : Input.GetKey(downDirectionKey) ? -1f : 0f;
 
         input = new Vector2(h, v).normalized;
 
@@ -118,10 +134,11 @@ public class PlayerMovement : MonoBehaviour
         }
 
         // 밀기 모드 진입
-        if (!isPushMode && (Input.GetKeyDown(KeyCode.F) && selectedBox != null))
+        if (!isPushMode && (Input.GetKeyDown(surveyKey) && selectedBox != null))
         {
             if (contactBoxes.Count > 0)
             {
+                Shared.interactionHintUI?.HideAll();
                 selectedBox = contactBoxes.OrderBy(b => Vector2.SqrMagnitude(rb.position - (Vector2)b.transform.position)).First();
                 isPushMode = true;
                 animator.SetBool("IsPushIdle", true); // 밀기대기모드 애니메이션 시작
@@ -133,8 +150,9 @@ public class PlayerMovement : MonoBehaviour
 
         // 선택된 푸시 오브젝트가 없고, 포커스된 상자가 있을 때만 열기
         if (!isPushMode && selectedBox == null && highlightedChest != null
-        && Input.GetKeyDown(KeyCode.F))
+        && Input.GetKeyDown(surveyKey))
         {
+            Shared.interactionHintUI?.HideAll();
             highlightedChest.OpenChest();
             highlightedChest = null; // 열렸으니 참조 해제
             return;
@@ -193,6 +211,8 @@ public class PlayerMovement : MonoBehaviour
                 contactBoxes.Add(box);
                 box.SetHighlight(true);
 
+                Shared.interactionHintUI?.ShowBoth(InteractionHintUI.KeyCodeToLabel(surveyKey), InteractionHintUI.KeyCodeToLabel(communicationKey));
+
                 Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
                 Vector3Int boxCell = floorTilemap.WorldToCell(box.transform.position);
                 Vector3Int delta = boxCell - playerCell;
@@ -231,8 +251,108 @@ public class PlayerMovement : MonoBehaviour
                 highlightedChest = closest;
                 highlightedChest.SetFocused(true);    // 포커스 부여(= UI/입력 허용)
                 highlightedChest.SetHighlight(true);  // 선택 1개만 하이라이트
+                Shared.interactionHintUI?.ShowBoth(InteractionHintUI.KeyCodeToLabel(surveyKey), InteractionHintUI.KeyCodeToLabel(communicationKey));
                 return;
             }
+
+            HandleInteractionHintsFallback();
+            // 여기까지 오면 상호작용 대상 없음 → 힌트 숨김
+            Shared.interactionHintUI?.HideAll();
+        }
+    }
+    void HandleInteractionHintsFallback()
+    {
+        // 이미 기존 로직으로 대상이 정해졌다면(푸시/상자 등) 거기에 맞춰 힌트는 켜져 있을 것.
+        // 여기서는 아무 대상도 못 찾았을 때만 "설명 전용" 힌트를 켠다.
+        if (selectedBox != null || highlightedChest != null) return;
+
+        var hits = Physics2D.OverlapCircleAll(transform.position, 0.2f);
+        Collider2D best = null;
+        float bestDist = float.MaxValue;
+        DescriptionData bestDesc = null;
+
+        foreach (var h in hits)
+        {
+            if (h.isTrigger == false && h.attachedRigidbody == null) continue; // 너무 무차별 감지 방지 (필요시 조정)
+                                                                               // 조건 1: DescriptionData가 있다면 최우선
+            if (h.TryGetComponent<DescriptionData>(out var dd) && (dd.enableHintOnContact))
+            {
+                float d = Vector2.SqrMagnitude((Vector2)h.bounds.ClosestPoint(transform.position) - (Vector2)transform.position);
+                if (d < bestDist) { best = h; bestDist = d; bestDesc = dd; }
+                continue;
+            }
+            //// 조건 2: 태그로만 힌트를 줄 수도 있음
+            //if (best == null && h.CompareTag("Interactable"))
+            //{
+            //    best = h; bestDist = 0.21f; // 가벼운 우선순위
+            //    bestDesc = null;
+            //}
+        }
+
+        if (best != null)
+        {
+            _lastHintTarget = best;
+            _lastDescData = bestDesc;
+
+            // "무엇이든 접촉" → 두 키 모두 보이게
+            Shared.interactionHintUI?.ShowBoth(
+                InteractionHintUI.KeyCodeToLabel(surveyKey),
+                InteractionHintUI.KeyCodeToLabel(communicationKey)
+            );
+        }
+        else
+        {
+            _lastHintTarget = null;
+            _lastDescData = null;
+            Shared.interactionHintUI?.HideAll();
+            Shared.descriptionDialogUI?.Hide();
+        }
+    }
+
+    void HandleCommunicationKey()
+    {
+        if (!Input.GetKeyDown(communicationKey)) return;
+
+        string text = null;
+
+        // 상자 포커스 중이면 상자 설명 우선
+        if (highlightedChest != null)
+        {
+            // 상자 기본 문구
+            text = "아이템 상자 기본 문구가 비어있음.";
+            // 혹시 상자에 DescriptionData가 있다면 그 문구가 우선
+            if (highlightedChest.TryGetComponent<DescriptionData>(out var dd) && !string.IsNullOrEmpty(dd.description))
+                text = dd.description;
+        }
+        // 푸시 박스 포커스 중이면
+        else if (selectedBox != null)
+        {
+            if (selectedBox.TryGetComponent<DescriptionData>(out var dd) && !string.IsNullOrEmpty(dd.description))
+                text = dd.description;
+            else
+                text = "밀기 상자 기본 문구가 비어있음.";
+        }
+        // 그 외 최근 접촉 대상
+        else if (_lastHintTarget != null)
+        {
+            if (_lastDescData != null && !string.IsNullOrEmpty(_lastDescData.description))
+                text = _lastDescData.description;
+            else
+                text = "무언가 상호작용할 수 있을 것 같다.";
+        }
+
+        if (!string.IsNullOrEmpty(text))
+        {
+            Shared.descriptionDialogUI?.Toggle(text);
+        }
+    }
+
+    // F가 눌릴 때는 설명창을 닫고 기존 로직 수행(진입/종료/오픈 등)
+    void HandleSurveyKeyPreAction()
+    {
+        if (Input.GetKeyDown(surveyKey))
+        {
+            Shared.descriptionDialogUI?.Hide();
         }
     }
 
@@ -245,10 +365,10 @@ public class PlayerMovement : MonoBehaviour
 
     Direction GetHexDirectionArrowKey()
     {
-        bool up = Input.GetKey(KeyCode.W);
-        bool down = Input.GetKey(KeyCode.S);
-        bool left = Input.GetKeyDown(KeyCode.A);
-        bool right = Input.GetKeyDown(KeyCode.D);
+        bool up = Input.GetKey(upDirectionKey);
+        bool down = Input.GetKey(downDirectionKey);
+        bool left = Input.GetKeyDown(leftDirectionKey);
+        bool right = Input.GetKeyDown(rightDirectionKey);
 
         if (up && left) return Direction.NW;
         if (up && right) return Direction.NE;
@@ -304,7 +424,6 @@ public class PlayerMovement : MonoBehaviour
         animator.SetFloat("PushX", blend.x);
         animator.SetFloat("PushY", blend.y);
         spriterenderer.flipX = flipX;
-        //animator.SetBool("IsPushIdle", false); // 밀기 애니메이션 시작
         animator.SetBool("IsPushing", true); // 밀기 애니메이션 시작
 
         Vector3 fromBox = box.transform.position;

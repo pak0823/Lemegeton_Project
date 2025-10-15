@@ -5,106 +5,29 @@ using Project.UI;
 
 namespace Project.UI
 {
-    public class OptionsMenuUI : MonoBehaviour, ISceneUiModule
+    public class OptionsMenuUI : ModalWindowBase
     {
-        [Header("Wiring")]
-        [SerializeField] private CanvasGroup rootGroup; // 옵션 패널 루트
         [SerializeField] private Button resumeButton;
         [SerializeField] private Button quitButton;
 
-        [Header("Events (Optional)")]
-        public UnityEvent onOpened;
-        public UnityEvent onClosed;
-
-        [Header("(Optional) Behavior")]
-        [SerializeField] private bool closeOnBackgroundClick = true;
-        [SerializeField] private KeyCode closeKey = KeyCode.Escape;
-
-        private bool _isOpen;
-        private bool _initialized;
-
-        private void Reset()
+        protected override void Awake()
         {
-            // 에디터에서 붙였을 때 자동 배선
-            if (!rootGroup) rootGroup = GetComponentInChildren<CanvasGroup>(true);
-        }
-
-        private void Awake()
-        {
-            WireButtons();
-            SetVisible(false, instant: true);
-        }
-
-        private void Update()
-        {
-            if (closeKey != KeyCode.None && Input.GetKeyDown(closeKey))
-                Toggle();
-
-            // (선택) 배경 클릭으로 닫기
-            //if (closeOnBackgroundClick && _isOpen && Input.GetMouseButtonDown(0))
-            //    Hide();
-        }
-
-        public void OnUiShown()
-        {
-            if (!_initialized)
-            {
-                SetVisible(false, instant: true);
-                _initialized = true;
-            }
-        }
-        public void OnUiHidden()
-        {
-            // 열려 있었다면 닫고 정리
-            if (_isOpen) Hide();
-        }
-
-        private void WireButtons()
-        {
-            if (resumeButton) resumeButton.onClick.AddListener(Hide);
+            base.Awake();
+            if (resumeButton) resumeButton.onClick.AddListener(() => Toggle());
             if (quitButton) quitButton.onClick.AddListener(OnBtnReturnTitle);
         }
 
-        public void Toggle()
-        {
-            if (_isOpen) Hide();
-            else Show();
-        }
+        protected override void OnShown() { Shared.GameSpeedController?.RequestPause(); }
+        protected override void OnHidden() { Shared.GameSpeedController?.ReleasePause(); }
 
-        public void Show()
+        public void OnBtnReturnTitle()  // - EndScene에서도 사용중
         {
-            if (_isOpen) return;
-            SetVisible(true);
-            Shared.GameSpeedController?.RequestPause();
-            onOpened?.Invoke();
-        }
-
-        public void Hide()
-        {
-            if (!_isOpen) return;
-            onClosed?.Invoke();
-            SetVisible(false);
-            Shared.GameSpeedController?.ReleasePause();
-        }
-
-        private void SetVisible(bool visible, bool instant = false)
-        {
-            _isOpen = visible;
-            if (!rootGroup)
-            {
-                gameObject.SetActive(visible);
-                return;
-            }
-            // CanvasGroup으로 페이드/입력 제어(에니메이션은 프로젝트 취향대로)
-            rootGroup.alpha = visible ? 1f : 0f;
-            rootGroup.blocksRaycasts = visible;
-            rootGroup.interactable = visible;
-            if (!gameObject.activeSelf) gameObject.SetActive(true); // 활성 상태는 유지
-        }
-
-        public void OnBtnReturnTitle()  // - EndScene에서 사용중
-        {
-            Shared.SceneTransitionManager.FadeToScene("TitleScene");
+            if (quitButton) quitButton.interactable = false;    //  중복 클릭 방지
+            Shared.GameSpeedController?.ReleasePause();  // 일시정지 해제                                           
+            var mgr = UiModalManager.Instance;  // 옵션창 닫기(안 닫아도 전환되지만, 상태 정리 겸 호출)
+            if (mgr != null) mgr.Close(this);
+            else Hide();
+            Shared.SceneTransitionManager.FadeToScene("TitleScene");    //타이틀로 이동
         }
     }
 }
