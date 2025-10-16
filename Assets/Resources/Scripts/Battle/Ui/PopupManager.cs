@@ -9,6 +9,7 @@ using static UnityEditor.Experimental.GraphView.GraphView;
 public class PopupManager : MonoBehaviour
 {
     public static PopupManager Instance { get; private set; }
+    [SerializeField] private RetreatConfirmPopup retreatPrefab;
 
     [SerializeField] private Canvas popupCanvas; // 씬의 공용 Canvas를 드래그해둘 수 있음
     [SerializeField] private RectTransform popupChildParent; // Canvas 아래 전용 레이어(자식)에 붙일 경우 지정
@@ -122,11 +123,28 @@ public class PopupManager : MonoBehaviour
                     c.sortingOrder = 5000;
             }
 
-            var task = _active.Show(msg, ok, cancel);
+            bool showCancel = !string.IsNullOrEmpty(cancel);  // cancel이 비면 OK-only
+            var task = _active.Show(msg, ok, cancel, showCancel);
             bool result = await task; // 팝업 종료까지 대기
             tcs.TrySetResult(result);
         }
 
         _showing = false;
+    }
+
+    public async Task<bool> ConfirmRetreatAsync(string message, float successChance01)    //탈출 전용 팝업
+    {
+        EnsureCanvas();
+        var parent = (popupChildParent != null)
+                   ? popupChildParent
+                   : (popupCanvas.transform as RectTransform);
+
+        var inst = Instantiate(retreatPrefab, parent);
+        (inst.transform as RectTransform).SetAsLastSibling();
+        if (!inst.gameObject.activeInHierarchy) inst.gameObject.SetActive(true);
+
+        bool ok = await inst.ShowAsync(message, successChance01);
+        Destroy(inst.gameObject);
+        return ok;
     }
 }

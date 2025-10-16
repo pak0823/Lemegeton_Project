@@ -9,6 +9,7 @@ namespace Project.UI
         [Header("Wiring")]
         [SerializeField] private Button startButton;
         [SerializeField] private Button continueButton;
+        [SerializeField] private Button optionButton;
         [SerializeField] private Button exitButton;
 
         [Header("Keyboard Navigation")]
@@ -21,7 +22,9 @@ namespace Project.UI
         [Header("Visual")]
         [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f; // 저장 없음일 때 '계속하기' 투명도
 
-        private Button[] _order;   // 선택 순서: [처음부터, 계속하기, 종료하기]
+        public OptionsMenuUI optionPanel;
+
+        private Button[] _order;   // 선택 순서: [처음부터, 계속하기, 설정, 종료하기]
         private int _index;         // 현재 선택 인덱스
         private bool _shown;        // 메뉴 표시 상태(라이프사이클)
 
@@ -67,7 +70,7 @@ namespace Project.UI
 
         private void Update()
         {
-            if (!_shown || !enableKeyboardControl) return;
+            if (!_shown || !enableKeyboardControl || optionPanel.IsShow) return;
             if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
             {
                 Move(-1);
@@ -148,7 +151,8 @@ namespace Project.UI
             {
                 startButton,     // 0: 처음부터
                 continueButton,  // 1: 계속하기
-                exitButton       // 2: 종료하기
+                optionButton,     // 2: 설정
+                exitButton       // 3: 종료하기
             };
         }
 

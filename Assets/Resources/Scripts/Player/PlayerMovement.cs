@@ -18,6 +18,7 @@ public class PlayerMovement : MonoBehaviour
     private Rigidbody2D rb;
     private List<Vector3> path = new();
     private Vector2 input = Vector2.zero;
+    float movementLockUntil = 0f;
 
     private Direction inputDir;
     public bool isPushMode { private set; get; }
@@ -56,7 +57,9 @@ public class PlayerMovement : MonoBehaviour
     void Update()
     {
         // 입력 차단 조건을 한 곳에서 체크
-        bool isInputBlocked = isPerformingPush
+        bool isInputBlocked =
+                                (Time.time < movementLockUntil)
+                              || isPerformingPush
                               || GamePause.IsPaused
                               || (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
                               || (Shared.ObjectGaugeManager != null && Shared.ObjectGaugeManager.IsBattleNoticeActive);
@@ -180,6 +183,13 @@ public class PlayerMovement : MonoBehaviour
                 rb.MovePosition(newPos);
             }
         }
+    }
+
+    // 외부에서 잠금 요청
+    public void LockMovementFor(float seconds)
+    {
+        movementLockUntil = Mathf.Max(movementLockUntil, Time.time + Mathf.Max(0f, seconds));
+        HaltImmediately(); // 즉시 멈춤 (애니/속도 초기화)
     }
 
     void HandlePushDetection()

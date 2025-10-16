@@ -13,33 +13,65 @@ public class ConfirmationPopup : MonoBehaviour
     [SerializeField] private Button btnCancel;
     [SerializeField] private Transform window; // 스케일 애니메이션용(선택)
 
+    [Header("Keyboard (optional)")]
+    [SerializeField] private bool enableKeyboard = true;
+    [SerializeField] private KeyCode keyConfirmA = KeyCode.Return;  // Enter
+    [SerializeField] private KeyCode keyConfirmB = KeyCode.E;       // E
+    [SerializeField] private KeyCode keyCancelA = KeyCode.Escape;  // Esc
+    [SerializeField] private KeyCode keyCancelB = KeyCode.Q;       // Q
+
     TaskCompletionSource<bool> _tcs;
+    bool _showCancel;
     bool _closing;
 
     void Awake()
     {
-        btnOk.onClick.AddListener(() => Close(true));
-        btnCancel.onClick.AddListener(() => Close(false));
+        if (btnOk) btnOk.onClick.AddListener(() => Close(true));
+        if (btnCancel) btnCancel.onClick.AddListener(() => Close(false));
         HideImmediate();
     }
 
-    public Task<bool> Show(string message, string ok = "확인", string cancel = "취소")
+    void Update()
+    {
+        if (!enableKeyboard || _tcs == null) return;
+
+        if (Input.GetKeyDown(keyConfirmA) || Input.GetKeyDown(keyConfirmB))
+        {
+            Close(true);
+        }
+        else if (_showCancel && (Input.GetKeyDown(keyCancelA) || Input.GetKeyDown(keyCancelB)))
+        {
+            Close(false);
+        }
+    }
+
+    public Task<bool> Show(string message, string ok = "확인", string cancel = "취소", bool showCancel = true)
     {
         _closing = false;
+        _showCancel = showCancel;
         _tcs = new TaskCompletionSource<bool>();
-        messageText.text = message;
-        okLabel.text = ok;
-        cancelLabel.text = cancel;
+
+        if (messageText) messageText.text = message;
+        if (okLabel) okLabel.text = ok;
+        if (cancelLabel) cancelLabel.text = cancel;
+
+        if (btnCancel) btnCancel.gameObject.SetActive(showCancel);
         gameObject.SetActive(true);
         EnableButtons(true);
         AnimateIn();
         return _tcs.Task;
     }
 
+    /// <summary>OK 전용(정보창) 헬퍼.</summary>
+    public Task<bool> ShowOk(string message, string ok = "확인")
+    {
+        return Show(message, ok, "", false);
+    }
+
     void EnableButtons(bool on)
     {
-        btnOk.interactable = on;
-        btnCancel.interactable = on;
+        if (btnOk) btnOk.interactable = on;
+        if (btnCancel) btnCancel.interactable = on && _showCancel;
     }
 
     void HideImmediate()
@@ -60,10 +92,7 @@ public class ConfirmationPopup : MonoBehaviour
         canvasGroup.alpha = 1f;
         canvasGroup.blocksRaycasts = true;
         canvasGroup.interactable = true;
-        if (window)
-        {
-            window.localScale = Vector3.one;
-        }
+        if (window) window.localScale = Vector3.one;
     }
 
     async void Close(bool result)
@@ -72,11 +101,10 @@ public class ConfirmationPopup : MonoBehaviour
         _closing = true;
         EnableButtons(false);
 
-        // 페이드아웃 (간단히)
+        // 간단 페이드아웃
         if (canvasGroup)
         {
-            float t = 0f;
-            float dur = 0.12f;
+            float t = 0f, dur = 0.12f;
             while (t < dur)
             {
                 t += Time.unscaledDeltaTime;

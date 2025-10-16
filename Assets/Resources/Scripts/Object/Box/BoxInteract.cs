@@ -106,7 +106,7 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
             var text = openDescriptions.entries[idx].text;
             if (!string.IsNullOrWhiteSpace(text))
             {
-                Shared.descriptionDialogUI?.Show(text);
+                Shared.descriptionDialogUI?.ShowTemporarily(text, 1.0f);    // 1초 잠금+유지
                 Shared.interactionHintUI?.HideAll();
             }
                 

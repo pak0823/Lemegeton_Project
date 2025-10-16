@@ -98,10 +98,10 @@ public class TrapBehavior : MonoBehaviour
             var text = triggerDescriptions.entries[idx].text;
             if (!string.IsNullOrWhiteSpace(text))
             {
-                Shared.descriptionDialogUI?.Show(text);
+                // 잠금형으로 1초 정도 유지
+                Shared.descriptionDialogUI?.ShowTemporarily(text, 1.0f);
                 Shared.interactionHintUI?.HideAll();
-            }
-                
+            }   
         }
     }
 }

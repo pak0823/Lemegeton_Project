@@ -846,8 +846,8 @@ public class BattleManager : MonoBehaviour
         }
         else if (!anyPlayer)
         {
-            if (_battleEndedOnce) return;              // ★ 중복 가드
-            _battleEndedOnce = true;                   // ★ 가드
+            if (_battleEndedOnce) return;              //  중복 가드
+            _battleEndedOnce = true;                   //  가드
             Debug.Log("[Battle] 패배...");
 
             if (Shared.PuzzleManager.IsPuzzleComplete)
@@ -1034,21 +1034,44 @@ public class BattleManager : MonoBehaviour
         if (acting == null || acting.team != Team.Player) return;
         if (state == BattleState.Resolving) return;
 
-        Debug.Log("이스케이프 버튼 클릭 실행됨");
+        // 2) 성공 확률 계산 = (해당 유닛 AGI) / (생존한 적군 전체 AGI 합)
+        var aliveEnemies = FindObjectsOfType<BattleUnit>()
+            .Where(u => u.team == Team.Enemy && !u.IsDead)
+            .ToList();
+        float enemyAgiSum = Mathf.Max(0.0001f, aliveEnemies.Sum(u => u.EffectiveAGI));
+        float successChance01 = Mathf.Clamp01(acting.EffectiveAGI / enemyAgiSum);
+
+        // 퍼센트 변환
+        int percent = Mathf.RoundToInt(successChance01 * 100f);
+
         // 공통 확인 팝업
         string unitName = GetUnitLabel(acting);
-        string safeName = unitName.Replace("<", "&lt;").Replace(">", "&gt;"); // 간단 이스케이프
-        string msg = $"<color=#C60004>{safeName}</color> 유닛을 전투에서 제외합니다. 진행할까요?";
-        bool ok = await PopupManager.Instance.ConfirmAsync(msg, "퇴각", "취소");
-        if (!ok) return;
+        string safeName = unitName.Replace("<", "&lt;").Replace(">", "&gt;");
+        string msg = $"<color=#C60004>{safeName}</color> 유닛을 전투에서 제외합니다. 진행할까요?\n" + 
+                     $"(탈출 성공 확률: {percent}%)";
 
-        Debug.Log("이스케이프 팝업창 열림");
+        bool ok = await PopupManager.Instance.ConfirmRetreatAsync(msg, successChance01);
+        if (!ok) return;    // 사용자가 취소
+        // 최종 실행: 성공/실패 롤
+        bool success = (Random.value < successChance01);
 
-        // 진행 중이던 선택/표시 정리 및 퇴각 처리
+        if (success)
+        {
+            // 성공 메시지 → 곧바로 퇴각 처리
+            await PopupManager.Instance.ConfirmAsync("탈출에 성공했습니다.", "확인", ""); // 확인만
+            RetreatCurrentUnit(acting); // 기존 퇴각 함수 재사용
+        }
+        else
+        {
+            // 실패 메시지 → 행동 없이 '턴만 종료'
+            await PopupManager.Instance.ConfirmAsync("탈출에 실패했습니다.", "확인", "");
+            EndPlayerTurn(); // 플레이어 턴 종료만 수행
+        }
+
+        // 진행 중이던 선택/표시 정리
         CancelCurrentAction();
         ClearAllPreviews();
         ClearTargetSelection();
-        RetreatCurrentUnit(acting);
     }
 
     private string GetUnitLabel(BattleUnit u)
@@ -1061,6 +1084,7 @@ public class BattleManager : MonoBehaviour
         return u.name;
     }
 
+    //탈출 실행
     void RetreatCurrentUnit(BattleUnit u)
     {
         if (u == null) return;

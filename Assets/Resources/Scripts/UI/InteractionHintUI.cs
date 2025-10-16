@@ -27,7 +27,6 @@ public class InteractionHintUI : MonoBehaviour
 
     void Awake()
     {
-        //if (!cam) cam = Camera.main;
         if (!cam) cam = Shared.MapManager.playerPrefab.GetComponentInChildren<Camera>();
         rootRect = transform as RectTransform;
         rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;

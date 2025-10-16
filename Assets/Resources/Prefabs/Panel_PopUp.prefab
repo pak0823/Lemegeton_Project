@@ -113,8 +113,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 80}
-  m_SizeDelta: {x: 420, y: 60}
+  m_AnchoredPosition: {x: 0, y: 51}
+  m_SizeDelta: {x: 420, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &6874530820582573303
 CanvasRenderer:
@@ -157,7 +157,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\uB3C4\uC8FC\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?"
+  m_Text: 
 --- !u!1 &1597777086409489483
 GameObject:
   m_ObjectHideFlags: 0
@@ -290,7 +290,7 @@ GameObject:
   - component: {fileID: 3320520356691186987}
   - component: {fileID: 7249641204846591014}
   - component: {fileID: 8298772313753574256}
-  - component: {fileID: 7075867400600673477}
+  - component: {fileID: 8601217445365043479}
   m_Layer: 5
   m_Name: Panel_PopUp
   m_TagString: Untagged
@@ -356,7 +356,7 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &7075867400600673477
+--- !u!114 &8601217445365043479
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -365,16 +365,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 1658208510496344206}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1d82b3720c24801438f00a4e81cb408a, type: 3}
+  m_Script: {fileID: 11500000, guid: 1b512a3f64624764cabfe964054aca59, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  canvasGroup: {fileID: 2093016561466205674}
   messageText: {fileID: 1620721661082100176}
-  okLabel: {fileID: 3687288606768479304}
-  cancelLabel: {fileID: 383852610592646900}
   btnOk: {fileID: 5129942995444199206}
   btnCancel: {fileID: 3759134888295909397}
-  window: {fileID: 5297479647418120109}
+  focusOk: {fileID: 5742377130069896653}
+  focusCancel: {fileID: 9073755768744108379}
+  leftMove_Key: 97
+  rightMove_Key: 100
+  current_Key: 101
+  cancel_Key: 113
+  cancelClose_Key: 27
 --- !u!1 &2357670241433113562
 GameObject:
   m_ObjectHideFlags: 0

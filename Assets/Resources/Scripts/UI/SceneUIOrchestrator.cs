@@ -61,14 +61,10 @@ namespace Project.UI
                 var mgr = UiModalManager.Instance;
                 if (mgr != null) mgr.OnEscape(optionsMenu);
                 else BroadcastMessage("OnPauseKeyPressed", SendMessageOptions.DontRequireReceiver); // Æú¹é
-
-                //SendMessage("OnPauseKeyPressed", SendMessageOptions.DontRequireReceiver);
             }
         }
 
-        /// <summary>
-        /// Public API to replace profile at runtime (e.g., right after scene load).
-        /// </summary>
+        // Public API to replace profile at runtime (e.g., right after scene load).
         public void SetProfile(SceneUIProfile newProfile, bool applyImmediately = true)
         {
             profile = newProfile;
@@ -76,9 +72,7 @@ namespace Project.UI
                 ApplyProfile();
         }
 
-        /// <summary>
-        /// Apply the currently assigned profile to all registered modules.
-        /// </summary>
+        // Apply the currently assigned profile to all registered modules.
         public void ApplyProfile()
         {
             if (profile == null)
@@ -87,7 +81,6 @@ namespace Project.UI
                 return;
             }
 
-            // HudController prefers Show/Hide to preserve CanvasGroup alpha & interactivity rules in your project.
             if (hud)
             {
                 if (profile.showHud) hud.Show();
