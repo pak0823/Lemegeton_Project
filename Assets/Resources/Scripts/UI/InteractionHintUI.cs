@@ -51,22 +51,22 @@ public class InteractionHintUI : MonoBehaviour
 
     public void BindFollow(Transform t) => followTarget = t;
 
-    public void ShowSurvey(string keyText)
+    public void ShowSurvey()
     {
-        if (surveyLabel) surveyLabel.text = keyText;
+        if (surveyLabel) surveyLabel.text = "조사";
         if (surveyRoot) surveyRoot.SetActive(true);
         ShowRoot();
     }
-    public void ShowCommunication(string keyText)
+    public void ShowCommunication()
     {
-        if (commLabel) commLabel.text = keyText;
+        if (commLabel) commLabel.text = "소통";
         if (commRoot) commRoot.SetActive(true);
         ShowRoot();
     }
-    public void ShowBoth(string surveyKeyText, string commKeyText)
+    public void ShowBoth()
     {
-        ShowSurvey(surveyKeyText);
-        ShowCommunication(commKeyText);
+        ShowSurvey();
+        ShowCommunication();
     }
     public void HideSurvey() { if (surveyRoot) surveyRoot.SetActive(false); TryHideRoot(); }
     public void HideCommunication() { if (commRoot) commRoot.SetActive(false); TryHideRoot(); }
@@ -87,15 +87,5 @@ public class InteractionHintUI : MonoBehaviour
         if (!group) return;
         bool any = (surveyRoot && surveyRoot.activeSelf) || (commRoot && commRoot.activeSelf);
         if (!any) HideAll();
-    }
-
-    // 키코드 → 표시용 문자열
-    public static string KeyCodeToLabel(KeyCode kc)
-    {
-        // 알파뉴메릭/펑션키 등 간단 매핑
-        string s = kc.ToString();
-        if (s.StartsWith("Alpha")) s = s.Substring(5);      // Alpha1 → 1
-        else if (s.StartsWith("Keypad")) s = "Num " + s.Substring(6); // Keypad1 → Num 1
-        return s;
     }
 }

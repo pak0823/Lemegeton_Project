@@ -7,12 +7,19 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class UIArrowNavigator : MonoBehaviour
 {
-    [Header("Buttons in order (좌->우)")]
+    public enum NavAxis { Horizontal, Vertical }
+
+    [Header("Buttons in order")]
     [SerializeField] private List<Button> buttons = new List<Button>();
+
+    [Header("Navigation Axis")]
+    [SerializeField] private NavAxis navAxis = NavAxis.Horizontal; // 패널별로 설정
 
     [Header("Keys")]
     private KeyCode UpKey = KeyCode.W;
     private KeyCode DownKey = KeyCode.S;
+    private KeyCode LeftKey = KeyCode.A;
+    private KeyCode RightKey = KeyCode.D;
     private KeyCode confirmKey = KeyCode.E;  // 확정키
 
     [Header("Behavior")]
@@ -34,10 +41,6 @@ public class UIArrowNavigator : MonoBehaviour
     [SerializeField] private bool lockWhileTargeting = true; // 전투가 타겟팅/프리뷰 상태면 잠금
     [SerializeField] private BattleManager battle;           // (SkillPanel 쪽만) 인스펙터에 할당
     private bool navLocked = false;
-
-    // 외부에서 제어할 수 있도록 메서드 노출
-    //public void LockNavigation() { navLocked = true; }
-    //public void UnlockNavigation() { navLocked = false; }
 
     private int index = 0;
     private readonly List<GameObject> highlightCache = new List<GameObject>();
@@ -70,49 +73,48 @@ public class UIArrowNavigator : MonoBehaviour
         if (!gameObject.activeInHierarchy) return;
         if (!IsInteractableByCanvasGroup(this.gameObject)) return;
 
-        // 전투 상태로 잠금 (예: 스킬 선택 후 범위 표시/타겟팅 진입)
+        // 스킬 타겟팅 중 잠금(스킬 패널일 때 유효)
         if (lockWhileTargeting && battle != null)
         {
-            if(battle.IsTargeting)
-            {
-                navLocked = true;
-            }
-            else
-            {
-                // 타깃팅이 끝났다면(= 취소/확정 이후 상태 복귀) 잠금 해제
-                if (navLocked)
-                {
-                    navLocked = false;
-                    UpdateHighlight(); // 하이라이트 한번 갱신(선택 상태 표시 복구)
-                }
-            }
+            if(battle.IsTargeting) navLocked = true;
+            else if (navLocked) { navLocked = false; UpdateHighlight(); }// 타깃팅이 끝났다면(= 취소/확정 이후 상태 복귀) 잠금 해제
         }
 
         // 잠금 상태에서는 '마우스 외부 선택 추적'과 '좌/우/확정' 모두 무시
-        if (navLocked)
-        {
-            // 하이라이트는 현재 선택에 그대로 고정
-            return;
-        }
+        if (navLocked) return;
 
         bool handledKey = false;
 
-        // 키보드 네비게이션
-        if (Input.GetKeyDown(DownKey))
+        // 이동 키 분기: Panel_Action(Horizontal) / Panel_Skill(Vertical)
+        if (navAxis == NavAxis.Horizontal)
         {
-            index = NextIndex(+1);
-            Focus();
-            UpdateHighlight();
-            handledKey = true;
+            if (Input.GetKeyDown(RightKey))
+            {
+                index = NextIndex(+1);
+                Focus(); UpdateHighlight(); handledKey = true;
+            }
+            else if (Input.GetKeyDown(LeftKey))
+            {
+                index = NextIndex(-1);
+                Focus(); UpdateHighlight(); handledKey = true;
+            }
         }
-        else if (Input.GetKeyDown(UpKey))
+        else // Vertical
         {
-            index = NextIndex(-1);
-            Focus();
-            UpdateHighlight();
-            handledKey = true;
+            if (Input.GetKeyDown(DownKey))
+            {
+                index = NextIndex(+1);
+                Focus(); UpdateHighlight(); handledKey = true;
+            }
+            else if (Input.GetKeyDown(UpKey))
+            {
+                index = NextIndex(-1);
+                Focus(); UpdateHighlight(); handledKey = true;
+            }
         }
-        else if (Input.GetKeyDown(confirmKey))
+
+        // 확정(E)  현재 버튼 onClick (취소는 BattleInput에서 처리 계속)
+        if (Input.GetKeyDown(confirmKey))
         {
             var b = GetButton(index);
             // 확정 직후 잠금

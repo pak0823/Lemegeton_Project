@@ -20,11 +20,57 @@ public class ExplorationTimerUi : MonoBehaviour
     public Text objectGaugeText;
     public Text perceiveGaugeText;
 
+    // 런타임 메모리 (씬 간 유지용)
+    static class Memory
+    {
+        public static bool has;
+        public static int stage;
+        public static float timeLeft;
+        public static bool finished;
+    }
+
+    // 외부에서 호출할 저장 API
+    public void SaveRuntime()
+    {
+        Memory.has = true;
+        Memory.stage = currentStage;
+        Memory.timeLeft = Mathf.Max(0f, timeLeft);
+        Memory.finished = isFinished;
+    }
+
+    // 내부에서 호출할 복원 API
+    void TryRestore()
+    {
+        if (!Memory.has) return;
+
+        currentStage = Mathf.Clamp(Memory.stage, 0, fibonacciMinutes.Count - 1);
+        timeLeft = Mathf.Max(0f, Memory.timeLeft);
+        isFinished = Memory.finished;
+        isRunning = !isFinished && timeLeft > 0f;
+
+        // 1회 사용 후 클리어
+        Memory.has = false;
+
+        if (endMessageText) endMessageText.gameObject.SetActive(false);
+
+        // UI 갱신
+        if (isRunning) UpdateTimerUI();
+    }
+
+
     private void OnEnable()
     {
-        currentStage = 0;
-        isFinished = false;
-        StartNextStage();
+        // 저장본이 있으면 복원, 없으면 초기화
+        if (Memory.has)
+        {
+            TryRestore();
+        }
+        else
+        {
+            currentStage = 0;
+            isFinished = false;
+            StartNextStage();
+        }
     }
 
     private void OnDisable()
@@ -35,10 +81,15 @@ public class ExplorationTimerUi : MonoBehaviour
 
     public void OnUiShown()
     {
-        // 오브젝트가 켜진 타이밍에 1회 초기화
-        currentStage = 0;
-        isFinished = false;
-        StartNextStage();
+        // UI가 “처음 켜질 때”만 초기화/복원
+        if (Memory.has)
+            TryRestore();
+        else
+        {
+            currentStage = 0;
+            isFinished = false;
+            StartNextStage();
+        }
     }
     public void OnUiHidden()
     {

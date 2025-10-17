@@ -207,6 +207,12 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
         if (stageNo < 0)
             Debug.LogWarning("[ObjectGaugeManager] stage number not set. (currentStageData or stageNumberOverride)");
 
+        var timer = FindObjectOfType<ExplorationTimerUi>(true);
+        if (timer != null)
+        {
+            timer.SaveRuntime();
+            Debug.Log("[ExplorationTimerUi] runtime saved before battle.");
+        }
         StageRuntimeContext.Instance.SetStageNumber(stageNo);
         StageRuntimeContext.Instance.SetBattleContext(BattleContext.TrapEncounter);
         Shared.SceneTransitionManager.FadeToScene("BattleScene");

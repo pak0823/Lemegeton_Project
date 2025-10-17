@@ -33,8 +33,16 @@ public class PuzzleManager : MonoBehaviour
         InitGoals();
         IsPuzzleComplete = false;
 
+        var timer = FindObjectOfType<ExplorationTimerUi>(true);
+        if (timer != null)
+        {
+            timer.OnUiHidden();
+        }
+
         if (IsPuzzleActive)
             resetBtn?.gameObject.SetActive(true);
+
+
     }
 
     void InitBoxes()
