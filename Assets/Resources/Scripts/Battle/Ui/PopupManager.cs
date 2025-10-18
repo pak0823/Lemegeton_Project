@@ -9,12 +9,14 @@ using static UnityEditor.Experimental.GraphView.GraphView;
 public class PopupManager : MonoBehaviour
 {
     public static PopupManager Instance { get; private set; }
-    [SerializeField] private RetreatConfirmPopup retreatPrefab;
-
     [SerializeField] private Canvas popupCanvas; // 씬의 공용 Canvas를 드래그해둘 수 있음
     [SerializeField] private RectTransform popupChildParent; // Canvas 아래 전용 레이어(자식)에 붙일 경우 지정
+    [SerializeField] private RetreatConfirmPopup retreatPrefab;
     [SerializeField] private ConfirmationPopup confirmationPrefab;
 
+
+    public static int ModalDepth { get; private set; } // 모달 중첩
+    public static bool IsModalOpen => ModalDepth > 0;   // 모달 여부
     readonly Queue<(string msg,string ok, string cancel,
                     TaskCompletionSource<bool> tcs)> queue
         = new Queue<(string, string, string, TaskCompletionSource<bool>)>();
@@ -124,8 +126,10 @@ public class PopupManager : MonoBehaviour
             }
 
             bool showCancel = !string.IsNullOrEmpty(cancel);  // cancel이 비면 OK-only
-            var task = _active.Show(msg, ok, cancel, showCancel);
-            bool result = await task; // 팝업 종료까지 대기
+            // 모달 진입/해제
+            ModalDepth++;
+            bool result = await _active.Show(msg, ok, cancel, showCancel); // 팝업 종료까지 대기
+            ModalDepth--;
             tcs.TrySetResult(result);
         }
 
@@ -143,7 +147,10 @@ public class PopupManager : MonoBehaviour
         (inst.transform as RectTransform).SetAsLastSibling();
         if (!inst.gameObject.activeInHierarchy) inst.gameObject.SetActive(true);
 
+        // 모달 진입/해제
+        ModalDepth++;
         bool ok = await inst.ShowAsync(message, successChance01);
+        ModalDepth--;
         Destroy(inst.gameObject);
         return ok;
     }

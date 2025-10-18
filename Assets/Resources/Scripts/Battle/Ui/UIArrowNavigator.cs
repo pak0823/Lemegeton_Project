@@ -72,6 +72,7 @@ public class UIArrowNavigator : MonoBehaviour
         // 패널이 꺼져 있거나, HUD CanvasGroup이 꺼져 있으면 동작 안함
         if (!gameObject.activeInHierarchy) return;
         if (!IsInteractableByCanvasGroup(this.gameObject)) return;
+        if (PopupManager.IsModalOpen) return;
 
         // 스킬 타겟팅 중 잠금(스킬 패널일 때 유효)
         if (lockWhileTargeting && battle != null)
@@ -129,10 +130,12 @@ public class UIArrowNavigator : MonoBehaviour
             var now = EventSystem.current.currentSelectedGameObject;
             if (now != lastSelectedGO && now != null)
             {
-                int extIdx = IndexOfButton(now);
+                // 클릭된 오브젝트가 버튼의 자식이어도 부모 쪽으로 올라가며 Button을 찾는다
+                int extIdx = IndexOfButtonDeep(now);
                 if (extIdx >= 0)
                 {
                     index = extIdx;
+                    Focus();            // (선택) EventSystem에도 반영하고 싶으면 유지
                     UpdateHighlight();
                 }
             }
@@ -211,6 +214,15 @@ public class UIArrowNavigator : MonoBehaviour
         else
             b.Select();
     }
+    public void SetExternalFocus(Button b, bool alsoSetEventSystem = false)
+    {
+        if (!b) return;
+        int i = IndexOfButtonDeep(b.gameObject);
+        if (i < 0) return;
+        index = i;
+        if (alsoSetEventSystem) Focus();
+        UpdateHighlight();
+    }
 
     // === Highlight ===
 
@@ -272,13 +284,6 @@ public class UIArrowNavigator : MonoBehaviour
         return b != null && b.gameObject.activeInHierarchy && b.interactable;
     }
 
-    int IndexOfButton(GameObject go)
-    {
-        for (int i = 0; i < buttons.Count; i++)
-            if (buttons[i] && buttons[i].gameObject == go) return i;
-        return -1;
-    }
-
     static bool IsInteractableByCanvasGroup(GameObject go)
     {
         var groups = go.GetComponentsInParent<CanvasGroup>(true);
@@ -289,5 +294,22 @@ public class UIArrowNavigator : MonoBehaviour
                 return false;
         }
         return true;
+    }
+    int IndexOfButtonDeep(GameObject go)
+    {
+        if (!go) return -1;
+        Transform t = go.transform;
+        while (t != null)
+        {
+            var btn = t.GetComponent<Button>();
+            if (btn != null)
+            {
+                for (int i = 0; i < buttons.Count; i++)
+                    if (buttons[i] == btn) return i;
+                return -1; // 버튼이지만 내 리스트가 아닐 때
+            }
+            t = t.parent;
+        }
+        return -1;
     }
 }

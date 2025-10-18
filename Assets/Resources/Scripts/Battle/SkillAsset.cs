@@ -25,9 +25,10 @@ public struct SkillRuntime
 
 public abstract class SkillAsset : ScriptableObject
 {
-    [Header("Meta")]
+    [Header("Display")]
     public string displayName;
-    public Sprite icon;
+    public Sprite descriptionImage; //스킬 범위 설명 이미지(패널에 표시)
+    [TextArea] public string description;   // 스킬 설명(패널에 표시)
 
     [Header("Damage (default)")]
     public DamageSchool school = DamageSchool.Physical;

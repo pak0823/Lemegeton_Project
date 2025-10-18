@@ -54,15 +54,11 @@ public class BattleInput : MonoBehaviour
 
     void Update()
     {
-        // 맵 준비 전이면 입력 무시
-        //if (provider == null || provider.PlayerFloor == null || provider.EnemyFloor == null) return;
-
+        if (HandleHudToggleEarly()) return; //HUD 상태 관리
+        if (GamePause.IsPaused || PopupManager.IsModalOpen) return;// 모달/일시정지 중에는 어떤 입력도 처리하지 않음
         if (!EnsureProviders()) return; // 맵/프로바이더 준비 보장
 
         HandleGameSpeedToggle();
-        if (HandleHudToggleEarly()) return; //HUD 상태 관리
-        if (GamePause.IsPaused) return;
-
         HandleMouseInput();
         HandleActionShortcuts();
     }
@@ -105,11 +101,11 @@ public class BattleInput : MonoBehaviour
         EnsureProviders();    // 즉시 1회 재바인딩 시도
     }
 
-#region Input Handlers
-void HandleGameSpeedToggle()
+    #region Input Handlers
+    void HandleGameSpeedToggle()
     {
-        //if (optionsMenuUI != null && optionsMenuUI.isShow) return; // 옵션창이 켜져 있으면 입력 무시
-
+        // 모달 중이면 속도 토글도 비활성
+        if (PopupManager.IsModalOpen) return;
         for (int i = 0; i < speedBinds.Length; i++)
         {
             var (key, idx) = speedBinds[i];
@@ -123,6 +119,7 @@ void HandleGameSpeedToggle()
 
     void HandleMouseInput()
     {
+        if (PopupManager.IsModalOpen) return;
         if (!Input.GetMouseButtonDown(0)) return;
 
         hudCtrl?.Show();    //HUD가 꺼진 상태에서 마우스 클릭이 확인될 시 켜짐
@@ -158,6 +155,8 @@ void HandleGameSpeedToggle()
 
     void HandleActionShortcuts()
     {
+        if (PopupManager.IsModalOpen) return;
+
         // === 스킬 관련 입력 공통 게이트 ===
         bool canSelectSkillNow = (battle != null
             && battle.IsPlayerTurn
@@ -301,7 +300,7 @@ void HandleGameSpeedToggle()
 
     bool HandleHudToggleEarly()
     {
-        //if (optionsMenuUI != null && optionsMenuUI.isShow) return false; // 옵션창이 켜져 있으면 입력 무시
+        if (PopupManager.IsModalOpen) return true;
 
         // Tab 키로 토글
         if (Input.GetKeyDown(battle_HudKey))

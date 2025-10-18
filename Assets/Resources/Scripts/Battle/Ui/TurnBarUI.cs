@@ -1,10 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.UI;
-using static UnityEditor.Progress;
-using static UnityEngine.Rendering.VirtualTexturing.Debugging;
 
 public class TurnBarUI : MonoBehaviour
 {
@@ -12,6 +9,9 @@ public class TurnBarUI : MonoBehaviour
     public RectTransform barImage;          // 바(이미지)의 RectTransform
     public GameObject unitIconPrefab;  // 아이콘 프리팹(Anchor=Left, Pivot=Center 권장)
     [SerializeField] private Text wavelabel;    //wave 텍스트
+    [SerializeField] private CanvasGroup waveTransitionPanel; // 전환 안내 패널(투명도/입력제어용)
+    [SerializeField] private Text waveTransitionText;         // 전환 안내 문구 텍스트
+    [SerializeField] private float transitionDuration = 1.5f; // 표시 시간(초, 실시간)
 
     [Tooltip("플레이어/적 아이콘 Y 오프셋")]
     public float playerRowY = 20f;
@@ -23,8 +23,9 @@ public class TurnBarUI : MonoBehaviour
     [Tooltip("체크 시 아이콘 간격 보정 없이 '겹치도록' 배치합니다.")]
     public bool allowOverlap = false;
 
-    public float barWidth;      // 현재 바 너비
+    public float barWidth;  // 현재 바 너비
     Dictionary<BattleUnit, Image> unitIcons = new();
+    bool uiPaused = false;  // 전환 중 UI 정지
 
     BattleManager battle;
 
@@ -50,6 +51,7 @@ public class TurnBarUI : MonoBehaviour
             };
 
             battle.OnATBReset += HandleATBResetToZero;
+            battle.OnWaveTransition += ShowWaveTransition;  // 다음 웨이브 전환 안내 구독
         }
     }
     void OnDestroy()
@@ -58,6 +60,7 @@ public class TurnBarUI : MonoBehaviour
         battle.OnATBChanged -= OnATBChanged_RelayoutAll;
         battle.OnWaveChanged -= WaveHandle;
         battle.OnATBReset -= HandleATBResetToZero;
+        battle.OnWaveTransition -= ShowWaveTransition;
     }
 
     void InitializeIcons()
@@ -115,6 +118,8 @@ public class TurnBarUI : MonoBehaviour
 
     void RelayoutAll()
     {
+        if (barImage == null || unitIcons.Count == 0) return;
+        if (uiPaused) return; // 전환 중엔 배치 정지(현재 위치 고정)
         if (barImage == null || unitIcons.Count == 0) return;
 
         // 두 줄로 분리
@@ -261,6 +266,42 @@ public class TurnBarUI : MonoBehaviour
     {
         if (!wavelabel) return;
         wavelabel.text = $"{cur}/{total}";
+    }
+
+    // 전환 안내 표시
+    void ShowWaveTransition(int next, int total)
+    {
+        if (waveTransitionPanel == null) { uiPaused = true; StartCoroutine(Co_AutoUnpause()); return; }
+        StopCoroutineSafe("Co_ShowWaveTransition");
+        StartCoroutine(Co_ShowWaveTransition(next, total));
+    }
+
+    System.Collections.IEnumerator Co_ShowWaveTransition(int next, int total)
+    {
+        uiPaused = true;
+        if (waveTransitionText)
+            waveTransitionText.text = $"다음 웨이브가 진행됩니다.";
+        waveTransitionPanel.gameObject.SetActive(true);
+        waveTransitionPanel.alpha = 1f;
+        waveTransitionPanel.interactable = false;
+        waveTransitionPanel.blocksRaycasts = false;
+        yield return new WaitForSecondsRealtime(Mathf.Max(0f, transitionDuration));
+        waveTransitionPanel.alpha = 0f;
+        waveTransitionPanel.gameObject.SetActive(false);
+        uiPaused = false;
+    }
+
+    // 패널이 없을 때도 일정 시간 후 자동 해제
+    System.Collections.IEnumerator Co_AutoUnpause()
+    {
+        yield return new WaitForSecondsRealtime(Mathf.Max(0f, transitionDuration));
+        uiPaused = false;
+    }
+
+    void StopCoroutineSafe(string name)
+    {
+        var r = GetType().GetMethod(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        // 이름 기반 Stop은 비권장이라, 여기선 호출 전 StopAllCoroutines로 간단히 처리하거나 필요 없으면 생략해도 됩니다.
     }
 
     struct Item

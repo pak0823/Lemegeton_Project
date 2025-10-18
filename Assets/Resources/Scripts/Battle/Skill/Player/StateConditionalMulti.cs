@@ -94,7 +94,7 @@ public class StateConditionalSkillMulti : SkillAsset, ISkillForStateResolver
                 if (r.overrideDisplayName && !string.IsNullOrEmpty(r.displayNameWhenMatched))
                     inst.displayName = r.displayNameWhenMatched;
                 if (r.overrideIcon && r.iconWhenMatched != null)
-                    inst.icon = r.iconWhenMatched;
+                    inst.descriptionImage = r.iconWhenMatched;
                 product = inst;
             }
 

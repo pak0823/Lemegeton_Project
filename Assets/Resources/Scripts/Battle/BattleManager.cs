@@ -53,6 +53,10 @@ public class BattleManager : MonoBehaviour
     bool isWaveTransitioning = false;
     public event System.Action<int, int, string> OnWaveChanged; // (cur,total,label)
     public event System.Action OnWaveStarted;   // 웨이브 시작 알림
+    public event System.Action<int, int> OnWaveTransition; // 다음 웨이브 전환 안내 (next,total)
+    [SerializeField] float waveTransitionDelay = 1.5f;    // 전환 안내 표시 시간(초, 실시간)
+
+
     private bool _battleEndedOnce = false; // 중복 승리 처리 방지
 
 
@@ -408,9 +412,21 @@ public class BattleManager : MonoBehaviour
     }
     IEnumerator Co_NextWave()
     {
-        // 잠깐 연출/페이드 등
-        yield return new WaitForSeconds(0.75f);
+        // 다음 웨이브 인덱스/표시용 번호 계산
         int nextIndex = currentWaveIndex + 1;
+
+        // 유효한 다음 웨이브가 있으면 TurnBar 등에 전환 알림 → 잠깐 대기
+        if (waveSet != null && waveSet.waves != null && nextIndex >= 0 && nextIndex < TotalWaves)
+        {
+            OnWaveTransition?.Invoke(nextIndex + 1, TotalWaves); // UI에 “다음 웨이브 진행” 표시
+            yield return new WaitForSecondsRealtime(Mathf.Max(0f, waveTransitionDelay));
+        }
+        else
+        {
+            // 기존 폴백 대기(필요 시)
+            yield return null;
+        }
+
         if (waveSet == null || waveSet.waves == null || nextIndex < 0 || nextIndex >= TotalWaves)
         {
             isWaveTransitioning = false;
