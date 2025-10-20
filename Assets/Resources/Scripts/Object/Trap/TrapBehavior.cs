@@ -85,15 +85,21 @@ public class TrapBehavior : MonoBehaviour
                 case 0:
                     current.ApplyDebuff(debuffData);
                     TrapPersist?.MarkTriggered();
+                    Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
                     break;
                 case 1: Shared.ObjectGaugeManager.RegisterTrapTriggeredByPlayer(); break;
-                case 2: /* 20% 케이스 로직 */ break;
+                case 2:
+                    Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
+                    break;
                 case 3:
                     current.ApplyDebuff(debuffData);
                     TrapPersist?.MarkTriggered();
+                    Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
                     break;
                 default: /* 프리셋 확장 대비 */ break;
             }
+
+            Debug.Log("idx: " + idx);
 
             var text = triggerDescriptions.entries[idx].text;
             if (!string.IsNullOrWhiteSpace(text))

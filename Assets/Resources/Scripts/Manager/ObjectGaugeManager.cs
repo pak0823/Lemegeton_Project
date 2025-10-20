@@ -1,10 +1,8 @@
 using System.Collections;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using static UnityEditor.PlayerSettings;
 
 // 맵 내 전체 상자 개수 대비
 // 열린 상자 + 발동된 함정 수를 게이지로 계산

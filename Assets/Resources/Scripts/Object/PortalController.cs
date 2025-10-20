@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 
 public class PortalController : MonoBehaviour
@@ -38,7 +37,7 @@ public class PortalController : MonoBehaviour
 
     void Update()
     {
-        if (playerInRange && Input.GetKeyDown(KeyCode.E))
+        if (playerInRange && Input.GetKeyDown(KeyCode.F))
         {
             // 전투씬으로 이동하는 포탈이라면 컨텍스트를 먼저 세팅
             if (setBattleContextOnUse && targetScene == "BattleScene")

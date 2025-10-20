@@ -89,8 +89,21 @@ namespace Project.UI
         {
             EnsureOrder();
             if (_order.Length == 0) return;
-            _index = (_index + delta + _order.Length) % _order.Length;
-            if (!HasAnySaveData() && _order[_index] == continueButton) _index = (_index + delta + _order.Length) % _order.Length;
+
+            int last = _order.Length - 1;
+            // 기본 이동: 경계 안으로 클램프 (래핑 금지)
+            int next = Mathf.Clamp(_index + delta, 0, last);
+
+            // 저장 없으면 '계속하기' 스킵 (경계 밖으로 벗어나지 않게 한 번만 보정)
+            if (!HasAnySaveData() && _order[next] == continueButton)
+            {
+                if (delta > 0) next = Mathf.Min(next + 1, last);   // 아래로 이동 시 한 칸 더
+                else next = Mathf.Max(next - 1, 0);      // 위로 이동 시 한 칸 위
+            }
+
+            // 최종 반영(이동 불가 상황이면 제자리)
+            _index = next;
+
             RefreshArrow();
         }
         private void Activate()
@@ -140,13 +153,26 @@ namespace Project.UI
             // 현재 선택이 '계속하기'인데 비활성화되었다면 선택을 유효 항목으로 옮김
             if (!hasSave && _order != null && _order.Length > 0 && _order[_index] == continueButton)
             {
-                Move(+1); // 아래로 한 칸 이동(필요 시 위로(-1)로 변경)
+                // 래핑 금지 모드에 맞춰 안전하게 옮김
+                int last = _order.Length - 1;
+                // 아래로 먼저 시도
+                int down = Mathf.Clamp(_index + 1, 0, last);
+                if (_order[down] == continueButton) down = Mathf.Clamp(down + 1, 0, last);
+                // 위로 대안
+                int up = Mathf.Clamp(_index - 1, 0, last);
+                                if (_order[up] == continueButton) up = Mathf.Clamp(up - 1, 0, last);
+                
+                                // 가능한 쪽으로 이동, 둘 다 불가하면 제자리
+                                if (down != _index && _order[down] != continueButton) _index = down;
+                                else if (up != _index && _order[up] != continueButton) _index = up;
+                                // 화살표 갱신
+                RefreshArrow();
             }
         }
 
         private void EnsureOrder()
         {
-            if (_order != null && _order.Length == 3) return;
+            if (_order != null && _order.Length == 4) return;
             _order = new[]
             {
                 startButton,     // 0: 처음부터

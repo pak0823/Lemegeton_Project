@@ -265,8 +265,16 @@ public class PlayerMovement : MonoBehaviour
                 return;
             }
 
+            if (hit.TryGetComponent<PortalController>(out var potal))
+            {
+                Shared.interactionHintUI?.ShowBoth();
+                return;
+            }
+
+            // Fallback으로(푸시/상자 외) 힌트 대상 탐색
             HandleInteractionHintsFallback();
-            // 여기까지 오면 상호작용 대상 없음 → 힌트 숨김
+
+            // 대상이 전혀 없을 때만 힌트 숨김
             Shared.interactionHintUI?.HideAll();
         }
     }

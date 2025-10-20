@@ -8,6 +8,7 @@ public class ExplorationTimerUi : MonoBehaviour
 {
     public Text timerText;
     public Text endMessageText;
+    public Image timerImage;
 
     private List<int> fibonacciMinutes = new List<int> { 5, 3, 2, 1 };
     private int currentStage = 0;
@@ -15,6 +16,11 @@ public class ExplorationTimerUi : MonoBehaviour
     private float timeLeft = 0f;
     private bool isRunning = false;
     private bool isFinished = false;
+
+    [Header("Timer Warning")]
+    [SerializeField] private float warningThresholdSeconds = 60f;     // 60초 이하 경고
+    [SerializeField] private Color warningColor = new Color(0.86f, 0.1f, 0.1f); // 붉은색
+    private Color _defaultTimerColor; // 원래 글자색을 기억
 
     // (임시) 인지 게이지 표기. 주석대로 공통 HUD로 이전 가능.
     public Text objectGaugeText;
@@ -60,6 +66,9 @@ public class ExplorationTimerUi : MonoBehaviour
 
     private void OnEnable()
     {
+        // 원래 타이머 색 기억
+        if (timerText) _defaultTimerColor = timerText.color;
+
         // 저장본이 있으면 복원, 없으면 초기화
         if (Memory.has)
         {
@@ -98,15 +107,21 @@ public class ExplorationTimerUi : MonoBehaviour
         if (timerText) timerText.gameObject.SetActive(false);
         if (objectGaugeText) objectGaugeText.gameObject.SetActive(false);
         if (perceiveGaugeText) perceiveGaugeText.gameObject.SetActive(false);
+        if (timerImage) timerImage.gameObject.SetActive(false);
     }
 
     private void Update()
     {
+        // 타이머/게이지 오브젝트 꺼져 있었다면 다시 켠다
+        if (timerText && !timerText.gameObject.activeSelf) timerText.gameObject.SetActive(true);
+        if (timerImage && !timerImage.gameObject.activeSelf) timerImage.gameObject.SetActive(true);
+
         if (!isRunning || isFinished)
         {
             if (timerText && timerText.gameObject.activeSelf)
             {
                 timerText.gameObject.SetActive(false);
+                if (timerImage) timerImage.gameObject.SetActive(false);
                 if (objectGaugeText) objectGaugeText.gameObject.SetActive(false);  // 임시용
                 if (perceiveGaugeText) perceiveGaugeText.gameObject.SetActive(false);  // 임시용
             }            
@@ -149,17 +164,23 @@ public class ExplorationTimerUi : MonoBehaviour
     void UpdateTimerUI()
     {
 
-        if(timeLeft > 60f)
+        if (timeLeft > warningThresholdSeconds)
         {
             int minutes = Mathf.FloorToInt(timeLeft / 60f);
             int seconds = Mathf.FloorToInt(timeLeft % 60f);
             timerText.text = $"{minutes:D2}:{seconds:D2}";
+
+            // 기본색 복원
+            if (timerText) timerText.color = _defaultTimerColor;
         }
         else
         {
             int seconds = Mathf.FloorToInt(timeLeft);
             int milliseconds = Mathf.FloorToInt((timeLeft - seconds) * 1000);
             timerText.text = $"{seconds:D2}:{milliseconds:D3}";
+
+            // 경고색 적용
+            if (timerText) timerText.color = warningColor;
         }
     }
 
