@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEngine.UIElements;
 
 public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, EndTurn }
 public enum BattleAction { Move, Attack }
@@ -101,6 +100,11 @@ public class BattleManager : MonoBehaviour
     [SerializeField] float jumpDuration = 0.08f;     // 시간 기반
     [SerializeField] float jumpArc = 0.15f;
 
+    public static void ClearStatic()
+    {
+        OnAnyUnitTurnStarted = null;
+    }
+
     //유닛 스킬 표시용
     public event System.Action<BattleUnit, string> OnUnitActionLabel; // (유닛, 라벨)
     public void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
@@ -137,9 +141,16 @@ public class BattleManager : MonoBehaviour
             if (provider != null) provider.OnMapsReady += Init;
         }
 
-        if (!initialized && provider != null && provider.PlayerFloor != null && provider.EnemyFloor != null)
+        if (!initialized)
         {
-            Init();
+            if (waveSet != null && waveSet.waves != null && waveSet.waves.Count > 0)
+            {
+                Init();
+            }
+            else if (provider != null && provider.PlayerFloor != null && provider.EnemyFloor != null)
+            {
+                Init();
+            }
         }
 
         StartCoroutine(Co_RebindBattleInputWhenMapsReady());
@@ -360,8 +371,40 @@ public class BattleManager : MonoBehaviour
                         );
         }
 
+        var localProvider = _spawnedEnemyLayout.GetComponentInChildren<BattleMapManager>(true);
+        Tilemap waveEnemyFloor = null;
+        Tilemap waveEnemyOverlay = null;
+        if (localProvider != null)
+        {
+            waveEnemyFloor = localProvider.EnemyFloor;
+        }
+        if (waveEnemyFloor == null)
+        {
+            // 폴백: 이름/태그 규칙 등으로 탐색 (프로젝트 규칙에 맞게 보강)
+            waveEnemyFloor = _spawnedEnemyLayout
+                .GetComponentsInChildren<Tilemap>(true)
+                .FirstOrDefault(t => t.name.IndexOf("Enemy", System.StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+        if (waveEnemyOverlay == null)
+        {
+            waveEnemyOverlay = _spawnedEnemyLayout
+                .GetComponentsInChildren<Tilemap>(true)
+                .FirstOrDefault(t => t.name.IndexOf("Overlay_Skill", System.StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+        if (waveEnemyFloor != null)
+        {
+            var mapMgr = Shared.battleMapManager as BattleMapManager ?? FindObjectOfType<BattleMapManager>(true);
+            mapMgr.UseEnemyFloor(waveEnemyFloor, waveEnemyOverlay);
+            provider = mapMgr; // 이 BattleManager가 쓰는 provider도 최신으로
+
+            Shared.battleInput?.RebindProviders(); // 입력쪽 provider 갱신(이미 존재하는 루틴)
+            Shared.battleGridManager?.RebindProvider();
+        }
+
         // 방금 스폰된 적 + 기존 플레이어 유닛까지 모두 다시 바인드/초기화
         RebindAllUnitsAndInitATB();
+
+        Debug.Log("[Battle] waveEnemyFloor: " + (waveEnemyFloor ? waveEnemyFloor.name : "NULL"));   //EnemyFloor가 비어있을 시 출력됨.
 
         OnWaveStarted?.Invoke();   //웨이브 시작 이벤트 발행
 
@@ -1534,10 +1577,23 @@ public class BattleManager : MonoBehaviour
 
 
     // 타겟팅 취소/종료 시 미리보기 지우기
+    Tilemap PickOverlayFor(Tilemap baseMap)
+    {
+        if (baseMap == (provider?.PlayerFloor)) return (provider as BattleMapManager)?.playerOverlay;
+        if (baseMap == (provider?.EnemyFloor)) return (provider as BattleMapManager)?.enemyOverlay;
+        return (provider as BattleMapManager)?.playerOverlay; // 폴백
+    }
+
     public void ShowMovePreview(Tilemap baseMap, IEnumerable<Vector3Int> cells)
-    => moveHighlighter?.ShowCells(baseMap, cells);
+    {
+        if (moveHighlighter != null) moveHighlighter.overlayMap = PickOverlayFor(baseMap);
+        moveHighlighter?.ShowCells(baseMap, cells);
+    }
     public void ShowSkillPreview(Tilemap baseMap, IEnumerable<Vector3Int> cells)
-        => skillHighlighter?.ShowCells(baseMap, cells);
+    {
+        if (skillHighlighter != null) skillHighlighter.overlayMap = PickOverlayFor(baseMap);
+        skillHighlighter?.ShowCells(baseMap, cells);
+    }
 
     public void ClearMovePreview()
         => moveHighlighter?.ClearTransient();

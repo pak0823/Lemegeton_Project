@@ -111,6 +111,10 @@ public class BattleGridManager : MonoBehaviour
               + Mathf.Abs(aRef.y - bRef.y)
               + Mathf.Abs((aRef.x + aRef.y) - (bRef.x + bRef.y))) / 2;
     }
+    public void RebindProvider()
+    {
+        provider = Shared.battleMapManager as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>(true);
+    }
 
     public void SetOccupied(Team t, Vector3Int cell, bool on)
     {

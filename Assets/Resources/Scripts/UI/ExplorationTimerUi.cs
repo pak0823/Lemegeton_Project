@@ -43,6 +43,14 @@ public class ExplorationTimerUi : MonoBehaviour
         Memory.timeLeft = Mathf.Max(0f, timeLeft);
         Memory.finished = isFinished;
     }
+    public static void ClearSavedRuntime()
+    {
+        // 씬 간 유지되는 정적 메모리 완전 초기화
+        Memory.has = false;
+        Memory.stage = 0;
+        Memory.timeLeft = 0f;
+        Memory.finished = false;
+    }
 
     // 내부에서 호출할 복원 API
     void TryRestore()

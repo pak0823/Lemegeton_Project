@@ -29,7 +29,14 @@ public class BattleMapManager : MonoBehaviour, IBattleMapProvider
     }
     void Start()
     {
-        OnMapsReady?.Invoke(); // ← 여기서 호출
+        if (playerFloor != null && enemyFloor != null)
+            OnMapsReady?.Invoke(); // 여기서 호출
+    }
+
+    public void UseEnemyFloor(Tilemap newEnemyFloor, Tilemap newEnemyOverlay = null)
+    {
+        enemyFloor = newEnemyFloor;
+        if (newEnemyOverlay != null) enemyOverlay = newEnemyOverlay;
     }
 
     Tilemap FindByName(string contains)

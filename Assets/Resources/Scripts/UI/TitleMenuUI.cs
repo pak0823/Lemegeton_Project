@@ -7,10 +7,10 @@ namespace Project.UI
     public class TitleMenuUI : MonoBehaviour, ISceneUiModule
     {
         [Header("Wiring")]
-        [SerializeField] private Button startButton;
-        [SerializeField] private Button continueButton;
-        [SerializeField] private Button optionButton;
-        [SerializeField] private Button exitButton;
+        [SerializeField] private Button continueButton; //계속하기
+        [SerializeField] private Button startButton;    //처음부터
+        [SerializeField] private Button optionButton;   //옵션
+        [SerializeField] private Button exitButton;     //종료
 
         [Header("Keyboard Navigation")]
         [SerializeField] private RectTransform arrow;          // 화살표 이미지(선택 표시용)
@@ -24,7 +24,7 @@ namespace Project.UI
 
         public OptionsMenuUI optionPanel;
 
-        private Button[] _order;   // 선택 순서: [처음부터, 계속하기, 설정, 종료하기]
+        private Button[] _order;   // 선택 순서: [계속하기, 처음부터, 설정, 종료하기]
         private int _index;         // 현재 선택 인덱스
         private bool _shown;        // 메뉴 표시 상태(라이프사이클)
 
@@ -35,8 +35,8 @@ namespace Project.UI
             _shown = true;
             EnsureOrder();
             var hasSave = HasAnySaveData();
-            UpdateContinueAvailability(hasSave);             // 초기 포커스: 저장 데이터 있으면 '계속하기(1)', 없으면 '처음부터(0)'
-            _index = (hasSave && continueButton && continueButton.interactable) ? 1 : 0;
+            UpdateContinueAvailability(hasSave);             // 초기 포커스: 저장 데이터 있으면 '계속하기(0)', 없으면 '처음부터(1)'
+            _index = (hasSave && continueButton && continueButton.interactable) ? 0 : 1;
             RefreshArrow();
         }
         public void OnUiHidden() 
@@ -47,6 +47,10 @@ namespace Project.UI
         }
         public void OnBtnStartGame()
         {
+            // 모든 데이터/상태 초기화
+            Project.GameResetter.ResetAll(deleteSaves: true);
+            //  └ 새 게임이지만 세이브는 지우고 싶지 않다면 false로
+
             Shared.SceneTransitionManager.FadeToScene("ExplorationScene");
             Debug.Log("인게임 씬으로 이동");
         }
@@ -64,8 +68,6 @@ namespace Project.UI
             if (startButton) startButton.onClick.AddListener(OnBtnStartGame);
             if (exitButton) exitButton.onClick.AddListener(OnBtnQuitGame);
             EnsureOrder();
-            // 타이틀 진입 직후 깜빡임 방지용: 화살표 비활성으로 시작
-            //if (arrow) arrow.gameObject.SetActive(false);
         }
 
         private void Update()
@@ -91,19 +93,38 @@ namespace Project.UI
             if (_order.Length == 0) return;
 
             int last = _order.Length - 1;
-            // 기본 이동: 경계 안으로 클램프 (래핑 금지)
-            int next = Mathf.Clamp(_index + delta, 0, last);
+            int next = _index + delta;
+
+            // 래핑 금지: 경계 넘으면 이동하지 않음
+            if (next < 0 || next > last)
+            {
+                RefreshArrow();
+                return;
+            }
 
             // 저장 없으면 '계속하기' 스킵 (경계 밖으로 벗어나지 않게 한 번만 보정)
             if (!HasAnySaveData() && _order[next] == continueButton)
             {
-                if (delta > 0) next = Mathf.Min(next + 1, last);   // 아래로 이동 시 한 칸 더
-                else next = Mathf.Max(next - 1, 0);      // 위로 이동 시 한 칸 위
+                int alt = next + delta; // 같은 방향으로 한 칸 더
+                if (alt < 0 || alt > last) // 더 갈 곳이 없으면 이동 취소
+                {
+                    RefreshArrow();
+                    return;
+                }
+                next = alt;
+                // alt도 우연히 계속하기일 가능성은 현재 배열 순서상 없음(연속 배치가 아니므로)
             }
 
-            // 최종 반영(이동 불가 상황이면 제자리)
-            _index = next;
+            // 유효성(비활성/숨김) 체크도 겸사겸사
+            var target = _order[next];
+            if (!target || !target.gameObject.activeInHierarchy || !target.interactable)
+            {
+                RefreshArrow();
+                return; // 갈 곳이 유효하지 않으면 이동 취소
+            }
 
+            // 최종 반영
+            _index = next;
             RefreshArrow();
         }
         private void Activate()
@@ -175,9 +196,9 @@ namespace Project.UI
             if (_order != null && _order.Length == 4) return;
             _order = new[]
             {
-                startButton,     // 0: 처음부터
-                continueButton,  // 1: 계속하기
-                optionButton,     // 2: 설정
+                continueButton,  // 0: 계속하기
+                startButton,     // 1: 처음부터
+                optionButton,    // 2: 설정
                 exitButton       // 3: 종료하기
             };
         }

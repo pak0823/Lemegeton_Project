@@ -2,6 +2,7 @@ using Project.UI;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 public class ExplorationResetUi : MonoBehaviour, ISceneUiModule
 {
@@ -14,6 +15,12 @@ public class ExplorationResetUi : MonoBehaviour, ISceneUiModule
     private void OnDisable()
     {
         if (resetButton) resetButton.SetActive(false);
+    }
+
+    void Update()
+    {
+        if(Shared.PuzzleManager.IsPuzzleActive)
+            resetButton.SetActive(false);
     }
 
     public void OnNormalMapReset()
