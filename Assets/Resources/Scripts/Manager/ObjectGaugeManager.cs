@@ -24,7 +24,7 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
     private int triggeredTraps;
     private bool thresholdReached;
 
-    [Header("인지 게이지")]
+    [Header("주시 스택")]
     public int awarenessMax = 5;
     public Text awarenessGaugeText;
     public GameObject battleNoticeUI;
@@ -139,7 +139,7 @@ public class ObjectGaugeManager : MonoBehaviour, IResettable
     private void UpdateAwarenessUI()
     {
         if (awarenessGaugeText != null)
-            awarenessGaugeText.text = $"인지 게이지: {awarenessGauge}/{awarenessMax}";
+            awarenessGaugeText.text = $"현재 주시 스택: {awarenessGauge}/{awarenessMax}";
     }
 
     #endregion

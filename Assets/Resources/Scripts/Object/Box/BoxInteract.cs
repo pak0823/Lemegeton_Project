@@ -23,8 +23,19 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     // 인식된 상자 확인
     private bool isFocused = false;
 
+    [Header("Animator Restore")]
+    [SerializeField] private string openedStateName = "Box_Open"; // 또는 "Opened"/"OpenIdle" 등 프로젝트 상태명
+    [SerializeField] private int openedLayer = 0;             // 기본 레이어
+    [SerializeField] private bool jumpToOpenedPoseOnRestore = true;
+
     // === 외부 확인용 프로퍼티 ===
     public bool IsOpened => isOpened;
+
+    private void OnEnable()
+    {
+        if (isOpened)
+            ForceOpenedVisual();
+    }
 
     private void Awake()
     {
@@ -112,6 +123,9 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
                 
         }
 
+        var descriptiondata = GetComponent<DescriptionData>();
+        if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
+
         // 열린 뒤에는 포커스/하이라이트/안내 UI 정리
         SetHighlight(false);
         if (targetMarker != null) targetMarker.SetActive(false);
@@ -147,19 +161,46 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     {
         isOpened = true;
         ForceOpenedVisual();
-        // 하이라이트/포커스 끄기 등 부가 처리 필요 시 추가
+
+        // 복원/즉시 열기 시에도 같은 처리
+        var descriptiondata = GetComponent<DescriptionData>();
+        if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
     }
 
     private void ForceOpenedVisual()
     {
-        // 애니메이터가 비어있으면 즉시 캐싱
         if (animator == null) animator = GetComponent<Animator>();
-        if (animator != null)
+        if (animator == null) return;
+
+        // 파라미터
+        animator.SetBool("IsOpened", true);
+
+        if (jumpToOpenedPoseOnRestore)
         {
-            //TrySetAnimatorBool(animator, "IsOpen", isOpened);
-            animator.SetBool("IsOpen", isOpened);
-            animator.Update(0f); // 한 프레임 강제 평가로 시각 확정
+            // 1) 상태 이름으로 바로 점프: 트랜지션/크로스페이드 없이 "그 상태의 마지막 포즈"로 고정
+            if (!string.IsNullOrEmpty(openedStateName))
+            {
+                int hash = Animator.StringToHash(openedStateName);
+                if (animator.HasState(openedLayer, hash))
+                {
+                    // Play(..., normalizedTime=1f) → 마지막 프레임로 스냅
+                    animator.Play(hash, openedLayer, 1f);
+                }
+                else
+                {
+                    // 폴백: 현재 컨트롤러에 "Open"이 없다면 그냥 bool만 맞추고 넘어감
+                }
+            }
+            else
+            {
+                // 이름 미지정 폴백: bool만 맞추기
+            }
         }
+
+        // 즉시 평가(한 프레임 대기 없이 포즈 적용)
+        animator.Update(0f);
+
+        // 포커스/UI도 열린 상태에 맞춰 정리
         if (targetMarker) targetMarker.SetActive(false);
     }
 
