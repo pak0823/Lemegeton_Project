@@ -117,7 +117,7 @@ public class PuzzleManager : MonoBehaviour
 
     public void ResetPuzzle()
     {
-        if (IsPuzzleComplete) return;
+        if (IsPuzzleComplete || !IsPuzzleActive) return;
 
         foreach (var box in puzzleBoxes)
             box.ResetToInitial(FloorTilemap);

@@ -8,6 +8,7 @@ public static class Shared
     public static MapToggleManager MapToggleManager;
     public static PuzzleManager PuzzleManager;
     public static ObjectGaugeManager ObjectGaugeManager;
+    public static ExplorationTimerUi ExplorationTimerUi;
 
     public static BattleManager BattleManager;
     public static BattleGridManager battleGridManager;
@@ -24,4 +25,5 @@ public static class Shared
     public static PlayerMovement PlayerMovement;
     public static PlayerDebuffController PlayerDebuffController;
     public static InteractionHintUI interactionHintUI;
+    public static ExplorationLogUI explorationLogUI;
 }

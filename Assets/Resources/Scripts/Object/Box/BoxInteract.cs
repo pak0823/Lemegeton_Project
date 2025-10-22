@@ -106,7 +106,7 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
             var text = openDescriptions.entries[idx].text;
             if (!string.IsNullOrWhiteSpace(text))
             {
-                Shared.descriptionDialogUI?.ShowTemporarily(text, 1.0f);    // 1초 잠금+유지
+                Shared.explorationLogUI?.Push(text); // 로그창에 한 줄 추가(10초 기본)
                 Shared.interactionHintUI?.HideAll();
             }
                 

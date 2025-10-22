@@ -1577,21 +1577,12 @@ public class BattleManager : MonoBehaviour
 
 
     // 타겟팅 취소/종료 시 미리보기 지우기
-    Tilemap PickOverlayFor(Tilemap baseMap)
-    {
-        if (baseMap == (provider?.PlayerFloor)) return (provider as BattleMapManager)?.playerOverlay;
-        if (baseMap == (provider?.EnemyFloor)) return (provider as BattleMapManager)?.enemyOverlay;
-        return (provider as BattleMapManager)?.playerOverlay; // 폴백
-    }
-
     public void ShowMovePreview(Tilemap baseMap, IEnumerable<Vector3Int> cells)
     {
-        if (moveHighlighter != null) moveHighlighter.overlayMap = PickOverlayFor(baseMap);
         moveHighlighter?.ShowCells(baseMap, cells);
     }
     public void ShowSkillPreview(Tilemap baseMap, IEnumerable<Vector3Int> cells)
     {
-        if (skillHighlighter != null) skillHighlighter.overlayMap = PickOverlayFor(baseMap);
         skillHighlighter?.ShowCells(baseMap, cells);
     }
 

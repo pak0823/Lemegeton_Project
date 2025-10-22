@@ -191,6 +191,11 @@ public class PlayerMovement : MonoBehaviour
         movementLockUntil = Mathf.Max(movementLockUntil, Time.time + Mathf.Max(0f, seconds));
         HaltImmediately(); // 즉시 멈춤 (애니/속도 초기화)
     }
+    bool IsCommunicationBlocked(Collider2D collider2d)
+    {
+        // 소통 금지 대상들을 여기서 중앙집중 관리
+        return collider2d != null && collider2d.GetComponent<TrapBehavior>() != null;
+    }
 
     void HandlePushDetection()
     {
@@ -291,6 +296,8 @@ public class PlayerMovement : MonoBehaviour
 
         foreach (var h in hits)
         {
+            if (IsCommunicationBlocked(h)) continue;    // 함정은 소통 대상에서 제외
+
             if (h.isTrigger == false && h.attachedRigidbody == null) continue; // 너무 무차별 감지 방지 (필요시 조정)
                                                                                // 조건 1: DescriptionData가 있다면 최우선
             if (h.TryGetComponent<DescriptionData>(out var dd) && (dd.enableHintOnContact))
@@ -327,6 +334,8 @@ public class PlayerMovement : MonoBehaviour
     void HandleCommunicationKey()
     {
         if (!Input.GetKeyDown(communicationKey)) return;
+
+        if (_lastHintTarget != null && IsCommunicationBlocked(_lastHintTarget)) return; // 예외 안전장치: 함정이면 즉시 무시
 
         string text = null;
 

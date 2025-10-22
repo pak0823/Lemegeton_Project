@@ -70,8 +70,11 @@ public class Highlighter : MonoBehaviour
 
             foreach (var cell in g.cells)
             {
-                if (!clipToBaseMap || g.baseMap.HasTile(cell))
-                    overlayMap.SetTile(cell, highlightTile);
+                if (clipToBaseMap && !g.baseMap.HasTile(cell)) continue;
+
+                var world = g.baseMap.GetCellCenterWorld(cell);
+                var ocell = overlayMap.WorldToCell(world);
+                overlayMap.SetTile(ocell, highlightTile);
             }
         }
     }

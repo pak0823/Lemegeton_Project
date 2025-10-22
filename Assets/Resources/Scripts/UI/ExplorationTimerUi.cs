@@ -17,6 +17,9 @@ public class ExplorationTimerUi : MonoBehaviour
     private bool isRunning = false;
     private bool isFinished = false;
 
+    private int _pauseTokens = 0;
+    public bool IsTemporarilyPaused => _pauseTokens > 0;
+
     [Header("Timer Warning")]
     [SerializeField] private float warningThresholdSeconds = 60f;     // 60초 이하 경고
     [SerializeField] private Color warningColor = new Color(0.86f, 0.1f, 0.1f); // 붉은색
@@ -26,6 +29,14 @@ public class ExplorationTimerUi : MonoBehaviour
     public Text objectGaugeText;
     public Text perceiveGaugeText;
 
+    // 외부에서 호출할 API 추가
+    public void Pause() { _pauseTokens++; }
+    public void Resume() { _pauseTokens = Mathf.Max(0, _pauseTokens - 1); }
+    public void PauseForRealtime(float seconds)
+    {
+        StartCoroutine(Co_PauseForRealtime(seconds));
+    }
+
     // 런타임 메모리 (씬 간 유지용)
     static class Memory
     {
@@ -33,6 +44,10 @@ public class ExplorationTimerUi : MonoBehaviour
         public static int stage;
         public static float timeLeft;
         public static bool finished;
+    }
+    void Awake()
+    {
+        Shared.ExplorationTimerUi = this;
     }
 
     // 외부에서 호출할 저장 API
@@ -50,6 +65,13 @@ public class ExplorationTimerUi : MonoBehaviour
         Memory.stage = 0;
         Memory.timeLeft = 0f;
         Memory.finished = false;
+    }
+
+    private System.Collections.IEnumerator Co_PauseForRealtime(float seconds)
+    {
+        Pause();
+        yield return new WaitForSecondsRealtime(Mathf.Max(0.01f, seconds));
+        Resume();
     }
 
     // 내부에서 호출할 복원 API
@@ -136,7 +158,8 @@ public class ExplorationTimerUi : MonoBehaviour
             return;
         }
 
-        timeLeft -= Time.deltaTime;
+        if (!IsTemporarilyPaused)
+            timeLeft -= Time.deltaTime;
 
         if (timeLeft <= 0f)
         {

@@ -105,7 +105,7 @@ public class TrapBehavior : MonoBehaviour
             if (!string.IsNullOrWhiteSpace(text))
             {
                 // 잠금형으로 1초 정도 유지
-                Shared.descriptionDialogUI?.ShowTemporarily(text, 1.0f);
+                Shared.explorationLogUI?.Push(text);
                 Shared.interactionHintUI?.HideAll();
             }   
         }
