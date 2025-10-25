@@ -51,7 +51,6 @@ public class PlayerMovement : MonoBehaviour
         animator = GetComponent<Animator>();
 
         activeMoveSpeed = defaultMoveSpeed;
-        Shared.interactionHintUI?.BindFollow(this.transform);
     }
 
     void Update()
@@ -226,7 +225,7 @@ public class PlayerMovement : MonoBehaviour
                 contactBoxes.Add(box);
                 box.SetHighlight(true);
 
-                Shared.interactionHintUI?.ShowBoth();
+                Shared.interactionHintUI?.ShowBothAt(box.transform);
 
                 Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
                 Vector3Int boxCell = floorTilemap.WorldToCell(box.transform.position);
@@ -266,13 +265,13 @@ public class PlayerMovement : MonoBehaviour
                 highlightedChest = closest;
                 highlightedChest.SetFocused(true);    // 포커스 부여(= UI/입력 허용)
                 highlightedChest.SetHighlight(true);  // 선택 1개만 하이라이트
-                Shared.interactionHintUI?.ShowBoth();
+                Shared.interactionHintUI?.ShowBothAt(closest.transform);
                 return;
             }
 
             if (hit.TryGetComponent<PortalController>(out var potal))
             {
-                Shared.interactionHintUI?.ShowBoth();
+                Shared.interactionHintUI?.ShowBothAt(potal.transform);
                 return;
             }
 
@@ -320,7 +319,7 @@ public class PlayerMovement : MonoBehaviour
             _lastDescData = bestDesc;
 
             // "무엇이든 접촉" → 두 키 모두 보이게
-            Shared.interactionHintUI?.ShowBoth();
+            Shared.interactionHintUI?.ShowBothAt(best.transform);
         }
         else
         {

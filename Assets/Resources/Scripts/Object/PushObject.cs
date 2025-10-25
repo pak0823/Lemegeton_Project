@@ -17,7 +17,7 @@ public class PushObject : MonoBehaviour, IExplorationPersistable
     public SpriteRenderer highlightRenderer;
     private Color originalColor;
     private bool isHighlighted = false;
-    public GameObject targetMarker;   //인식 표시
+    //public GameObject targetMarker;   //인식 표시
 
     public bool isPushable = true;
 
@@ -33,7 +33,7 @@ public class PushObject : MonoBehaviour, IExplorationPersistable
             originalColor = highlightRenderer.color;
 
         // 시작 시 안내 UI OFF
-        if (targetMarker != null) targetMarker.SetActive(false);
+        //if (targetMarker != null) targetMarker.SetActive(false);
     }
 
     void OnEnable()
@@ -49,8 +49,8 @@ public class PushObject : MonoBehaviour, IExplorationPersistable
             isHighlighted = on;
         }
 
-        if (targetMarker != null)
-            targetMarker.SetActive(on);
+        //if (targetMarker != null)
+        //    targetMarker.SetActive(on);
     }
 
     public bool CanBePushed(Direction dir)

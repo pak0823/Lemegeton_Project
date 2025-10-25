@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 6867410682792608740}
   - component: {fileID: 4484438638996098317}
   - component: {fileID: 6111608853345139563}
+  - component: {fileID: 7081516996210987845}
   m_Layer: 7
   m_Name: Push_Box
   m_TagString: Untagged
@@ -34,8 +35,7 @@ Transform:
   m_LocalPosition: {x: 0, y: 0.6, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 719259129394020594}
+  m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &970675628057749739
@@ -108,7 +108,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 72
   highlightRenderer: {fileID: 0}
-  targetMarker: {fileID: 5649198409497596424}
   isPushable: 1
 --- !u!114 &6159233499454139846
 MonoBehaviour:
@@ -219,71 +218,17 @@ MonoBehaviour:
   enableHintOnContact: 1
   useAlternateAfterOpened: 0
   descriptionAfterOpened: 
---- !u!1001 &6072450461832848173
-PrefabInstance:
+--- !u!114 &7081516996210987845
+MonoBehaviour:
   m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 3509826414663564362}
-    m_Modifications:
-    - target: {fileID: 1882594255956504869, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_Name
-      value: TargetMarker
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0.35
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 2516616678073473041, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: d079b9893224a314099d9b360ed350b5, type: 3}
---- !u!4 &719259129394020594 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 6755117809736934367, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-  m_PrefabInstance: {fileID: 6072450461832848173}
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &5649198409497596424 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1882594255956504869, guid: d079b9893224a314099d9b360ed350b5, type: 3}
-  m_PrefabInstance: {fileID: 6072450461832848173}
-  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5660706881139632647}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b0458b23d51f4a64a806bfcbd1ced38b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  surveyOffset: {x: 100, y: 24}
+  commOffset: {x: 0, y: 110}

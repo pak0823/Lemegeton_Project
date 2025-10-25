@@ -142,6 +142,31 @@ public class MapManager : MonoBehaviour
         }
 
         mapToggle.SetPlayerStartPosition(player.transform);
+
+        // 여기서 카메라 타깃/경계 주입
+        HookCameraToPlayer(player.transform);
+    }
+
+    void HookCameraToPlayer(Transform player)
+    {
+        // 메인 카메라의 CameraFollow2D 찾기
+        var cam = Camera.main ? Camera.main.GetComponent<CameraFollow2D>()
+                              : FindObjectOfType<CameraFollow2D>(true);
+        if (!cam) return;
+
+        // 타깃을 갓 생성된 플레이어로 지정 + 즉시 스냅
+        cam.SetTarget(player, snap: true);
+
+        // (선택) 월드 경계 콜라이더 자동 지정
+        // - 우선 WorldBounds라는 이름의 오브젝트를 찾고
+        // - 없으면 CompositeCollider2D → BoxCollider2D 순으로 폴백
+        Collider2D bounds = null;
+        var t = currentMap.transform.Find("WorldBounds");
+        if (t) t.TryGetComponent(out bounds);
+        if (!bounds) bounds = currentMap.GetComponentInChildren<CompositeCollider2D>(true);
+        if (!bounds) bounds = currentMap.GetComponentInChildren<BoxCollider2D>(true);
+
+        if (bounds) cam.worldBounds = bounds;
     }
 
     void ApplyExplorationSnapshot(ExplorationSnapshot snap, Tilemap floorMap, Tilemap wallMap)

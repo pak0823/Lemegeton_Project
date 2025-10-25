@@ -6,7 +6,7 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
 {
     private ExplorationPersistId pid;
     public Animator animator;
-    public GameObject targetMarker;   //인식 표시
+    //public GameObject targetMarker;   //인식 표시
     public bool isPlayerNear = false;
     [SerializeField] private bool isOpened = false;
     private bool _applyOpenOnStart = false;  // 복원 시 다음 프레임에 반영
@@ -49,15 +49,15 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
             originalColor = highlightRenderer.color;
 
         // 시작 시 안내 UI OFF
-        if (targetMarker != null) targetMarker.SetActive(false);
+        //if (targetMarker != null) targetMarker.SetActive(false);
     }
 
     void Start()
     {
         if (animator == null)
             animator = GetComponent<Animator>();
-        if (targetMarker != null)
-            targetMarker.SetActive(false); // 시작시 꺼두기
+        //if (targetMarker != null)
+        //    targetMarker.SetActive(false); // 시작시 꺼두기
 
         // 복귀 직후 Animator 초기 상태가 덮어써도 여기서 다시 강제로 맞춤
         if (isOpened || _applyOpenOnStart)
@@ -75,8 +75,8 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
         isFocused = on;
 
         // 포커스 기준으로만 안내 UI 제어
-        if (targetMarker != null)
-            targetMarker.SetActive(isFocused && !isOpened);
+        //if (targetMarker != null)
+        //    targetMarker.SetActive(isFocused && !isOpened);
     }
 
     // PushObject와 동일 패턴의 하이라이트 메서드
@@ -128,7 +128,7 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
 
         // 열린 뒤에는 포커스/하이라이트/안내 UI 정리
         SetHighlight(false);
-        if (targetMarker != null) targetMarker.SetActive(false);
+        //if (targetMarker != null) targetMarker.SetActive(false);
         isFocused = false;
     }
 
@@ -150,7 +150,7 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
             if (!isOpened)
             {
                 SetHighlight(false);
-                if (targetMarker != null) targetMarker.SetActive(false);
+                //if (targetMarker != null) targetMarker.SetActive(false);
                 isFocused = false;
             }
         }
@@ -201,7 +201,7 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
         animator.Update(0f);
 
         // 포커스/UI도 열린 상태에 맞춰 정리
-        if (targetMarker) targetMarker.SetActive(false);
+        //if (targetMarker) targetMarker.SetActive(false);
     }
 
     // IExplorationPersistable

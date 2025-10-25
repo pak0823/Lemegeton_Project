@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
-using static UnityEngine.GraphicsBuffer;
+using System.Collections.Generic;
+using UnityEngine.EventSystems;
 
 namespace Project.UI
 {
@@ -19,14 +20,18 @@ namespace Project.UI
         [SerializeField] private bool simulateHasSaveData = false;
         [Tooltip("Up/W, Down/S, Enter(Return/Space) 입력 활성화")]
         [SerializeField] private bool enableKeyboardControl = true;
+
         [Header("Visual")]
         [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f; // 저장 없음일 때 '계속하기' 투명도
+        [SerializeField] private Color focusTextColor = new Color(1f, 0.5f, 0f);    // 포커스 시 텍스트 색 (주황)
 
+        private readonly Dictionary<Text, Color> _origTextColors = new Dictionary<Text, Color>();
         public OptionsMenuUI optionPanel;
 
         private Button[] _order;   // 선택 순서: [계속하기, 처음부터, 설정, 종료하기]
         private int _index;         // 현재 선택 인덱스
         private bool _shown;        // 메뉴 표시 상태(라이프사이클)
+
 
 
         public void OnUiShown()
@@ -35,6 +40,7 @@ namespace Project.UI
             _shown = true;
             EnsureOrder();
             var hasSave = HasAnySaveData();
+            RebuildLabelCache();
             UpdateContinueAvailability(hasSave);             // 초기 포커스: 저장 데이터 있으면 '계속하기(0)', 없으면 '처음부터(1)'
             _index = (hasSave && continueButton && continueButton.interactable) ? 0 : 1;
             RefreshArrow();
@@ -44,6 +50,9 @@ namespace Project.UI
             // 메뉴 닫힐 때 정리
             _shown = false;
             if (arrow) arrow.gameObject.SetActive(false);
+            // 전부 원래 색 복구
+            foreach (var kv in _origTextColors)
+                if (kv.Key) kv.Key.color = kv.Value;
         }
         public void OnBtnStartGame()
         {
@@ -68,7 +77,37 @@ namespace Project.UI
             if (startButton) startButton.onClick.AddListener(OnBtnStartGame);
             if (exitButton) exitButton.onClick.AddListener(OnBtnQuitGame);
             EnsureOrder();
+
+            // 각 버튼의 원래 텍스트 색 캐시
+            CacheLabelColors(continueButton);
+            CacheLabelColors(startButton);
+            CacheLabelColors(optionButton);
+            CacheLabelColors(exitButton);
+
+            // 마우스 Hover → 화살표 이동
+            WireHover(continueButton, 0);
+            WireHover(startButton, 1);
+            WireHover(optionButton, 2);
+            WireHover(exitButton, 3);
         }
+
+        void CacheLabelColors(Button btn)
+        {
+            if (!btn) return;
+            var texts = btn.GetComponentsInChildren<Text>(true);
+            foreach (var t in texts)
+                if (t && !_origTextColors.ContainsKey(t))
+                    _origTextColors[t] = t.color;
+        }
+        void RebuildLabelCache()
+        {
+            _origTextColors.Clear();
+            CacheLabelColors(continueButton);
+            CacheLabelColors(startButton);
+            CacheLabelColors(optionButton);
+            CacheLabelColors(exitButton);
+        }
+        Color GetOrig(Text t) => (t && _origTextColors.TryGetValue(t, out var c)) ? c : Color.white;
 
         private void Update()
         {
@@ -87,6 +126,18 @@ namespace Project.UI
                 Activate();
             }
         }
+
+        private void WireHover(Button btn, int idx)
+        {
+            if (!btn) return;
+            var et = btn.gameObject.GetComponent<EventTrigger>();
+            if (!et) et = btn.gameObject.AddComponent<EventTrigger>();
+
+            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            entry.callback.AddListener(_ => OnHoverIndex(idx));
+            et.triggers.Add(entry);
+        }
+
         private void Move(int delta)
         {
             EnsureOrder();
@@ -127,6 +178,21 @@ namespace Project.UI
             _index = next;
             RefreshArrow();
         }
+
+        // 화살표를 특정 인덱스로 이동(버튼 유효성 체크 포함)
+        private void OnHoverIndex(int idx)
+        {
+            if (!_shown || (optionPanel && optionPanel.IsShow)) return;
+            EnsureOrder();
+            if (idx < 0 || idx >= _order.Length) return;
+
+            var target = _order[idx];
+            // 비활성/비상호작용 항목은 무시(계속하기 잠금 등)
+            if (!target || !target.gameObject.activeInHierarchy || !target.interactable) return;
+
+            _index = idx;
+            RefreshArrow();
+        }
         private void Activate()
         {
             EnsureOrder();
@@ -154,7 +220,34 @@ namespace Project.UI
             arrowRt.anchorMin = tr.anchorMin;
             arrowRt.anchorMax = tr.anchorMax;
             arrowRt.anchoredPosition = tr.anchoredPosition + arrowOffset;
-            arrowRt.SetAsLastSibling(); // z 오더 보정(선택)
+            arrowRt.SetAsLastSibling(); // z 오더 보정
+
+            // 선택 텍스트 색 갱신
+            ApplyFocusVisuals();
+        }
+
+        void ApplyFocusVisuals()
+        {
+            // 전부 원래 색으로 복구(현재 존재하는 자식 텍스트들 대상으로)
+            if (_order != null)
+            {
+                foreach (var btn in _order)
+                {
+                    if (!btn) continue;
+                    foreach (var t in btn.GetComponentsInChildren<Text>(true))
+                    {
+                        if (!t) continue;
+                        t.color = GetOrig(t); // 캐시에 없으면 white가 될 텐데,
+                    }
+                }
+            }
+
+            // 선택된 버튼만 포커스 색 적용
+            if (_order == null || _order.Length == 0) return;
+            var sel = _order[_index];
+            if (!sel) return;
+            foreach (var t in sel.GetComponentsInChildren<Text>(true))
+                if (t) t.color = focusTextColor;
         }
 
         private void UpdateContinueAvailability(bool hasSave)

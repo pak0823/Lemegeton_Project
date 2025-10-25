@@ -14,24 +14,40 @@ public class InteractionHintUI : MonoBehaviour
     [SerializeField] GameObject surveyRoot;
     [SerializeField] RectTransform surveyRect;
     [SerializeField] Text surveyLabel;
-    [SerializeField] Vector2 surveyOffset = new Vector2(60f, 0f); // F는 오른쪽
+    [SerializeField] Vector2 defaultSurveyOffset = new Vector2(60f, 0f); // 기본 힌트 위치 F
+    Vector2 _surveyOffset;   // 현재 적용중
 
     [Header("Communication")]
     [SerializeField] GameObject commRoot;
     [SerializeField] Text commLabel;
     [SerializeField] RectTransform commRect;
-    [SerializeField] Vector2 commOffset = new Vector2(0f, 80f);  // E는 위쪽
+    [SerializeField] Vector2 defaultCommOffset = new Vector2(0f, 80f);  // 기본 힌트 위치 E
+    Vector2 _commOffset;     // 현재 적용중
+
+    [Header("Cancel")]
+    [SerializeField] GameObject cancelRoot;
+    [SerializeField] RectTransform cancelRect;
+    [SerializeField] Text cancelLabel;
+    //[SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // 기본 힌트 위치 F
+    Vector2 _cancelOffset;   // 현재 적용중
 
     RectTransform rootRect;
     Canvas rootCanvas;
 
+    public void ShowSurveyAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowSurvey(); }
+    public void ShowCommunicationAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowCommunication(); }
+    public void ShowBothAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowBoth(); }
+
     void Awake()
     {
-        if (!cam) cam = Shared.MapManager.playerPrefab.GetComponentInChildren<Camera>();
         rootRect = transform as RectTransform;
         rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
+        if (!cam) cam = FindAnyObjectByType<Camera>();
         HideAll();
         Shared.interactionHintUI = this; // 싱글톤 접근
+        _surveyOffset = defaultSurveyOffset;
+        _commOffset = defaultCommOffset;
+        _cancelOffset = defaultSurveyOffset;
     }
 
     void LateUpdate()
@@ -39,14 +55,64 @@ public class InteractionHintUI : MonoBehaviour
         if (!group || group.alpha <= 0f || !followTarget || !cam) return;
 
         var sp = cam.WorldToScreenPoint(followTarget.position);
-        var rt = transform as RectTransform;
 
-        // 각 키 UI를 개별 오프셋으로 배치
-        if (surveyRoot && surveyRoot.activeSelf && surveyRect)
-            surveyRect.anchoredPosition = surveyOffset;
+        if (!rootRect) rootRect = transform as RectTransform;
+        if (!rootCanvas) rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
 
-        if (commRoot && commRoot.activeSelf && commRect)
-            commRect.anchoredPosition = commOffset;
+        if (rootCanvas && rootRect)
+        {
+            if (rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            {
+                // 오버레이: 스크린 좌표 그대로
+                rootRect.position = sp;
+            }
+            else
+            {
+                // 카메라/월드 스페이스: 로컬 앵커 좌표로 변환
+                RectTransform canvasRect = rootCanvas.transform as RectTransform;
+                Vector2 lp;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    canvasRect, sp,
+                    rootCanvas.renderMode == RenderMode.ScreenSpaceCamera ? rootCanvas.worldCamera : cam,
+                    out lp);
+                rootRect.anchoredPosition = lp;
+            }
+        }
+
+        // 키별 오프셋은 기존처럼 유지
+        if (surveyRoot && surveyRoot.activeSelf && surveyRect) surveyRect.anchoredPosition = _surveyOffset;
+        if (commRoot && commRoot.activeSelf && commRect) commRect.anchoredPosition = _commOffset;
+        if (cancelRoot && cancelRoot.activeSelf && cancelRect) cancelRect.anchoredPosition = _cancelOffset;
+    }
+    void SetOffsetsFrom(Transform t)
+    {
+        // 우선 개체의 HintAnchor가 있으면 그것을 사용
+        var anchor = t ? t.GetComponent<HintAnchor>() : null;
+        if (anchor)
+        {
+            _surveyOffset = anchor.surveyOffset;
+            _commOffset = anchor.commOffset;
+            _cancelOffset = anchor.surveyOffset;    //surveyOffset과 같은 위치를 사용하기에 그대로 사용
+            return;
+        }
+        // 없으면 기본값
+        _surveyOffset = defaultSurveyOffset;
+        _commOffset = defaultCommOffset;
+        _cancelOffset = defaultSurveyOffset;
+    }
+
+    public void SetOffsets(Vector2? survey = null, Vector2? comm = null)
+    {
+        _surveyOffset = survey ?? defaultSurveyOffset;
+        _commOffset = comm ?? defaultCommOffset;
+        _cancelOffset = survey ?? defaultSurveyOffset;
+    }
+
+    void ResetOffsets()
+    {
+        _surveyOffset = defaultSurveyOffset;
+        _commOffset = defaultCommOffset;
+        _cancelOffset = defaultSurveyOffset;
     }
 
     public void BindFollow(Transform t) => followTarget = t;
@@ -75,6 +141,7 @@ public class InteractionHintUI : MonoBehaviour
         if (surveyRoot) surveyRoot.SetActive(false);
         if (commRoot) commRoot.SetActive(false);
         if (group) { group.alpha = 0f; group.blocksRaycasts = false; group.interactable = false; }
+        ResetOffsets();
     }
 
     void ShowRoot()
