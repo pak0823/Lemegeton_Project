@@ -13,6 +13,12 @@ public class TurnBarUI : MonoBehaviour
     [SerializeField] private Text waveTransitionText;         // 전환 안내 문구 텍스트
     [SerializeField] private float transitionDuration = 1.5f; // 표시 시간(초, 실시간)
 
+    [Header("Active Turn Display")]
+    [SerializeField] RectTransform activeSlot;             // 턴바 오른쪽 바깥에 놓을 빈 컨테이너
+    [SerializeField] Vector2 activeIconSize = new Vector2(96, 96);
+    [SerializeField] float activePopDuration = 0.12f;      // 살짝 팝업 애니
+    [SerializeField] bool hideInBarWhileActive = true;     // 활성화된 유닛은 바에서 숨김
+
     [Tooltip("플레이어/적 아이콘 Y 오프셋")]
     public float playerRowY = 20f;
     public float enemyRowY = -20f;
@@ -28,6 +34,9 @@ public class TurnBarUI : MonoBehaviour
     bool uiPaused = false;  // 전환 중 UI 정지
 
     BattleManager battle;
+    BattleUnit activeUnit;        // 현재 턴 주인공
+    Image activeBigIcon;          // activeSlot에 띄운 큰 아이콘
+    Coroutine activePopCo;
 
     void Start()
     {
@@ -53,14 +62,20 @@ public class TurnBarUI : MonoBehaviour
             battle.OnATBReset += HandleATBResetToZero;
             battle.OnWaveTransition += ShowWaveTransition;  // 다음 웨이브 전환 안내 구독
         }
+
+        BattleManager.OnAnyUnitTurnStarted += HandleTurnStarted;
     }
     void OnDestroy()
     {
-        if (!battle) return;
-        battle.OnATBChanged -= OnATBChanged_RelayoutAll;
-        battle.OnWaveChanged -= WaveHandle;
-        battle.OnATBReset -= HandleATBResetToZero;
-        battle.OnWaveTransition -= ShowWaveTransition;
+        if (battle)
+        {
+            battle.OnATBChanged -= OnATBChanged_RelayoutAll;
+            battle.OnWaveChanged -= WaveHandle;
+            battle.OnATBReset -= HandleATBResetToZero;
+            battle.OnWaveTransition -= ShowWaveTransition;
+        }
+
+        BattleManager.OnAnyUnitTurnStarted -= HandleTurnStarted;
     }
 
     void InitializeIcons()
@@ -110,10 +125,21 @@ public class TurnBarUI : MonoBehaviour
         }
     }
 
-    void OnATBChanged_RelayoutAll(BattleUnit _, float __, float ___)
+    void OnATBChanged_RelayoutAll(BattleUnit _battleunit, float _atb, float _maxatb)
     {
-        // 개별 변화 시에도 전체를 재배치(겹침 방지 위해)
-        RelayoutAll();
+        //if (_battleunit.name == "LuckySix") Debug.Log($"[TurnBarUI] Received ATB for {_battleunit?.name ?? "null"} : atb={_atb:F3}, max={_maxatb:F3}");  //ActiveIcon의 출력이 이상할 시 테스트용으로 남겨둠
+
+        // 보조 판정: atb가 아주 작아졌으면(턴이 막 끝나서 리셋된 상태) active 아이콘 정리
+        // (원래보다 느슨한 임계값을 사용해서 실수/소수 오류 방지)
+        const float kEps = 0.12f; // 필요시 0.05 ~ 0.2 사이로 조절
+
+        // 턴 종료(= ATB가 0으로 리셋) 프레임에 액티브 표시 정리
+        if (hideInBarWhileActive && activeUnit != null && _battleunit == activeUnit && _atb <= kEps)
+        {
+            ClearActiveIcon(); // 아래 2번 패치로 "좌측으로 스냅"까지 함께 처리
+        }
+
+        RelayoutAll(); // 정리 후 배치
     }
 
     void RelayoutAll()
@@ -131,6 +157,18 @@ public class TurnBarUI : MonoBehaviour
             var unit = kv.Key;
             var img = kv.Value;
             if (unit == null || img == null) { unitIcons.Remove(unit); continue; }
+
+            // 활성 유닛은 바에서 숨기고, 레이아웃 계산 대상에서 제외
+            if (hideInBarWhileActive && unit == activeUnit)
+            {
+                img.gameObject.SetActive(false);
+                continue;
+            }
+            else if (!img.gameObject.activeSelf)
+            {
+                // 활성 유닛이 아니면 반드시 보이게
+                img.gameObject.SetActive(true);
+            }
 
             var rt = img.rectTransform;
             float width = rt.rect.width;
@@ -234,6 +272,56 @@ public class TurnBarUI : MonoBehaviour
             it.rt.anchoredPosition = new Vector2(it.x, it.y);
         }
     }
+    void HandleTurnStarted(BattleUnit u)
+    {
+        if (u == null) return;
+        ClearActiveIcon();  // 이전 active 아이콘을 완전히 정리
+        ShowActiveIcon(u);  // 새 유닛의 큰 아이콘을 띄움
+    }
+
+    void ShowActiveIcon(BattleUnit u)
+    {
+        // 이전 표시 정리
+        ClearActiveIcon();
+
+        activeUnit = u;
+
+        // 턴바의 작은 아이콘 숨김(레이아웃에서 제외)
+        if (unitIcons.TryGetValue(u, out var small))
+            small.gameObject.SetActive(!hideInBarWhileActive);
+
+        if (!activeSlot) return;
+
+        // 큰 아이콘 생성
+        var go = Instantiate(unitIconPrefab, activeSlot);
+        activeBigIcon = go.GetComponent<Image>();
+        if (activeBigIcon && u.data) activeBigIcon.sprite = u.data.UnitIcon;
+
+        var rt = activeBigIcon.rectTransform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = activeIconSize;
+
+        // 팝업 애니
+        if (activePopCo != null) StopCoroutine(activePopCo);
+        activePopCo = StartCoroutine(Co_PopIn(rt));
+    }
+    System.Collections.IEnumerator Co_PopIn(RectTransform rt)
+    {
+        if (!rt) yield break;
+        float t = 0f, dur = Mathf.Max(0.01f, activePopDuration);
+        Vector3 from = Vector3.one * 0.85f, to = Vector3.one;
+        rt.localScale = from;
+        while (t < dur)
+        {
+            t += Time.unscaledDeltaTime; // UI 애니는 실시간 기준
+            float k = Mathf.Clamp01(t / dur);
+            rt.localScale = Vector3.Lerp(from, to, k);
+            yield return null;
+        }
+        rt.localScale = to;
+        activePopCo = null;
+    }
 
     void HandleATBResetToZero()
     {
@@ -249,6 +337,7 @@ public class TurnBarUI : MonoBehaviour
         }
         // 내부 레이아웃 계산 로직이 있다면 한 번 더 강제
         RelayoutAll();
+        ClearActiveIcon();
     }
 
 
@@ -256,16 +345,35 @@ public class TurnBarUI : MonoBehaviour
     void RemoveUnitIcon(BattleUnit unit)
     {
         if (!unitIcons.ContainsKey(unit)) return;
+        if (activeUnit == unit) ClearActiveIcon();
 
         Destroy(unitIcons[unit].gameObject);
         unitIcons.Remove(unit);
+    }
+    void ClearActiveIcon()
+    {
+        if (activeBigIcon) Destroy(activeBigIcon.gameObject);
+        activeBigIcon = null;
+
+        // 턴바의 작은 아이콘 다시 보이게 + 좌측으로 스냅
+        var u = activeUnit;
+        if (u && unitIcons.TryGetValue(u, out var img) && img)
+        {
+            img.gameObject.SetActive(true);
+            var rt = img.rectTransform;
+            float xMin = rt.rect.width * rt.pivot.x; // 바의 왼쪽 경계 내 피벗 최소
+            float y = (u.team == Team.Player) ? playerRowY : enemyRowY;
+            rt.anchoredPosition = new Vector2(xMin, y); // 즉시 왼쪽으로 스냅
+        }
+
+        activeUnit = null;
     }
 
     // Wave 텍스트 표시
     private void WaveHandle(int cur, int total, string waveLabel)
     {
         if (!wavelabel) return;
-        wavelabel.text = $"{cur}/{total}";
+        wavelabel.text = $"{cur}";
     }
 
     // 전환 안내 표시

@@ -19,6 +19,7 @@ public class BarrierController : MonoBehaviour
     private bool isOpen = false;
     private bool playerInRange = false;
     private bool hasLoaded = false;
+    [SerializeField] private KeyCode surveyKey = KeyCode.F;
 
     void Start()
     {
@@ -47,7 +48,7 @@ public class BarrierController : MonoBehaviour
     {
         if (!isOpen || !playerInRange || hasLoaded) return;
 
-        if (Input.GetKeyDown(KeyCode.E))
+        if (Input.GetKeyDown(surveyKey))
         {
             LoadNextMap();
             Debug.Log("[Barrier] ƒ˚¡Ó∏ ¿∏∑Œ ¿Ãµø«‘");

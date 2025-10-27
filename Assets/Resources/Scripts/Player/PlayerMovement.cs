@@ -19,6 +19,7 @@ public class PlayerMovement : MonoBehaviour
     private List<Vector3> path = new();
     private Vector2 input = Vector2.zero;
     float movementLockUntil = 0f;
+    int _hardLockTokens = 0; // 무기한 잠금 토큰
 
     private Direction inputDir;
     public bool isPushMode { private set; get; }
@@ -26,6 +27,14 @@ public class PlayerMovement : MonoBehaviour
     private PushObject selectedBox = null;
     private List<PushObject> contactBoxes = new();
     private bool isPerformingPush = false;
+
+    // 마우스 이동 상태
+    bool mouseMoveActive = false;
+    Vector2 mouseMoveTarget;
+    [SerializeField] float clickArrivalThreshold = 0.1f; // 도착 판정
+    [SerializeField] float clickProbeRadius = 0.15f;      // 충돌 예측 반경
+    ContactFilter2D _castFilter;
+    readonly RaycastHit2D[] _castHits = new RaycastHit2D[4];
 
     private SpriteRenderer spriterenderer;
     private Animator animator;
@@ -51,6 +60,10 @@ public class PlayerMovement : MonoBehaviour
         animator = GetComponent<Animator>();
 
         activeMoveSpeed = defaultMoveSpeed;
+
+        // 마우스 이동 충돌 예측 필터 (자기 자신은 자동 제외됨)
+        _castFilter.useTriggers = false;
+        _castFilter.SetLayerMask(impassableLayerMask);
     }
 
     void Update()
@@ -58,6 +71,7 @@ public class PlayerMovement : MonoBehaviour
         // 입력 차단 조건을 한 곳에서 체크
         bool isInputBlocked =
                                 (Time.time < movementLockUntil)
+                              || (_hardLockTokens > 0)
                               || isPerformingPush
                               || GamePause.IsPaused
                               || (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
@@ -67,6 +81,30 @@ public class PlayerMovement : MonoBehaviour
         {
             HaltImmediately();
             return;
+        }
+
+        // 마우스 우클릭 목표 지정 (밀기모드/일시정지/잠금 아닐 때만)
+        if (!isPushMode && Input.GetMouseButtonDown(1))
+        {
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
+                Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x,
+                                                                Input.mousePosition.y,
+                                                                zDist));
+                wp.z = transform.position.z;   // 2D 평면 z 고정(대개 0)
+
+                mouseMoveTarget = wp;
+                mouseMoveActive = true;
+
+                input = Vector2.zero;
+                path.Clear();
+
+                var dir = (Vector2)(mouseMoveTarget - rb.position);
+                if (dir.sqrMagnitude > 0.0001f)
+                    spriterenderer.flipX = dir.x > 0f;
+            }
         }
 
         HandleSurveyKeyPreAction();
@@ -92,19 +130,40 @@ public class PlayerMovement : MonoBehaviour
                 animator.SetFloat("PushX", 0f);
                 animator.SetFloat("PushY", 0f);
                 animator.SetBool("IsPushIdle", false);
+                Shared.interactionHintUI?.HideAll();
                 Debug.Log("[Push] 밀기 모드 종료");
                 return;
             }
 
-            if (inputDir != Direction.None && inputDir == pendingDirectionKey && selectedBox != null)
+            if (selectedBox != null && (Input.GetKeyDown(leftDirectionKey) || Input.GetKeyDown(rightDirectionKey)))
             {
-                if (selectedBox.TryPush(pendingDirectionKey, out var fromCell, out var toCell))
+                // 혹시라도 가까이에서 상대 위치가 바뀌었으면, 현재 프레임 기준으로 다시 한 번 보정
+                var playerCell = floorTilemap.WorldToCell(rb.position);
+                var boxCell = floorTilemap.WorldToCell(selectedBox.transform.position);
+                var delta = boxCell - playerCell;
+                bool odd = Mathf.Abs(playerCell.y) % 2 == 1;
+                pendingDirectionKey = GetDirectionFromDelta(delta, odd);
+
+                if (pendingDirectionKey != Direction.None && IsConfirmKeyFor(pendingDirectionKey))
                 {
-                    StartCoroutine(PerformPush(selectedBox, fromCell, toCell - fromCell));
+                    if (selectedBox.TryPush(pendingDirectionKey, out var fromCell, out var toCell))
+                    {
+                        var (blend, flipX) = GetPushBlend(pendingDirectionKey);
+                        animator.SetFloat("PushX", blend.x);
+                        animator.SetFloat("PushY", blend.y);
+                        spriterenderer.flipX = flipX;
+
+                        StartCoroutine(PerformPush(selectedBox, fromCell, toCell - fromCell));
+                    }
+                    else
+                    {
+                        Debug.Log("[Push] 해당 방향으로는 밀 수 없습니다.");
+                    }
                 }
                 else
                 {
-                    Debug.Log("[Push] 해당 방향으로는 밀 수 없습니다.");
+                    // 잘못된(반대) 키면 무시 (원하면 여기서 효과음/진동/짧은 UI 피드백 가능)
+                    // Debug.Log("[Push] 반대 방향 키 입력 무시");
                 }
             }
 
@@ -140,11 +199,13 @@ public class PlayerMovement : MonoBehaviour
         {
             if (contactBoxes.Count > 0)
             {
-                Shared.interactionHintUI?.HideAll();
+                //Shared.interactionHintUI?.HideAll();
+                Shared.interactionHintUI?.HideBoth();
                 selectedBox = contactBoxes.OrderBy(b => Vector2.SqrMagnitude(rb.position - (Vector2)b.transform.position)).First();
                 isPushMode = true;
                 animator.SetBool("IsPushIdle", true); // 밀기대기모드 애니메이션 시작
                 path.Clear();
+                Shared.interactionHintUI?.ShowCancelAt(selectedBox.transform);
                 Debug.Log("[Push] 밀기 모드 진입");
             }
             return;
@@ -170,6 +231,50 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
+        // 마우스 직선 이동 우선 처리
+        if (mouseMoveActive)
+        {
+            Vector2 pos = rb.position;
+            Vector2 to = mouseMoveTarget - pos;
+            float dist = to.magnitude;
+
+            // 도착 판정
+            if (dist <= clickArrivalThreshold)
+            {
+                mouseMoveActive = false;
+                HaltImmediately();                  // 애니메이션도 0으로
+                return;
+            }
+
+            Vector2 dir = to / Mathf.Max(dist, 0.0001f);
+            float step = defaultMoveSpeed * Time.fixedDeltaTime;
+            Vector2 wanted = pos + dir * step;
+
+            // 스프라이트 방향 갱신
+            spriterenderer.flipX = dir.x > 0f;
+
+            // 본인 콜라이더를 자동으로 무시하는 Rigidbody 캐스트 사용
+            int hitCount = rb.Cast(dir, _castFilter, _castHits, step);
+            bool hitGeom = hitCount > 0;
+
+            // 다음 셀의 통행 가능 여부도 체크(타일/벽/박스 중심에 걸치는 경우)
+            Vector3Int tgtCell = floorTilemap.WorldToCell(wanted);
+            bool walkable = IsWalkableCell(tgtCell);
+
+            if (hitGeom || !walkable)
+            {
+                // 충돌 → 즉시 정지
+                mouseMoveActive = false;
+                HaltImmediately();
+                return;
+            }
+
+            // 정상 이동
+            rb.MovePosition(wanted);
+            if (animator != null) animator.SetInteger("Move", 1);
+            return;
+        }
+
         animator.SetInteger("Move", (path.Count > 0 || input.sqrMagnitude > 0f) ? 1 : 0);
 
         // 키 이동 처리
@@ -189,6 +294,16 @@ public class PlayerMovement : MonoBehaviour
     {
         movementLockUntil = Mathf.Max(movementLockUntil, Time.time + Mathf.Max(0f, seconds));
         HaltImmediately(); // 즉시 멈춤 (애니/속도 초기화)
+    }
+    public void LockMovementIndefinite()
+    {
+        _hardLockTokens++;
+        HaltImmediately();
+    }
+    public void UnlockMovementIndefinite()
+    {
+        _hardLockTokens = Mathf.Max(0, _hardLockTokens - 1);
+        HaltImmediately();
     }
     bool IsCommunicationBlocked(Collider2D collider2d)
     {
@@ -427,6 +542,25 @@ public class PlayerMovement : MonoBehaviour
         };
     }
 
+    bool IsConfirmKeyFor(Direction dir)
+    {
+        switch (dir)
+        {
+            // 왼쪽 계열은 A(왼쪽)만 허용
+            case Direction.West:
+            case Direction.NW:
+            case Direction.SW:
+                return Input.GetKeyDown(leftDirectionKey);
+
+            // 오른쪽 계열은 D(오른쪽)만 허용
+            case Direction.East:
+            case Direction.NE:
+            case Direction.SE:
+                return Input.GetKeyDown(rightDirectionKey);
+        }
+        return false;
+    }
+
     public void ClearPath() => path.Clear();
 
     bool IsWalkableCell(Vector3Int cell)
@@ -434,8 +568,18 @@ public class PlayerMovement : MonoBehaviour
         if (!floorTilemap.HasTile(cell)) return false;
         if (wallTilemap != null && wallTilemap.HasTile(cell)) return false;
         Vector3 world = floorTilemap.GetCellCenterWorld(cell);
-        Collider2D block = Physics2D.OverlapCircle(world, 0.1f, impassableLayerMask);
-        return block == null;
+        //Collider2D block = Physics2D.OverlapCircle(world, 0.1f, impassableLayerMask);
+        //return block == null;
+
+        // 자기 자신을 무시하기 위해 All로 받아서 필터링
+        var hits = Physics2D.OverlapCircleAll(world, 0.1f, impassableLayerMask);
+        foreach (var h in hits)
+        {
+            if (!h) continue;
+            if (h.attachedRigidbody == rb) continue; // ★ 본인 무시
+            return false; // 뭔가 걸리면 통행 불가
+        }
+        return true;
     }
 
     IEnumerator PerformPush(PushObject box, Vector3Int fromCell, Vector3Int dir)
@@ -514,6 +658,7 @@ public class PlayerMovement : MonoBehaviour
         // 입력과 경로를 모두 초기화해서 FixedUpdate가 더 이상 움직이지 않게 함
         input = Vector2.zero;
         inputDir = Direction.None; // 이미 ResetInput()도 있지만 여기서 직접 처리
+        mouseMoveActive = false;
         ClearPath();
         if (animator != null) animator.SetInteger("Move", 0);
     }

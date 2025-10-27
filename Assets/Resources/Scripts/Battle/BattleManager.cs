@@ -228,11 +228,6 @@ public class BattleManager : MonoBehaviour
             if (sc != null)
             {
                 sc.OnStatusChanged += RecomputeATBSpeedsFromLiveUnits; // 기존
-                if (logAGIOnStatusChange)
-                {
-                    var unitCapture = u; // 루프 변수 복사
-                    sc.OnStatusChanged += () => LogUnitAGI(unitCapture, "StatusChanged");
-                }
             }
         }
 
@@ -298,8 +293,9 @@ public class BattleManager : MonoBehaviour
             {
                 u.UpdateATB(delta);
                 OnATBChanged?.Invoke(u, u.ATB, u.MaxATB); // UI 업데이트 이벤트 호출
+                //if (u.name == "LuckySix") Debug.Log($"[ATB Emit] {u.name} ATB={u.ATB:F3} / Max={u.MaxATB:F3}");//ActiveIcon의 출력이 이상할 시 테스트용으로 남겨둠
             }
-                
+
         }
 
         // ATB 최대 유닛(동시턴 타이브레이커 포함) 찾기
@@ -323,20 +319,6 @@ public class BattleManager : MonoBehaviour
                 StartTurn(acting);
             }
         }
-    }
-
-
-
-    [Header("Debug/Logs")]
-    [SerializeField] bool logAGIOnTurnStart = true;
-    [SerializeField] bool logAGIOnStatusChange = false;
-
-    void LogUnitAGI(BattleUnit u, string reason)
-    {
-        if (u == null) return;
-        var sc = u.GetComponent<StatusController>();
-        int stacks = (sc != null) ? sc.GetStacks(StatusId.Slow) : 0;            // GetStacks
-        float mult = (sc != null) ? sc.GetAgilityMultiplier() : 1f;             // GetAgilityMultiplier
     }
 
     // Grid 점유 해제 시도(맵/그리드 레퍼런스에 맞춰 구현)
@@ -542,9 +524,10 @@ public class BattleManager : MonoBehaviour
         manualEndRequested = false;
         OnAnyUnitTurnStarted?.Invoke(unit);
 
+        Debug.Log($"[Battle] StartTurn -> {acting.name}");
+
         var sc = unit.GetComponent<StatusController>();
         if (sc != null) sc.OnTurnStart();
-        if (logAGIOnTurnStart) LogUnitAGI(unit, "TurnStart");
 
         // 캐스팅 성공 턴 소비 처리
         if (unit.team == Team.Enemy)
@@ -572,8 +555,6 @@ public class BattleManager : MonoBehaviour
             //Debug.Log($"[EnemyTurn] {unit.name} 턴 시작 → ATB 정지");
             StartCoroutine(EnemyTurnRoutine(unit));
         }
-
-        //UpdateTurnIndicator();
     }
 
     // === 생존 유닛들의 현재 AGI 범위로 전원의 ATB 속도 재계산 ===

@@ -34,7 +34,7 @@ public class UnitStatusItemUI : MonoBehaviour
     public Image highlightOverlay;                 // 예: 전체를 덮는 Image
     public Sprite defaultHighlightSprite;          // (선택) 기본 하이라이트 스프라이트
     public List<Graphic> tintTargets = new List<Graphic>(); //오버레이가 없을 때 색상으로 강조하고 싶은 Graphic들
-    public Color highlightTint = new Color(1f, 1f, 0.5f, 1f); // 밝은 노란 톤
+    public Color highlightTint = new Color(183f / 255f, 173f / 255f, 122f / 255f, 1f); // 밝은 노란 톤
 
     [Header("Death Style")]
     //public Color deadTint = new Color(0.6f, 0.6f, 0.6f, 1f);   // 회색 강조

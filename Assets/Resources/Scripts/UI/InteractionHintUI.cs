@@ -26,9 +26,9 @@ public class InteractionHintUI : MonoBehaviour
 
     [Header("Cancel")]
     [SerializeField] GameObject cancelRoot;
-    [SerializeField] RectTransform cancelRect;
     [SerializeField] Text cancelLabel;
-    //[SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // 기본 힌트 위치 F
+    [SerializeField] RectTransform cancelRect;
+    [SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // 기본 힌트 위치 F
     Vector2 _cancelOffset;   // 현재 적용중
 
     RectTransform rootRect;
@@ -36,6 +36,7 @@ public class InteractionHintUI : MonoBehaviour
 
     public void ShowSurveyAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowSurvey(); }
     public void ShowCommunicationAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowCommunication(); }
+    public void ShowCancelAt(Transform t) { BindFollow(t);SetOffsetsFrom(t); ShowCancel(); }
     public void ShowBothAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowBoth(); }
 
     void Awake()
@@ -47,7 +48,7 @@ public class InteractionHintUI : MonoBehaviour
         Shared.interactionHintUI = this; // 싱글톤 접근
         _surveyOffset = defaultSurveyOffset;
         _commOffset = defaultCommOffset;
-        _cancelOffset = defaultSurveyOffset;
+        _cancelOffset = defaultCancelOffset;
     }
 
     void LateUpdate()
@@ -92,27 +93,27 @@ public class InteractionHintUI : MonoBehaviour
         {
             _surveyOffset = anchor.surveyOffset;
             _commOffset = anchor.commOffset;
-            _cancelOffset = anchor.surveyOffset;    //surveyOffset과 같은 위치를 사용하기에 그대로 사용
+            _cancelOffset = anchor.cancelOffset;    //surveyOffset과 같은 위치를 사용하기에 그대로 사용
             return;
         }
         // 없으면 기본값
         _surveyOffset = defaultSurveyOffset;
         _commOffset = defaultCommOffset;
-        _cancelOffset = defaultSurveyOffset;
+        _cancelOffset = defaultCancelOffset;
     }
 
     public void SetOffsets(Vector2? survey = null, Vector2? comm = null)
     {
         _surveyOffset = survey ?? defaultSurveyOffset;
         _commOffset = comm ?? defaultCommOffset;
-        _cancelOffset = survey ?? defaultSurveyOffset;
+        _cancelOffset = survey ?? defaultCancelOffset;
     }
 
     void ResetOffsets()
     {
         _surveyOffset = defaultSurveyOffset;
         _commOffset = defaultCommOffset;
-        _cancelOffset = defaultSurveyOffset;
+        _cancelOffset = defaultCancelOffset;
     }
 
     public void BindFollow(Transform t) => followTarget = t;
@@ -129,17 +130,33 @@ public class InteractionHintUI : MonoBehaviour
         if (commRoot) commRoot.SetActive(true);
         ShowRoot();
     }
+    public void ShowCancel()
+    {
+        if (cancelLabel) cancelLabel.text = "취소";
+        if (cancelRoot) cancelRoot.SetActive(true);
+        ShowRoot();
+    }
+
     public void ShowBoth()
     {
         ShowSurvey();
         ShowCommunication();
     }
+
+    public void HideBoth()
+    {
+        HideSurvey();
+        HideCommunication();
+    }
+
     public void HideSurvey() { if (surveyRoot) surveyRoot.SetActive(false); TryHideRoot(); }
     public void HideCommunication() { if (commRoot) commRoot.SetActive(false); TryHideRoot(); }
+    public void HideCancel() { if (cancelRoot) cancelRoot.SetActive(false);TryHideRoot(); }
     public void HideAll()
     {
         if (surveyRoot) surveyRoot.SetActive(false);
         if (commRoot) commRoot.SetActive(false);
+        if (cancelRoot) cancelRoot.SetActive(false);
         if (group) { group.alpha = 0f; group.blocksRaycasts = false; group.interactable = false; }
         ResetOffsets();
     }
@@ -152,7 +169,7 @@ public class InteractionHintUI : MonoBehaviour
     void TryHideRoot()
     {
         if (!group) return;
-        bool any = (surveyRoot && surveyRoot.activeSelf) || (commRoot && commRoot.activeSelf);
+        bool any = (surveyRoot && surveyRoot.activeSelf) || (commRoot && commRoot.activeSelf) || (cancelRoot && cancelRoot.activeSelf);
         if (!any) HideAll();
     }
 }
