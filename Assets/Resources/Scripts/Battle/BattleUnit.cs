@@ -116,6 +116,7 @@ public class BattleUnit : MonoBehaviour
         // 최대치가 줄어들 땐 현재값도 즉시 맞추기
         HP = Mathf.Min(HP, MaxHP);
         MP = Mathf.Min(MP, MaxMP);
+        Rage = Mathf.Min(MP, MaxRage);
 
         if (debugLogStats)
         {

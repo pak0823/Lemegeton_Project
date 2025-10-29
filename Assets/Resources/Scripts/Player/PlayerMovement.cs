@@ -32,7 +32,7 @@ public class PlayerMovement : MonoBehaviour
     bool mouseMoveActive = false;
     Vector2 mouseMoveTarget;
     [SerializeField] float clickArrivalThreshold = 0.1f; // 도착 판정
-    [SerializeField] float clickProbeRadius = 0.15f;      // 충돌 예측 반경
+    //[SerializeField] float clickProbeRadius = 0.15f;      // 충돌 예측 반경
     ContactFilter2D _castFilter;
     readonly RaycastHit2D[] _castHits = new RaycastHit2D[4];
 

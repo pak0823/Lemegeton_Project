@@ -27,12 +27,6 @@ public class UIArrowNavigator : MonoBehaviour
     [Tooltip("마우스/다른 스크립트로 선택된 버튼도 하이라이트가 따라가도록 갱신")]
     [SerializeField] private bool followExternalSelection = true;
 
-    [Header("Highlight")]
-    [Tooltip("각 버튼의 자식 중 이 이름의 오브젝트만 활성화합니다")]
-    [SerializeField] private string highlightChildName = "Highlight";
-    [Tooltip("버튼 라벨 재바인딩 등으로 구조가 바뀌면 true로 호출하여 캐시를 갱신하세요")]
-    [SerializeField] private bool autoRebuildOnEnable = true;
-
     [Header("Unity 기본 네비게이션(Selectable Navigation) 끄기")]
     [SerializeField] private bool disableUnitySelectableNavigation = true;
 
@@ -42,27 +36,36 @@ public class UIArrowNavigator : MonoBehaviour
     [SerializeField] private BattleManager battle;           // (SkillPanel 쪽만) 인스펙터에 할당
     private bool navLocked = false;
 
+    // 텍스트 색상 하이라이트
+    [Header("Text Color Highlight")]
+    [SerializeField] private Color32 focusOrHoverColor = new Color32(255, 155, 0, 255);
+
     private int index = 0;
     private readonly List<GameObject> highlightCache = new List<GameObject>();
     private GameObject lastSelectedGO; // 외부 선택 추적용
 
+    // 버튼별 라벨 및 원본 색상 캐시
+    private readonly List<Text> labelCache = new List<Text>();
+    private readonly List<Color> originalColors = new List<Color>();
+    private bool originalCaptured = false;   // 최초 1회만 원본색 저장
+
     void Awake()
     {
-        if (autoRebuildOnEnable) BuildHighlightCache();
-        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();   //기본 UI 네비게이션 끄기
-        if(Shared.UIArrowNavigator == null)
-            Shared.UIArrowNavigator = this;
+        BuildLabelCache(captureOriginal: true);
+        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
+        if (Shared.UIArrowNavigator == null) Shared.UIArrowNavigator = this; // 기존 동작 유지  :contentReference[oaicite:0]{index=0}
     }
 
     void OnEnable()
     {
-        if (autoRebuildOnEnable) BuildHighlightCache();
+        BuildLabelCache(captureOriginal: false);
         if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
-        navLocked = false;           // 패널이 새로 열릴 때는 항상 잠금 해제 상태로 시작
-        // 패널이 켜질 때 첫 유효 버튼으로 포커스
+        navLocked = false;
+
         index = FirstActiveIndex();
-        if (autoFocusOnEnable) Focus();    // EventSystem에 선택 반영
-        UpdateHighlight();                 // 하이라이트 갱신
+        if (autoFocusOnEnable) Focus();
+        UpdateHighlight(); // 이제는 "텍스트 색"을 갱신하도록 동작  :contentReference[oaicite:1]{index=1}
+
         lastSelectedGO = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
         battle = Shared.BattleManager;
     }
@@ -89,36 +92,19 @@ public class UIArrowNavigator : MonoBehaviour
         // 이동 키 분기: Panel_Action(Horizontal) / Panel_Skill(Vertical)
         if (navAxis == NavAxis.Horizontal)
         {
-            if (Input.GetKeyDown(RightKey))
-            {
-                index = NextIndex(+1);
-                Focus(); UpdateHighlight(); handledKey = true;
-            }
-            else if (Input.GetKeyDown(LeftKey))
-            {
-                index = NextIndex(-1);
-                Focus(); UpdateHighlight(); handledKey = true;
-            }
+            if (Input.GetKeyDown(RightKey)) { index = NextIndex(+1); Focus(); UpdateHighlight(); handledKey = true; }
+            else if (Input.GetKeyDown(LeftKey)) { index = NextIndex(-1); Focus(); UpdateHighlight(); handledKey = true; }
         }
         else // Vertical
         {
-            if (Input.GetKeyDown(DownKey))
-            {
-                index = NextIndex(+1);
-                Focus(); UpdateHighlight(); handledKey = true;
-            }
-            else if (Input.GetKeyDown(UpKey))
-            {
-                index = NextIndex(-1);
-                Focus(); UpdateHighlight(); handledKey = true;
-            }
+            if (Input.GetKeyDown(DownKey)) { index = NextIndex(+1); Focus(); UpdateHighlight(); handledKey = true; }
+            else if (Input.GetKeyDown(UpKey)) { index = NextIndex(-1); Focus(); UpdateHighlight(); handledKey = true; }
         }
 
         // 확정(E)  현재 버튼 onClick (취소는 BattleInput에서 처리 계속)
         if (Input.GetKeyDown(confirmKey))
         {
             var b = GetButton(index);
-            // 확정 직후 잠금
             if (lockAfterConfirm) navLocked = true;
             b?.onClick?.Invoke();
             handledKey = true;
@@ -154,7 +140,7 @@ public class UIArrowNavigator : MonoBehaviour
     public void RebuildAndRefocus(bool keepCurrentIfPossible = true)
     {
         int prevIdx = index;
-        BuildHighlightCache();
+        BuildLabelCache(captureOriginal: true);
         if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
         if (!keepCurrentIfPossible || !IsUsable(GetButton(prevIdx)))
             index = FirstActiveIndex();
@@ -166,9 +152,8 @@ public class UIArrowNavigator : MonoBehaviour
     public void SetButtons(List<Button> newButtons, bool refocus = true)
     {
         buttons = newButtons ?? new List<Button>();
-        BuildHighlightCache();
+        BuildLabelCache(captureOriginal: true);
         if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
-
         index = FirstActiveIndex();
         if (refocus) { Focus(); UpdateHighlight(); }
     }
@@ -176,8 +161,22 @@ public class UIArrowNavigator : MonoBehaviour
     {
         if (i < 0 || i >= buttons.Count) return;
         index = i;
-        if (focus) Focus();          // EventSystem 선택까지 반영
+        if (focus) Focus();
         if (updateHighlight) UpdateHighlight();
+    }
+    // 마우스/외부 포커스 진입 (Relay에서 호출)  :contentReference[oaicite:3]{index=3}
+    public void SetExternalFocus(Button b, bool alsoSetEventSystem = false)
+    {
+        if (!b) return;
+        int i = IndexOfButtonDeep(b.gameObject);
+        if (i < 0) return;
+
+        index = i;      // 포커스 이동
+        if (alsoSetEventSystem)
+        {
+            Focus();
+        }
+        UpdateHighlight();
     }
 
     // === Core ===
@@ -214,18 +213,6 @@ public class UIArrowNavigator : MonoBehaviour
         else
             b.Select();
     }
-    public void SetExternalFocus(Button b, bool alsoSetEventSystem = false)
-    {
-        if (!b) return;
-        int i = IndexOfButtonDeep(b.gameObject);
-        if (i < 0) return;
-        index = i;
-        if (alsoSetEventSystem) Focus();
-        UpdateHighlight();
-    }
-
-    // === Highlight ===
-
     void ApplyDisableSelectableNavigation()
     {
         foreach (var btn in buttons)
@@ -238,37 +225,37 @@ public class UIArrowNavigator : MonoBehaviour
     }
 
 
-    void BuildHighlightCache()
+    void BuildLabelCache(bool captureOriginal)
     {
-        highlightCache.Clear();
-        for (int i = 0; i < buttons.Count; i++)
+        labelCache.Clear();
+        foreach (var btn in buttons)
         {
-            GameObject h = null;
-            var btn = buttons[i];
-            if (btn != null)
-            {
-                var t = btn.transform.Find(highlightChildName);
-                if (t) h = t.gameObject;
-            }
-            highlightCache.Add(h);
+            Text t = null;
+            if (btn != null) t = btn.GetComponentInChildren<Text>(true);
+            labelCache.Add(t);
         }
-        // 최초엔 모두 끔
-        for (int i = 0; i < highlightCache.Count; i++)
+
+        // 원본색은 "최초 1회"만 캡처
+        if (captureOriginal && !originalCaptured)
         {
-            var h = highlightCache[i];
-            if (h && h.activeSelf) h.SetActive(false);
+            originalColors.Clear();
+            foreach (var t in labelCache)
+                originalColors.Add(t ? t.color : Color.white);
+            originalCaptured = true;
         }
+
+        // 패널 재활성화 시 한 번 전체를 원본으로 복구
+        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
+            if (labelCache[i]) labelCache[i].color = originalColors[i];
     }
 
     void UpdateHighlight()
     {
-        for (int i = 0; i < highlightCache.Count; i++)
-        {
-            var h = highlightCache[i];
-            if (!h) continue;
-            bool on = (i == index);
-            if (h.activeSelf != on) h.SetActive(on);
-        }
+        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
+            if (labelCache[i]) labelCache[i].color = originalColors[i];
+
+        if (index >= 0 && index < labelCache.Count && labelCache[index])
+            labelCache[index].color = focusOrHoverColor;
     }
 
     // === Utils ===

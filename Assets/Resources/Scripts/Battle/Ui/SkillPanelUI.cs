@@ -10,6 +10,7 @@ public class SkillPanelUI : MonoBehaviour
     public Button[] buttons;            // 4~5개
     [SerializeField] private Text descriptionText;   // 스킬 설명 표시
     [SerializeField] private Image rangeImage;     // 범위(아이콘 재활용)
+    [SerializeField] private Text selectTargetHintText;
 
     private SkillAsset[] cachedAssets;  // 마지막으로 채운 SO 목록 캐시
 
@@ -23,6 +24,7 @@ public class SkillPanelUI : MonoBehaviour
         {
             battle.OnSkillPanelToggled += HandleToggle;
             battle.OnSkillPanelPopulateSO += HandlePopulateSO;
+            battle.OnHint += HandleHint;
         }
 
         if (panel != null) panel.SetActive(false); // 기본 비활성
@@ -35,12 +37,19 @@ public class SkillPanelUI : MonoBehaviour
         {
             battle.OnSkillPanelToggled -= HandleToggle;
             battle.OnSkillPanelPopulateSO -= HandlePopulateSO;
+            battle.OnHint -= HandleHint;
         }
     }
 
     void HandleToggle(bool show)
     {
         if (panel != null) panel.SetActive(show);
+
+        if (!show && selectTargetHintText)
+        {
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+        }
     }
 
     void HandlePopulateSO(SkillAsset[] assets)
@@ -48,12 +57,35 @@ public class SkillPanelUI : MonoBehaviour
         if (buttons == null) return;
         cachedAssets = assets; // 캐시
         int n = Mathf.Min(assets?.Length ?? 0, buttons.Length);
+        int last = buttons.Length - 1;
 
         for (int i = 0; i < buttons.Length; i++)
         {
             var btn = buttons[i];
             if (btn == null) continue;
 
+            // --- 마지막 버튼은 항상 Cancel로 구성 ---
+            if (i == last)
+            {
+                btn.gameObject.SetActive(true);
+
+                // 클릭 → 취소 이벤트 발생 (인스펙터에서 배틀 취소 함수 연결)
+                btn.onClick.RemoveAllListeners();
+                btn.onClick.AddListener(() =>
+                {
+                    // 상세를 비우고 패널 상태는 유지/닫기는 배틀 로직에 맡김
+                    UpdateDetail(null, forceClear: true, showCancelDesc: true);
+                });
+
+                // 호버/선택 시 상세를 비우기
+                var et = btn.GetComponent<EventTrigger>() ?? btn.gameObject.AddComponent<EventTrigger>();
+                ClearTriggers(et);
+                AddTrigger(et, EventTriggerType.PointerEnter, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
+                AddTrigger(et, EventTriggerType.Select, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
+                continue;
+            }
+
+            // --- 스킬 버튼 구성 ---
             if (i < n)
             {
                 btn.gameObject.SetActive(true);
@@ -68,8 +100,8 @@ public class SkillPanelUI : MonoBehaviour
                 {
                     // 하이라이트를 먼저 현재 버튼으로 고정
                     var nav = (panel != null ? panel.GetComponent<UIArrowNavigator>() : null)
-                                ?? GetComponentInChildren<UIArrowNavigator>(true);
-                    if (nav != null) nav.SelectIndexImmediate(capture);
+                                    ?? GetComponentInChildren<UIArrowNavigator>(true);
+                    if (nav != null) nav.SelectIndexImmediate(capture, focus: false, updateHighlight: true);
 
                     // EventSystem에도 선택으로 알려주고 싶다면
                     if (EventSystem.current != null)
@@ -90,8 +122,7 @@ public class SkillPanelUI : MonoBehaviour
             }
             else
             {
-                if((buttons.Length - 1) > i)
-                    btn.gameObject.SetActive(false);
+                btn.gameObject.SetActive(false);
             }
         }
 
@@ -109,8 +140,23 @@ public class SkillPanelUI : MonoBehaviour
     }
 
     // === 상세 갱신 ===
-    void UpdateDetail(SkillAsset _skillasset)
+    void UpdateDetail(SkillAsset _skillasset, bool forceClear = false, bool showCancelDesc = false)
     {
+        // Cancel 전용 설명
+        if (showCancelDesc)
+        {
+            if (descriptionText) descriptionText.text = "선택을 취소합니다.";
+            if (rangeImage)
+            {
+                rangeImage.sprite = null;
+                rangeImage.enabled = false;
+            }
+            return;
+        }
+
+        // Cancel 버튼 혹은 forceClear=true 면 항상 비우기
+        bool clear = forceClear || _skillasset == null;
+
         if (descriptionText)
             descriptionText.text = _skillasset != null ? (string.IsNullOrEmpty(_skillasset.description) ? "" : _skillasset.description) : "";
 
@@ -129,5 +175,19 @@ public class SkillPanelUI : MonoBehaviour
         entry.callback.AddListener(_ => _callback?.Invoke());
         _eventtrigger.triggers.RemoveAll(e => e.eventID == type && e.callback == null); // 청소(옵션)
         _eventtrigger.triggers.Add(entry);
+    }
+    void ClearTriggers(EventTrigger _eventtrigger)
+    {
+        if (_eventtrigger == null) return;
+        _eventtrigger.triggers.Clear();
+    }
+
+    void HandleHint(string msg)
+    {
+        if (!selectTargetHintText) return;
+
+        bool show = !string.IsNullOrEmpty(msg);
+        selectTargetHintText.text = show ? msg : string.Empty;
+        selectTargetHintText.gameObject.SetActive(show);
     }
 }

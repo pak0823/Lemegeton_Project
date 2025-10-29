@@ -67,7 +67,6 @@ public class BattleManager : MonoBehaviour
     private Tilemap currentSkillTargetMap;  //스킬이 지정한 맵
     public Tilemap CurrentSkillTargetMap => currentSkillTargetMap;
 
-
     // === 수동 종료 감지용 ===
     bool manualEndRequested = false;
 
@@ -92,6 +91,7 @@ public class BattleManager : MonoBehaviour
 
     // UI와 통신용 이벤트
     public event System.Action<bool> OnSkillPanelToggled;  // true=열기/false=닫기
+    public event System.Action<string> OnHint;   // UI에 간단한 안내 문구 전달
 
     [Header("Projectile/VFX")]
     public GameObject projectilePrefab;     // 투사체
@@ -721,6 +721,7 @@ public class BattleManager : MonoBehaviour
             currentSkillSO = null;
             currentSkillTargetMap = null;
             state = BattleState.ActionSelect;
+            UpdateTargetingHint();
             if (!isSelectingSkill) OpenSkillPanel();
             return;
         }
@@ -729,6 +730,7 @@ public class BattleManager : MonoBehaviour
             ClearMovePreview();
             ClearTargetSelection();
             state = BattleState.ActionSelect;
+            UpdateTargetingHint();
             return;
         }
         // 그밖의 상황에서 패널이 열려 있다면(= 취소 2회째) 패널 닫기
@@ -737,6 +739,7 @@ public class BattleManager : MonoBehaviour
             ClearAllPreviews();
             CloseSkillPanel();
             state = BattleState.ActionSelect;
+            UpdateTargetingHint();
             return;
         }
     }
@@ -1172,11 +1175,13 @@ public class BattleManager : MonoBehaviour
 
         OnSkillPanelPopulateSO?.Invoke(view);
         OnSkillPanelToggled?.Invoke(true);
+        UpdateTargetingHint();
     }
     public void CloseSkillPanel()
     {
         isSelectingSkill = false;
         OnSkillPanelToggled?.Invoke(false);
+        UpdateTargetingHint();
     }
 
     public void SelectSkill(int index)
@@ -1217,13 +1222,14 @@ public class BattleManager : MonoBehaviour
         state = BattleState.Targeting;
         ClearAllPreviews();
         ClearTargetSelection(); // 기존 선택/마커 초기화
+        UpdateTargetingHint();
 
         // Unit 타겟형이면: AGI 내림차순 사이클 구성 후 첫 타겟으로 마커 표시
         if (skill.targetMode == SkillTargetMode.Unit)
         {
             BuildTargetCycle();           // Enemy만, AGI desc
-            if (targetCycle.Count > 0)
-                SelectTarget(0);          // 첫 타겟(=가장 빠른 AGI)으로 마커/미리보기
+            //if (targetCycle.Count > 0)
+            //    SelectTarget(0);          // 첫 타겟(=가장 빠른 AGI)으로 마커/미리보기
         }
         else // Tile 타겟형: 내부 타일 커서를 1회 세팅하고 프리뷰 유지
         {
@@ -1245,6 +1251,15 @@ public class BattleManager : MonoBehaviour
                 }
             }
         }
+    }
+
+    private void UpdateTargetingHint()
+    {
+        // 스킬이 확정되어 타게팅 상태일 때만 힌트 노출
+        if (state == BattleState.Targeting && currentSkillSO != null)
+            OnHint?.Invoke("대상을 선택하세요");
+        else
+            OnHint?.Invoke(string.Empty);
     }
 
     // 현재 선택된 스킬의 범위를 "유닛 기준"으로 미리보기
@@ -1554,6 +1569,7 @@ public class BattleManager : MonoBehaviour
         currentSkill = default;           // 레거시
         currentSkillSO = null;            // SO도 클리어
         currentSkillTargetMap = null;
+        UpdateTargetingHint();
     }
 
 

@@ -23,7 +23,7 @@ namespace Project.UI
 
         [Header("Visual")]
         [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f; // 저장 없음일 때 '계속하기' 투명도
-        [SerializeField] private Color focusTextColor = new Color(1f, 0.5f, 0f);    // 포커스 시 텍스트 색 (주황)
+        [SerializeField] private Color focusTextColor = new Color(255f/255f, 155f/255f, 0f);    // 포커스 시 텍스트 색 (주황)
 
         private readonly Dictionary<Text, Color> _origTextColors = new Dictionary<Text, Color>();
         public OptionsMenuUI optionPanel;
