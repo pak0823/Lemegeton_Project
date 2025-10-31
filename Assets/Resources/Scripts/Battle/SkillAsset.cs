@@ -120,8 +120,7 @@ public abstract class SkillAsset : ScriptableObject
 
     //    return top[Random.Range(0, top.Count)];
     //}
-    public static BattleUnit PickPreferredStatusThenHighestHostility(
-    IEnumerable<BattleUnit> candidates, StatusId preferred)
+    public static BattleUnit PickPreferredStatusThenHighestHostility(IEnumerable<BattleUnit> candidates, StatusId preferred)
     {
         if (candidates == null) return null;
         var list = candidates.Where(u => u && u.team == Team.Player && !u.IsDead).ToList();
@@ -135,5 +134,18 @@ public abstract class SkillAsset : ScriptableObject
 
         if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
         return PickTargetByWeightedHostility(list);
-}
+    }
+    public virtual string GetFullDescriptionRich()
+    {
+        // description 끝에 (MP:00) 추가
+        if (mpCost > 0)
+        {
+            string mpColor = "#00A2FF"; // 밝은 파란색
+            return $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{mpCost}</color>)</color></size>";
+        }
+        else
+        {
+            return description;
+        }
+    }
 }

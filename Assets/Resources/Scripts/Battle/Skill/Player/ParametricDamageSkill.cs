@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEngine.UIElements;
-using static UnityEngine.GraphicsBuffer;
 
 [CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Damage", fileName = "ParametricDamageSkill")]
 public class ParametricDamageSkill : SkillAsset
@@ -72,52 +70,8 @@ public class ParametricDamageSkill : SkillAsset
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
-        if (areaPreset == AreaPreset.Single) { yield return originCell; yield break; }  //단일
-
-        if (areaPreset == AreaPreset.LineHorizontal)    //가로
-        {
-            var ax = SkillLibrary.OffsetToAxial(originCell);
-            var deltas = new[] { new Vector2Int(-1, 0), new Vector2Int(0, 0), new Vector2Int(1, 0) };
-            foreach (var d in deltas)
-                yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
-            yield break;
-        }
-
-        if (areaPreset == AreaPreset.LineDiagU3)
-        {
-            var ax = SkillLibrary.OffsetToAxial(originCell);
-
-            // 스위치로 축만 선택
-            var dir = diagUseNEAxis
-                ? new Vector2Int(1, -1)  // NE/SW 축 (↗↙)
-                : new Vector2Int(0, -1); // NW/SE 축 (↖↘)
-
-            for (int i = -1; i <= 1; i++)
-            {
-                var p = new Vector2Int(ax.x + dir.x * i, ax.y + dir.y * i);
-                yield return SkillLibrary.AxialToOffset(p);
-            }
-            yield break;
-        }
-
-        if (areaPreset == AreaPreset.LineDiagU7)
-        {
-            var ax = SkillLibrary.OffsetToAxial(originCell);
-            var dir = diagUseNEAxis ? new Vector2Int(1, -1) : new Vector2Int(0, -1);
-            for (int i = -3; i <= 3; i++)
-            {
-                var p = new Vector2Int(ax.x + dir.x * i, ax.y + dir.y * i);
-                yield return SkillLibrary.AxialToOffset(p);
-            }
-            yield break;
-        }
-
-        yield return originCell;
-        var axR = SkillLibrary.OffsetToAxial(originCell);
-        var deltasR = new[]{ new Vector2Int(1,0), new Vector2Int(1,-1), new Vector2Int(0,-1),
-                             new Vector2Int(-1,0), new Vector2Int(-1,1), new Vector2Int(0,1) };
-        foreach (var d in deltasR)
-            yield return SkillLibrary.AxialToOffset(new Vector2Int(axR.x + d.x, axR.y + d.y));
+        foreach (var c in AreaShapes.GetCells(originCell, areaPreset, diagUseNEAxis))
+            yield return c;
     }
 
     BattleUnit PickPrimaryTarget()
@@ -250,46 +204,24 @@ public class ParametricDamageSkill : SkillAsset
                         .Where(u => u != null && !u.IsDead && u.team != caster.team) // 상대팀만
                         .ToList();
 
-        int baseStat = (damageSchool == DamageSchool.Physical) ? caster.PhysicalDamage : caster.MagicDamage;
+        bm.ExecuteSkillDamage(caster, victims, this, map, centerCell);
+    }
 
-        foreach (var v in victims)
-        {
-            float mult = GetMultiplierFor(v);        // 상태기반 추가 배수
+    public override int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
+    {
+        // 1) 기본 산식(속성/저항 포함)은 부모 호출
+        int baseDmg = base.ComputeDamage(caster, target, ctx);
 
-            if (useFrontlineBonus && IsInFrontline(caster, frontlineDepth))
-                mult *= Mathf.Max(0f, frontlineMultiplier);
+        // 2) 추가 배수: 상태 기반
+        float mult = GetMultiplierFor(target);
 
-            float finalPower = power * mult;
-            // raw 계산을 먼저 하고 음수면 0으로 클램프해서 음수 Floor 문제 방지
-            float raw = Mathf.Max(0f, baseStat * finalPower);
-            // 소수점 내림(Floor) 적용
-            int floored = Mathf.FloorToInt(raw);
-            // 최소 데미지 보장
-            int dmg = Mathf.Max(0, floored);
+        // 3) 추가 배수: 전방 보너스
+        if (useFrontlineBonus && caster != null && IsInFrontline(caster, frontlineDepth))
+            mult *= Mathf.Max(0f, frontlineMultiplier);
 
-            // 체력 비례 배율 계산(대미지 적용 전 hp로 계산해야함)
-            float healthMultiplier = 1 + (1 - ((float)v.HP / v.MaxHP));
-            Debug.Log($"healthMultiplier: {healthMultiplier}");
-
-            v.PlayHit();
-            v.TakeDamage(dmg);
-
-            float scaling = v.isBoss == ISBOSS.Boss ? 2.0f : 1.0f;
-
-            // 상태 효과에 따른 배율 가져오기
-            float statusMultiplier = caster.HostilityGenerationMultiplier;
-            //Debug.Log($"statusMultiplier: {statusMultiplier}");
-
-            // 최종 적대감 생성량 계산
-            float hostilityGained = dmg * healthMultiplier * scaling * statusMultiplier;
-
-            // 캐스터(플레이어)의 적대감 증가
-            caster.AddHostility(hostilityGained);
-
-            Debug.Log($"{caster.name}이(가) {v.name}에게 {dmg} 피해를 입혀 적대감 {hostilityGained} 획득! (현재 총 적대감: {caster.Hostility})");
-        }
-
-        
+        // 4) 최종
+        int dmg = Mathf.Max(0, Mathf.RoundToInt(baseDmg * mult));
+        return dmg;
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)

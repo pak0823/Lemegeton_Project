@@ -158,7 +158,7 @@ public class SkillPanelUI : MonoBehaviour
         bool clear = forceClear || _skillasset == null;
 
         if (descriptionText)
-            descriptionText.text = _skillasset != null ? (string.IsNullOrEmpty(_skillasset.description) ? "" : _skillasset.description) : "";
+            descriptionText.text = _skillasset != null ? (string.IsNullOrEmpty(_skillasset.description) ? "" : _skillasset.GetFullDescriptionRich()) : "";
 
         if (rangeImage)
         {

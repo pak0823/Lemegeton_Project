@@ -133,90 +133,146 @@ public static class SkillLibrary
         return best;
     }
 
-    public static SkillDefinition Get(SkillId id)
+    // 가로3
+    public static IEnumerable<Vector3Int> GetAreaHorizontal3(Vector3Int originCell)
     {
-
-        switch (id)
-        {
-            // a) 대상 지목 가로열: {W, SELF, E}
-            case SkillId.Skill1:
-                return new SkillDefinition
-                {
-                    id = id,
-                    name = "Skill 1: 가로열(Unit)",
-                    targetMode = SkillTargetMode.Unit,
-                    GetAreaCells = (origin, _) =>
-                        Unique(ToOffsetCells(origin, new[]
-                        {
-                            new Vector2Int(-1, 0), // W
-                            new Vector2Int( 0, 0), // SELF
-                            new Vector2Int( 1, 0), // E
-                        }))
-                };
-
-            // b) 대상 지목 세로열: {NW, SELF, SE}  → axial {(0,-1),(0,0),(0,1)}
-            case SkillId.Skill2:
-                return new SkillDefinition
-                {
-                    id = id,
-                    name = "Skill 2: 세로열(Unit)",
-                    targetMode = SkillTargetMode.Unit,
-                    GetAreaCells = (origin, _) =>
-                        Unique(ToOffsetCells(origin, new[]
-                        {
-                            new Vector2Int( 0,-1), // NW
-                            new Vector2Int( 0, 0), // SELF
-                            new Vector2Int( 0, 1), // SE
-                        }))
-                };
-
-            // c) 대상 지목 부채꼴(대상 포함, '왼쪽-위 방향'으로 펼치는 3칸)
-            //    요청의 예시 {(0,0),(-1,0),(-1,-1)}는 odd-q 기준이었다고 보이지만,
-            //    axial로 동일 의도를 반영: {SELF, W(-1,0), NW(0,-1)}
-            case SkillId.Skill3:
-                return new SkillDefinition
-                {
-                    id = id,
-                    name = "Skill 3: 부채꼴(Unit)",
-                    targetMode = SkillTargetMode.Unit,
-                    GetAreaCells = (origin, _) =>
-                        Unique(ToOffsetCells(origin, new[]
-                        {
-                            new Vector2Int( 0, 0), // SELF
-                            new Vector2Int(-1, 0), // W
-                            new Vector2Int( 0,-1), // NW
-                        }))
-                };
-
-            // d) 타일 지목: 중심 포함 R=1 (중심 + 주변 6칸)
-            case SkillId.Skill4:
-                return new SkillDefinition
-                {
-                    id = id,
-                    name = "Skill 4: 원형(Tile)",
-                    targetMode = SkillTargetMode.Tile,
-                    GetAreaCells = (origin, _) =>
-                        Unique(ToOffsetCells(origin, AXIAL_RADIUS1_WITH_CENTER))
-                };
-            // d) 타일 지목 도넛형6 - 수정 필요
-            case SkillId.Skill5:
-                return new SkillDefinition
-                {
-                    id = id,
-                    name = "Skill 5: 도넛형(Tile)",
-                    targetMode = SkillTargetMode.Tile,
-                    GetAreaCells = (origin, _) =>
-                        Unique(ToOffsetCells(origin, AXIAL_NEIGHBORS))
-                };
-
-            default:
-                return new SkillDefinition
-                {
-                    id = id,
-                    name = id.ToString(),
-                    targetMode = SkillTargetMode.Unit,
-                    GetAreaCells = (origin, _) => new[] { origin }
-                };
-        }
+        // 기존 직접 계산 → AreaShapes 위임
+        return AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineHorizontal, false);
     }
+
+    // 세로3
+    public static IEnumerable<Vector3Int> GetAreaVertical3(Vector3Int originCell)
+    {
+        return AreaShapes.LineVertical3(originCell);
+    }
+
+    // 원형(반경1, 중심 포함)
+    public static IEnumerable<Vector3Int> GetAreaRing1(Vector3Int originCell)
+    {
+        return AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.Ring, false);
+    }
+
+    // 도넛(반경1, 중심 제외)
+    public static IEnumerable<Vector3Int> GetAreaDonut1(Vector3Int originCell)
+    {
+        return AreaShapes.DonutRadius1(originCell);
+    }
+
+    // 부채꼴(반경1, 전방 3칸)
+    //  - 기존 코드가 정면을 유닛 에이밍이나 'caster→target'으로 정했다면,
+    //    거기서 axial 정면 벡터를 만들어 이 함수에 넘겨줘.
+    public static IEnumerable<Vector3Int> GetAreaFanForwardR1(Vector3Int originCell, Vector3 casterWorld, Vector3 targetWorld)
+    {
+        // 월드 정면 → 축 좌표 정면 근사
+        Vector2 aim = (targetWorld - casterWorld);
+        if (aim.sqrMagnitude < 1e-6f) aim = Vector2.right;
+        aim.Normalize();
+
+        // 월드->axial 6방향 중 가장 가까운 축 선택
+        var axialDirs = new[]
+        {
+        new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
+        new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
+    };
+
+        // 축 벡터를 월드로 투영해 가장 큰 dot을 정면으로 선택
+        Vector3 right = Vector3.right, up = Vector3.up; // 필요시 Grid 변환 축을 사용하도록 개선
+        int best = 0; float bestDot = float.NegativeInfinity;
+        for (int i = 0; i < axialDirs.Length; i++)
+        {
+            // 간단히: (ax.x * right + ax.y * up) 로 근사 (프로젝트 좌표계에 맞게 교체 가능)
+            Vector2 dirW = axialDirs[i].x * (Vector2)right + axialDirs[i].y * (Vector2)up;
+            float d = Vector2.Dot(aim, dirW.normalized);
+            if (d > bestDot) { bestDot = d; best = i; }
+        }
+
+        return AreaShapes.FanForwardR1(originCell, axialDirs[best]);
+    }
+
+    //public static SkillDefinition Get(SkillId id)
+    //{
+
+    //    switch (id)
+    //    {
+    //        // a) 대상 지목 가로열: {W, SELF, E}
+    //        case SkillId.Skill1:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 1: 가로열(Unit)",
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, new[]
+    //                    {
+    //                        new Vector2Int(-1, 0), // W
+    //                        new Vector2Int( 0, 0), // SELF
+    //                        new Vector2Int( 1, 0), // E
+    //                    }))
+    //            };
+
+    //        // b) 대상 지목 세로열: {NW, SELF, SE}  → axial {(0,-1),(0,0),(0,1)}
+    //        case SkillId.Skill2:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 2: 세로열(Unit)",
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, new[]
+    //                    {
+    //                        new Vector2Int( 0,-1), // NW
+    //                        new Vector2Int( 0, 0), // SELF
+    //                        new Vector2Int( 0, 1), // SE
+    //                    }))
+    //            };
+
+    //        // c) 대상 지목 부채꼴(대상 포함, '왼쪽-위 방향'으로 펼치는 3칸)
+    //        //    요청의 예시 {(0,0),(-1,0),(-1,-1)}는 odd-q 기준이었다고 보이지만,
+    //        //    axial로 동일 의도를 반영: {SELF, W(-1,0), NW(0,-1)}
+    //        case SkillId.Skill3:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 3: 부채꼴(Unit)",
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, new[]
+    //                    {
+    //                        new Vector2Int( 0, 0), // SELF
+    //                        new Vector2Int(-1, 0), // W
+    //                        new Vector2Int( 0,-1), // NW
+    //                    }))
+    //            };
+
+    //        // d) 타일 지목: 중심 포함 R=1 (중심 + 주변 6칸)
+    //        case SkillId.Skill4:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 4: 원형(Tile)",
+    //                targetMode = SkillTargetMode.Tile,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, AXIAL_RADIUS1_WITH_CENTER))
+    //            };
+    //        // d) 타일 지목 도넛형6 - 수정 필요
+    //        case SkillId.Skill5:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 5: 도넛형(Tile)",
+    //                targetMode = SkillTargetMode.Tile,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, AXIAL_NEIGHBORS))
+    //            };
+
+    //        default:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = id.ToString(),
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) => new[] { origin }
+    //            };
+    //    }
+    //}
 }

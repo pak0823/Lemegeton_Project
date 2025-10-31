@@ -116,7 +116,7 @@ public class BattleUnit : MonoBehaviour
         // 최대치가 줄어들 땐 현재값도 즉시 맞추기
         HP = Mathf.Min(HP, MaxHP);
         MP = Mathf.Min(MP, MaxMP);
-        Rage = Mathf.Min(MP, MaxRage);
+        Rage = Mathf.Min(Rage, MaxRage);
 
         if (debugLogStats)
         {
@@ -230,6 +230,7 @@ public class BattleUnit : MonoBehaviour
             baseMaxRage = data.MaxRage;
             AGI = data.AGI;
             isBoss = data.isBoss;
+            Hostility = data.Hostility;
         }
 
         // 상태 반영된 최대치가 필요하므로 먼저 캐시 무효화

@@ -1,36 +1,92 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
 [CreateAssetMenu(menuName = "Battle/Skills/Enemy/Template", fileName = "SKILL_Template")]
 public class EnemySkill : SkillAsset
 {
-    // 인스펙터에서 설정:
-    // - displayName, icon
-    // - school, attribute, power
-    // - targetMode (Unit / Tile)
-    // - legacyId  : 범위 미리보기/판정에 기존 도형을 재사용하려면 지정
-    //   (주의: Skill1/Skill2로 두면 '시전 후 이동' 로직이 켜짐)
+    // AreaShapes 기반 프리셋 (레거시에 대응)
+    public enum AreaPresetEnemy
+    {
+        Single,
+        Horizontal3,           // 가로 3칸
+        Vertical3,             // 세로 3칸
+        Ring1_WithCenter,      // 반경1(중심 포함)
+        Donut1_NoCenter,       // 반경1(중심 제외: 이웃 6칸)
+        DiagU3_NE,             // 대각 3칸(NE축)
+        DiagU3_NW,             // 대각 3칸(NW축)
+        DiagU7_NE,             // 대각 7칸(NE축)
+        DiagU7_NW,             // 대각 7칸(NW축)
+        FanForwardR1           // 전방 부채꼴(반경1, 정면+좌우 3칸)
+    }
 
+    [Header("Area Preset (AreaShapes)")]
+    public AreaPresetEnemy areaPreset = AreaPresetEnemy.Single;
+
+    [Tooltip("Diag 계열에서 NE축을 쓸지 여부")]
+    public bool diagUseNEAxis = true;
+
+    /// <summary>
+    /// 미리보기/판정용 범위 셀 반환(프리셋에 따라 AreaShapes로 위임)
+    /// - 주의: FanForwardR1은 정면이 필요하므로 여기선 원형(혹은 중심)로 단순화하고,
+    ///   실제 Resolve에서 정면을 계산해 정확한 범위를 사용한다.
+    /// </summary>
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
     {
-        // 1) 레거시 범위 그대로 재사용 (추천)
-        var def = SkillLibrary.Get(legacyId); // SkillDefinition
-        return (def.GetAreaCells != null)
-            ? def.GetAreaCells(originCell, isOddRow)
-            : new[] { originCell };
+        switch (areaPreset)
+        {
+            case AreaPresetEnemy.Single:
+                yield return originCell; yield break;
 
-        // 2) (선택) 직접 커스텀 도형을 만들고 싶다면 위 return을 주석 처리하고 아래 예시를 사용
-        // var originAx = SkillLibrary.OffsetToAxial(originCell);
-        // // 중심 + 이웃 6칸 (R=1)
-        // Vector2Int[] offsets = {
-        //     new Vector2Int(0, 0), new Vector2Int(1, 0), new Vector2Int(1,-1),
-        //     new Vector2Int(0,-1), new Vector2Int(-1,0), new Vector2Int(-1,1),
-        //     new Vector2Int(0, 1)
-        // };
-        // foreach (var d in offsets)
-        //     yield return SkillLibrary.AxialToOffset(originAx + d);
+            case AreaPresetEnemy.Horizontal3:
+                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineHorizontal, true))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.Vertical3:
+                foreach (var c in AreaShapes.LineVertical3(originCell))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.Ring1_WithCenter:
+                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.Ring, false))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.Donut1_NoCenter:
+                foreach (var c in AreaShapes.DonutRadius1(originCell))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU3_NE:
+                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU3, true))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU3_NW:
+                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU3, false))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU7_NE:
+                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU7, true))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU7_NW:
+                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU7, false))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.FanForwardR1:
+                // 프리뷰 단계에선 정면 정보가 없을 수 있으므로 안전하게 중심만, 또는 링1 등으로 간단 표시
+                // 필요하면 링1 표시가 더 친절함:
+                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.Ring, false))
+                    yield return c;
+                yield break;
+        }
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
@@ -38,10 +94,11 @@ public class EnemySkill : SkillAsset
         if (bm == null || caster == null || target == null) yield break;
 
         var map = target.CurrentMap;
-        var origin = target.Cell; // 대상 유닛 좌표를 원점으로 범위 계산
-        var area = GetAreaCells(origin, SkillLibrary.IsOddColumn(origin));
+        var origin = target.Cell;
+
+        var area = GetAreaCellsForContext(map, origin, caster, target);
         var victims = bm.GetUnitsInArea(map, area);
-        bm.ExecuteSkillDamage(caster, victims, this, map, origin); // SO 경로 전용
+        bm.ExecuteSkillDamage(caster, victims, this, map, origin); // 중앙 경로(피해+적대감)
         yield return null;
     }
 
@@ -49,17 +106,50 @@ public class EnemySkill : SkillAsset
     {
         if (bm == null || map == null || caster == null) yield break;
 
-        var area = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
+        // 타일 지정형은 정면을 caster→origin으로 계산
+        var area = GetAreaCellsForContext(map, originCell, caster, null);
         var victims = bm.GetUnitsInArea(map, area);
         bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
         yield return null;
     }
 
-    // (선택) 커스텀 대미지 공식을 쓰고 싶을 때만 override
-    // public override int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
-    // {
-    //     int baseDmg = base.ComputeDamage(caster, target, ctx); // school/attribute/power 반영
-    //     // TODO: 필요시 추가 보정
-    //     return baseDmg;
-    // }
+    // --------- helpers ---------
+
+    IEnumerable<Vector3Int> GetAreaCellsForContext(Tilemap map, Vector3Int originCell, BattleUnit caster, BattleUnit targetOrNull)
+    {
+        if (areaPreset != AreaPresetEnemy.FanForwardR1)
+            return GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell)); // 위 프리셋 위임 사용
+
+        // FanForwardR1: 정면 추출 후 AreaShapes.FanForwardR1 사용
+        // 정면 = caster→target(유닛형) 또는 caster→origin(타일형)
+        Vector3 casterW = caster != null ? caster.transform.position : map.GetCellCenterWorld(originCell);
+        Vector3 aimW = (targetOrNull != null)
+            ? targetOrNull.transform.position
+            : map.GetCellCenterWorld(originCell);
+
+        Vector2 aim = (aimW - casterW);
+        if (aim.sqrMagnitude < 1e-6f) aim = Vector2.right;
+        aim.Normalize();
+
+        // 월드에서 가장 가까운 axial 6방을 고름
+        var axialDirs = new[]
+        {
+            new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
+            new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
+        };
+
+        // Grid 회전 고려(필요시 map.layoutGrid.transform.right/up 사용하는 것도 가능)
+        Vector2 right = Vector2.right;
+        Vector2 up = Vector2.up;
+
+        int best = 0; float bestDot = float.NegativeInfinity;
+        for (int i = 0; i < axialDirs.Length; i++)
+        {
+            Vector2 dirW = axialDirs[i].x * right + axialDirs[i].y * up;
+            float d = Vector2.Dot(aim, dirW.normalized);
+            if (d > bestDot) { bestDot = d; best = i; }
+        }
+
+        return AreaShapes.FanForwardR1(originCell, axialDirs[best]);
+    }
 }

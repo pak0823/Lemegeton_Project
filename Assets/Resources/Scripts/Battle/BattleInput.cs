@@ -52,10 +52,10 @@ public class BattleInput : MonoBehaviour
     void Update()
     {
         if (HandleHudToggleEarly()) return; //HUD 상태 관리
+        HandleGameSpeedToggle();
+
         if (GamePause.IsPaused || PopupManager.IsModalOpen) return;// 모달/일시정지 중에는 어떤 입력도 처리하지 않음
         if (!EnsureProviders()) return; // 맵/프로바이더 준비 보장
-
-        HandleGameSpeedToggle();
         HandleMouseInput();
         HandleActionShortcuts();
     }
@@ -70,12 +70,12 @@ public class BattleInput : MonoBehaviour
                            && cam != null);
         if (ok) return true;
 
-        // 1) provider 재획득 (현재 구조와 동일한 경로로)
+        // provider 재획득 (현재 구조와 동일한 경로로)
         if (provider == null)
             provider = Shared.battleMapManager as IBattleMapProvider
                                    ?? FindObjectOfType<BattleMapManager>(true);
 
-        // 2) 카메라 재획득
+        // 카메라 재획득
         if (cam == null) cam = Camera.main;
 
         _rebindTries++;

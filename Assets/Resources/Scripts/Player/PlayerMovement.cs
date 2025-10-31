@@ -199,7 +199,6 @@ public class PlayerMovement : MonoBehaviour
         {
             if (contactBoxes.Count > 0)
             {
-                //Shared.interactionHintUI?.HideAll();
                 Shared.interactionHintUI?.HideBoth();
                 selectedBox = contactBoxes.OrderBy(b => Vector2.SqrMagnitude(rb.position - (Vector2)b.transform.position)).First();
                 isPushMode = true;
@@ -568,15 +567,15 @@ public class PlayerMovement : MonoBehaviour
         if (!floorTilemap.HasTile(cell)) return false;
         if (wallTilemap != null && wallTilemap.HasTile(cell)) return false;
         Vector3 world = floorTilemap.GetCellCenterWorld(cell);
-        //Collider2D block = Physics2D.OverlapCircle(world, 0.1f, impassableLayerMask);
-        //return block == null;
 
         // 자기 자신을 무시하기 위해 All로 받아서 필터링
-        var hits = Physics2D.OverlapCircleAll(world, 0.1f, impassableLayerMask);
+        var hits = Physics2D.OverlapCircleAll(world, 0.05f, impassableLayerMask);
         foreach (var h in hits)
         {
             if (!h) continue;
-            if (h.attachedRigidbody == rb) continue; // ★ 본인 무시
+            if (h.attachedRigidbody == rb) continue; // 본인 무시
+            var hitCell = floorTilemap.WorldToCell(h.bounds.center);
+            if (hitCell != cell) continue;
             return false; // 뭔가 걸리면 통행 불가
         }
         return true;
@@ -622,12 +621,12 @@ public class PlayerMovement : MonoBehaviour
         isPerformingPush = false;
     }
 
-    bool HasImpassableObject(Vector3Int cell)
-    {
-        Vector3 worldCenter = floorTilemap.GetCellCenterWorld(cell);
-        Collider2D hit = Physics2D.OverlapCircle(worldCenter, 0.1f, impassableLayerMask);
-        return hit != null;
-    }
+    //bool HasImpassableObject(Vector3Int cell)
+    //{
+    //    Vector3 worldCenter = floorTilemap.GetCellCenterWorld(cell);
+    //    Collider2D hit = Physics2D.OverlapCircle(worldCenter, 0.1f, impassableLayerMask);
+    //    return hit != null;
+    //}
     public void SetTilemap(Tilemap floor, Tilemap wall)
     {
         floorTilemap = floor;

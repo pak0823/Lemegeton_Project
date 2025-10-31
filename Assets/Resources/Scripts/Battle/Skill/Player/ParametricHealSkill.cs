@@ -28,32 +28,10 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
         if (powerOverride > 0f) power = powerOverride;
         targetMode = selectionMode;
     }
-
-    // Ring/Line/Single 범위 계산은 Damage 쪽과 동일 로직을 재사용
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
-        if (areaPreset == ParametricDamageSkill.AreaPreset.Single)
-        {
-            yield return originCell;
-            yield break;
-        }
-
-        if (areaPreset == ParametricDamageSkill.AreaPreset.LineHorizontal)
-        {
-            var ax = SkillLibrary.OffsetToAxial(originCell);
-            var deltas = new[] { new Vector2Int(-1, 0), new Vector2Int(0, 0), new Vector2Int(1, 0) };
-            foreach (var d in deltas)
-                yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
-            yield break;
-        }
-
-        // Ring (중심 + 주변 6칸)
-        yield return originCell;
-        var axR = SkillLibrary.OffsetToAxial(originCell);
-        var deltasR = new[]{ new Vector2Int(1,0), new Vector2Int(1,-1), new Vector2Int(0,-1),
-                             new Vector2Int(-1,0), new Vector2Int(-1,1), new Vector2Int(0,1) };
-        foreach (var d in deltasR)
-            yield return SkillLibrary.AxialToOffset(new Vector2Int(axR.x + d.x, axR.y + d.y));
+        foreach (var c in AreaShapes.GetCells(originCell, areaPreset, false))
+            yield return c;
     }
 
     // 미리보기/지목 타일 맵: 아군 플로어를 반환
@@ -85,19 +63,11 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
             int amount = CalcHealAmount(caster, u);
             u.Heal(amount);
 
-            float healthMultiplier = 1 + (1 - ((float)caster.HP / caster.MaxHP));
-            Debug.Log($"healthMultiplier: {healthMultiplier}");
-
-            float statusMultiplier = caster.HostilityGenerationMultiplier;
-            Debug.Log($"statusMultiplier: {statusMultiplier}");
-
             // 최종 적대감 생성량 계산
-            float hostilityGained = amount * healthMultiplier * statusMultiplier;
+            float hostilityGained = HostilityRules.FromHeal(amount, caster);
 
             // 캐스터(플레이어)의 적대감 증가
             caster.AddHostility(hostilityGained);
-
-            Debug.Log($"{caster.name}이(가) {u.name}에게 {amount} 회복을 시켜 적대감 {hostilityGained} 획득! (현재 총 적대감: {caster.Hostility})");
         }
     }
 

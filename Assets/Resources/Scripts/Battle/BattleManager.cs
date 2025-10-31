@@ -1242,8 +1242,6 @@ public class BattleManager : MonoBehaviour
                 var world = cam ? cam.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
                 world.z = 0f;
                 var hover = map.WorldToCell(world);
-                //selectedCell = map.HasTile(hover) ? hover : new Vector3Int(-2, -2, 0);  // 마우스가 타일 위면 그 타일, 아니면 기본(-2,-2)
-                //PreviewSkillAreaOnTile(map, selectedCell); // 즉시 프리뷰
                 if (map.HasTile(hover))
                 {
                     selectedCell = hover;
@@ -1342,14 +1340,15 @@ public class BattleManager : MonoBehaviour
 
         Vector3 originalW = caster.transform.position;
 
-        // 1) 타겟 앞 점프(연출)
+        // 타겟 앞 점프(연출)
         if (TryGetFrontCellOfTarget(caster, target, out var frontCell))
         {
-            Vector3 frontW = provider.EnemyFloor.GetCellCenterWorld(frontCell);
+            var mapForJump = target.CurrentMap ?? provider.EnemyFloor;
+            Vector3 frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
             yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
         }
 
-        // 2) 공격 모션 중 임팩트 타이밍에 해결
+        // 공격 모션 중 임팩트 타이밍에 해결
         bool impactTriggered = false;
         bool resolved = false;
 
@@ -1532,7 +1531,6 @@ public class BattleManager : MonoBehaviour
     {
         if (caster == null || source == null) return;
 
-        // (임시) 아군/적 팀 구분
         foreach (var v in victims)
         {
             if (v == null) continue;
@@ -1545,9 +1543,15 @@ public class BattleManager : MonoBehaviour
                     casterCell = caster.Cell,
                     targetCell = v.Cell
                 };
+
                 int damage = Mathf.Max(1, source.ComputeDamage(caster, v, ctx));
+                v.PlayHit();
                 v.TakeDamage(damage);
-                Debug.Log("damage:"+ damage);
+
+                // 중앙화된 적대감 산출
+                float hostilityGained = HostilityRules.FromDamage(damage, caster, v);
+                caster.AddHostility(hostilityGained);
+                //Debug.Log($"[DMG] {caster.name} -> {v.name}: {damage}, Hostility +{hostilityGained:F1}");
             }
         }
     }
@@ -1613,128 +1617,99 @@ public class BattleManager : MonoBehaviour
         => skillHighlighter?.ClearGroup(token);
 
 
-    bool TryGetFrontCellOfTarget(BattleUnit caster, BattleUnit target, out Vector3Int frontCell) //근접 공격 시 타겟 앞 타일로 이동
+    bool TryGetFrontCellOfTarget(BattleUnit caster, BattleUnit target, out Vector3Int frontCell)
     {
-        frontCell = target.Cell;
+        frontCell = target != null ? target.Cell : default;
+        if (target == null || caster == null) return false;
 
-        // 타겟 기준으로 '시전자 방향'을 찾는다.
-        int dirIdx = SkillLibrary.NearestDirectionIndex(target.Cell, caster.Cell);
-        var stepAx = SkillLibrary.DirIndexToAxial(dirIdx);
+        var targetMap = target.CurrentMap;
+        var casterMap = caster.CurrentMap ?? targetMap;
 
-        var tAx = SkillLibrary.ToAxial(target.Cell);
-        var frontAx = new Vector2Int(tAx.x + stepAx.x, tAx.y + stepAx.y);
-        var candidate = SkillLibrary.ToOffset(frontAx);
+        // --- 1) 좌우 우선 규칙 ---
+        var baseCell = target.Cell;
+        int dx = caster.Cell.x - target.Cell.x;
 
-        var map = target.CurrentMap;
-
-        // 실제로 이동하는 건 아니고 '연출용 좌표'로만 쓸 거라 HasTile 정도만 체크
-        if (map != null && map.HasTile(candidate))
+        if (dx < 0)
         {
-            frontCell = candidate;
+            // 캐스터가 타깃의 '왼쪽'에 있음 → 서쪽 이웃 고정
+            frontCell = new Vector3Int(baseCell.x - 1, baseCell.y, baseCell.z);
             return true;
         }
-        return false;
-    }
-
-    IEnumerator Co_GapCloseThenResolveOnTarget(SkillDefinition def, BattleUnit caster, BattleUnit target)
-    {
-        state = BattleState.Resolving;
-
-        Vector3 originalW = caster.transform.position;
-
-        // 1) 타겟 앞 타일(적 맵 좌표)의 월드 지점으로 '연출용 점프'
-        if (TryGetFrontCellOfTarget(caster, target, out var frontCell))
+        else if (dx > 0)
         {
-            Vector3 frontW = provider.EnemyFloor.GetCellCenterWorld(frontCell);
-            yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
+            // 캐스터가 타깃의 '오른쪽'에 있음 → 동쪽 이웃 고정
+            frontCell = new Vector3Int(baseCell.x + 1, baseCell.y, baseCell.z);
+            return true;
         }
 
-        // 2) 공격 모션 + 임팩트 타이밍에 범위피해(대상 유닛 셀을 '원점'으로)
-        bool impactDone = false;
-        System.Action impact = null;
-        impact = () =>
+        // --- 2) 같은 컬럼(수직 정렬)일 때만 기존 각도 기반 선택 폴백 ---
+        // 타겟→시전자 월드 방향
+        Vector3 targetW = targetMap.GetCellCenterWorld(target.Cell);
+        Vector3 casterW = casterMap.GetCellCenterWorld(caster.Cell);
+        Vector2 aimDir = (Vector2)(casterW - targetW);
+        if (aimDir.sqrMagnitude < 1e-6f) return false;
+        aimDir.Normalize();
+
+        bool oddCol = SkillLibrary.IsOddColumn(baseCell);
+
+        // odd-q 이웃 집합(프로젝트에서 쓰는 체계 그대로)
+        Vector3Int[] neighOffsetsEven = {
+        new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
+        new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int(-1,-1, 0), new Vector3Int( 0,-1,0)
+    };
+        Vector3Int[] neighOffsetsOdd = {
+        new Vector3Int(+1, 0, 0), new Vector3Int(+1,+1,0),
+        new Vector3Int( 0,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int( 0,-1, 0), new Vector3Int(+1,-1,0)
+    };
+        var candidates = oddCol ? neighOffsetsOdd : neighOffsetsEven;
+
+        float bestDot = float.NegativeInfinity;
+        float bestDist2 = float.PositiveInfinity;
+        const float EPS = 1e-5f;
+        Vector3Int best = baseCell;
+
+        foreach (var off in candidates)
         {
-            caster.OnAttackImpact -= impact;
-            impactDone = true;
-            ResolveSkillAtCell(def, target.CurrentMap, target.Cell, caster); // 기존 범위·피해 루틴 재사용
-        };
-        caster.OnAttackImpact += impact;
+            var neigh = new Vector3Int(baseCell.x + off.x, baseCell.y + off.y, baseCell.z);
+            var neighW = targetMap.GetCellCenterWorld(neigh);
 
-        yield return caster.AnimateAttack(target);  // 기존 근접 모션 재사용
+            Vector2 dir = (Vector2)(neighW - targetW);
+            if (dir.sqrMagnitude < 1e-6f) continue;
+            dir.Normalize();
 
-        if (!impactDone) // 폴백(애니 이벤트 누락 시)
-            ResolveSkillAtCell(def, target.CurrentMap, target.Cell, caster);
+            float d = Vector2.Dot(aimDir, dir);
+            float dist2 = ((Vector2)(neighW - casterW)).sqrMagnitude;
 
-        // 3) 원위치 '순간 복귀'
-        caster.transform.position = originalW;
-
-        FinishActionAfterSkill(); // 패널 닫기/토큰 소모/턴 진행
-    }
-
-    IEnumerator Co_ProjectileSkillThenFinish(SkillDefinition def, Tilemap map, Vector3Int cell, BattleUnit caster)
-    {
-        state = BattleState.Resolving;
-
-        bool castEnded = false;   // 캐스터 모션 종료(AnimEvent_AttackEnd)
-        bool projEnded = false;   // 투사체 도착/폭발/피해 적용까지 완료
-
-        // 1) 캐스터 모션 종료 이벤트 훅
-        System.Action onCastEnd = null;
-        onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
-        caster.OnAttackEnded += onCastEnd;
-
-        // 2) 발사 타이밍(AnimEvent_AttackImpact) 훅: 투사체 생성만!
-        System.Action onFire = null;
-        onFire = () =>
-        {
-            caster.OnAttackImpact -= onFire;
-            // 투사체 생성 및 Init
-            if (projectilePrefab != null)
+            if (d > bestDot + EPS || (Mathf.Abs(d - bestDot) <= EPS && dist2 < bestDist2))
             {
-                var startW = caster.transform.position;
-                var targetW = map.GetCellCenterWorld(cell);
-                var go = Instantiate(projectilePrefab, startW, Quaternion.identity);
-                var pc = go.GetComponent<ProjectileController>();
-                if (pc != null)
-                {
-                    // 일정 속도로 이동시키기 (초당 3유닛)
-                    pc.Init(startW, targetW, () => {
-                        ResolveSkillAtCell(def, map, cell, caster); // 폭발 직후에 범위피해 적용
-                    }, speedUnitsPerSec: 3f);
-                }
-                else
-                {
-                    // 컴포넌트 누락 대비 폴백
-                    StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, () =>
-                    {
-                        ResolveSkillAtCell(def, map, cell, caster);
-                        projEnded = true;
-                    }));
-                }
+                bestDot = d;
+                bestDist2 = dist2;
+                best = neigh;
             }
-            else
-            {
-                // 프리팹 없을 땐 즉시 적용(테스트용)
-                ResolveSkillAtCell(def, map, cell, caster);
-                projEnded = true;
-            }
-        };
-
-        caster.OnAttackImpact += onFire;
-
-        // 3) 제자리 원거리 모션 재생
-        yield return caster.AnimateRanged(); // 내부에서 AttackEnd를 기다림
-
-        // 4) 안전장치: 혹시 모션이 먼저 끝나도 투사체가 끝날 때까지 대기
-        float timeout = 3f; // 과도한 지연 방지
-        while (!(castEnded && projEnded) && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
         }
 
-        FinishActionAfterSkill();
+        frontCell = best;
+        return true;
     }
+    Vector3 GetCellRightEdgeWorld(Tilemap map, Vector3Int cell, float margin = 0.02f)   // 점프가 실행되는 좌표의 오른쪽 끝으로 이동
+    {
+        if (map == null) return Vector3.zero;
+
+        // 기준점: 셀 중심
+        var center = map.GetCellCenterWorld(cell);
+
+        // 그리드/셀 크기
+        var grid = map.layoutGrid != null ? map.layoutGrid : map.GetComponentInParent<Grid>();
+        var cellSize = (grid != null) ? grid.cellSize : Vector3.one;
+
+        // "오른쪽" 방향(그리드 회전 고려)으로 반 셀 + 여유 마진만큼 이동
+        // margin은 경계선 살짝 안쪽으로 밀어넣어 스프라이트가 튀어나오지 않게 함
+        Vector3 rightDir = (grid != null) ? grid.transform.right : Vector3.right;
+        return center + rightDir * (cellSize.x * 0.5f - margin);
+    }
+
     // 유틸 래퍼 추가
     IEnumerator Co_ResolveUnitThenFlag(SkillAsset skill, BattleUnit caster, BattleUnit target, System.Action done)
     {
