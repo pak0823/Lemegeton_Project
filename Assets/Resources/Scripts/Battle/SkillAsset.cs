@@ -81,7 +81,8 @@ public abstract class SkillAsset : ScriptableObject
         float totalHostility = 0f;
         foreach (var unit in potentialTargets)
         {
-            totalHostility += unit.Hostility;
+            float visMult = SmokeZoneRuntime.GetVisibilityMultiplier(unit);
+            totalHostility += Mathf.Max(0f, unit.Hostility * visMult);
         }
 
         // 합계가 0 이하면 (모두 적대감이 0), 랜덤으로 한 명 선택
@@ -132,8 +133,24 @@ public abstract class SkillAsset : ScriptableObject
             return sc != null && sc.Has(preferred);
         }).ToList();
 
-        if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
-        return PickTargetByWeightedHostility(list);
+        var pool = (slowed.Count > 0) ? slowed : list;
+
+        // 가시 감쇠 고려한 가중치 랜덤
+        float total = 0f;
+        foreach (var u in pool)
+            total += Mathf.Max(0f, u.Hostility * SmokeZoneRuntime.GetVisibilityMultiplier(u));
+
+        if (total <= 0f) return pool[Random.Range(0, pool.Count)];
+
+        float r = Random.Range(0, total);
+        foreach (var u in pool)
+        {
+            r -= Mathf.Max(0f, u.Hostility * SmokeZoneRuntime.GetVisibilityMultiplier(u));
+            if (r <= 0f) return u;
+        }
+        return pool[pool.Count - 1];
+        //if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
+        //return PickTargetByWeightedHostility(list);
     }
     public virtual string GetFullDescriptionRich()
     {

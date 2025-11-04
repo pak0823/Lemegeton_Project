@@ -12,6 +12,11 @@ public class TrapBehavior : MonoBehaviour
     private Quaternion initialRotation;
     private TrapPersist TrapPersist;
 
+    [Header("발동 조건 보정")]
+    [SerializeField] bool requireSameCellForPush = true;          // 박스는 '같은 타일'일 때만 발동
+    [SerializeField] float fallbackCellSize = 1.0f;               // 타일맵이 없을 때 거리기반 폴백
+    bool _pendingTriggeredByPush = false; // Enter에서 놓친 경우 Stay에서 한 번 더 판정
+
     [Header("확률 설명 (트랩 발동 시)")]
     public WeightedDescriptionsSO triggerDescriptions;
 
@@ -53,10 +58,15 @@ public class TrapBehavior : MonoBehaviour
             return;
         }
 
-        var PushBox = other.GetComponent<PushObject>();
-        if (PushBox != null)
+        var pushBox = other.GetComponent<PushObject>();
+        if (pushBox != null)
         {
-            // 박스가 활성화시킨 경우도 동일하게 Persist/통계를 남기고 종료 처리
+            if (!ShouldTriggerByPush(pushBox))    // 같은 셀 아니면 무시
+            {
+                _pendingTriggeredByPush = true;   // Stay에서 재판정
+                return;
+            }
+
             TrapPersist?.MarkTriggered();
             Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
             TriggerTrap(other);
@@ -64,17 +74,50 @@ public class TrapBehavior : MonoBehaviour
         }
     }
 
-    public void TriggerTrap(Collider2D player)
+    void OnTriggerStay2D(Collider2D other)
+    {
+        if (!_pendingTriggeredByPush || isTriggered) return;
+
+        var pushBox = other.GetComponent<PushObject>();
+        if (pushBox == null) return;
+
+        if (ShouldTriggerByPush(pushBox))
+        {
+            _pendingTriggeredByPush = false;
+            TrapPersist?.MarkTriggered();
+            Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
+            TriggerTrap(other);
+        }
+    }
+
+    bool ShouldTriggerByPush(PushObject push)
+    {
+        if (!requireSameCellForPush) return true;
+
+        // 1) 타일맵 기준 셀 비교 (정확)
+        if (push.floorTilemap != null)
+        {
+            var map = push.floorTilemap;
+            Vector3Int trapCell = map.WorldToCell(transform.position);
+            Vector3Int boxCell = map.WorldToCell(push.transform.position);
+            return trapCell == boxCell;
+        }
+
+        // 2) 폴백: 월드 거리로 근사 (타일 크기 절반 내에 들어왔을 때만)
+        float half = Mathf.Max(0.1f, fallbackCellSize * 0.5f);
+        return Vector2.Distance(transform.position, push.transform.position) <= half;
+    }
+
+    public void TriggerTrap(Collider2D other)
     {
         if (isTriggered) return;
-
         isTriggered = true;
 
         if (applyOnce)
             gameObject.SetActive(false); // Destroy 대신 비활성화로 처리
 
-        var current = player.GetComponent<PlayerDebuffController>();
-        if (current == null) return;  //플레이어 작동이 아닐 시
+        var player = other.GetComponent<PlayerDebuffController>();
+        if (player == null) return;  //플레이어 작동이 아닐 시
         
 
         int idx = triggerDescriptions ? triggerDescriptions.PickIndex() : -1;
@@ -83,7 +126,7 @@ public class TrapBehavior : MonoBehaviour
             switch (idx)
             {
                 case 0:
-                    current.ApplyDebuff(debuffData);
+                    player.ApplyDebuff(debuffData);
                     TrapPersist?.MarkTriggered();
                     Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
                     break;
@@ -92,7 +135,7 @@ public class TrapBehavior : MonoBehaviour
                     Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
                     break;
                 case 3:
-                    current.ApplyDebuff(debuffData);
+                    player.ApplyDebuff(debuffData);
                     TrapPersist?.MarkTriggered();
                     Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
                     break;

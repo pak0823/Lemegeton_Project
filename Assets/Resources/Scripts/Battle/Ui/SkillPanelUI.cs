@@ -10,9 +10,12 @@ public class SkillPanelUI : MonoBehaviour
     public Button[] buttons;            // 4~5개
     [SerializeField] private Text descriptionText;   // 스킬 설명 표시
     [SerializeField] private Image rangeImage;     // 범위(아이콘 재활용)
-    [SerializeField] private Text selectTargetHintText;
+    [SerializeField] private Text selectTargetHintText; //행동 텍스트 ui
 
     private SkillAsset[] cachedAssets;  // 마지막으로 채운 SO 목록 캐시
+
+    // 적 라벨이 표기 중인지(패널 토글과 무관하게 유지)
+    private bool _pinnedEnemyLabel = false;
 
     void Awake()
     {
@@ -25,6 +28,7 @@ public class SkillPanelUI : MonoBehaviour
             battle.OnSkillPanelToggled += HandleToggle;
             battle.OnSkillPanelPopulateSO += HandlePopulateSO;
             battle.OnHint += HandleHint;
+            battle.OnUnitActionLabel += HandleUnitActionLabel;
         }
 
         if (panel != null) panel.SetActive(false); // 기본 비활성
@@ -38,6 +42,7 @@ public class SkillPanelUI : MonoBehaviour
             battle.OnSkillPanelToggled -= HandleToggle;
             battle.OnSkillPanelPopulateSO -= HandlePopulateSO;
             battle.OnHint -= HandleHint;
+            battle.OnUnitActionLabel -= HandleUnitActionLabel;
         }
     }
 
@@ -45,7 +50,8 @@ public class SkillPanelUI : MonoBehaviour
     {
         if (panel != null) panel.SetActive(show);
 
-        if (!show && selectTargetHintText)
+        // 패널이 닫혀도, 적 행동 라벨이 고정중이면 힌트 텍스트를 지우지 않음
+        if (!show && selectTargetHintText && !_pinnedEnemyLabel)
         {
             selectTargetHintText.text = string.Empty;
             selectTargetHintText.gameObject.SetActive(false);
@@ -185,9 +191,33 @@ public class SkillPanelUI : MonoBehaviour
     void HandleHint(string msg)
     {
         if (!selectTargetHintText) return;
+        if (_pinnedEnemyLabel) return;
 
         bool show = !string.IsNullOrEmpty(msg);
         selectTargetHintText.text = show ? msg : string.Empty;
         selectTargetHintText.gameObject.SetActive(show);
+    }
+    void HandleUnitActionLabel(BattleUnit unit, string label)
+    {
+        if (!selectTargetHintText) return;
+
+        // 빈 라벨이면 고정 해제 & 숨김
+        if (string.IsNullOrEmpty(label))
+        {
+            _pinnedEnemyLabel = false;
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+            return;
+        }
+
+        // 유닛 표시 이름(없으면 GameObject 이름 fallback)
+        string unitName = unit != null && !string.IsNullOrEmpty(unit.name) ? unit.name : "유닛";
+
+        // 보기 좋게 색만 살짝(원하면 제거 가능)
+        selectTargetHintText.text = $"<color=#FF5555>{unitName}</color> 의 {label}";
+        selectTargetHintText.gameObject.SetActive(true);
+
+        // 패널 열림/닫힘과 무관하게 유지
+        _pinnedEnemyLabel = true;
     }
 }

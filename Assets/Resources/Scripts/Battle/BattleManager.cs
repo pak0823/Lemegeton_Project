@@ -66,6 +66,8 @@ public class BattleManager : MonoBehaviour
     BattleUnit selectedTarget; // 현재 선택된 대상
     private Tilemap currentSkillTargetMap;  //스킬이 지정한 맵
     public Tilemap CurrentSkillTargetMap => currentSkillTargetMap;
+    private Tilemap customPreviewMap;
+    private HashSet<Vector3Int> customPreviewCells;
 
     // === 수동 종료 감지용 ===
     bool manualEndRequested = false;
@@ -81,6 +83,7 @@ public class BattleManager : MonoBehaviour
     int _lastAGICount;
     const float AGI_EPS = 0.0001f;
     public event System.Action OnATBReset; // 턴바 강제 초기화 신호
+    public event System.Action<BattleUnit> OnUnitEndTurn;
 
     [Header("Skill Runtime")]
     public bool isSelectingSkill = false;          // 스킬 선택 패널이 열렸는지
@@ -701,10 +704,10 @@ public class BattleManager : MonoBehaviour
             acting.Heal(-1);
             //Debug.Log("[EndPlayerTurn] 행동 없이 수동 종료 → HP회복");
         }
-
         manualEndRequested = false;
 
         // ATB 재개(다음 턴은 Update()가 자동 감지)
+        OnUnitEndTurn?.Invoke(acting);
         acting.ResetATB(); // ATB와 Overfill 함께 초기화
         acting = null;
         atbPaused = false;
@@ -720,6 +723,8 @@ public class BattleManager : MonoBehaviour
             ClearTargetSelection();
             currentSkillSO = null;
             currentSkillTargetMap = null;
+            customPreviewCells = null;
+            customPreviewMap = null;
             state = BattleState.ActionSelect;
             UpdateTargetingHint();
             if (!isSelectingSkill) OpenSkillPanel();
@@ -729,6 +734,8 @@ public class BattleManager : MonoBehaviour
         {
             ClearMovePreview();
             ClearTargetSelection();
+            customPreviewCells = null;
+            customPreviewMap = null;
             state = BattleState.ActionSelect;
             UpdateTargetingHint();
             return;
@@ -1062,6 +1069,7 @@ public class BattleManager : MonoBehaviour
         }
 
         enemy.ResetATB();
+        OnUnitEndTurn?.Invoke(enemy);
         if (acting == enemy) acting = null;
 
         atbPaused = false;     // 전체 ATB 재개
@@ -1234,18 +1242,43 @@ public class BattleManager : MonoBehaviour
         else // Tile 타겟형: 내부 타일 커서를 1회 세팅하고 프리뷰 유지
         {
             currentSkillTargetMap = (skill as ITargetMapProvider)?.GetTargetMap(this, acting) ?? provider?.EnemyFloor;
-            var map = currentSkillTargetMap;
 
-            if (map != null)
+            if (skill is ISkillCustomPreview customPrev)
             {
-                var cam = Camera.main;
-                var world = cam ? cam.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
-                world.z = 0f;
-                var hover = map.WorldToCell(world);
-                if (map.HasTile(hover))
+                var map = customPrev.GetTargetMap(this, acting) ?? currentSkillTargetMap;
+                var cells = customPrev.GetPreviewCells(this, acting);
+
+                currentSkillTargetMap = map;
+                customPreviewMap = map;
+                customPreviewCells = (cells != null) ? new HashSet<Vector3Int>(cells) : new HashSet<Vector3Int>();
+
+                if (map != null && customPreviewCells != null && customPreviewCells.Count > 0)
+                    ShowSkillPreview(map, customPreviewCells);
+            }
+            else
+            {
+                customPreviewCells = null;
+                customPreviewMap = null;
+
+                //if (customPreviewCells != null && customPreviewCells.Count > 0)
+                //{
+                //    // 커스텀 프리뷰 잠금 상태에서는 호버 프리뷰를 갱신하지 않음
+                //    return;
+                //}
+
+                var map = currentSkillTargetMap;
+
+                if (map != null)
                 {
-                    selectedCell = hover;
-                    PreviewSkillAreaOnTile(map, selectedCell);
+                    var cam = Camera.main;
+                    var world = cam ? cam.ScreenToWorldPoint(Input.mousePosition) : Vector3.zero;
+                    world.z = 0f;
+                    var hover = map.WorldToCell(world);
+                    if (map.HasTile(hover))
+                    {
+                        selectedCell = hover;
+                        PreviewSkillAreaOnTile(map, selectedCell);
+                    }
                 }
             }
         }
@@ -1255,7 +1288,12 @@ public class BattleManager : MonoBehaviour
     {
         // 스킬이 확정되어 타게팅 상태일 때만 힌트 노출
         if (state == BattleState.Targeting && currentSkillSO != null)
-            OnHint?.Invoke("대상을 선택하세요");
+        {
+            if (currentSkillSO.targetMode == SkillTargetMode.Tile)
+                OnHint?.Invoke("이동할 위치를 선택하세요");
+            else
+                OnHint?.Invoke("대상을 선택하세요");
+        }
         else
             OnHint?.Invoke(string.Empty);
     }
@@ -1290,6 +1328,10 @@ public class BattleManager : MonoBehaviour
     // 현재 선택된 스킬의 범위를 "타일 기준"으로 미리보기
     public void PreviewSkillAreaOnTile(Tilemap map, Vector3Int originCell)
     {
+        if (customPreviewCells != null) // 커스텀 프리뷰(후보 잠금)가 활성화되어 있다면,
+            return;                    // 호버 기반 프리뷰 갱신을 전면 차단
+
+
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Tile) { ClearAllPreviews(); return; }
         if (map == null) { ClearAllPreviews(); return; }
 
@@ -1330,8 +1372,38 @@ public class BattleManager : MonoBehaviour
         if (!IsPlayerTurn || acting == null || map == null) return;
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Tile) return;
 
+        // 커스텀 프리뷰가 잠금돼 있다면: '후보 안'에서만 확정 가능
+        if (customPreviewCells != null)
+        {
+            if (!customPreviewCells.Contains(originCell))
+            {
+                if (customPreviewCells.Count == 0) return;                // 후보 없음 → 아무 것도 하지 않음
+                if (!customPreviewCells.Contains(originCell)) return;      // 후보 밖 클릭 → 무시
+            }
+            else if (currentSkillSO is ISkillCustomPreview cp)
+            {
+                var targetMap = (currentSkillSO as ITargetMapProvider)?.GetTargetMap(this, acting) ?? map;
+                var candidates = cp.GetPreviewCells(this, acting);
+                var set = (candidates != null) ? new HashSet<Vector3Int>(candidates) : new HashSet<Vector3Int>();
+                if (set.Count == 0 || !set.Contains(originCell)) return;   // 유효 후보가 아니면 종료 금지
+            }
+        }
+
         ClearSkillPreview();
-        StartCoroutine(Co_ProjectileSkillThenFinishSO(currentSkillSO, map, originCell, acting));
+        if (currentSkillSO is IInstantTileSkill)
+        {
+            // 커스텀 프리뷰 잠금 해제
+            customPreviewCells = null;
+            customPreviewMap = null;
+
+            // 무연출 즉시 해결 경로 (MP 차감은 스킬 내부에서 수행)
+            StartCoroutine(Co_ResolveTileThenFlag(currentSkillSO, map, originCell, acting, () => { FinishActionAfterSkill(); }));
+        }
+        else
+        {
+            // 기존: 투사체/공격 연출 경로
+            StartCoroutine(Co_ProjectileSkillThenFinishSO(currentSkillSO, map, originCell, acting));
+        }
     }
 
     IEnumerator Co_GapCloseThenResolveOnTargetSO(SkillAsset skill, BattleUnit caster, BattleUnit target)
@@ -1573,6 +1645,8 @@ public class BattleManager : MonoBehaviour
         currentSkill = default;           // 레거시
         currentSkillSO = null;            // SO도 클리어
         currentSkillTargetMap = null;
+        customPreviewCells = null;
+        customPreviewMap = null;
         UpdateTargetingHint();
     }
 
@@ -1584,6 +1658,15 @@ public class BattleManager : MonoBehaviour
     }
     public void ShowSkillPreview(Tilemap baseMap, IEnumerable<Vector3Int> cells)
     {
+        if (customPreviewCells != null)
+        {
+            // 후보가 0개면 아무 것도 그리지 않음
+            if (customPreviewCells.Count == 0) return;
+
+            // 락에서 전달한 동일 참조가 아닌 임의 셀은 무시(호버 등 외부 호출 차단)
+            if (!object.ReferenceEquals(cells, customPreviewCells)) return;
+        }
+
         skillHighlighter?.ShowCells(baseMap, cells);
     }
 
