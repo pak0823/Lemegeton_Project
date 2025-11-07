@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UI;
@@ -25,6 +26,7 @@ public class BattleUnit : MonoBehaviour
     public ISBOSS isBoss;
     public float AGI;
     [NonSerialized] public float ATB = 0f; // 0~100
+    float _agiMinRef, _agiMaxRef;
     public float Overfill { get; private set; } = 0f; // ATB가 그 프레임에 100을 넘기면 얼마큼 넘었는지 저장(동시턴 우선순위 1순위)
     public float MaxATB { get; private set; } = 100f; // 기본 100
     public bool IsTurnReady => ATB >= 100f; // ATB가 최대가 되어 행동 가능 상태
@@ -69,7 +71,7 @@ public class BattleUnit : MonoBehaviour
 
     #region ----- State-based Stat System -----
     [Header("State-based Stat DB (Shared)")]
-    [SerializeField] private StateStatModifierDB stateStatDB;
+    public StateStatModifierDB stateStatDB;
 
     // 베이스 스탯(인스펙터/데이터로 세팅)
     [SerializeField] private int basePhysicalDamage = 1;
@@ -78,12 +80,8 @@ public class BattleUnit : MonoBehaviour
     [SerializeField] private int baseMaxMP = 100;
     [SerializeField] private int baseMaxRage = 100;
 
-    // (선택) 방어/이속 등 확장 필드가 있다면 같은 패턴으로 추가
-    [SerializeField] private int baseDefense = 0;
-    [SerializeField] private int baseSpeed = 0;
-
     // 상태 컨트롤러 캐시/보정 캐시
-    UnitStateController _usc;
+    UnitStateController unitStateController;
     bool _statCacheDirty = true;
 
     struct StatMult
@@ -102,7 +100,7 @@ public class BattleUnit : MonoBehaviour
             atk *= Mathf.Max(0f, e.atkMultiplier);
             mag *= Mathf.Max(0f, e.magMultiplier);
             def *= Mathf.Max(0f, e.defMultiplier);
-            spd *= Mathf.Max(0f, e.spdMultiplier);
+            spd *= Mathf.Max(0f, e.agiMultiplier);
             hpAdd += e.hpFlatAdd;
             mpAdd += e.mpFlatAdd;
             hostilityGenerationMultiplier *= Mathf.Max(0f, e.hostilityStatMultiplier);
@@ -141,9 +139,9 @@ public class BattleUnit : MonoBehaviour
             if (_statCacheDirty)
             {
                 _cachedMult = StatMult.Identity;
-                if (_usc != null && stateStatDB != null)
+                if (unitStateController != null && stateStatDB != null)
                 {
-                    var states = _usc.GetAll(); // 현재 활성 상태 목록
+                    var states = unitStateController.GetAll(); // 현재 활성 상태 목록
                     if (states != null)
                     {
                         foreach (var s in states)
@@ -175,11 +173,6 @@ public class BattleUnit : MonoBehaviour
 
     // 상태 효과가 적용된 최종 적대감 '생성량' 배율 (예: 도발 상태일 때 2.0f)
     public float HostilityGenerationMultiplier => Mult.hostilityGenerationMultiplier;
-
-
-    // (선택) 방어/속도 등
-    public int Defense => Mathf.RoundToInt(baseDefense * Mult.def);
-    public int Speed => Mathf.RoundToInt(baseSpeed * Mult.spd);
     #endregion
 
     #region Unity Callbacks
@@ -188,9 +181,17 @@ public class BattleUnit : MonoBehaviour
         if (!animator) animator = GetComponent<Animator>();
         if (!spriteRenderer) spriteRenderer = GetComponent<SpriteRenderer>();
 
-        _usc = GetComponent<UnitStateController>();
+        unitStateController = GetComponent<UnitStateController>();
         // 상태 변경 시 캐시 무효화(이벤트가 있다면 구독)
-        if (_usc != null) _usc.OnStatesChanged += InvalidateStatCache;
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged += InvalidateStatCache;
+            unitStateController.OnBuffsChanged += InvalidateStatCache; // 캐시 무효화
+
+            // ATB 재계산도 연결
+            unitStateController.OnStatesChanged += RecomputeATBFromRefs;
+            unitStateController.OnBuffsChanged += RecomputeATBFromRefs;
+        }
 
         ApplyData(); // 데이터 반영(HP/MP 초기화 포함)
     }
@@ -202,7 +203,14 @@ public class BattleUnit : MonoBehaviour
 
     void OnDestroy()
     {
-        if (_usc != null) _usc.OnStatesChanged -= InvalidateStatCache;
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged -= InvalidateStatCache;
+            unitStateController.OnBuffsChanged -= InvalidateStatCache;
+
+            unitStateController.OnStatesChanged -= RecomputeATBFromRefs;
+            unitStateController.OnBuffsChanged -= RecomputeATBFromRefs;
+        }
     }
 
     void Start()
@@ -245,9 +253,20 @@ public class BattleUnit : MonoBehaviour
 
     public void InitializeATB(float minAGI, float maxAGI)
     {
+        _agiMinRef = minAGI;                 // 기준 저장
+        _agiMaxRef = maxAGI;
+
         float normalized = (EffectiveAGI - minAGI) / Mathf.Max(0.01f, maxAGI - minAGI);
         float turnTime = Mathf.Lerp(12f, 6f, normalized); // 6~12초
         atbPerSecond = MaxATB / turnTime;
+    }
+
+    // 버프/상태 변경 시 불러줄 헬퍼
+    void RecomputeATBFromRefs()
+    {
+        if (_agiMaxRef <= _agiMinRef + 0.001f) return;
+        // 같은 기준으로 다시 계산(EffectiveAGI가 달라졌으니 atbPerSecond가 갱신됨)
+        InitializeATB(_agiMinRef, _agiMaxRef);
     }
 
     public void UpdateATB(float deltaTime)
@@ -272,7 +291,13 @@ public class BattleUnit : MonoBehaviour
         {
             var sc = GetComponent<StatusController>();
             float mul = (sc != null) ? sc.GetAgilityMultiplier() : 1f;
-            return AGI * mul;
+
+            // 상태/버프 DB 배수(특히 연막 AgiUp)는 여기서 곱해진다
+            float stateMul = 1f;
+            if (stateStatDB != null && unitStateController != null)
+                stateMul = stateStatDB.ComputeMultipliers(unitStateController).agi;
+
+            return AGI * mul * stateMul;
         }
     }
 
@@ -282,6 +307,37 @@ public class BattleUnit : MonoBehaviour
         ATB = 0f;
         Overfill = 0f; // 동시턴 우선순위 잔여값도 초기화
     }
+
+    #region Skill Cooldowns
+    // === Skill Cooldowns (per unit) ===
+    private readonly Dictionary<SkillAsset, int> _cooldowns = new();
+
+    public bool IsSkillOnCooldown(SkillAsset s)
+        => s != null && _cooldowns.TryGetValue(s, out var left) && left > 0;
+
+    public int GetCooldownRemaining(SkillAsset s)
+        => s != null && _cooldowns.TryGetValue(s, out var left) ? Mathf.Max(0, left) : 0;
+
+    public void ApplyCooldown(SkillAsset s)
+    {
+        if (s == null) return;
+        int cd = Mathf.Max(0, s.cooldownTurns);
+        if (cd <= 0) { _cooldowns.Remove(s); return; }
+        _cooldowns[s] = cd;
+    }
+
+    // 자신의 턴이 끝날 때 1씩 감소
+    public void TickAllCooldowns()
+    {
+        var keys = new List<SkillAsset>(_cooldowns.Keys);
+        foreach (var k in keys)
+        {
+            _cooldowns[k] = Mathf.Max(0, _cooldowns[k] - 1);
+            if (_cooldowns[k] == 0) _cooldowns.Remove(k);
+        }
+    }
+    #endregion
+
     #region Movement
 
     public IEnumerator AnimateMoveTo(Tilemap map, Vector3Int toCell)

@@ -100,8 +100,8 @@ public class BattleManager : MonoBehaviour
     public GameObject projectilePrefab;     // 투사체
 
     //점프 애니메이션 속도 및 높이 값
-    [SerializeField] float jumpDuration = 0.08f;     // 시간 기반
-    [SerializeField] float jumpArc = 0.15f;
+    float jumpDuration = 0.08f;     // 시간 기반
+    float jumpArc = 0.2f;
 
     public static void ClearStatic()
     {
@@ -527,6 +527,9 @@ public class BattleManager : MonoBehaviour
         manualEndRequested = false;
         OnAnyUnitTurnStarted?.Invoke(unit);
 
+        EmitActionLabel(null, "");
+        OnHint?.Invoke(string.Empty);
+
         Debug.Log($"[Battle] StartTurn -> {acting.name}");
 
         var sc = unit.GetComponent<StatusController>();
@@ -709,6 +712,7 @@ public class BattleManager : MonoBehaviour
         // ATB 재개(다음 턴은 Update()가 자동 감지)
         OnUnitEndTurn?.Invoke(acting);
         acting.ResetATB(); // ATB와 Overfill 함께 초기화
+        acting.TickAllCooldowns();  //재사용 턴 수 감소
         acting = null;
         atbPaused = false;
         state = BattleState.Idle;
@@ -806,7 +810,10 @@ public class BattleManager : MonoBehaviour
         if (currentSkillSO == null || currentSkillSO.targetMode != SkillTargetMode.Unit) return;
 
         ClearSkillPreview();
-        StartCoroutine(Co_GapCloseThenResolveOnTargetSO(currentSkillSO, acting, selectedTarget));
+        var skill = currentSkillSO;
+        bool doGapClose = skill.ShouldGapCloseToTarget(acting, selectedTarget);
+
+        StartCoroutine(Co_GapCloseThenResolveOnTargetSO(skill, acting, selectedTarget, doGapClose));
     }
 
     void ClearTargetSelection()
@@ -1070,6 +1077,8 @@ public class BattleManager : MonoBehaviour
 
         enemy.ResetATB();
         OnUnitEndTurn?.Invoke(enemy);
+        enemy.TickAllCooldowns();
+
         if (acting == enemy) acting = null;
 
         atbPaused = false;     // 전체 ATB 재개
@@ -1215,13 +1224,20 @@ public class BattleManager : MonoBehaviour
         if (!acting.HasMP(skill.mpCost))
         {
             Debug.Log($"[Skill] MP 부족: {skill.displayName} (필요 {skill.mpCost})");
-            //EmitActionLabel?.Invoke(acting, $"MP {skill.mpCost} 필요"); // 카드 라벨 등
             return; // 타겟팅 진입 안 함
+        }
+
+        // 쿨다운 사전 차단
+        if (acting.IsSkillOnCooldown(skill))
+        {
+            Debug.Log($"[Skill] 쿨다운: {skill.displayName} (남은 턴 {acting.GetCooldownRemaining(skill)})");
+            return;
         }
 
         if (skill is ISelfCastSkill self && self.SelfCastOnSelect)
         {
             StartCoroutine(skill.ResolveOnUnit(this, acting, acting));
+            acting.ApplyCooldown(skill);
             FinishActionAfterSkill(); // 프로젝트의 기존 "행동 종료" 루틴 호출
             return;
         }
@@ -1289,8 +1305,10 @@ public class BattleManager : MonoBehaviour
         // 스킬이 확정되어 타게팅 상태일 때만 힌트 노출
         if (state == BattleState.Targeting && currentSkillSO != null)
         {
+            if(currentSkillSO)
+
             if (currentSkillSO.targetMode == SkillTargetMode.Tile)
-                OnHint?.Invoke("이동할 위치를 선택하세요");
+                OnHint?.Invoke("위치를 선택하세요");
             else
                 OnHint?.Invoke("대상을 선택하세요");
         }
@@ -1365,7 +1383,12 @@ public class BattleManager : MonoBehaviour
 
         // 미리보기 정리
         ClearSkillPreview();
-        StartCoroutine(Co_GapCloseThenResolveOnTargetSO(currentSkillSO, acting, target));
+
+        var skill = currentSkillSO;
+        if (skill == null) return;
+
+        bool doGapClose = skill.ShouldGapCloseToTarget(acting, target);
+        StartCoroutine(Co_GapCloseThenResolveOnTargetSO(skill, acting, target, doGapClose));
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int originCell)
     {
@@ -1397,7 +1420,7 @@ public class BattleManager : MonoBehaviour
             customPreviewMap = null;
 
             // 무연출 즉시 해결 경로 (MP 차감은 스킬 내부에서 수행)
-            StartCoroutine(Co_ResolveTileThenFlag(currentSkillSO, map, originCell, acting, () => { FinishActionAfterSkill(); }));
+            StartCoroutine(Co_ResolveTileThenFlag(currentSkillSO, map, originCell, acting, () => { acting.ApplyCooldown(currentSkillSO); FinishActionAfterSkill(); }));
         }
         else
         {
@@ -1406,68 +1429,53 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    IEnumerator Co_GapCloseThenResolveOnTargetSO(SkillAsset skill, BattleUnit caster, BattleUnit target)
+    IEnumerator Co_GapCloseThenResolveOnTargetSO(
+        SkillAsset skill,
+        BattleUnit caster,
+        BattleUnit target,
+        bool doGapClose)
     {
-        state = BattleState.Resolving;
+        if (skill == null || caster == null || target == null)
+            yield break;
 
-        Vector3 originalW = caster.transform.position;
+        var originalW = caster.transform.position;
 
-        // 타겟 앞 점프(연출)
-        if (TryGetFrontCellOfTarget(caster, target, out var frontCell))
+        // 1) 필요하면 대상 앞으로 점프(gap close)
+        if (doGapClose && TryGetFrontCellOfTarget(caster, target, out var frontCell))
         {
             var mapForJump = target.CurrentMap ?? provider.EnemyFloor;
             Vector3 frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
+
             yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
         }
 
-        // 공격 모션 중 임팩트 타이밍에 해결
-        bool impactTriggered = false;
-        bool resolved = false;
-
-        System.Action impact = null;
-        impact = () =>
-        {
-            // 중복 방지 플래그 & 구독 해제
-            impactTriggered = true;
-            caster.OnAttackImpact -= impact;
-
-            // 임팩트 순간 최종 차감
-            if (!caster.TryConsumeMP(skill.mpCost))
-            {
-                Debug.Log("[Skill] 임팩트 시 MP 부족 → 취소");
-                // 비용 차감 실패: 아무것도 일으키지 않고 종료
-                return;
-            }
-
-            // 차감 성공 → 스킬 해결
-            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => { resolved = true; }));
-        };
-
-        caster.OnAttackImpact += impact;
+        // 2) 공격/시전 모션 (점프를 안 쓰더라도 근접 모션은 그대로 쓸 수 있음)
         yield return caster.AnimateAttack(target);
 
-        caster.OnAttackImpact -= impact;    //애니가 끝났는데도 핸들러가 남아있을 수 있으니 한 번 더 해제
+        bool resolved = false;
 
-        if (!impactTriggered)
+        // 3) 임팩트 타이밍에 스킬 처리 (기존 로직 재사용)
+        void OnImpact()
         {
-            if (!caster.TryConsumeMP(skill.mpCost))
-            {
-                Debug.Log("[Skill] 임팩트 미수신 폴백 시 MP 부족 → 취소");
-            }
-            else
-            {
-                yield return skill.ResolveOnUnit(this, caster, target);
-            }
-
-            resolved = true;
+            caster.OnAttackImpact -= OnImpact;
+            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => { resolved = true; }));
         }
 
-        // 임팩트로 시작했다면, 해결 완료까지 대기(타임아웃 가드)
-        float timeout = 1.5f;
-        while (!resolved && (timeout > 0f)) { timeout -= Time.deltaTime; yield return null; }
+        caster.OnAttackImpact += OnImpact;
 
-        // 3) 원위치 복귀
+        // 혹시 애니에서 임팩트 이벤트가 안 들어온 경우 대비해 타임아웃 처리 등 기존 코드 유지
+        float timeout = 0.5f;
+        while (!resolved && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+        caster.OnAttackImpact -= OnImpact;
+
+        // 4) 원위치 복귀
+        // doGapClose=false인 경우 원래 자리 == 현재 자리라서 그냥 스냅만 되는 효과 (문제 없음)
         caster.transform.position = originalW;
+
         FinishActionAfterSkill();
     }
 
@@ -1503,13 +1511,17 @@ public class BattleManager : MonoBehaviour
             {
                 var startW = caster.transform.position;
                 var targetW = map.GetCellCenterWorld(cell);
-                var go = Instantiate(projectilePrefab, startW, Quaternion.identity);
-                var pc = go.GetComponent<ProjectileController>();
-                if (pc != null)
+                var projectilePrefab = Instantiate(this.projectilePrefab, startW, Quaternion.identity);
+                var projectileController = projectilePrefab.GetComponent<ProjectileController>();
+                if (projectileController != null)
                 {
-                    pc.Init(startW, targetW,
-                        () => StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () => { projEnded = true; })),
-                        speedUnitsPerSec: 3f);
+                    projectileController.Init(startW, targetW,
+                                            () => StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+                                            {
+                                                caster.ApplyCooldown(skill);
+                                                projEnded = true;
+                                            })),
+                                            speedUnitsPerSec: 3f);
                 }
                 else
                 {
@@ -1540,6 +1552,7 @@ public class BattleManager : MonoBehaviour
             else
             {
                 yield return skill.ResolveOnTile(this, map, cell, caster);
+                caster.ApplyCooldown(skill);
                 projEnded = true;
             }
         }

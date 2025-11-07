@@ -5,8 +5,8 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public enum DamageSchool { Physical, Magical }  //근력, 총명
-public enum AttackAttr { None, Pierce, Strike, Slash /* etc */ }
+public enum DamageSchool { Physical, Magical, Composite }  //근력, 총명 , 복합
+public enum AttackAttr { None, Pierce, Strike, Slash }
 public enum TargetPriorityMode
 {
     None,
@@ -41,6 +41,14 @@ public abstract class SkillAsset : ScriptableObject
     [Header("Targeting")]
     public SkillTargetMode targetMode; // 기존 enum 재사용 (Unit/Tile) 
 
+    [Header("Cooldown")]
+    [Tooltip("해당 스킬 사용 후 다시 사용할 때까지 필요한 '자신의 턴 수'. 0이면 쿨다운 없음.")]
+    public int cooldownTurns = 0;
+
+    [Header("Melee / Gap Close")]
+    [Tooltip("Unit 타겟 스킬일 때, 대상에게 뛰어가서 공격할지 여부. false면 제자리에서 시전.")]
+    public bool useGapCloseJump = true;
+
     [Header("Compat (임시)")]
     public SkillId legacyId = SkillId.Skill1; // 기존 분기 로직 호환용
 
@@ -56,10 +64,27 @@ public abstract class SkillAsset : ScriptableObject
     //스킬별 대미지 계산. 필요시 하위 클래스에서 override
     public virtual int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
     {
-        // 물리=PhysicalDamage, 마법=MagicDamage
-        int baseStat = (school == DamageSchool.Physical)
-            ? Mathf.Max(1, caster.PhysicalDamage)
-            : Mathf.Max(1, caster.MagicDamage);
+        int baseStat;
+
+        switch (school)
+        {
+            case DamageSchool.Physical:
+                baseStat = Mathf.Max(1, caster.PhysicalDamage);
+                break;
+
+            case DamageSchool.Magical:
+                baseStat = Mathf.Max(1, caster.MagicDamage);
+                break;
+
+            case DamageSchool.Composite:
+                // 물리 + 마법 합산
+                baseStat = Mathf.Max(1, caster.PhysicalDamage + caster.MagicDamage);
+                break;
+
+            default:
+                baseStat = Mathf.Max(1, caster.PhysicalDamage);
+                break;
+        }
 
         float mult = Mathf.Max(0f, power);
 
@@ -108,7 +133,7 @@ public abstract class SkillAsset : ScriptableObject
         return potentialTargets[potentialTargets.Count - 1];
     }
 
-    /// <summary>컬렉션에서 '적대감(Hostility)'이 가장 높은 플레이어 유닛을 선택. 동률이면 랜덤.</summary>
+    // <summary>컬렉션에서 '적대감(Hostility)'이 가장 높은 플레이어 유닛을 선택. 동률이면 랜덤.</summary>
     //public static BattleUnit PickHighestHostility(IEnumerable<BattleUnit> candidates)
     //{
     //    if (candidates == null) return null;
@@ -164,5 +189,9 @@ public abstract class SkillAsset : ScriptableObject
         {
             return description;
         }
+    }
+    public virtual bool ShouldGapCloseToTarget(BattleUnit caster, BattleUnit target)    /// Unit 타겟 사용 시 점프 연출(gap close)을 사용할지 여부
+    {
+        return useGapCloseJump;
     }
 }

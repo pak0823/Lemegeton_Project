@@ -22,4 +22,11 @@ public static class HostilityRules
         float statusMultiplier = caster.HostilityGenerationMultiplier;
         return Mathf.Max(0f, healAmount) * healthMultiplier * statusMultiplier;
     }
+
+    public static float GetVisibleHostility(BattleUnit _unit)
+    {
+        float baseHostility = _unit.Hostility; // 원본(변하지 않음)
+        float getVisibility = SmokeZoneRuntime.GetVisibilityMultiplier(_unit);
+        return baseHostility * getVisibility;
+    }
 }

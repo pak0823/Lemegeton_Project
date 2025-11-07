@@ -11,8 +11,9 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     {
         W_Only,          // 플레이어 기준 W로만
         SW_Only,         // 플레이어 기준 SW로만
-        W_or_SW          // 플레이어 기준 W 또는 SW (적은 E 또는 NE)
+        W_or_SW,         // 플레이어 기준 W 또는 SW (적은 E 또는 NE)
     }
+    enum DirLabel { W, E, SW, NE }
     // 선택 즉시 자기 자신에게 발동(타겟팅 불필요)
     public enum DirectionMode
     {
@@ -84,62 +85,73 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         var map = caster.CurrentMap;
         var start = caster.Cell;
 
-        // 플레이어/적 별 “뒤” 방향 후보 집합
-        var dirs = GetBackDirectionsFor(caster.team, start);
+        var labels = GetDirectionsFor(caster.team, start, direction, backMode);
         var results = new HashSet<Vector3Int>();
 
-        foreach (var step in dirs)
+        foreach (var label in labels)
         {
-            var endCandidate = ScanToEdge(map, start, step, maxScanCells);
-            var landing = FindNearestFreeBackward(bm, map, endCandidate, step, start);
+            var endCandidate = ScanToEdge(map, start, label, maxScanCells);
+            var landing = FindNearestFreeBackward(bm, map, endCandidate, label, start);
 
             if (landing == start || !IsLandingFree(bm, map, landing))
                 continue;
-            
-            var delta = landing - start;
-            int dot = delta.x * step.x + delta.y * step.y;
-            if (dot <= 0) continue;   // step과 같은 방향 성분이 없으면 제외
 
-            // 최종 통과한 후보만 추가
             results.Add(landing);
         }
-
         return results;
     }
 
     // ----------------- helpers -----------------
     // 플레이어는 W(-1,0)/SW(-1,1), 적은 E(+1,0)/NE(+1,-1)
-    List<Vector3Int> GetBackDirectionsFor(Team t, Vector3Int start)
+    List<DirLabel> GetDirectionsFor(Team t, Vector3Int start, DirectionMode dirMode, BackMode backMode)
     {
-        bool odd = SkillLibrary.IsOddColumn(start);
+        // 팀 기준 전/후 쌍 (라벨)
+        DirLabel backA, backB, frontA, frontB;
+        if (t == Team.Player) { backA = DirLabel.W; backB = DirLabel.SW; frontA = DirLabel.E; frontB = DirLabel.NE; }
+        else { backA = DirLabel.E; backB = DirLabel.NE; frontA = DirLabel.W; frontB = DirLabel.SW; }
 
-        // odd-q(세로 기준)에서 W는 고정, SW/NE는 홀짝에 따라 다름
-        Vector3Int W = new(-1, 0, 0);
-        Vector3Int SW = odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0);
-        Vector3Int E = new(1, 0, 0);
-        Vector3Int NE = odd ? new Vector3Int(+1, +1, 0) : new Vector3Int(0, +1, 0);
+        if (dirMode == DirectionMode.AbsoluteNegativeX) return new() { DirLabel.W };
+        if (dirMode == DirectionMode.AbsolutePositiveX) return new() { DirLabel.E };
 
-        if (t == Team.Player)
+        bool useFront = (dirMode == DirectionMode.TeamBasedFront);
+        var a = useFront ? frontA : backA;
+        var b = useFront ? frontB : backB;
+
+        return backMode switch
         {
-            switch (backMode)
-            {
-                case BackMode.W_Only: return new() { W };
-                case BackMode.SW_Only: return new() { SW };
-                default: return new() { W, SW };
-            }
-        }
-        else // Enemy
+            BackMode.W_Only => new() { a },
+            BackMode.SW_Only => new() { b },
+            BackMode.W_or_SW => new() { a, b },
+            // (혹시 E_or_NE를 쓰신다면 여기에 추가)
+            _ => new() { a, b }
+        };
+    }
+    Vector3Int GetStepAt(Vector3Int cell, DirLabel label)
+    {
+        bool odd = SkillLibrary.IsOddColumn(cell);
+        switch (label)
         {
-            switch (backMode)
-            {
-                case BackMode.W_Only: return new() { E };
-                case BackMode.SW_Only: return new() { NE };
-                default: return new() { E, NE };
-            }
+            case DirLabel.W: return new Vector3Int(-1, 0, 0);
+            case DirLabel.E: return new Vector3Int(1, 0, 0);
+            case DirLabel.SW: return odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0);
+            case DirLabel.NE: return odd ? new Vector3Int(+1, +1, 0) : new Vector3Int(0, +1, 0);
         }
+        return Vector3Int.zero;
+    }
+    DirLabel Opposite(DirLabel l)
+    {
+        switch (l)
+        {
+            case DirLabel.W: return DirLabel.E;
+            case DirLabel.E: return DirLabel.W;
+            case DirLabel.SW: return DirLabel.NE;
+            case DirLabel.NE: return DirLabel.SW;
+        }
+        return l;
     }
 
-    Vector3Int ScanToEdge(Tilemap map, Vector3Int start, Vector3Int step, int maxCells)
+    // 라벨 기반 스캔
+    Vector3Int ScanToEdge(Tilemap map, Vector3Int start, DirLabel label, int maxCells)
     {
         var cur = start; int guard = 0;
         while (true)
@@ -147,31 +159,32 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             if (maxCells > 0 && guard >= maxCells) break;
             guard++;
 
+            var step = GetStepAt(cur, label);             // ★ 현재 칸 기준으로 step 재계산
             var next = new Vector3Int(cur.x + step.x, cur.y + step.y, cur.z);
             if (!IsCellWithin(map, next)) break;
             if (!HasTile(map, next)) break;
 
-            cur = next; // 중간 장애물/유닛은 통과(무시)
+            cur = next;
         }
         return cur;
     }
 
-    Vector3Int FindNearestFreeBackward(BattleManager bm, Tilemap map, Vector3Int endCandidate, Vector3Int step, Vector3Int start)
+
+    // 라벨 기반 역방향 탐색(착지 가능 지점 찾기)
+    Vector3Int FindNearestFreeBackward(BattleManager bm, Tilemap map, Vector3Int endCandidate, DirLabel label, Vector3Int start)
     {
         var cur = endCandidate;
-        var back = new Vector3Int(-step.x, -step.y, -step.z);
+        var backLabel = Opposite(label);
 
         while (true)
         {
             if (IsLandingFree(bm, map, cur)) return cur;
 
-            var prev = new Vector3Int(cur.x + back.x, cur.y + back.y, cur.z + back.z);
+            var backStep = GetStepAt(cur, backLabel);     // ★ 여기서도 동적 역스텝
+            var prev = new Vector3Int(cur.x + backStep.x, cur.y + backStep.y, cur.z);
 
-            // 맵 밖/타일 없음 → 더 이상 물러날 수 없음 = 착지 불가
             if (!IsCellWithin(map, prev) || !HasTile(map, prev))
                 return start;
-
-            // 출발점까지 왔는데도 착지 불가면 포기
             if (prev == start)
                 return start;
 
@@ -200,6 +213,11 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     {
         var endW = map.GetCellCenterWorld(landing);
 
+        //이동 시 현재 칸 점유 해제
+        var startCell = caster.Cell;
+        if (bm != null && bm.grid != null)
+            bm.grid.SetOccupied(caster.team, startCell, false);
+
         if (dashAnimate)
         {
             var startW = caster.transform.position;
@@ -221,6 +239,11 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         }
 
         caster.MoveTo(map, landing); // 최종 스냅(셀 setter 보호)
+
+        // 이동 끝: 새 칸 점유 설정
+        if (bm != null && bm.grid != null)
+            bm.grid.SetOccupied(caster.team, caster.Cell, true);
+
         yield return null;
     }
 }

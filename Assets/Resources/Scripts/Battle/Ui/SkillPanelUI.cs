@@ -1,11 +1,13 @@
-using Unity.VisualScripting;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 public class SkillPanelUI : MonoBehaviour
 {
     [Header("Refs")]
-    public BattleManager battle;        // 인스펙터로 할당
+    public BattleManager battleManager;        // 인스펙터로 할당
     public GameObject panel;            // SkillPanel 오브젝트
     public Button[] buttons;            // 4~5개
     [SerializeField] private Text descriptionText;   // 스킬 설명 표시
@@ -13,22 +15,23 @@ public class SkillPanelUI : MonoBehaviour
     [SerializeField] private Text selectTargetHintText; //행동 텍스트 ui
 
     private SkillAsset[] cachedAssets;  // 마지막으로 채운 SO 목록 캐시
+    private bool[] cachedUsable;
 
     // 적 라벨이 표기 중인지(패널 토글과 무관하게 유지)
     private bool _pinnedEnemyLabel = false;
 
     void Awake()
     {
-        if (battle == null)
-            battle = FindObjectOfType<BattleManager>();
+        if (!battleManager)
+            battleManager =FindAnyObjectByType<BattleManager>();
 
         // 이벤트 구독
-        if (battle != null)
+        if (battleManager != null)
         {
-            battle.OnSkillPanelToggled += HandleToggle;
-            battle.OnSkillPanelPopulateSO += HandlePopulateSO;
-            battle.OnHint += HandleHint;
-            battle.OnUnitActionLabel += HandleUnitActionLabel;
+            battleManager.OnSkillPanelToggled += HandleToggle;
+            battleManager.OnSkillPanelPopulateSO += HandlePopulateSO;
+            battleManager.OnHint += HandleHint;
+            battleManager.OnUnitActionLabel += HandleUnitActionLabel;
         }
 
         if (panel != null) panel.SetActive(false); // 기본 비활성
@@ -37,12 +40,32 @@ public class SkillPanelUI : MonoBehaviour
 
     void OnDestroy()
     {
-        if (battle != null)
+        if (battleManager != null)
         {
-            battle.OnSkillPanelToggled -= HandleToggle;
-            battle.OnSkillPanelPopulateSO -= HandlePopulateSO;
-            battle.OnHint -= HandleHint;
-            battle.OnUnitActionLabel -= HandleUnitActionLabel;
+            battleManager.OnSkillPanelToggled -= HandleToggle;
+            battleManager.OnSkillPanelPopulateSO -= HandlePopulateSO;
+            battleManager.OnHint -= HandleHint;
+            battleManager.OnUnitActionLabel -= HandleUnitActionLabel;
+        }
+    }
+
+    void LateUpdate()
+    {
+        if (panel == null || !panel.activeInHierarchy) return;
+        if (buttons == null || cachedUsable == null) return;
+
+        int len = Mathf.Min(buttons.Length, cachedUsable.Length);
+        for (int i = 0; i < len; i++)
+        {
+            var b = buttons[i];
+            if (b == null) continue;
+            if (!b.gameObject.activeInHierarchy) continue;
+
+            bool should = cachedUsable[i];
+
+            // 다른 어디서 바꿔도 여기서 되돌린다
+            if (b.interactable != should)
+                b.interactable = should;
         }
     }
 
@@ -64,27 +87,31 @@ public class SkillPanelUI : MonoBehaviour
         cachedAssets = assets; // 캐시
         int n = Mathf.Min(assets?.Length ?? 0, buttons.Length);
         int last = buttons.Length - 1;
+        if (cachedUsable == null || cachedUsable.Length != buttons.Length)
+            cachedUsable = new bool[buttons.Length];
 
         for (int i = 0; i < buttons.Length; i++)
         {
-            var btn = buttons[i];
-            if (btn == null) continue;
+            Button button = buttons[i];
+            if (button == null) continue;
 
             // --- 마지막 버튼은 항상 Cancel로 구성 ---
             if (i == last)
             {
-                btn.gameObject.SetActive(true);
-
+                button.gameObject.SetActive(true);
+                button.interactable = true;
+                if (cachedUsable != null && i < cachedUsable.Length)
+                    cachedUsable[i] = true;
                 // 클릭 → 취소 이벤트 발생 (인스펙터에서 배틀 취소 함수 연결)
-                btn.onClick.RemoveAllListeners();
-                btn.onClick.AddListener(() =>
+                button.onClick.RemoveAllListeners();
+                button.onClick.AddListener(() =>
                 {
                     // 상세를 비우고 패널 상태는 유지/닫기는 배틀 로직에 맡김
                     UpdateDetail(null, forceClear: true, showCancelDesc: true);
                 });
 
                 // 호버/선택 시 상세를 비우기
-                var et = btn.GetComponent<EventTrigger>() ?? btn.gameObject.AddComponent<EventTrigger>();
+                var et = button.GetComponent<EventTrigger>() ?? button.gameObject.AddComponent<EventTrigger>();
                 ClearTriggers(et);
                 AddTrigger(et, EventTriggerType.PointerEnter, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
                 AddTrigger(et, EventTriggerType.Select, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
@@ -94,47 +121,81 @@ public class SkillPanelUI : MonoBehaviour
             // --- 스킬 버튼 구성 ---
             if (i < n)
             {
-                btn.gameObject.SetActive(true);
-                var asset = assets[i];
+                button.gameObject.SetActive(true);
+                SkillAsset asset = assets[i];
 
-                var txt = btn.GetComponentInChildren<Text>();
-                if (txt != null) txt.text = asset != null ? asset.displayName : "(empty)";
+                Text txt = button.GetComponentInChildren<Text>();
+                if (txt != null)
+                {
+                    string label = (asset != null ? asset.displayName : "(empty)");
 
-                btn.onClick.RemoveAllListeners();
+                    // 남은 cooldown 표시
+                    int cooldown = 0;
+                    BattleUnit actor = battleManager != null ? battleManager.GetType().GetField("acting", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(battleManager) as BattleUnit : null;
+                    if (actor != null && asset != null) 
+                        cooldown = actor.GetCooldownRemaining(asset);
+
+                    txt.text = (cooldown > 0) ? $"{label} (CD:{cooldown})" : label;
+                }
+
+                // 쿨다운 스킬 버튼 잠금
+                bool usable = (battleManager != null && battleManager.IsPlayerTurn && battleManager.currentSkillSO == null);
+                if (usable && asset != null)
+                {
+                    BattleUnit actor = Shared.BattleManager != null ? Shared.BattleManager.GetType()
+                        .GetField("acting", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                        ?.GetValue(Shared.BattleManager) as BattleUnit : null;
+
+                    if (actor != null)
+                        usable = !actor.IsSkillOnCooldown(asset) && actor.HasMP(asset.mpCost);
+                }
+
+                button.interactable = usable;
+                cachedUsable[i] = usable;
+
+                button.onClick.RemoveAllListeners();
                 int capture = i;
-                btn.onClick.AddListener(() =>
+                button.onClick.AddListener(() =>
                 {
                     // 하이라이트를 먼저 현재 버튼으로 고정
-                    var nav = (panel != null ? panel.GetComponent<UIArrowNavigator>() : null)
-                                    ?? GetComponentInChildren<UIArrowNavigator>(true);
-                    if (nav != null) nav.SelectIndexImmediate(capture, focus: false, updateHighlight: true);
+                    UIArrowNavigator navigator = (panel != null ? panel.GetComponent<UIArrowNavigator>() : null)
+                                ?? GetComponentInChildren<UIArrowNavigator>(true);
+                    navigator?.RebuildAndRefocus(); // 비활성 버튼 건너뛰도록 갱신
+
+                    if (navigator != null) navigator.SelectIndexImmediate(capture, focus: false, updateHighlight: true);
 
                     // EventSystem에도 선택으로 알려주고 싶다면
                     if (EventSystem.current != null)
-                        EventSystem.current.SetSelectedGameObject(btn.gameObject);
+                        EventSystem.current.SetSelectedGameObject(button.gameObject);
 
                     // 상세 패널 즉시 갱신
                     UpdateDetail(asset);
 
                     // 기존 배틀 호출(이 시점에서 Targeting 진입 → 잠금이 걸려도 OK)
-                    battle.SelectSkill(capture);
+                    battleManager.SelectSkill(capture);
                 });
 
                 // 호버/선택 시에도 상세 갱신 (마우스/패드 모두 커버)
-                var et = btn.GetComponent<EventTrigger>();
-                if (et == null) et = btn.gameObject.AddComponent<EventTrigger>();
-                AddTrigger(et, EventTriggerType.PointerEnter, () => UpdateDetail(asset));
-                AddTrigger(et, EventTriggerType.Select, () => UpdateDetail(asset));
+                EventTrigger eventTrigger = button.GetComponent<EventTrigger>();
+                if (eventTrigger == null) eventTrigger = button.gameObject.AddComponent<EventTrigger>();
+                AddTrigger(eventTrigger, EventTriggerType.PointerEnter, () => UpdateDetail(asset));
+                AddTrigger(eventTrigger, EventTriggerType.Select, () => UpdateDetail(asset));
             }
             else
             {
-                btn.gameObject.SetActive(false);
+                button.gameObject.SetActive(false);
+                if (cachedUsable != null && i < cachedUsable.Length)
+                    cachedUsable[i] = false;
             }
         }
 
         // 첫 항목으로 상세 초기화
         if (n > 0 && assets[0] != null) UpdateDetail(assets[0]);
         else UpdateDetail(null);
+
+        var navigator = (panel != null ? panel.GetComponent<UIArrowNavigator>()
+                               : GetComponentInChildren<UIArrowNavigator>(true));
+        navigator?.RebuildAndRefocus();
     }
 
     // 초기에 불필요한 리스너 삭제
@@ -148,6 +209,10 @@ public class SkillPanelUI : MonoBehaviour
     // === 상세 갱신 ===
     void UpdateDetail(SkillAsset _skillasset, bool forceClear = false, bool showCancelDesc = false)
     {
+        // 타겟팅 중에는 설명을 바꾸지 않는다. 단, forceClear(true)인 경우만 예외적으로 허용
+        if (battleManager != null && battleManager.IsTargeting)
+            return;
+
         // Cancel 전용 설명
         if (showCancelDesc)
         {
@@ -171,6 +236,11 @@ public class SkillPanelUI : MonoBehaviour
             // rangeSprite를 따로 둘 계획이면: a.rangeSprite ?? a.descriptionImage
             rangeImage.sprite = _skillasset != null ? _skillasset.descriptionImage : null;
             rangeImage.enabled = (rangeImage.sprite != null);
+        }
+        else
+        {
+            rangeImage.sprite = _skillasset.descriptionImage;
+            rangeImage.enabled = true;
         }
     }
 

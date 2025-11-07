@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 492f0b7ae9548a84098a9e4545fd6b7c, type: 3}
+  m_Name: SteamStateSmoke
+  m_EditorClassIdentifier: 
+  displayName: "\uC5F0\uB9C9\uD0C4"
+  descriptionImage: {fileID: 0}
+  description: "\uB2E8\uC77C \uD0C0\uC77C\uC5D0 \uBC30\uCE58\uB41C \uB3D9\uB8CC\uC758
+    \uC801\uC758\uB97C \uAC10\uC18C\uD569\uB2C8\uB2E4. \uC774 \uAE30\uC220\uC740
+    2\uD134 \uB3D9\uC548 \uC720\uC9C0\uB429\uB2C8\uB2E4"
+  school: 0
+  attribute: 0
+  power: 0
+  mpCost: 7
+  targetMode: 1
+  cooldownTurns: 4
+  legacyId: 0
+  rules:
+  - name: "\uC21C\uD48D\uD0C4"
+    requireAll: 02000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 28e55f30530be9c4b8824736cf5e1c67, type: 2}
+    overrideAreaPreset: 0
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: "\uC21C\uD48D\uD0C4"
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  defaultSkill: {fileID: 11400000, guid: ae5f922f50629744ba0d7f433d82f5c1, type: 2}

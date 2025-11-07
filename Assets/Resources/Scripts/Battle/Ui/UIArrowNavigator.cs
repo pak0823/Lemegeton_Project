@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -26,22 +25,24 @@ public class UIArrowNavigator : MonoBehaviour
     [SerializeField] private bool autoFocusOnEnable = true;
     [Tooltip("마우스/다른 스크립트로 선택된 버튼도 하이라이트가 따라가도록 갱신")]
     [SerializeField] private bool followExternalSelection = true;
+    int lockedIndex = -1;
 
     [Header("Unity 기본 네비게이션(Selectable Navigation) 끄기")]
     [SerializeField] private bool disableUnitySelectableNavigation = true;
 
     [Header("Lock Settings")]
-    [SerializeField] private bool lockAfterConfirm = true;   // 확정(버튼 onClick) 직후 잠금
+    //[SerializeField] private bool lockAfterConfirm = true;   // 확정(버튼 onClick) 직후 잠금
     [SerializeField] private bool lockWhileTargeting = true; // 전투가 타겟팅/프리뷰 상태면 잠금
     [SerializeField] private BattleManager battle;           // (SkillPanel 쪽만) 인스펙터에 할당
-    private bool navLocked = false;
+    bool navLocked;
+    public bool IsLocked => navLocked;
 
     // 텍스트 색상 하이라이트
     [Header("Text Color Highlight")]
-    [SerializeField] private Color32 focusOrHoverColor = new Color32(255, 155, 0, 255);
+    [SerializeField] private Color focusOrHoverColor = new Color32(255, 155, 0, 255);
+    [SerializeField, Range(0f, 1f)] float disabledLabelAlpha = 0.45f; // 비활성 텍스트 알파
 
     private int index = 0;
-    private readonly List<GameObject> highlightCache = new List<GameObject>();
     private GameObject lastSelectedGO; // 외부 선택 추적용
 
     // 버튼별 라벨 및 원본 색상 캐시
@@ -67,7 +68,8 @@ public class UIArrowNavigator : MonoBehaviour
         UpdateHighlight(); // 이제는 "텍스트 색"을 갱신하도록 동작  :contentReference[oaicite:1]{index=1}
 
         lastSelectedGO = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
-        battle = Shared.BattleManager;
+        if (battle == null)
+            battle = Shared.BattleManager;
     }
 
     void Update()
@@ -76,16 +78,33 @@ public class UIArrowNavigator : MonoBehaviour
         if (!gameObject.activeInHierarchy) return;
         if (!IsInteractableByCanvasGroup(this.gameObject)) return;
         if (PopupManager.IsModalOpen) return;
+        if (battle == null) battle = Shared.BattleManager;
 
-        // 스킬 타겟팅 중 잠금(스킬 패널일 때 유효)
-        if (lockWhileTargeting && battle != null)
+        if (lockWhileTargeting && battle != null && battle.IsTargeting)
         {
-            if(battle.IsTargeting) navLocked = true;
-            else if (navLocked) { navLocked = false; UpdateHighlight(); }// 타깃팅이 끝났다면(= 취소/확정 이후 상태 복귀) 잠금 해제
+            if (!navLocked)
+            {
+                navLocked = true;
+                lockedIndex = index;           // 현재 선택된 버튼 인덱스를 잠금 대상으로
+            }
+            else if (lockedIndex < 0)
+            {
+                lockedIndex = index;           // 혹시 비어있다면 보정
+            }
+
+            ApplyLockedHighlight();            // 매 프레임 강제로 잠금 버튼에만 포커스 적용
+            return;                            // 아래 키/마우스/외부 포커스 처리 전부 차단
+        }
+        else if (navLocked)
+        {
+            // 타겟팅 종료 → 잠금 해제 및 포커스 정상화
+            navLocked = false;
+            lockedIndex = -1;
+            RebuildAndRefocus();
+            return;
         }
 
-        // 잠금 상태에서는 '마우스 외부 선택 추적'과 '좌/우/확정' 모두 무시
-        if (navLocked) return;
+        navLocked = false;
 
         bool handledKey = false;
 
@@ -105,7 +124,6 @@ public class UIArrowNavigator : MonoBehaviour
         if (Input.GetKeyDown(confirmKey))
         {
             var b = GetButton(index);
-            if (lockAfterConfirm) navLocked = true;
             b?.onClick?.Invoke();
             handledKey = true;
         }
@@ -120,9 +138,13 @@ public class UIArrowNavigator : MonoBehaviour
                 int extIdx = IndexOfButtonDeep(now);
                 if (extIdx >= 0)
                 {
-                    index = extIdx;
-                    Focus();            // (선택) EventSystem에도 반영하고 싶으면 유지
-                    UpdateHighlight();
+                    var b = GetButton(extIdx);
+                    if (b != null && b.interactable)
+                    {
+                        index = extIdx;
+                        Focus();
+                        UpdateHighlight();
+                    }
                 }
             }
             lastSelectedGO = now;
@@ -140,11 +162,12 @@ public class UIArrowNavigator : MonoBehaviour
     public void RebuildAndRefocus(bool keepCurrentIfPossible = true)
     {
         int prevIdx = index;
-        BuildLabelCache(captureOriginal: true);
+        BuildLabelCache(captureOriginal: false);
         if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
         if (!keepCurrentIfPossible || !IsUsable(GetButton(prevIdx)))
             index = FirstActiveIndex();
         Focus();
+        ApplyDisabledVisuals();
         UpdateHighlight();
     }
 
@@ -229,33 +252,111 @@ public class UIArrowNavigator : MonoBehaviour
     {
         labelCache.Clear();
         foreach (var btn in buttons)
-        {
-            Text t = null;
-            if (btn != null) t = btn.GetComponentInChildren<Text>(true);
-            labelCache.Add(t);
-        }
+            labelCache.Add(FindLabelText(btn));
 
-        // 원본색은 "최초 1회"만 캡처
         if (captureOriginal && !originalCaptured)
         {
             originalColors.Clear();
-            foreach (var t in labelCache)
-                originalColors.Add(t ? t.color : Color.white);
+            for (int i = 0; i < labelCache.Count; i++)
+            {
+                var t = labelCache[i];
+                var c = t ? t.color : Color.white;
+                originalColors.Add(new Color(c.r, c.g, c.b, 1f)); // 원본 RGB+알파1
+            }
             originalCaptured = true;
         }
-
-        // 패널 재활성화 시 한 번 전체를 원본으로 복구
-        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
-            if (labelCache[i]) labelCache[i].color = originalColors[i];
     }
 
     void UpdateHighlight()
     {
+        // 전체를 원본으로 되돌리되, 비활성 버튼은 스킵
         for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
-            if (labelCache[i]) labelCache[i].color = originalColors[i];
+        {
+            var t = labelCache[i];
+            var b = GetButton(i);
+            if (!t) continue;
+            if (b == null || !b.interactable) continue; // 반투명 유지
 
+
+            var oc = originalColors[i];
+            t.color = new Color(oc.r, oc.g, oc.b, 1f);
+        }
+
+        // 포커스 색 적용도 '활성 버튼'에만
         if (index >= 0 && index < labelCache.Count && labelCache[index])
-            labelCache[index].color = focusOrHoverColor;
+        {
+            var b = GetButton(index);
+            if (b != null && b.interactable)
+            {
+                // 활성일 때만 하이라이트
+                var c = (Color)focusOrHoverColor;
+                labelCache[index].color = new Color(c.r, c.g, c.b, 1f);
+            }
+        }
+    }
+    void ApplyLockedHighlight()
+    {
+        // 캐시 없으면 초기화
+        if (!originalCaptured)
+            BuildLabelCache(captureOriginal: true);
+        else
+            BuildLabelCache(captureOriginal: false);
+
+        // 먼저 활성/비활성 알파 처리 (비활성은 기본색 + 낮은 알파)
+        ApplyDisabledVisuals();
+
+        // 락된 인덱스에만 포커스 색 적용
+        if (lockedIndex >= 0 && lockedIndex < labelCache.Count)
+        {
+            var t = labelCache[lockedIndex];
+            var b = GetButton(lockedIndex);
+            if (t != null && b != null && b.interactable)
+            {
+                var c = focusOrHoverColor;
+                t.color = new Color(c.r, c.g, c.b, 1f); // 포커스 주황, 알파 1
+            }
+        }
+    }
+
+    void ApplyDisabledVisuals()
+    {
+        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
+        {
+            var t = labelCache[i];
+            var b = GetButton(i);
+            if (!t) continue;
+
+            var oc = originalColors[i];
+            if (b != null && b.interactable)
+            {
+                // 활성: 원본 RGB + 알파 1
+                t.color = new Color(oc.r, oc.g, oc.b, 1f);
+            }
+            else
+            {
+                // 비활성: 원본 RGB + 낮은 알파 (기본색 유지, 투명도만 낮춤)
+                t.color = new Color(oc.r, oc.g, oc.b, disabledLabelAlpha);
+            }
+        }
+    }
+    Text FindLabelText(Button btn)
+    {
+        if (!btn) return null;
+
+        // targetGraphic이 Text인 경우, ColorTint가 텍스트를 물들임 -> 배경 Image가 있으면 타겟을 그쪽으로 변경
+        var bg = btn.GetComponent<Image>();
+        if (bg && btn.targetGraphic is Text)
+            btn.targetGraphic = bg;
+
+        // 스킬 버튼은 텍스트 색을 우리가 직접 관리하므로, 트랜지션은 배경만 쓰거나 None으로
+        if (bg && btn.transition == Selectable.Transition.ColorTint)
+        {
+            // 여기서 ColorBlock을 흰색으로 정리해도 되고,
+            // 최소한 텍스트에는 영향이 안 가게 targetGraphic만 Image로 맞춰주면 충분.
+        }
+
+        var texts = btn.GetComponentsInChildren<Text>(true);
+        return texts.Length > 0 ? texts[0] : null;
     }
 
     // === Utils ===
