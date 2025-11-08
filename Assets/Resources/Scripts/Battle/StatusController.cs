@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum StatusId { None = 0 ,Slow = 1 }
+public enum StatusId { None = 0 ,Slow = 1 , ShootingStack = 2 }
 
 public static class DebuffTuning
 {
@@ -67,6 +67,28 @@ public class StatusController : MonoBehaviour
     {
         _map.Clear();                 // 내부 상태 사전 비우기
         OnStatusChanged?.Invoke();    // UI/ATB 등 갱신 트리거
+    }
+
+    public void SetStacks(StatusId id, int stacks, int durationTurns = 0)
+    {
+        if (stacks <= 0)
+        {
+            if (_map.Remove(id))
+                OnStatusChanged?.Invoke();
+            return;
+        }
+
+        if (_map.TryGetValue(id, out var e))
+        {
+            e.stacks = stacks;
+            e.remainingTurns = durationTurns;
+        }
+        else
+        {
+            _map[id] = new StatusEntry(id, stacks, durationTurns);
+        }
+
+        OnStatusChanged?.Invoke();
     }
 
     public void ApplyWithTurnContext(StatusId id, int stacks, int durationTurns)

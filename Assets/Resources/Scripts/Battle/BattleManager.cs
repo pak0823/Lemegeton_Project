@@ -68,6 +68,7 @@ public class BattleManager : MonoBehaviour
     public Tilemap CurrentSkillTargetMap => currentSkillTargetMap;
     private Tilemap customPreviewMap;
     private HashSet<Vector3Int> customPreviewCells;
+    public BattleUnit ActingUnit => acting;
 
     // === 수동 종료 감지용 ===
     bool manualEndRequested = false;
@@ -201,33 +202,34 @@ public class BattleManager : MonoBehaviour
     // 씬 내 모든 BattleUnit(플레이어+적)을 재바인드하고 ATB/구독을 초기화
     private void RebindAllUnitsAndInitATB()
     {
-        var units = FindObjectsOfType<BattleUnit>(true).ToList();
+        var battleUnit = FindObjectsOfType<BattleUnit>(true).ToList();
 
-        float minAGI = units.Min(u => u.EffectiveAGI);
-        float maxAGI = units.Max(u => u.EffectiveAGI);
+        float minAGI = battleUnit.Min(unit => unit.EffectiveAGI);
+        float maxAGI = battleUnit.Max(unit => unit.EffectiveAGI);
         
-        foreach (var u in units)
+        foreach (var unit in battleUnit)
         {
-            var map = (u.team == Team.Player) ? provider.PlayerFloor : provider.EnemyFloor;
-            var cell = map.WorldToCell(u.transform.position);
+            var map = (unit.team == Team.Player) ? provider.PlayerFloor : provider.EnemyFloor;
+            var cell = map.WorldToCell(unit.transform.position);
 
-            u.Bind(map, cell);
-            grid.SetOccupied(u.team, u.Cell, true);
-            u.InitializeATB(minAGI, maxAGI);
+            unit.Bind(map, cell);
+            grid.SetOccupied(unit.team, unit.Cell, true);
+            unit.InitializeATB(minAGI, maxAGI);
+            unit.InitPassives(this);
 
-            u.OnDied -= HandleUnitDied;
-            u.OnDied += HandleUnitDied;
+            unit.OnDied -= HandleUnitDied;
+            unit.OnDied += HandleUnitDied;
         }
 
         _lastMinAGI = minAGI;
         _lastMaxAGI = maxAGI;
-        _lastAGISum = units.Sum(u => u.EffectiveAGI);
-        _lastAGICount = units.Count;
+        _lastAGISum = battleUnit.Sum(unit => unit.EffectiveAGI);
+        _lastAGICount = battleUnit.Count;
 
         // 상태가 바뀌면 ATB 재계산
-        foreach (var u in units)
+        foreach (var unit in battleUnit)
         {
-            var sc = u.GetComponent<StatusController>();
+            var sc = unit.GetComponent<StatusController>();
             if (sc != null)
             {
                 sc.OnStatusChanged += RecomputeATBSpeedsFromLiveUnits; // 기존
@@ -693,6 +695,24 @@ public class BattleManager : MonoBehaviour
             {
                 EndEnemyTurn(acting);
             }
+        }
+    }
+
+    public IEnumerable<BattleUnit> GetLivingEnemiesOf(BattleUnit _battleunit)
+    {
+        if (_battleunit == null) yield break;
+
+        // 씬에 존재하는 모든 유닛 기준으로 계산
+        var currentUnit = FindObjectsOfType<BattleUnit>();
+
+        foreach (var units in currentUnit) // ← 기존에 쓰는 유닛 리스트/배열 이름 사용
+        {
+            if (units == null) continue;
+            if (units == _battleunit) continue;
+            if (units.team == _battleunit.team) continue;
+            if (units.IsDead || units.IsRetreated) continue;
+
+            yield return units;
         }
     }
 
@@ -1440,21 +1460,17 @@ public class BattleManager : MonoBehaviour
 
         var originalW = caster.transform.position;
 
-        // 1) 필요하면 대상 앞으로 점프(gap close)
+        // 필요하면 대상 앞으로 점프(gap close)
         if (doGapClose && TryGetFrontCellOfTarget(caster, target, out var frontCell))
         {
             var mapForJump = target.CurrentMap ?? provider.EnemyFloor;
             Vector3 frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
-
             yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
         }
 
-        // 2) 공격/시전 모션 (점프를 안 쓰더라도 근접 모션은 그대로 쓸 수 있음)
-        yield return caster.AnimateAttack(target);
-
         bool resolved = false;
 
-        // 3) 임팩트 타이밍에 스킬 처리 (기존 로직 재사용)
+        // 임팩트 타이밍에 스킬 처리 (기존 로직 재사용)
         void OnImpact()
         {
             caster.OnAttackImpact -= OnImpact;
@@ -1463,20 +1479,84 @@ public class BattleManager : MonoBehaviour
 
         caster.OnAttackImpact += OnImpact;
 
+        // 공격/시전 모션 (점프를 안 쓰더라도 근접 모션은 그대로 쓸 수 있음)
+        yield return caster.AnimateAttack(target);
+
         // 혹시 애니에서 임팩트 이벤트가 안 들어온 경우 대비해 타임아웃 처리 등 기존 코드 유지
-        float timeout = 0.5f;
-        while (!resolved && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
+        //float timeout = 0.3f;
+        //while (!resolved && timeout > 0f)
+        //{
+        //    timeout -= Time.deltaTime;
+        //    yield return null;
+        //}
         caster.OnAttackImpact -= OnImpact;
 
-        // 4) 원위치 복귀
-        // doGapClose=false인 경우 원래 자리 == 현재 자리라서 그냥 스냅만 되는 효과 (문제 없음)
+        // 폴백 처리: 임팩트 이벤트를 못 받았으면 여기서 직접 ResolveOnUnit 실행
+        if (!resolved)
+        {
+            // 애니메이션 이벤트 누락 등 안전망
+            yield return skill.ResolveOnUnit(this, caster, target);
+        }
+
+        caster.ApplyCooldown(skill);
+
+        // 원위치 복귀
         caster.transform.position = originalW;
 
         FinishActionAfterSkill();
+    }
+
+    // 턴/행동 토큰/스킬 패널에 영향을 주지 않는 "무료 반응 공격"으로 동작
+    public Coroutine StartReactiveAttack(BattleUnit caster, BattleUnit target, SkillAsset skill, bool doGapClose)
+    {
+        if (caster == null || target == null || skill == null) return null;
+        return StartCoroutine(Co_ReactiveGapCloseThenResolveOnTargetSO(skill, caster, target, doGapClose));
+    }
+
+    IEnumerator Co_ReactiveGapCloseThenResolveOnTargetSO(
+        SkillAsset skill,
+        BattleUnit caster,
+        BattleUnit target,
+        bool doGapClose)
+    {
+        if (skill == null || caster == null || target == null)
+            yield break;
+
+        var originalW = caster.transform.position;
+
+        // 필요하면 대상 앞으로 점프
+        if (doGapClose && TryGetFrontCellOfTarget(caster, target, out var frontCell))
+        {
+            var mapForJump = target.CurrentMap ?? provider.EnemyFloor;
+            var frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
+            yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
+        }
+
+        bool resolved = false;
+
+        void OnImpact()
+        {
+            caster.OnAttackImpact -= OnImpact;
+            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => { resolved = true; }));
+        }
+
+        caster.OnAttackImpact += OnImpact;
+
+        // 공격 모션 (애니메이션 이벤트가 있으면 그 타이밍에 Resolve)
+        yield return caster.AnimateAttack(target);
+
+        caster.OnAttackImpact -= OnImpact;
+
+        // 폴백: 임팩트 이벤트를 못 받았으면 애니 끝난 시점에 바로 처리
+        if (!resolved)
+        {
+            yield return skill.ResolveOnUnit(this, caster, target);
+        }
+
+        // 원위치 복귀 (gap close 했을 때만 의미 있음)
+        caster.transform.position = originalW;
+
+        // 여기서는 FinishActionAfterSkill() 호출 안 함
     }
 
     IEnumerator Co_ProjectileSkillThenFinishSO(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
@@ -1636,6 +1716,7 @@ public class BattleManager : MonoBehaviour
                 // 중앙화된 적대감 산출
                 float hostilityGained = HostilityRules.FromDamage(damage, caster, v);
                 caster.AddHostility(hostilityGained);
+                caster.NotifyDealtDamage(v, damage, source);
                 //Debug.Log($"[DMG] {caster.name} -> {v.name}: {damage}, Hostility +{hostilityGained:F1}");
             }
         }

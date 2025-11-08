@@ -64,9 +64,12 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Events
-    public event System.Action<int> OnDamaged;  //피격 이벤트
+    public event Action<int> OnDamaged;  //피격 이벤트
     public event Action<BattleUnit> OnDied; // 사망 이벤트
-    public event System.Action<BattleUnit> OnRetreated; //도주 이벤트
+    public event Action<BattleUnit> OnRetreated; //도주 이벤트
+    public event System.Action<BattleUnit, BattleUnit, int, SkillAsset> OnDealtDamage;  // 유닛이 피해를 "성공적으로 입혔을 때" 알림 (패시브 트리거용)
+    public event Action<BattleUnit, Tilemap, Vector3Int, Vector3Int> OnMoved;   //유닛의 이동 확인
+    public static event Action<BattleUnit> OnAnyMoved;
     #endregion
 
     #region ----- State-based Stat System -----
@@ -79,6 +82,10 @@ public class BattleUnit : MonoBehaviour
     [SerializeField] private int baseMaxHP = 100;
     [SerializeField] private int baseMaxMP = 100;
     [SerializeField] private int baseMaxRage = 100;
+
+    [Header("Passives (runtime)")]
+    // UnitData.passives를 복사해 두고, 활성 상태만 OnAttach 호출
+    private readonly List<PassiveAsset> _activePassives = new();
 
     // 상태 컨트롤러 캐시/보정 캐시
     UnitStateController unitStateController;
@@ -251,6 +258,22 @@ public class BattleUnit : MonoBehaviour
     }
     #endregion
 
+    public void InitPassives(BattleManager _battlemanager)
+    {
+        _activePassives.Clear();
+
+        if (data == null || data.passives == null) return;
+
+        foreach (var passives in data.passives)
+        {
+            if (passives == null) continue;
+            if (!passives.unlockedByDefault) continue; // 추후 해금 조건 체크 지점
+
+            _activePassives.Add(passives);
+            passives.OnAttach(this, _battlemanager);
+        }
+    }
+
     public void InitializeATB(float minAGI, float maxAGI)
     {
         _agiMinRef = minAGI;                 // 기준 저장
@@ -308,22 +331,56 @@ public class BattleUnit : MonoBehaviour
         Overfill = 0f; // 동시턴 우선순위 잔여값도 초기화
     }
 
+    // 외부에서 패시브 on/off 할 때 사용 (예: 해금 조건 달성 시 켜기)
+    public void SetPassiveEnabled(PassiveAsset _passives, bool enabled, BattleManager _battlemanager)
+    {
+        if (_passives == null) return;
+
+        bool has = _activePassives.Contains(_passives);
+
+        if (enabled && !has)
+        {
+            _activePassives.Add(_passives);
+            _passives.OnAttach(this, _battlemanager);
+        }
+        else if (!enabled && has)
+        {
+            _activePassives.Remove(_passives);
+            _passives.OnDetach(this, _battlemanager);
+        }
+    }
+
     #region Skill Cooldowns
     // === Skill Cooldowns (per unit) ===
     private readonly Dictionary<SkillAsset, int> _cooldowns = new();
 
     public bool IsSkillOnCooldown(SkillAsset s)
-        => s != null && _cooldowns.TryGetValue(s, out var left) && left > 0;
+    {
+        var key = GetCooldownKey(s);
+        return key != null && _cooldowns.TryGetValue(key, out var left) && left > 0;
+    }
 
     public int GetCooldownRemaining(SkillAsset s)
-        => s != null && _cooldowns.TryGetValue(s, out var left) ? Mathf.Max(0, left) : 0;
+    {
+        var key = GetCooldownKey(s);
+        return key != null && _cooldowns.TryGetValue(key, out var left)
+            ? Mathf.Max(0, left)
+            : 0;
+    }
 
     public void ApplyCooldown(SkillAsset s)
     {
-        if (s == null) return;
+        var key = GetCooldownKey(s);
+        if (key == null) return;
+
         int cd = Mathf.Max(0, s.cooldownTurns);
-        if (cd <= 0) { _cooldowns.Remove(s); return; }
-        _cooldowns[s] = cd;
+        if (cd <= 0)
+        {
+            _cooldowns.Remove(key);
+            return;
+        }
+
+        _cooldowns[key] = cd;
     }
 
     // 자신의 턴이 끝날 때 1씩 감소
@@ -335,6 +392,21 @@ public class BattleUnit : MonoBehaviour
             _cooldowns[k] = Mathf.Max(0, _cooldowns[k] - 1);
             if (_cooldowns[k] == 0) _cooldowns.Remove(k);
         }
+    }
+
+    private SkillAsset GetCooldownKey(SkillAsset s)
+    {
+        if (s == null) return null;
+
+        // 이미 등록된 것 중 같은 legacyId를 가진 애가 있으면 그걸 공용 키로 사용
+        foreach (var key in _cooldowns.Keys)
+        {
+            if (key != null && key.legacyId == s.legacyId)
+                return key;
+        }
+
+        // 2) 아직 없으면 이번 스킬 자신을 키로 사용
+        return s;
     }
     #endregion
 
@@ -370,8 +442,17 @@ public class BattleUnit : MonoBehaviour
 
     public void MoveTo(Tilemap map, Vector3Int toCell)
     {
+        Tilemap fromMap = CurrentMap;
+        Vector3Int fromCell = Cell;
+
+        CurrentMap = map;
         Cell = toCell;
         transform.position = map.GetCellCenterWorld(toCell);
+
+        // 인스턴스 이벤트
+        OnMoved?.Invoke(this, fromMap, fromCell, toCell);
+        // 전역 이벤트 (패시브들이 듣는 용도)
+        OnAnyMoved?.Invoke(this);
     }
 
     void HandleWaveStarted()
@@ -552,4 +633,11 @@ public class BattleUnit : MonoBehaviour
     // Attack 클립 끝에서 호출(또는 트랜지션 Exit 이벤트)
     public void AnimEvent_AttackEnd() => OnAttackEnded?.Invoke();
     #endregion
+
+    /// 이 유닛이 피해를 성공적으로 가했을 때 호출해, 패시브 등 리스너에게 알린다.
+    /// 반드시 BattleUnit 외부에선 이 메서드만 호출하고, 이벤트를 직접 Invoke하지 말 것.
+    public void NotifyDealtDamage(BattleUnit victim, int damage, SkillAsset source)
+    {
+        OnDealtDamage?.Invoke(this, victim, damage, source);
+    }
 }

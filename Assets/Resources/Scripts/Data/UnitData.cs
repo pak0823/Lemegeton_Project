@@ -21,6 +21,9 @@ public class UnitData : ScriptableObject
     [Header("Skills (per character)")]
     public SkillAsset[] skills; // 에디터에서 캐릭터별로 할당
 
+    [Header("Passives (per character)")]
+    public PassiveAsset[] passives; // 패시브 스킬들 (해금 여부는 런타임에서 결정)
+
     [Header("UI")]
     public Sprite UnitIcon; // ATB 아이콘용 스프라이트
 }
