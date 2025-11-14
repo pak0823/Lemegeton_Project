@@ -3,13 +3,15 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum StatusId { None = 0 ,Slow = 1 , ShootingStack = 2 }
+public enum StatusId { None = 0 ,Slow = 1 , ShootingStack = 2 , Bleed = 3 }
 
 public static class DebuffTuning
 {
     // index = 둔화 스택 수 (0~6)
     public static readonly float[] SlowAgilityMult = { 1.0f, 0.9f, 0.8f, 0.7f, 0.5f, 0.3f, 0.1f };
     public const int SlowMaxStacks = 6;
+    // 출혈 스택당 체력 비율(1% = 0.01f), 최대 6스택 동일 상한 사용
+    public const float BleedPercentPerStack = 0.01f;
 }
 
 [Serializable]
@@ -132,6 +134,15 @@ public class StatusController : MonoBehaviour
     /// <summary>이 유닛의 턴 시작 시 지속시간 감소/정리.</summary>
     public void OnTurnStart()
     {
+        // 출혈 틱: 스택 × 1% × MaxHP
+        int bleedStacks = GetStacks(StatusId.Bleed);
+        if (bleedStacks > 0 && _owner != null && !_owner.IsDead)
+        {
+            float p = DebuffTuning.BleedPercentPerStack * bleedStacks;
+            int dmg = Mathf.Max(1, Mathf.CeilToInt(_owner.MaxHP * p)); // 최소 1
+            _owner.TakeDamage(dmg); // 적대감 비발생 DoT로 둘 거면 별도 플래그가 있으면 활용, 없으면 그대로 사용
+        }
+
         bool changed = false;
         var toRemove = new List<StatusId>();
         foreach (var kv in _map)

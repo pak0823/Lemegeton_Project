@@ -5,11 +5,12 @@ using UnityEngine;
 
 public enum SkillId
 {
-    Skill1 = 0, // 대상 지목 가로열
-    Skill2 = 1, // 대상 지목 세로열
-    Skill3 = 2, // 대상 지목 부채꼴
-    Skill4 = 3, // 타일 지목 원형1
-    Skill5 = 4 // 타일 지목 도넛형6
+    None,
+    Skill1 = 0,
+    Skill2 = 1,
+    Skill3 = 2,
+    Skill4 = 3,
+    Skill5 = 4 
 }
 
 public enum SkillTargetMode

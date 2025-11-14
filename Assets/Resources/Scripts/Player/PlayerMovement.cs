@@ -388,6 +388,11 @@ public class PlayerMovement : MonoBehaviour
                 Shared.interactionHintUI?.ShowBothAt(potal.transform);
                 return;
             }
+            else if(hit.TryGetComponent<HintAnchor>(out var hint))
+            {
+                Shared.interactionHintUI?.ShowBothAt(hint.transform);
+                return;
+            }
 
             // FallbackÀ¸·Î(Çª½Ã/»óÀÚ ¿Ü) ÈùÆ® ´ë»ó Å½»ö
             HandleInteractionHintsFallback();
@@ -621,12 +626,6 @@ public class PlayerMovement : MonoBehaviour
         isPerformingPush = false;
     }
 
-    //bool HasImpassableObject(Vector3Int cell)
-    //{
-    //    Vector3 worldCenter = floorTilemap.GetCellCenterWorld(cell);
-    //    Collider2D hit = Physics2D.OverlapCircle(worldCenter, 0.1f, impassableLayerMask);
-    //    return hit != null;
-    //}
     public void SetTilemap(Tilemap floor, Tilemap wall)
     {
         floorTilemap = floor;

@@ -28,6 +28,9 @@ public class EnemySkill : SkillAsset
     [Tooltip("Diag 계열에서 NE축을 쓸지 여부")]
     public bool diagUseNEAxis = true;
 
+    [Header("Casting Suppression")]
+    [Range(0, 3)] public int suppressionRequired = 0;  // 0이면 기존처럼 즉시 캔슬
+
     /// <summary>
     /// 미리보기/판정용 범위 셀 반환(프리셋에 따라 AreaShapes로 위임)
     /// - 주의: FanForwardR1은 정면이 필요하므로 여기선 원형(혹은 중심)로 단순화하고,

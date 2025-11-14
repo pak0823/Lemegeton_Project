@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 492f0b7ae9548a84098a9e4545fd6b7c, type: 3}
   m_Name: SteamStrike_Multi
   m_EditorClassIdentifier: 
-  displayName: "\uC99D\uAE30\uC0AC\uACA9"
+  displayName: "\uB9AC\uBCFC\uBC84 \uC0AC\uACA9"
   descriptionImage: {fileID: 21300000, guid: 53f9425c3ddc30947bb9094c4b63a4bd, type: 3}
   description: "\uB300\uC0C1\uC744 \uB9C8\uBC95 \uACF5\uACA9(=\uCD1D\uBA85)\uD569\uB2C8\uB2E4."
   school: 1
@@ -23,13 +23,23 @@ MonoBehaviour:
   cooldownTurns: 0
   useGapCloseJump: 0
   legacyId: 3
+  trainingRoutes:
+  - title: "\uB300\uC0C1 \uD655\uB300 \uD6C8\uB828"
+    description: "\uB300\uC0C1\uACFC \uAC19\uC740 \uC5F4\uC5D0\uB3C4 \uAE30\uC220\uC774
+      \uC801\uC911\uD569\uB2C8\uB2E4."
+  - title: "\uB300\uC0C1 \uC81C\uC555 \uD6C8\uB828"
+    description: "\uB300\uC0C1\uC5D0\uAC8C 1\uD134 \uB3D9\uC548 \uC81C\uC555 \uC911\uCCA9\uC744
+      1 \uBD80\uC5EC\uD569\uB2C8\uB2E4."
+  - title: "\uCD9C\uD608 \uD53C\uD574 \uD6C8\uB828"
+    description: "\uB300\uC0C1\uC5D0\uAC8C 3\uD134 \uB3D9\uC548 \uCD9C\uD608 \uC911\uCCA9\uC744
+      1 \uBD80\uC5EC\uD569\uB2C8\uB2E4."
   rules:
   - name: Steam
     requireAll: 02000000
     requireAny: 
     forbidAny: 
     skill: {fileID: 11400000, guid: d7d178f96c635b74f80204670ea77688, type: 2}
-    overrideAreaPreset: 1
+    overrideAreaPreset: 0
     areaPresetWhenMatched: 4
     overrideDisplayName: 1
     displayNameWhenMatched: "\uC99D\uAE30\uC0AC\uACA9"

@@ -97,6 +97,10 @@ public class BattleManager : MonoBehaviour
     public event System.Action<bool> OnSkillPanelToggled;  // true=열기/false=닫기
     public event System.Action<string> OnHint;   // UI에 간단한 안내 문구 전달
 
+    [Header("Training")]
+    public TrainingDB trainingDB;   // 인스펙터로 TrainingDB 할당
+    public TrainingDB Training => trainingDB;
+
     [Header("Projectile/VFX")]
     public GameObject projectilePrefab;     // 투사체
 
@@ -1712,6 +1716,40 @@ public class BattleManager : MonoBehaviour
                 int damage = Mathf.Max(1, source.ComputeDamage(caster, v, ctx));
                 v.PlayHit();
                 v.TakeDamage(damage);
+
+                // 훈련 강화 처리 (ParametricDamageSkill 전용)
+                if (source is ParametricDamageSkill dmgSkill && caster != null)
+                {
+                    int route = caster.GetTrainingRouteIndex(dmgSkill);
+
+                    // 제압 추가: 캐스팅 중인 적에게 suppressCur 추가 감소
+                    if (route == 1 && dmgSkill.trainingSuppressionOnHit > 0)
+                    {
+                        var cast = v.GetComponent<EnemyCastState>();
+                        if (cast != null)
+                        {
+                            cast.TryReduceSuppression(dmgSkill.trainingSuppressionOnHit);
+                        }
+                    }
+
+                    // 출혈 부여
+                    if (route == 2 && dmgSkill.trainingApplyBleed)
+                    {
+                        var sc = v.GetComponent<StatusController>();
+                        if (sc != null)
+                        {
+                            sc.ApplyWithTurnContext(
+                                StatusId.Bleed,
+                                Mathf.Max(1, dmgSkill.trainingBleedStacks),
+                                Mathf.Max(1, dmgSkill.trainingBleedDurationTurns)
+                            );
+                            Debug.Log(
+                $"[Bleed] {v.name} ← {dmgSkill.name} " +
+                $"stacks+={dmgSkill.trainingBleedStacks}, duration={dmgSkill.trainingBleedDurationTurns}"
+            );
+                        }
+                    }
+                }
 
                 // 중앙화된 적대감 산출
                 float hostilityGained = HostilityRules.FromDamage(damage, caster, v);

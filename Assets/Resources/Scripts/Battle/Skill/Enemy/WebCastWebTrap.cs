@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 
 [CreateAssetMenu(menuName = "Battle/SkillAsset/Enemy/WebCast")]
-public class WebCastWebTrap : SkillAsset
+public class WebCastWebTrap : EnemySkill
 {
     [Header("Web Trap")]
     public ProjectileController projectilePrefab;   // 스킬 전용 투사체 지정
@@ -23,30 +23,31 @@ public class WebCastWebTrap : SkillAsset
     }
 
     // 유닛 대상으로 “캐스팅 예정” 등록
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (bm == null || caster == null || target == null || target.IsDead) yield break;
+        if (_battlemanager == null || _caster == null || _target == null || _target.IsDead) yield break;
 
         // 현재 타겟의 셀을 기록(시점 고정)
-        Tilemap map = target.CurrentMap;
-        Vector3Int cell = target.Cell;
+        Tilemap map = _target.CurrentMap;
+        Vector3Int cell = _target.Cell;
 
         // 캐스팅 상태 진입(소유 적의 다음 턴 시작에 생성)
-        var cast = caster.GetComponent<EnemyCastState>();
-        if (cast == null) cast = caster.gameObject.AddComponent<EnemyCastState>();
+        var cast = _caster.GetComponent<EnemyCastState>();
+        if (cast == null) cast = _caster.gameObject.AddComponent<EnemyCastState>();
         cast.BeginCasting(new EnemyCastState.PendingCast
         {
-            owner = caster,
-            bm = bm,
+            owner = _caster,
+            bm = _battlemanager,
             map = map,
             cell = cell,
             trapPrefab = trapPrefab,
             projectilePrefab = projectilePrefab,
-            projectileSpeed = projectileSpeed
+            projectileSpeed = projectileSpeed,
+            skillSO = this  //이번에 시전 중인 스킬 SO 지정
         });
 
         // 캐스팅 제스처(원거리 포즈 등)
-        caster.SetCasting(true);
+        _caster.SetCasting(true);
 
 
         yield break;

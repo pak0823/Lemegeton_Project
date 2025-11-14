@@ -14,6 +14,7 @@ public class BattleUnit : MonoBehaviour
 
     [Header("BattleManager")]
     BattleManager battleManager;
+    public BattleManager Battle => battleManager;
 
     [Header("FX / Projectile")]
     public ProjectileController defaultProjectilePrefab;  // 유닛 기본 투사체
@@ -625,6 +626,24 @@ public class BattleUnit : MonoBehaviour
         //if (HP != before) Debug.Log($"{name} Heal +{HP - before} → {HP}/{MaxHP}");
     }
     #endregion
+
+    public int GetTrainingRouteIndex(SkillAsset skill)
+    {
+        if (Battle == null || Battle.Training == null || data == null || skill == null)
+            return -1;
+
+        var db = Battle.Training;
+
+        // 1) legacyId 그룹 기준 조회
+        if (skill.legacyId != SkillId.None)
+        {
+            int r = db.GetRouteByLegacy(data, skill.legacyId);
+            if (r >= 0) return r;
+        }
+
+        // 2) fallback: 개별 스킬 기준 조회
+        return db.GetRoute(data, skill);
+    }
 
     #region Animation Events
     // Attack 클립의 임팩트 프레임에서 호출

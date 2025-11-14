@@ -61,6 +61,27 @@ public class ParametricDamageSkill : SkillAsset
 
     public static void ClearFrontlineCache() => _frontlineCache.Clear();
 
+    [Header("Training Effects")]
+    [Tooltip("훈련 루트 0: 범위 프리셋을 이 값으로 교체")]
+    public bool trainingUseAreaOverride = false;
+    public AreaPreset trainingAreaPreset = AreaPreset.Single;
+    public bool trainingDiagUseNEAxis = true;
+
+    [Tooltip("훈련 루트 1: 캐스팅 제압 추가 감소량(피격 시)")]
+    public int trainingSuppressionOnHit = 0; // 0=미사용, 1 이상이면 그만큼 추가로 suppressCur 감소
+
+    [Tooltip("훈련 루트 2: 출혈 부여 설정")]
+    public bool trainingApplyBleed = false;
+    [Range(1, DebuffTuning.SlowMaxStacks)] public int trainingBleedStacks = 1;
+    [Min(1)] public int trainingBleedDurationTurns = 2;
+
+    // 선택된 훈련 루트를 읽어 현재 실행에 반영
+    int GetRoute(BattleUnit caster)
+    {
+        if (caster == null) return -1;
+        return caster.GetTrainingRouteIndex(this);
+    }
+
     void OnEnable()
     {
         school = damageSchool;
@@ -70,7 +91,18 @@ public class ParametricDamageSkill : SkillAsset
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
     {
-        foreach (var c in AreaShapes.GetCells(originCell, areaPreset, diagUseNEAxis))
+        // 현재 턴의 시전자(플레이어든 적이든)
+        var bm = Shared.BattleManager;
+        BattleUnit caster = bm != null ? bm.ActingUnit : null;
+
+        int route = GetRoute(caster);
+        bool useOverride = (route == 0 && trainingUseAreaOverride);
+
+        // 기본/훈련 프리셋 선택
+        var preset = useOverride ? trainingAreaPreset : areaPreset;
+        bool useDiag = useOverride ? trainingDiagUseNEAxis : diagUseNEAxis;
+
+        foreach (var c in AreaShapes.GetCells(originCell, preset, useDiag))
             yield return c;
     }
 
@@ -204,22 +236,23 @@ public class ParametricDamageSkill : SkillAsset
                         .Where(u => u != null && !u.IsDead && u.team != caster.team) // 상대팀만
                         .ToList();
 
+
         bm.ExecuteSkillDamage(caster, victims, this, map, centerCell);
     }
 
     public override int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
     {
-        // 1) 기본 산식(속성/저항 포함)은 부모 호출
+        // 기본 산식(속성/저항 포함)은 부모 호출
         int baseDmg = base.ComputeDamage(caster, target, ctx);
 
-        // 2) 추가 배수: 상태 기반
+        // 추가 배수: 상태 기반
         float mult = GetMultiplierFor(target);
 
-        // 3) 추가 배수: 전방 보너스
+        // 추가 배수: 전방 보너스
         if (useFrontlineBonus && caster != null && IsInFrontline(caster, frontlineDepth))
             mult *= Mathf.Max(0f, frontlineMultiplier);
 
-        // 4) 최종
+        // 최종
         int dmg = Mathf.Max(0, Mathf.RoundToInt(baseDmg * mult));
         return dmg;
     }
@@ -228,13 +261,16 @@ public class ParametricDamageSkill : SkillAsset
     {
         if (!bm || !caster) yield break;
 
-        // 플레이어가 지목한 'target'을 그대로 사용
         BattleUnit primary = (useProvidedUnitTarget && target != null && !target.IsDead)
                                 ? target
-                                : PickPrimaryTarget(); // (적 AI 등에서 재사용)
+                                : PickPrimaryTarget();
 
         if (primary == null) yield break;
 
+        int route = GetRoute(caster);
+        Debug.Log($"[Training] {name} by {caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
+
+        // 범위 계산은 GetAreaCells 안에서 route를 보고 알아서 처리
         DealAreaDamage(bm, caster, primary.CurrentMap, primary.Cell);
         yield break;
     }
@@ -242,8 +278,17 @@ public class ParametricDamageSkill : SkillAsset
     {
         if (!bm || !caster || !map) yield break;
 
+        int route = GetRoute(caster);
+        Debug.Log($"[Training] (Tile) {name} by {caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
+
         DealAreaDamage(bm, caster, map, originCell);
         yield break;
+    }
+
+    public override int GetSuppressionOnHit(BattleUnit caster)
+    {
+        // 루트1일 때만 trainingSuppressionOnHit 값을 돌려줌
+        return (GetRoute(caster) == 1) ? Mathf.Max(0, trainingSuppressionOnHit) : 0;
     }
 
 }

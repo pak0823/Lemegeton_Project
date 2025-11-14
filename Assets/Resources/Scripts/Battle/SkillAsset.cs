@@ -23,6 +23,13 @@ public struct SkillRuntime
     public Vector3Int targetCell;   // 피격자 셀
 }
 
+[System.Serializable]
+public struct TrainingRouteInfo
+{
+    public string title;
+    [TextArea] public string description;
+}
+
 public abstract class SkillAsset : ScriptableObject
 {
     [Header("Display")]
@@ -51,6 +58,13 @@ public abstract class SkillAsset : ScriptableObject
 
     [Header("Compat (임시)")]
     public SkillId legacyId = SkillId.Skill1; // 기존 분기 로직 호환용
+
+    [Header("Training (UI only)")]
+    [Tooltip("훈련 UI에 표시할 3개 루트의 제목/설명. 비어 있으면 기본 텍스트로 대체.")]
+    public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
+
+    // 기본값 0 = 제압 감소 없음
+    public virtual int GetSuppressionOnHit(BattleUnit caster) => 0;
 
     /// <summary>미리보기/피격판정을 위한 범위 셀 반환. origin = 대상 유닛 셀(유닛형) 또는 조준 셀(타일형)</summary>
     public abstract IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow);
