@@ -5,6 +5,8 @@ using TMPro; // TextMeshPro 사용 안하면 Text로 바꿔도 됨
 
 public class TrainingUI : MonoBehaviour
 {
+    bool isShow = true;
+
     [Header("Refs")]
     public TrainingDB trainingDB;                 // 인스펙터에 TrainingDB 할당
     public List<UnitData> ownedUnits;             // 플레이어 소유 유닛 목록 (임시: 인스펙터로 지정)
@@ -35,12 +37,33 @@ public class TrainingUI : MonoBehaviour
         BuildUnitList();
         saveButton.onClick.AddListener(OnClickSave);
         resetButton.onClick.AddListener(OnClickReset);
+        OnHide();
     }
 
     void ClearChildren(Transform t)
     {
         for (int i = t.childCount - 1; i >= 0; i--) Destroy(t.GetChild(i).gameObject);
     }
+
+    public void OnToggle()
+    {
+        isShow = !isShow;
+        if (isShow)
+            OnShow();
+        else
+            OnHide();
+    }
+    void OnShow()
+    {
+        isShow = true;
+        this.gameObject.SetActive(isShow);
+    }
+    void OnHide()
+    {
+        isShow = false;
+        this.gameObject.SetActive(isShow);
+    }
+
 
     void BuildUnitList()
     {

@@ -1245,9 +1245,10 @@ public class BattleManager : MonoBehaviour
         if (skill == null) return;
 
         // MP 부족 사전 차단
-        if (!acting.HasMP(skill.mpCost))
+        int effectiveCost = skill.GetEffectiveMpCost(acting);
+        if (!acting.HasMP(effectiveCost))
         {
-            Debug.Log($"[Skill] MP 부족: {skill.displayName} (필요 {skill.mpCost})");
+            Debug.Log($"[Skill] MP 부족: {skill.displayName} (필요 {effectiveCost})");
             return; // 타겟팅 진입 안 함
         }
 
@@ -1260,9 +1261,23 @@ public class BattleManager : MonoBehaviour
 
         if (skill is ISelfCastSkill self && self.SelfCastOnSelect)
         {
-            StartCoroutine(skill.ResolveOnUnit(this, acting, acting));
-            acting.ApplyCooldown(skill);
-            FinishActionAfterSkill(); // 프로젝트의 기존 "행동 종료" 루틴 호출
+            // 실제 MP 소비는 SelfStateSkill.ResolveOnUnit 내부에서 처리
+            bool isFreeAction = false;
+
+            // 이 스킬(=legacy 그룹)에 대해 선택된 훈련 루트
+            int route = acting.GetTrainingRouteIndex(skill);
+
+            // Route 2 + 해당 스킬이 "무료턴 사용" 옵션 켜져 있으면 무료턴으로 처리
+            if (route == 2)
+            {
+                if (skill is SelfStateSkill sss && sss.trainingFreeActionOnRoute2)
+                    isFreeAction = true;
+                else if (skill is SelfStateCleanseSkill scs && scs.trainingFreeActionOnRoute2)
+                    isFreeAction = true;
+            }
+
+            // 코루틴으로 처리해서, 끝난 뒤 무료/일반 행동을 분기
+            StartCoroutine(Co_ResolveSelfCastThenFinish(skill, acting, isFreeAction));
             return;
         }
 
@@ -1561,6 +1576,42 @@ public class BattleManager : MonoBehaviour
         caster.transform.position = originalW;
 
         // 여기서는 FinishActionAfterSkill() 호출 안 함
+    }
+
+    IEnumerator Co_ResolveSelfCastThenFinish(SkillAsset skill, BattleUnit caster, bool freeAction)
+    {
+        if (skill == null || caster == null) yield break;
+
+        // 자기 자신 대상으로 Resolve
+        yield return skill.ResolveOnUnit(this, caster, caster);
+
+        // ResolveOnUnit 안에서 MP 부족이면 그냥 yield break 해서 아무 변화 없이 끝나므로,
+        // 여기서는 쿨다운만 공통 처리
+        caster.ApplyCooldown(skill);
+
+        if (!freeAction)
+        {
+            // 기본: 기존과 동일하게 행동을 1회 소비 (공격으로 간주)
+            FinishActionAfterSkill();
+        }
+        else
+        {
+            // ==== 무료 행동 ====
+            // 스킬 패널/타겟 상태 초기화만 하고, 행동 토큰/턴은 그대로 유지
+            ClearSkillPreview();
+            CloseSkillPanel();
+
+            currentSkill = default;
+            currentSkillSO = null;
+            currentSkillTargetMap = null;
+            customPreviewCells = null;
+            customPreviewMap = null;
+            UpdateTargetingHint();
+
+            // 플레이어 턴의 "행동 선택" 상태로 유지
+            if (IsPlayerTurn)
+                state = BattleState.ActionSelect;
+        }
     }
 
     IEnumerator Co_ProjectileSkillThenFinishSO(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)

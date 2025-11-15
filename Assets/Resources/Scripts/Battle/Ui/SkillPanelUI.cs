@@ -229,7 +229,26 @@ public class SkillPanelUI : MonoBehaviour
         bool clear = forceClear || _skillasset == null;
 
         if (descriptionText)
-            descriptionText.text = _skillasset != null ? (string.IsNullOrEmpty(_skillasset.description) ? "" : _skillasset.GetFullDescriptionRich()) : "";
+        {
+            if (_skillasset == null)
+            {
+                descriptionText.text = "";
+            }
+            else
+            {
+                BattleUnit actor = null;
+
+                if (battleManager != null)
+                {
+                    actor = battleManager.ActingUnit;
+                }
+
+                if (actor != null)
+                    descriptionText.text = _skillasset.GetFullDescriptionRich(actor);
+                else
+                    descriptionText.text = _skillasset.GetFullDescriptionRich();
+            }
+        }
 
         if (rangeImage)
         {

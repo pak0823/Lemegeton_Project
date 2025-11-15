@@ -12,7 +12,8 @@ public enum UnitStateId
 public enum UnitStateBuffId
 {
     None = 0,
-    AgiUp = 1
+    AgiUp = 1,
+    MagicUp = 2
 }
 
 /// <summary>

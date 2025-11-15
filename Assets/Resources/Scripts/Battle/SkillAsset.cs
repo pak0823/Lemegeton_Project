@@ -208,4 +208,14 @@ public abstract class SkillAsset : ScriptableObject
     {
         return useGapCloseJump;
     }
+    public virtual int GetEffectiveMpCost(BattleUnit caster)
+    {
+        // 기본값은 그냥 mpCost 그대로
+        return mpCost;
+    }
+    public virtual string GetFullDescriptionRich(BattleUnit caster)
+    {
+        // 기본적으로는 캐스터 정보 필요 없으면 기존 구현 재사용
+        return GetFullDescriptionRich();
+    }
 }

@@ -113,8 +113,25 @@ public class BattleUnit : MonoBehaviour
             mpAdd += e.mpFlatAdd;
             hostilityGenerationMultiplier *= Mathf.Max(0f, e.hostilityStatMultiplier);
         }
+
+        public void ApplyBuff(StateStatModifierDB.BuffEntry e)
+        {
+            if (e == null) return;
+
+            atk *= e.atkMultiplier;
+            mag *= e.magMultiplier;
+            def *= e.defMultiplier;
+            spd *= e.agiMultiplier;
+
+            hpAdd += e.hpFlatAdd;
+            mpAdd += e.mpFlatAdd;
+
+            hostilityGenerationMultiplier *= e.hostilityStatMultiplier;
+        }
     }
     StatMult _cachedMult = StatMult.Identity;
+
+
 
     void InvalidateStatCache() 
     { 
@@ -135,8 +152,6 @@ public class BattleUnit : MonoBehaviour
                 $"HOSTILITY(스탯)={Hostility}  " +
                 $"HP={HP}/{MaxHP}  MP={MP}/{MaxMP}"
             );
-            //DEF ={ Defense}SPD ={ Speed}
-            
         }
     }
 
@@ -149,11 +164,20 @@ public class BattleUnit : MonoBehaviour
                 _cachedMult = StatMult.Identity;
                 if (unitStateController != null && stateStatDB != null)
                 {
-                    var states = unitStateController.GetAll(); // 현재 활성 상태 목록
-                    if (states != null)
+                    // 상태(State) 배수 적용
+                    foreach (var s in unitStateController.GetAll())
                     {
-                        foreach (var s in states)
-                            _cachedMult.Apply(stateStatDB.Get(s));
+                        var entry = stateStatDB.Get(s);
+                        if (entry != null)
+                            _cachedMult.Apply(entry);
+                    }
+
+                    // 버프(Buff) 배수 적용
+                    foreach (var b in unitStateController.GetAllBuffs())
+                    {
+                        var buffEntry = stateStatDB.GetBuff(b);
+                        if (buffEntry != null)
+                            _cachedMult.ApplyBuff(buffEntry);
                     }
                 }
                 _statCacheDirty = false;
