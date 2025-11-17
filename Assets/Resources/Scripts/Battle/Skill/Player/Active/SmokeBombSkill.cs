@@ -37,7 +37,22 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     [Header("Targeting")]
     public SkillTargetMode selectionMode = SkillTargetMode.Tile; // 타일 지목
 
+    [Header("Training")]
+    [Tooltip("Route 0에서 MP 비용을 덮어쓸지 여부")]
+    public bool trainingUseMpOverride = false;
+    [Tooltip("Route 2에서 범위를 덮어쓸지 여부")]
+    public bool trainingUseZoneAreaOverride = true;
 
+    [Tooltip("Route 0 선택 시 실제 소모 MP")]
+    public int trainingMpCostRoute0 = 5;
+
+    [Tooltip("Route 1 선택 시 증가할 수치 값")]
+    [Range(0f, 1f)] public float trainingMpRegenRatio = 0.3f;
+
+    [Tooltip("Training Route2 (Zone Area Override)")]
+
+    public ParametricDamageSkill.AreaPreset trainingZoneAreaPreset =
+        ParametricDamageSkill.AreaPreset.Ring;
 
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }
@@ -70,11 +85,13 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         if (cells.Count == 0) yield break;
 
         CreateSmokeZoneRuntime(
-            bm, map, cells, caster, durationCasterTurns, visibilityHostilityFactor,
+             bm, map, cells, originCell, caster, durationCasterTurns, visibilityHostilityFactor,
             smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder
         );
 
-        if (mpCost > 0) caster.TryConsumeMP(mpCost);
+        int cost = GetEffectiveMpCost(caster);
+        if (cost > 0) caster.TryConsumeMP(cost);
+
         yield break;
     }
 
@@ -86,19 +103,92 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         yield return ResolveOnTile(bm, map, target.Cell, caster);
     }
 
-    void CreateSmokeZoneRuntime(BattleManager bm, Tilemap map, List<Vector3Int> cells, BattleUnit caster, int durationTurns, float factor,
-        GameObject vfxPrefab, float yOffset, string sortingLayer, int sortingOrder)
+    void CreateSmokeZoneRuntime(
+    BattleManager bm,
+    Tilemap map,
+    List<Vector3Int> cells,
+    Vector3Int centerCell,
+    BattleUnit caster,
+    int durationTurns,
+    float factor,
+    GameObject vfxPrefab,
+    float yOffset,
+    string sortingLayer,
+    int sortingOrder)
     {
         var go = new GameObject("SmokeZoneRuntime");
         var comp = go.AddComponent<SmokeZoneRuntime>();
         go.transform.SetParent(bm.transform, false);
 
         // 모드에 따라 파라미터 전달
-        comp.Initialize(bm, map, cells, caster, durationCasterTurns,
+        comp.Initialize(bm,
+        map,
+        cells,
+        caster,
+        durationTurns,
         effectMode == SmokeEffectMode.HostilityVisibility ? visibilityHostilityFactor : 1f);
 
-        comp.SetEffectMode(effectMode, agiBuffState, agiMultiplier);
+        int route = caster.GetTrainingRouteIndex(this);
+        // --- route1: MP 회복 활성화 ---
+        if (route == 1)
+        {
+            comp.enableMpRegen = true;
+            comp.mpRegenRatio = trainingMpRegenRatio;
+        }
+        else
+        {
+            comp.enableMpRegen = false;
+            comp.mpRegenRatio = 0f;
+        }
 
+        // --- route2: 존 범위 오버라이드 ---
+        if (route == 2 && trainingUseZoneAreaOverride)
+        {
+            // 중심 기준 Ring 셀 목록 계산
+            var ringCells = AreaShapes.GetCells(
+                centerCell,
+                trainingZoneAreaPreset,   // 보통 Ring
+                diagUseNEAxis: true
+            );
+            comp.OverrideAreaCells(ringCells);
+        }
+
+        // Hostility / AGI 모드 설정
+        comp.SetEffectMode(effectMode, agiBuffState, agiMultiplier);
+        // VFX 배치
         comp.AttachVfx(smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder, caster.team);
+    }
+
+    public override int GetEffectiveMpCost(BattleUnit caster)
+    {
+        int cost = mpCost;
+        if (caster == null) return cost;
+
+        int route = caster.GetTrainingRouteIndex(this);
+        if (route == 0 && trainingUseMpOverride)
+        {
+            cost = Mathf.Max(0, trainingMpCostRoute0);
+        }
+
+        return cost;
+    }
+    public override string GetFullDescriptionRich(BattleUnit caster)
+    {
+        int cost = GetEffectiveMpCost(caster);
+
+        if (!string.IsNullOrEmpty(description))
+        {
+            if (cost > 0)
+            {
+                string mpColor = "#00A2FF";
+                return $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
+            }
+            else
+            {
+                return description;
+            }
+        }
+
+        return base.GetFullDescriptionRich(caster);
     }
 }

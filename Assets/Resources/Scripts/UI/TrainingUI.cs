@@ -32,6 +32,9 @@ public class TrainingUI : MonoBehaviour
     readonly List<Button> _skillBtns = new();
     readonly List<Button> _routeBtns = new();
 
+    // 스킬별로 선택된 루트를 임시 저장해 두는 캐시
+    readonly Dictionary<SkillAsset, int> _pendingRoutes = new();
+
     void Start()
     {
         BuildUnitList();
@@ -89,6 +92,8 @@ public class TrainingUI : MonoBehaviour
         _selectedSkill = null;
         _selectedRoute = -1;
 
+        _pendingRoutes.Clear(); // 유닛 바꿀 때 캐시 초기화
+
         BuildSkillList();
         BuildRoutes(null); // 클리어
     }
@@ -124,10 +129,25 @@ public class TrainingUI : MonoBehaviour
     {
         _selectedSkill = s;
 
-        // DB에 저장되어 있는 기존 선택 불러오기
-        _selectedRoute = (trainingDB != null && _selectedUnit != null)
-            ? trainingDB.GetRoute(_selectedUnit, _selectedSkill)
-            : -1;
+        if (s == null)
+        {
+            _selectedRoute = -1;
+            BuildRoutes(null);
+            return;
+        }
+
+        // 1순위: 이번 UI 세션에서 선택해둔 값(_pendingRoutes)
+        if (_pendingRoutes.TryGetValue(s, out var cachedRoute))
+        {
+            _selectedRoute = cachedRoute;
+        }
+        else
+        {
+            // 2순위: TrainingDB에 이미 저장된 값
+            _selectedRoute = (trainingDB != null && _selectedUnit != null)
+                ? trainingDB.GetRoute(_selectedUnit, _selectedSkill)
+                : -1;
+        }
 
         BuildRoutes(s);
     }
@@ -176,7 +196,16 @@ public class TrainingUI : MonoBehaviour
             else if (uText) uText.text = title + "\n" + desc;
 
             int idx = i;
-            b.onClick.AddListener(() => { _selectedRoute = idx; HighlightRoutes(); });
+            b.onClick.AddListener(() =>
+            {
+                _selectedRoute = idx;
+                if (_selectedSkill != null)
+                {
+                    // 현재 스킬에 대해 선택한 루트를 캐시에 저장
+                    _pendingRoutes[_selectedSkill] = idx;
+                }
+                HighlightRoutes();
+            });
             _routeBtns.Add(b);
         }
 
@@ -198,15 +227,26 @@ public class TrainingUI : MonoBehaviour
         if (trainingDB == null || _selectedUnit == null)
             return;
 
-        if (_selectedSkill == null || _selectedRoute < 0)
+        // 캐시에 쌓인 모든 (스킬, 루트)를 저장
+        if (_pendingRoutes.Count > 0)
         {
-            // 선택 안 한 상태로 저장 → 원본 상태 유지
-            // 아무 것도 안 해도 되지만, 명시적으로 -1 저장하고 싶다면:
-            // trainingDB.SetRoute(_selectedUnit, _selectedSkill, -1);
+            foreach (var kv in _pendingRoutes)
+            {
+                var skill = kv.Key;
+                var route = kv.Value;
+
+                if (skill == null) continue;
+                // route는 -1(미선택) ~ 2 범위, TrainingDB.SetRoute 안에서 clamp됨
+                trainingDB.SetRoute(_selectedUnit, skill, route);
+            }
         }
         else
         {
-            trainingDB.SetRoute(_selectedUnit, _selectedSkill, _selectedRoute);
+            // 혹시 예전 방식처럼 "현재 스킬 하나만" 저장하던 패턴을 유지하고 싶다면
+            if (_selectedSkill != null && _selectedRoute >= 0)
+            {
+                trainingDB.SetRoute(_selectedUnit, _selectedSkill, _selectedRoute);
+            }
         }
 
         Debug.Log("[TrainingUI] 저장 완료");
@@ -220,6 +260,7 @@ public class TrainingUI : MonoBehaviour
         _selectedUnit = null;
         _selectedSkill = null;
         _selectedRoute = -1;
+        _pendingRoutes.Clear();
 
         ClearChildren(skillListRoot);
         ClearChildren(routesRoot);

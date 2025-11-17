@@ -218,4 +218,9 @@ public abstract class SkillAsset : ScriptableObject
         // 기본적으로는 캐스터 정보 필요 없으면 기존 구현 재사용
         return GetFullDescriptionRich();
     }
+    public virtual int GetEffectiveCooldownTurns(BattleUnit caster)
+    {
+        // 기본은 그냥 설정값 그대로
+        return cooldownTurns;
+    }
 }

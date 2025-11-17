@@ -193,6 +193,7 @@ public class BattleUnit : MonoBehaviour
     public int MaxMP => baseMaxMP + Mult.mpAdd;
     public int MaxRage => baseMaxRage;
     public float Hostility { get; private set; } = 1.0f; // 전투 시작 시 기본 적대감 (0으로 시작하면 첫 타겟팅이 불가능하므로 1 등으로 설정)
+
     public void AddHostility(float amount)
     {
         Hostility = Mathf.Max(0, Hostility + amount); // 적대감은 0 밑으로 내려가지 않도록 합니다.
@@ -398,7 +399,8 @@ public class BattleUnit : MonoBehaviour
         var key = GetCooldownKey(s);
         if (key == null) return;
 
-        int cd = Mathf.Max(0, s.cooldownTurns);
+        // 훈련 등을 반영한 실제 쿨다운 턴수
+        int cd = Mathf.Max(0, s.GetEffectiveCooldownTurns(this));
         if (cd <= 0)
         {
             _cooldowns.Remove(key);
@@ -580,12 +582,11 @@ public class BattleUnit : MonoBehaviour
         MP = Mathf.Max(0, MP - cost);
         return true;
     }
-    // (선택) 회복도 필요하면:
-    //public void GainMP(int amount)
-    //{
-    //    if (amount <= 0) return;
-    //    MP = Mathf.Clamp(MP + amount, 0, MaxMP);
-    //}
+    public void GainMP(int amount)
+    {
+        if (amount <= 0) return;
+        MP = Mathf.Clamp(MP + amount, 0, MaxMP);
+    }
 
     public void Retreat()
     {

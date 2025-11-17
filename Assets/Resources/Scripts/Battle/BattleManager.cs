@@ -1454,12 +1454,53 @@ public class BattleManager : MonoBehaviour
         ClearSkillPreview();
         if (currentSkillSO is IInstantTileSkill)
         {
+            // === ParametricDirectionSkill의 Route2 무료턴 처리 여부 판단 ===
+            bool freeAction = false;
+            if (currentSkillSO is ParametricDirectionSkill dirSkill && acting != null)
+            {
+                int route = acting.GetTrainingRouteIndex(dirSkill);
+                if (route == 2 && dirSkill.trainingFreeActionOnRoute2)
+                    freeAction = true;
+            }
+
             // 커스텀 프리뷰 잠금 해제
             customPreviewCells = null;
             customPreviewMap = null;
 
-            // 무연출 즉시 해결 경로 (MP 차감은 스킬 내부에서 수행)
-            StartCoroutine(Co_ResolveTileThenFlag(currentSkillSO, map, originCell, acting, () => { acting.ApplyCooldown(currentSkillSO); FinishActionAfterSkill(); }));
+            if (!freeAction)
+            {
+                // 기본: 행동 1회 소비(공격으로 간주)
+                StartCoroutine(Co_ResolveTileThenFlag(currentSkillSO, map, originCell, acting, () =>
+                {
+                    acting.ApplyCooldown(currentSkillSO);
+                    FinishActionAfterSkill();
+                }));
+            }
+            else
+            {
+                // === 무료 행동 경로 ===
+                StartCoroutine(Co_ResolveTileThenFlag(currentSkillSO, map, originCell, acting, () =>
+                {
+                    acting.ApplyCooldown(currentSkillSO);
+
+                    // 행동 토큰은 그대로, UI/상태만 정리
+                    ClearSkillPreview();
+                    CloseSkillPanel();
+
+                    currentSkill = default;
+                    currentSkillSO = null;
+                    currentSkillTargetMap = null;
+                    customPreviewCells = null;
+                    customPreviewMap = null;
+                    UpdateTargetingHint();
+
+                    if (IsPlayerTurn)
+                        state = BattleState.ActionSelect; // 같은 턴에서 다른 행동 이어서 가능
+                }));
+            }
+
+            //// 무연출 즉시 해결 경로 (MP 차감은 스킬 내부에서 수행)
+            //StartCoroutine(Co_ResolveTileThenFlag(currentSkillSO, map, originCell, acting, () => { acting.ApplyCooldown(currentSkillSO); FinishActionAfterSkill(); }));
         }
         else
         {

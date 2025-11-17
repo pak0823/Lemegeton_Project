@@ -11,6 +11,12 @@ public class SmokeZoneRuntime : MonoBehaviour
     SmokeBombSkill.SmokeEffectMode mode = SmokeBombSkill.SmokeEffectMode.HostilityVisibility;
     UnitStateBuffId agiBuffState = UnitStateBuffId.None;
     float agiMul = 1f;
+
+    [Header("Training Options")]
+    public bool enableMpRegen = false;
+    [Range(0f, 1f)] public float mpRegenRatio = 0f;  // 예: 0.3f = MaxMP * 0.3
+
+
     public static float GetVisibilityMultiplier(BattleUnit unit)
     {
         if (unit == null || unit.IsDead) return 1f;
@@ -53,6 +59,7 @@ public class SmokeZoneRuntime : MonoBehaviour
         this.caster = caster;
         this.turnsLeft = Mathf.Max(1, durationCasterTurns);
         this.factor = Mathf.Clamp(visibilityFactor, 0f, 1f);
+
 
         if (_battlemanager != null) _battlemanager.OnUnitEndTurn += HandleUnitEndTurn;
 
@@ -170,6 +177,29 @@ public class SmokeZoneRuntime : MonoBehaviour
             if (turnsLeft <= 0)
                 Destroy(gameObject); // OnDestroy에서 VFX도 함께 정리
         }
+
+        // Route1: 연막존 안에서 턴을 끝낸 아군의 MP 회복
+        if (enableMpRegen && unit != null && unit.team == caster.team)
+        {
+            if (map != null && cells != null && cells.Contains(unit.Cell))
+            {
+                float ratio = Mathf.Clamp01(mpRegenRatio); // 보통 0.3
+                                                           // MaxMP 프로퍼티가 있다고 가정 (없다면 유사 필드 사용)
+                int amount = Mathf.RoundToInt(unit.MaxMP * ratio);
+                if (amount > 0)
+                {
+                    unit.GainMP(amount);
+                    Debug.Log($"[Smoke MP Regen] {unit.name} +{amount} MP  (ratio={ratio})");
+                }
+            }
+        }
+    }
+
+    // Route2에서 범위 바꿀 때 사용할 헬퍼
+    public void OverrideAreaCells(IEnumerable<Vector3Int> _newCells)
+    {
+        if (_newCells == null) return;
+        cells = new HashSet<Vector3Int>(_newCells);
     }
 
 

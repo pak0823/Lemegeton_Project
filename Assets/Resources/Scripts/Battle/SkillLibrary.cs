@@ -5,7 +5,7 @@ using UnityEngine;
 
 public enum SkillId
 {
-    None,
+    None = -1,
     Skill1 = 0,
     Skill2 = 1,
     Skill3 = 2,

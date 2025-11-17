@@ -75,6 +75,12 @@ public class ParametricDamageSkill : SkillAsset
     [Range(1, DebuffTuning.SlowMaxStacks)] public int trainingBleedStacks = 1;
     [Min(1)] public int trainingBleedDurationTurns = 2;
 
+    [Tooltip("쿨다운 턴수 변화량(음수면 단축)")]
+    public int trainingCooldownDeltaRoute2 = 0;
+
+    [Tooltip("이 스킬을 맵 상의 모든 적군에게 적중시키기")]
+    public bool trainingHitAllEnemiesOnRoute0 = false;
+
     // 선택된 훈련 루트를 읽어 현재 실행에 반영
     int GetRoute(BattleUnit caster)
     {
@@ -231,13 +237,32 @@ public class ParametricDamageSkill : SkillAsset
     // 중심 셀 기준으로 범위 유닛들을 찾아 데미지 적용(팀 반대편만)
     void DealAreaDamage(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int centerCell)
     {
+        if (!bm || !caster) return;
+
+        int route = GetRoute(caster);
+
+        //전체 적군 공격 (이 스킬에서 trainingHitAllEnemiesOnRoute0를 켠 경우)
+        if (route == 0 && trainingHitAllEnemiesOnRoute0)
+        {
+            var allUnits = Object.FindObjectsOfType<BattleUnit>();
+            var victims = allUnits
+                .Where(u => u != null
+                            && !u.IsDead
+                            && u.team != caster.team
+                            && u.CurrentMap == map)
+                .ToList();
+
+            bm.ExecuteSkillDamage(caster, victims, this, map, centerCell);
+            return;
+        }
+
+        // 기본/다른 훈련 루트: 기존 범위 로직 사용
         var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
-        var victims = bm.GetUnitsInArea(map, area)
-                        .Where(u => u != null && !u.IsDead && u.team != caster.team) // 상대팀만
-                        .ToList();
+        var areaVictims = bm.GetUnitsInArea(map, area)
+                            .Where(u => u != null && !u.IsDead && u.team != caster.team)
+                            .ToList();
 
-
-        bm.ExecuteSkillDamage(caster, victims, this, map, centerCell);
+        bm.ExecuteSkillDamage(caster, areaVictims, this, map, centerCell);
     }
 
     public override int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
@@ -289,6 +314,19 @@ public class ParametricDamageSkill : SkillAsset
     {
         // 루트1일 때만 trainingSuppressionOnHit 값을 돌려줌
         return (GetRoute(caster) == 1) ? Mathf.Max(0, trainingSuppressionOnHit) : 0;
+    }
+
+    public override int GetEffectiveCooldownTurns(BattleUnit caster)
+    {
+        int cd = cooldownTurns;
+
+        int route = GetRoute(caster);
+        if (route == 2 && trainingCooldownDeltaRoute2 != 0)
+        {
+            cd = Mathf.Max(0, cd + trainingCooldownDeltaRoute2);
+        }
+
+        return cd;
     }
 
 }
