@@ -18,7 +18,7 @@ MonoBehaviour:
     6\uD134 \uD6C4 \uB2E4\uC2DC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.\r"
   school: 2
   attribute: 0
-  power: 1
+  power: 3
   mpCost: 0
   targetMode: 0
   cooldownTurns: 6
@@ -27,9 +27,9 @@ MonoBehaviour:
   trainingRoutes:
   - title: "\uB300\uC0C1 \uD655\uB300 \uD6C8\uB828"
     description: "\uBAA8\uB4E0 \uC801\uAD70\uC5D0\uAC8C \uAE30\uC220\uC774 \uC801\uC911\uD569\uB2C8\uB2E4."
-  - title: "\uB300\uC0C1 \uC81C\uC555 \uD6C8\uB828"
-    description: "\uB300\uC0C1\uC5D0\uAC8C 1\uD134 \uB3D9\uC548 \uC81C\uC555 \uC911\uCCA9\uC744
-      3 \uBD80\uC5EC\uD569\uB2C8\uB2E4.\r"
+  - title: "\uCD9C\uD608 \uD53C\uD574 \uD6C8\uB828"
+    description: "\uB300\uC0C1\uC5D0\uAC8C 3\uD134 \uB3D9\uC548 \uCD9C\uD608 \uC911\uCCA9\uC744
+      1 \uBD80\uC5EC\uD569\uB2C8\uB2E4."
   - title: "\uAE30\uC220 \uAC00\uC18D \uD6C8\uB828"
     description: "\uC7AC\uC0AC\uC6A9 \uB300\uAE30 \uC2DC\uAC04\uC744 \uB2E8\uCD95\uC2DC\uD0B5\uB2C8\uB2E4.
       (4)\r"
@@ -37,23 +37,28 @@ MonoBehaviour:
   preferredStatus: 0
   areaPreset: 0
   useProvidedUnitTarget: 1
-  powerOverride: 1
+  powerOverride: 3
   damageSchool: 2
   conditionalMultipliers: []
   selectionMode: 0
   diagUseNEAxis: 1
+  trainingUseAreaOverride: 0
+  routeForAreaOverride: -1
+  trainingAreaPreset: 0
+  trainingDiagUseNEAxis: 1
+  routeForSuppression: -1
+  trainingSuppressionOnHit: 0
+  trainingApplyBleed: 1
+  routeForBleed: 1
+  trainingBleedStacks: 1
+  trainingBleedDurationTurns: 3
+  routeForCooldown: 2
+  trainingCooldownDelta: -2
+  routeForHitAllEnemies: 0
+  trainingHitAllEnemies: 1
   useFrontlineBonus: 0
   frontlineDepth: 2
   frontlineMultiplier: 1.5
-  trainingUseAreaOverride: 0
-  trainingAreaPreset: 0
-  trainingDiagUseNEAxis: 1
-  trainingSuppressionOnHit: 3
-  trainingApplyBleed: 0
-  trainingBleedStacks: 1
-  trainingBleedDurationTurns: 2
-  trainingCooldownDeltaRoute2: -2
-  trainingHitAllEnemiesOnRoute0: 1
   useManualFrontier: 0
   manualFrontierPlayer: []
   manualFrontierEnemy: []

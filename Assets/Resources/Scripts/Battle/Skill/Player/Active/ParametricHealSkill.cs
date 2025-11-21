@@ -95,4 +95,34 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
 
 
     }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        int cost = GetEffectiveMpCost(_caster);
+        string mpColor = "#00A2FF";
+        string baseDesc;
+        if (!string.IsNullOrEmpty(description))
+        {
+            if (cost > 0)
+                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
+            else
+                baseDesc = description;
+        }
+        else
+        {
+            baseDesc = base.GetFullDescriptionRich(_caster);
+        }
+
+        int route = _caster.GetTrainingRouteIndex(this);
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
 }

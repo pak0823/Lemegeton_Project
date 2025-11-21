@@ -16,40 +16,42 @@ public class ShootingInsightPassive : PassiveAsset
     // Runtime: 유닛별 스택 관리 (SO는 공유되므로 딕셔너리 필요)
     private readonly Dictionary<BattleUnit, int> _stacks = new();
 
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
     {
-        if (owner == null) return;
-        owner.OnDealtDamage += HandleDealtDamage;
-        _stacks[owner] = 0;
+        if (_owner == null) return;
+        _owner.OnDealtDamage += HandleDealtDamage;
+        _stacks[_owner] = 0;
     }
 
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
     {
-        if (owner == null) return;
-        owner.OnDealtDamage -= HandleDealtDamage;
-        _stacks.Remove(owner);
+        if (_owner == null) return;
+        _owner.OnDealtDamage -= HandleDealtDamage;
+        _stacks.Remove(_owner);
         // 추후 통찰 버프/상태를 쓴다면 여기서 제거
     }
 
-    private void HandleDealtDamage(BattleUnit dealer, BattleUnit victim, int damage, SkillAsset source)
+    private void HandleDealtDamage(BattleUnit _dealer, BattleUnit _victim, int _damage, SkillAsset _source)
     {
-        if (dealer == null) return;
-        if (onlyOnDamagePositive && damage <= 0) return;
+        if (_dealer == null) return;
+        if (onlyOnDamagePositive && _damage <= 0) return;
 
-        if (!_stacks.TryGetValue(dealer, out var cur))
+        if (!_stacks.TryGetValue(_dealer, out var cur))
             cur = 0;
 
         cur++;
-        Debug.Log($"[Passive:ShootingInsight] {dealer.name} stack -> {cur}");
+        Debug.Log($"[Passive:ShootingInsight] {_dealer.name} stack -> {cur}");
 
-        StatusController statusController = dealer.GetComponent<StatusController>();
+        StatusController statusController = _dealer.GetComponent<StatusController>();
         if (statusController != null)
             statusController.SetStacks(StatusId.ShootingStack, cur, 0); // showTurns=false 이라 duration은 의미 없음
 
         // 5스택 도달: 통찰 강화 트리거 (현재는 로그/플레이스홀더만)
         if (cur == triggerStacks)
         {
-            Debug.Log($"[Passive:ShootingInsight] {dealer.name} 통찰 강화 발동 (x{insightValue}) [TODO: 실제 스탯 연동]");
+            Debug.Log($"[Passive:ShootingInsight] {_dealer.name} 통찰 강화 발동 (x{insightValue}) [TODO: 실제 스탯 연동]");
+
+            _dealer.AnnouncePassive(displayName);    // 패시브 발동 라벨 호출
             // TODO: UnitStateBuffId.Insight 같은 버프를 적용해서
             //       StateStatModifierDB에서 치명 관련 수치를 올리도록 연동 가능.
         }
@@ -57,13 +59,13 @@ public class ShootingInsightPassive : PassiveAsset
         // 6스택 도달: 리셋
         if (cur >= resetStacks)
         {
-            Debug.Log($"[Passive:ShootingInsight] {dealer.name} 스택 리셋");
+            Debug.Log($"[Passive:ShootingInsight] {_dealer.name} 스택 리셋");
             cur = 0;
             if (statusController != null)
                 statusController.SetStacks(StatusId.ShootingStack, 0); // 아이콘 제거
             // TODO: 여기서 사격 중첩/통찰 버프 상태 제거
         }
 
-        _stacks[dealer] = cur;
+        _stacks[_dealer] = cur;
     }
 }

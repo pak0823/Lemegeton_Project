@@ -17,44 +17,44 @@ public class ReactiveMoveAttackPassive : PassiveAsset
     private readonly List<BattleUnit> _candidates = new();
     private bool _reactionScheduled;
 
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
     {
-        _owner = owner;
-        _battle = battle;
+        this._owner = _owner;
+        this._battle = _battle;
         _candidates.Clear();
         _reactionScheduled = false;
 
         BattleUnit.OnAnyMoved += HandleAnyMoved;
     }
 
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
     {
         BattleUnit.OnAnyMoved -= HandleAnyMoved;
         _candidates.Clear();
         _reactionScheduled = false;
 
-        _owner = null;
-        _battle = null;
+        this._owner = null;
+        this._battle = null;
     }
 
-    private void HandleAnyMoved(BattleUnit mover)
+    private void HandleAnyMoved(BattleUnit _mover)
     {
         if (_owner == null || _battle == null) return;
-        if (mover == null || mover.IsDead || mover.IsRetreated) return;
+        if (_mover == null || _mover.IsDead || _mover.IsRetreated) return;
         if (_owner.IsDead || _owner.IsRetreated) return;
 
         // 자기 자신 무시
-        if (mover == _owner) return;
+        if (_mover == _owner) return;
 
         // 아군 이동은 무시 (요구사항: 적군 유닛이 이동했을 때)
-        if (mover.team == _owner.team) return;
+        if (_mover.team == _owner.team) return;
 
         // "이 유닛의 차례가 아닐 때"만 발동
         if (_battle.ActingUnit == _owner) return;
 
         // 후보 목록에 추가
-        if (!_candidates.Contains(mover))
-            _candidates.Add(mover);
+        if (!_candidates.Contains(_mover))
+            _candidates.Add(_mover);
 
         // 한 번만 스케줄: 같은 프레임에 여러 번 이동해도 1회 처리
         if (!_reactionScheduled)
@@ -95,6 +95,8 @@ public class ReactiveMoveAttackPassive : PassiveAsset
         if (!_owner.HasMP(skill.mpCost)) yield break;
 
         bool doGapClose = useGapClose && skill.ShouldGapCloseToTarget(_owner, target);
+
+        _owner.AnnouncePassive(displayName);    // 패시브 발동 라벨 호출
 
         // 행동 토큰/턴에 영향 없는 리액션 공격 실행
         _battle.StartReactiveAttack(_owner, target, skill, doGapClose);

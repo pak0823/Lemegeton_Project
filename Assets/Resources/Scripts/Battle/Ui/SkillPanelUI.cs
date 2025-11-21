@@ -32,6 +32,10 @@ public class SkillPanelUI : MonoBehaviour
             battleManager.OnSkillPanelPopulateSO += HandlePopulateSO;
             battleManager.OnHint += HandleHint;
             battleManager.OnUnitActionLabel += HandleUnitActionLabel;
+            battleManager.OnUnitEndTurn += HandleAnyUnitEndTurn_ClearLabel;
+            battleManager.OnWaveStarted += HandleWaveStarted_ClearLabel;
+            battleManager.OnUnitPassiveLabel += HandleUnitPassiveLabel;
+            battleManager.OnUnitTurnLabel += HandleUnitTurnLabel;
         }
 
         if (panel != null) panel.SetActive(false); // 기본 비활성
@@ -46,6 +50,10 @@ public class SkillPanelUI : MonoBehaviour
             battleManager.OnSkillPanelPopulateSO -= HandlePopulateSO;
             battleManager.OnHint -= HandleHint;
             battleManager.OnUnitActionLabel -= HandleUnitActionLabel;
+            battleManager.OnUnitEndTurn -= HandleAnyUnitEndTurn_ClearLabel;
+            battleManager.OnWaveStarted -= HandleWaveStarted_ClearLabel;
+            battleManager.OnUnitPassiveLabel -= HandleUnitPassiveLabel;
+            battleManager.OnUnitTurnLabel -= HandleUnitTurnLabel;
         }
     }
 
@@ -280,9 +288,11 @@ public class SkillPanelUI : MonoBehaviour
     void HandleHint(string msg)
     {
         if (!selectTargetHintText) return;
-        if (_pinnedEnemyLabel) return;
 
         bool show = !string.IsNullOrEmpty(msg);
+        if (show)
+            _pinnedEnemyLabel = false;
+
         selectTargetHintText.text = show ? msg : string.Empty;
         selectTargetHintText.gameObject.SetActive(show);
     }
@@ -307,6 +317,69 @@ public class SkillPanelUI : MonoBehaviour
         selectTargetHintText.gameObject.SetActive(true);
 
         // 패널 열림/닫힘과 무관하게 유지
+        _pinnedEnemyLabel = true;
+    }
+    void HandleUnitPassiveLabel(BattleUnit unit, string label)
+    {
+        if (!selectTargetHintText) return;
+
+        if (string.IsNullOrEmpty(label))
+        {
+            // 패시브 라벨 클리어
+            _pinnedEnemyLabel = false;
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+            return;
+        }
+
+        string unitName = unit != null && !string.IsNullOrEmpty(unit.name) ? unit.name : "유닛";
+        // 패시브는 색상만 다르게(예: 노랑)
+        selectTargetHintText.text = $"<color=#F2C94C>{unitName}</color> 의 <b>{label}</b>";
+        selectTargetHintText.gameObject.SetActive(true);
+
+        _pinnedEnemyLabel = true; // 패시브 표시 중에는 힌트/패널 토글에 영향받지 않게 고정
+    }
+    void HandleAnyUnitEndTurn_ClearLabel(BattleUnit u)
+    {
+        // 적/아군 관계없이, UI 라벨은 이 타이밍에 정리
+        _pinnedEnemyLabel = false;
+        if (selectTargetHintText)
+        {
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+        }
+    }
+    void HandleWaveStarted_ClearLabel()
+    {
+        _pinnedEnemyLabel = false;
+        if (selectTargetHintText)
+        {
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+        }
+    }
+    void HandleUnitTurnLabel(BattleUnit unit)
+    {
+        if (!selectTargetHintText) return;
+
+        if (unit == null)
+        {
+            // 혹시 null로 클리어 신호를 보낼 일이 생기면 여기서도 처리 가능
+            _pinnedEnemyLabel = false;
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+            return;
+        }
+
+        string unitName = !string.IsNullOrEmpty(unit.name) ? unit.name : "유닛";
+
+        // 턴 시작 배너 텍스트
+        selectTargetHintText.text = $"<color=#FFFFFF>{unitName}</color> 의 턴";
+
+        selectTargetHintText.gameObject.SetActive(true);
+
+        // 이 라벨도 "고정 라벨" 취급해서, 패널 on/off와 무관하게 유지
+        // (턴이 끝나면 HandleAnyUnitEndTurn_ClearLabel에서 지워짐)
         _pinnedEnemyLabel = true;
     }
 }

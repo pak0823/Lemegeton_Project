@@ -22,28 +22,28 @@ public class ReactiveAfterMoveAttackPassive : PassiveAsset
     private BattleUnit _owner;
     private BattleManager _battle;
 
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
     {
-        _owner = owner;
-        _battle = battle;
+        this._owner = _owner;
+        this._battle = _battle;
 
-        if (_owner != null)
-            _owner.OnMoved += HandleOwnerMoved;
+        if (this._owner != null)
+            this._owner.OnMoved += HandleOwnerMoved;
     }
 
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
     {
-        if (_owner != null)
-            _owner.OnMoved -= HandleOwnerMoved;
+        if (this._owner != null)
+            this._owner.OnMoved -= HandleOwnerMoved;
 
-        _owner = null;
-        _battle = null;
+        this._owner = null;
+        this._battle = null;
     }
 
-    private void HandleOwnerMoved(BattleUnit unit, Tilemap fromMap, Vector3Int fromCell, Vector3Int toCell)
+    private void HandleOwnerMoved(BattleUnit _unit, Tilemap _fromMap, Vector3Int _fromCell, Vector3Int _toCell)
     {
         if (_owner == null || _battle == null) return;
-        if (unit != _owner) return;
+        if (_unit != _owner) return;
         if (_owner.IsDead || _owner.IsRetreated) return;
 
         // 자기 턴에 한 이동만 반응할지 옵션
@@ -90,6 +90,8 @@ public class ReactiveAfterMoveAttackPassive : PassiveAsset
         if (!_owner.HasMP(skill.mpCost)) yield break;
 
         bool doGapClose = useGapClose && skill.ShouldGapCloseToTarget(_owner, target);
+
+        _owner.AnnouncePassive(displayName);    // 패시브 발동 라벨 호출
 
         // 턴/행동 토큰에는 영향 주지 않는 리액션 공격 실행
         _battle.StartReactiveAttack(_owner, target, skill, doGapClose);

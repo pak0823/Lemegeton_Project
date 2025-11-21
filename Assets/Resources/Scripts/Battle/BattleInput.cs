@@ -162,6 +162,10 @@ public class BattleInput : MonoBehaviour
             && battle.IsPlayerTurn
             && battle.IsTargeting
             && battle.currentSkillSO != null);
+        bool canTargetKnockback = (battle != null
+            && battle.IsPlayerTurn
+            && battle.IsKnockbackTargeting
+            && battle.currentSkillSO != null);
 
         bool isTargetingNow = canTargetSkill;
 
@@ -181,7 +185,7 @@ public class BattleInput : MonoBehaviour
         if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(battle_CancelKey))
         {
             // 스킬 타겟팅 중(선택됨) → '스킬만 해제', 패널 유지 (1단계 취소)
-            if (canTargetSkill)
+            if (canTargetSkill || canTargetKnockback)
             {
                 battle.CancelCurrentAction(); // 내부에서 스킬만 초기화 & 패널 유지
                 return;
@@ -222,22 +226,38 @@ public class BattleInput : MonoBehaviour
 
             if (battle.currentSkillSO != null && battle.currentSkillSO.targetMode == SkillTargetMode.Unit)
             {
-                // 마우스가 가리키는 적 유닛이 있다면 '선택' 자체를 그 유닛으로 갱신
+                var skill = battle.currentSkillSO;
+                var acting = battle.ActingUnit;
+                bool wantsAlly = skill is AllyRetreatSwapSkill;
+
                 var hit = Physics2D.Raycast(world, Vector2.zero, 0.01f, unitMask);
                 var unit = hit.collider ? hit.collider.GetComponentInParent<BattleUnit>() : null;
-                if (unit != null && unit.team == Team.Enemy)
+
+                if (unit != null && acting != null)
                 {
-                    // targetCycle에 포함된 적일 때만 선택 변경(내부에서 index 찾아 SelectTarget 호출)
-                    if (!battle.SelectTargetByUnit(unit))
+                    bool isAlly = (unit.team == acting.team);
+                    bool isValidTarget =
+                        (!wantsAlly && !isAlly) ||   // 일반 스킬: 적만
+                        (wantsAlly && isAlly);       // AllyRetreat: 아군만
+
+                    if (isValidTarget)
                     {
-                        // 사이클에 없다면(필요 시) 미리보기만 보여주고 선택은 유지하고 싶다면 아래 한 줄 유지
-                        battle.PreviewSkillAreaOnUnit(unit);
+                        if (!battle.SelectTargetByUnit(unit))
+                        {
+                            battle.PreviewSkillAreaOnUnit(unit);
+                        }
                     }
-                    // SelectTargetByUnit()이 성공하면 마커+하이라이트는 내부에서 이미 갱신됨
+                    else
+                    {
+                        // 유효 타겟이 아니면 기존 선택 유지 / 프리뷰 유지
+                        if (battle.SelectedTarget != null)
+                            battle.PreviewSkillAreaOnUnit(battle.SelectedTarget);
+                        else
+                            battle.ClearSkillPreview();
+                    }
                 }
                 else
                 {
-                    // 마우스가 비었거나 아군이면, 현재 선택 유지(원하면 미리보기도 유지)
                     if (battle.SelectedTarget != null)
                         battle.PreviewSkillAreaOnUnit(battle.SelectedTarget);
                     else

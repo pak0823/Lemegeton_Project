@@ -40,11 +40,17 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     public float dashArc = 0.0f;
 
     [Header("Training")]
-    [Tooltip("Route 0에서 MP 비용을 덮어쓸지 여부")]
+    [Header("소모값 감소 적용")]
+    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
     public bool trainingUseMpOverride = false;
-
-    [Tooltip("선택 시 실제 소모 MP")]
+    [Range(-1, 2)]
+    [Tooltip("이 스킬에서 MP 감소가 적용될 훈련 루트 인덱스 (-1이면 미사용)")]
+    public int routeForMpOverride = 0;
+    [Tooltip("훈련 시 실제 소모 MP")]
     public int trainingMpCostRoute0 = 5;
+
+    [Header("적의 감소 적용")]
+
 
     [Tooltip("현재 적대감에서 이 값만큼 즉시 감소 (양수 입력)")]
     public float trainingHostilityDeltaRoute1 = 0.3f;
@@ -340,24 +346,34 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
         return cost;
     }
-    public override string GetFullDescriptionRich(BattleUnit caster)
+    public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(caster);
-
+        int cost = GetEffectiveMpCost(_caster);
+        string mpColor = "#00A2FF";
+        string baseDesc;
         if (!string.IsNullOrEmpty(description))
         {
             if (cost > 0)
-            {
-                string mpColor = "#00A2FF";
-                return $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            }
+                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
             else
-            {
-                return description;
-            }
+                baseDesc = description;
+        }
+        else
+        {
+            baseDesc = base.GetFullDescriptionRich(_caster);
         }
 
-        return base.GetFullDescriptionRich(caster);
+        int route = _caster.GetTrainingRouteIndex(this);
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
     }
 
 }

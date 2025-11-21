@@ -669,6 +669,11 @@ public class BattleUnit : MonoBehaviour
         // 2) fallback: 개별 스킬 기준 조회
         return db.GetRoute(data, skill);
     }
+    //패시브 설명 호출
+    public void AnnouncePassive(string passiveName)
+    {
+        Battle?.EmitPassiveLabelAutoClear(this, passiveName, 1.0f);
+    }
 
     #region Animation Events
     // Attack 클립의 임팩트 프레임에서 호출

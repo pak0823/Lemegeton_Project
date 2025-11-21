@@ -50,11 +50,6 @@ public class ParametricDamageSkill : SkillAsset
     [Header("Diagonal Options")]
     [SerializeField] private bool diagUseNEAxis = true; //방향 변경
 
-    [Header("Frontline Bonus")]
-    [SerializeField] private bool useFrontlineBonus = false;   // 전방 보너스 사용 여부
-    [SerializeField] private int frontlineDepth = 2;            // "앞 N열"
-    [SerializeField] private float frontlineMultiplier = 1.5f;  // 배수(예: 1.5)
-
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }  // 선택값 반영
 #endif
@@ -62,30 +57,74 @@ public class ParametricDamageSkill : SkillAsset
     public static void ClearFrontlineCache() => _frontlineCache.Clear();
 
     [Header("Training Effects")]
-    [Tooltip("훈련 루트 0: 범위 프리셋을 이 값으로 교체")]
+    [Header("범위 변경")]
+    [Tooltip("훈련으로 범위 변경을 적용할 것인지")]
     public bool trainingUseAreaOverride = false;
+    [Tooltip("범위 프리셋 교체를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)]
+    public int routeForAreaOverride = -1;
     public AreaPreset trainingAreaPreset = AreaPreset.Single;
     public bool trainingDiagUseNEAxis = true;
 
-    [Tooltip("훈련 루트 1: 캐스팅 제압 추가 감소량(피격 시)")]
+
+    [Header("제압 부여 설정")]
+    [Tooltip("제압을 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)]
+    public int routeForSuppression = -1;
+    [Tooltip("캐스팅 제압 추가 감소량(피격 시)")]
     public int trainingSuppressionOnHit = 0; // 0=미사용, 1 이상이면 그만큼 추가로 suppressCur 감소
 
-    [Tooltip("훈련 루트 2: 출혈 부여 설정")]
+    [Header("출혈 부여 설정")]
+    [Tooltip("훈련으로 출혈 효과를 적용할 것인지")]
     public bool trainingApplyBleed = false;
+    [Tooltip("출혈을 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)]
+    public int routeForBleed = -1;
     [Range(1, DebuffTuning.SlowMaxStacks)] public int trainingBleedStacks = 1;
     [Min(1)] public int trainingBleedDurationTurns = 2;
 
+    [Header("턴수 변화 설정")]
+    [Tooltip("쿨다운 변화를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)]
+    public int routeForCooldown = -1;
     [Tooltip("쿨다운 턴수 변화량(음수면 단축)")]
-    public int trainingCooldownDeltaRoute2 = 0;
+    public int trainingCooldownDelta = 0;
 
+    [Header("넉백 설정")]
+    [Tooltip("훈련으로 넉백 효과를 사용할 것인지")]
+    public bool trainingUseKnockback = false;
+    [Tooltip("넉백 효과가 활성화될 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)]
+    public int routeForKnockback = -1;
+
+    [Header("전체 공격 설정")]
+    [Tooltip("이 효과(전체 적군 타격)를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)]
+    public int routeForHitAllEnemies = -1;
     [Tooltip("이 스킬을 맵 상의 모든 적군에게 적중시키기")]
-    public bool trainingHitAllEnemiesOnRoute0 = false;
+    public bool trainingHitAllEnemies = false;
+
+    [Header("Frontline Bonus(전방 보너스)")]
+    [SerializeField] private bool useFrontlineBonus = false;   // 전방 보너스 사용 여부
+    [SerializeField] private int frontlineDepth = 2;            // "앞 N열"
+    [SerializeField] private float frontlineMultiplier = 1.5f;  // 배수(예: 1.5)
+    [SerializeField] private bool useManualFrontier = true;
+
+    // 1열 수동 경계
+    [SerializeField] private List<Vector3Int> manualFrontierPlayer;
+    [SerializeField] private List<Vector3Int> manualFrontierEnemy;
+
+    // 2열 수동 지정(있으면 자동 확장 대신 이걸 우선 사용)
+    [SerializeField] private List<Vector3Int> manualSecondLayerPlayer;
+    [SerializeField] private List<Vector3Int> manualSecondLayerEnemy;
+    [SerializeField] private AxialDir playerFrontlineDir = AxialDir.SW; // 플레이어 전방축
+    [SerializeField] private AxialDir enemyFrontlineDir = AxialDir.NE; // 적 전방축
 
     // 선택된 훈련 루트를 읽어 현재 실행에 반영
-    int GetRoute(BattleUnit caster)
+    int GetRoute(BattleUnit _caster)
     {
-        if (caster == null) return -1;
-        return caster.GetTrainingRouteIndex(this);
+        if (_caster == null) return -1;
+        return _caster.GetTrainingRouteIndex(this);
     }
 
     void OnEnable()
@@ -95,20 +134,22 @@ public class ParametricDamageSkill : SkillAsset
         targetMode = selectionMode;  // 실행 시에도 선택값 반영
     }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
     {
         // 현재 턴의 시전자(플레이어든 적이든)
         var bm = Shared.BattleManager;
         BattleUnit caster = bm != null ? bm.ActingUnit : null;
 
         int route = GetRoute(caster);
-        bool useOverride = (route == 0 && trainingUseAreaOverride);
+        bool useOverride = trainingUseAreaOverride
+                   && routeForAreaOverride >= 0
+                   && route == routeForAreaOverride;
 
         // 기본/훈련 프리셋 선택
         var preset = useOverride ? trainingAreaPreset : areaPreset;
         bool useDiag = useOverride ? trainingDiagUseNEAxis : diagUseNEAxis;
 
-        foreach (var c in AreaShapes.GetCells(originCell, preset, useDiag))
+        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
             yield return c;
     }
 
@@ -131,10 +172,10 @@ public class ParametricDamageSkill : SkillAsset
         }
     }
 
-    float GetMultiplierFor(BattleUnit victim)
+    float GetMultiplierFor(BattleUnit _victim)
     {
         if (conditionalMultipliers == null || conditionalMultipliers.Count == 0) return 1f;
-        var sc = victim ? victim.GetComponent<StatusController>() : null;
+        var sc = _victim ? _victim.GetComponent<StatusController>() : null;
         if (sc == null) return 1f;
 
         float mult = 1f;
@@ -143,46 +184,36 @@ public class ParametricDamageSkill : SkillAsset
         return mult;
     }
 
-    [SerializeField] private bool useManualFrontier = true;
-
-    // 1열 수동 경계
-    [SerializeField] private List<Vector3Int> manualFrontierPlayer;
-    [SerializeField] private List<Vector3Int> manualFrontierEnemy;
-
-    // 2열 수동 지정(있으면 자동 확장 대신 이걸 우선 사용)
-    [SerializeField] private List<Vector3Int> manualSecondLayerPlayer;
-    [SerializeField] private List<Vector3Int> manualSecondLayerEnemy;
-    [SerializeField] private AxialDir playerFrontlineDir = AxialDir.SW; // 플레이어 전방축
-    [SerializeField] private AxialDir enemyFrontlineDir = AxialDir.NE; // 적 전방축
+    
     public enum AxialDir { E, NE, NW, W, SW, SE }
     Vector2Int DirToAx(AxialDir d) => AX_DIRS[(int)d];
     // 맵별/팀별/깊이별 캐시
     static readonly Dictionary<(Tilemap, int, int), HashSet<Vector3Int>> _frontlineCache
         = new Dictionary<(Tilemap, int, int), HashSet<Vector3Int>>();
 
-    HashSet<Vector3Int> GetFrontlineSet(Tilemap map, Team team, int depth)
+    HashSet<Vector3Int> GetFrontlineSet(Tilemap _map, Team _team, int _depth)
     {
-        if (!map || depth <= 0) return null;
-        var key = (map, (int)team, depth);
+        if (!_map || _depth <= 0) return null;
+        var key = (_map, (int)_team, _depth);
         if (_frontlineCache.TryGetValue(key, out var cached)) return cached;
 
         // 맵 존재 타일 수집
-        var b = map.cellBounds;
+        var b = _map.cellBounds;
         var all = new HashSet<Vector3Int>();
         for (int y = b.yMin; y < b.yMax; y++)
             for (int x = b.xMin; x < b.xMax; x++)
-            { var c = new Vector3Int(x, y, 0); if (map.HasTile(c)) all.Add(c); }
+            { var c = new Vector3Int(x, y, 0); if (_map.HasTile(c)) all.Add(c); }
 
         // 전방축 f (이미 수동축 SW/NE를 쓰고 계신다면 그대로)
-        Vector2Int f = (team == Team.Player) ? DirToAx(playerFrontlineDir)
+        Vector2Int f = (_team == Team.Player) ? DirToAx(playerFrontlineDir)
                                              : DirToAx(enemyFrontlineDir);
 
         // 1) 1열: 수동 경계 우선, 없으면 자동 frontier
         var frontier = new HashSet<Vector3Int>();
-        var srcFront = (team == Team.Player) ? manualFrontierPlayer : manualFrontierEnemy;
+        var srcFront = (_team == Team.Player) ? manualFrontierPlayer : manualFrontierEnemy;
         if (useManualFrontier && srcFront != null && srcFront.Count > 0)
         {
-            foreach (var c in srcFront) if (map.HasTile(c)) frontier.Add(c);
+            foreach (var c in srcFront) if (_map.HasTile(c)) frontier.Add(c);
         }
         else
         {
@@ -192,20 +223,20 @@ public class ParametricDamageSkill : SkillAsset
                 var ax = SkillLibrary.OffsetToAxial(c);
                 var axF = new Vector2Int(ax.x + f.x, ax.y + f.y);
                 var offF = SkillLibrary.AxialToOffset(axF);
-                if (!map.HasTile(offF)) frontier.Add(c);
+                if (!_map.HasTile(offF)) frontier.Add(c);
             }
         }
 
         // 최종 결과에 1열 추가
         var result = new HashSet<Vector3Int>(frontier);
 
-        if (depth >= 2)
+        if (_depth >= 2)
         {
             // 2) 2열: 수동 2열이 있으면 우선 사용
-            var secondManual = (team == Team.Player) ? manualSecondLayerPlayer : manualSecondLayerEnemy;
+            var secondManual = (_team == Team.Player) ? manualSecondLayerPlayer : manualSecondLayerEnemy;
             if (secondManual != null && secondManual.Count > 0)
             {
-                foreach (var c in secondManual) if (map.HasTile(c)) result.Add(c);
+                foreach (var c in secondManual) if (_map.HasTile(c)) result.Add(c);
             }
             else
             {
@@ -217,7 +248,7 @@ public class ParametricDamageSkill : SkillAsset
                     var ax = SkillLibrary.OffsetToAxial(c);
                     var axBk = new Vector2Int(ax.x - f.x, ax.y - f.y); // -f
                     var offBk = SkillLibrary.AxialToOffset(axBk);
-                    if (map.HasTile(offBk)) next.Add(offBk);
+                    if (_map.HasTile(offBk)) next.Add(offBk);
                 }
                 foreach (var n in next) result.Add(n);
             }
@@ -227,54 +258,137 @@ public class ParametricDamageSkill : SkillAsset
         return result;
     }
 
-    bool IsInFrontline(BattleUnit u, int depth)
+    public List<Vector3Int> GetKnockbackCandidates(BattleManager bm, BattleUnit caster, BattleUnit target)
     {
-        if (!u || !u.CurrentMap) return false;
-        var set = GetFrontlineSet(u.CurrentMap, u.team, depth);
-        return set != null && set.Contains(u.Cell);
+        var result = new List<Vector3Int>();
+        if (!bm || !caster || !target) return result;
+
+        var map = target.CurrentMap;
+        if (!map) return result;
+
+        var start = target.Cell;
+
+        // caster -> target 방향 (넉백은 "caster에서 target으로"의 연장선 방향)
+        Vector3 casterW = map.GetCellCenterWorld(caster.Cell);
+        Vector3 targetW = map.GetCellCenterWorld(start);
+        Vector2 awayDir = (Vector2)(targetW - casterW);
+        if (awayDir.sqrMagnitude < 1e-6f) return result;
+        awayDir.Normalize();
+
+        bool oddCol = SkillLibrary.IsOddColumn(start);
+
+        // BattleManager.TryGetFrontCellOfTarget에서 쓰는 이웃 오프셋 그대로 복붙 
+        Vector3Int[] neighOffsetsEven = {
+        new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
+        new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int(-1,-1, 0), new Vector3Int( 0,-1,0)
+    };
+        Vector3Int[] neighOffsetsOdd = {
+        new Vector3Int(+1, 0, 0), new Vector3Int(+1,+1,0),
+        new Vector3Int( 0,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int( 0,-1, 0), new Vector3Int(+1,-1,0)
+    };
+
+        var neighs = oddCol ? neighOffsetsOdd : neighOffsetsEven;
+        var scored = new List<(float score, Vector3Int cell)>();
+
+        foreach (var off in neighs)
+        {
+            var cand = new Vector3Int(start.x + off.x, start.y + off.y, start.z);
+            if (!map.HasTile(cand)) continue;
+
+            // target -> candidate 방향
+            Vector3 candW = map.GetCellCenterWorld(cand);
+            Vector2 dir = (Vector2)(candW - targetW);
+            if (dir.sqrMagnitude < 1e-6f) continue;
+            dir.Normalize();
+
+            // awayDir(캐스터에서 타겟쪽)과 가장 비슷한(=dot가 큰) 이웃 2개 선택
+            float dot = Vector2.Dot(awayDir, dir);
+            scored.Add((dot, cand));
+        }
+
+        // dot 큰 순으로 정렬
+        scored.Sort((a, b) => b.score.CompareTo(a.score));
+
+        // === 상위 2개만 후보 슬롯으로 고정 ===
+        int maxSlots = Mathf.Min(2, scored.Count);
+        for (int i = 0; i < maxSlots; i++)
+        {
+            var cell = scored[i].cell;
+
+            // 타일 없으면 이 슬롯은 그냥 스킵 (대체 방향 X)
+            if (!map.HasTile(cell))
+                continue;
+
+            // 점유 여부 체크
+            var units = bm.GetUnitsInArea(map, new[] { cell });
+            bool occupied = false;
+            foreach (var u in units)
+            {
+                if (u != null && !u.IsDead && u.Cell == cell)
+                {
+                    occupied = true;
+                    break;
+                }
+            }
+
+            if (!occupied)
+                result.Add(cell);
+        }
+
+        // result에는 0~2개의 셀만 들어감 (대체 방향 없음)
+        return result;
+    }
+
+    bool IsInFrontline(BattleUnit _battleunit, int _depth)
+    {
+        if (!_battleunit || !_battleunit.CurrentMap) return false;
+        var set = GetFrontlineSet(_battleunit.CurrentMap, _battleunit.team, _depth);
+        return set != null && set.Contains(_battleunit.Cell);
     }
 
     // 중심 셀 기준으로 범위 유닛들을 찾아 데미지 적용(팀 반대편만)
-    void DealAreaDamage(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int centerCell)
+    void DealAreaDamage(BattleManager _bm, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
     {
-        if (!bm || !caster) return;
+        if (!_bm || !_caster) return;
 
-        int route = GetRoute(caster);
+        int route = GetRoute(_caster);
 
         //전체 적군 공격 (이 스킬에서 trainingHitAllEnemiesOnRoute0를 켠 경우)
-        if (route == 0 && trainingHitAllEnemiesOnRoute0)
+        if (trainingHitAllEnemies && routeForHitAllEnemies >= 0 && route == routeForHitAllEnemies)
         {
             var allUnits = Object.FindObjectsOfType<BattleUnit>();
             var victims = allUnits
                 .Where(u => u != null
                             && !u.IsDead
-                            && u.team != caster.team
-                            && u.CurrentMap == map)
+                            && u.team != _caster.team
+                            && u.CurrentMap == _map)
                 .ToList();
 
-            bm.ExecuteSkillDamage(caster, victims, this, map, centerCell);
+            _bm.ExecuteSkillDamage(_caster, victims, this, _map, _centerCell);
             return;
         }
 
         // 기본/다른 훈련 루트: 기존 범위 로직 사용
-        var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
-        var areaVictims = bm.GetUnitsInArea(map, area)
-                            .Where(u => u != null && !u.IsDead && u.team != caster.team)
+        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
+        var areaVictims = _bm.GetUnitsInArea(_map, area)
+                            .Where(u => u != null && !u.IsDead && u.team != _caster.team)
                             .ToList();
 
-        bm.ExecuteSkillDamage(caster, areaVictims, this, map, centerCell);
+        _bm.ExecuteSkillDamage(_caster, areaVictims, this, _map, _centerCell);
     }
 
-    public override int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
+    public override int ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
     {
         // 기본 산식(속성/저항 포함)은 부모 호출
-        int baseDmg = base.ComputeDamage(caster, target, ctx);
+        int baseDmg = base.ComputeDamage(_caster, _target, _skillruntime);
 
         // 추가 배수: 상태 기반
-        float mult = GetMultiplierFor(target);
+        float mult = GetMultiplierFor(_target);
 
         // 추가 배수: 전방 보너스
-        if (useFrontlineBonus && caster != null && IsInFrontline(caster, frontlineDepth))
+        if (useFrontlineBonus && _caster != null && IsInFrontline(_caster, frontlineDepth))
             mult *= Mathf.Max(0f, frontlineMultiplier);
 
         // 최종
@@ -282,51 +396,83 @@ public class ParametricDamageSkill : SkillAsset
         return dmg;
     }
 
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _bm, BattleUnit _caster, BattleUnit _target)
     {
-        if (!bm || !caster) yield break;
+        if (!_bm || !_caster) yield break;
 
-        BattleUnit primary = (useProvidedUnitTarget && target != null && !target.IsDead)
-                                ? target
+        BattleUnit primary = (useProvidedUnitTarget && _target != null && !_target.IsDead)
+                                ? _target
                                 : PickPrimaryTarget();
 
         if (primary == null) yield break;
 
-        int route = GetRoute(caster);
-        Debug.Log($"[Training] {name} by {caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
+        int route = GetRoute(_caster);
+        Debug.Log($"[Training] {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
 
         // 범위 계산은 GetAreaCells 안에서 route를 보고 알아서 처리
-        DealAreaDamage(bm, caster, primary.CurrentMap, primary.Cell);
+        DealAreaDamage(_bm, _caster, primary.CurrentMap, primary.Cell);
         yield break;
     }
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _bm, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
-        if (!bm || !caster || !map) yield break;
+        if (!_bm || !_caster || !_map) yield break;
 
-        int route = GetRoute(caster);
-        Debug.Log($"[Training] (Tile) {name} by {caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
+        int route = GetRoute(_caster);
+        Debug.Log($"[Training] (Tile) {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
 
-        DealAreaDamage(bm, caster, map, originCell);
+        DealAreaDamage(_bm, _caster, _map, _originCell);
         yield break;
     }
 
-    public override int GetSuppressionOnHit(BattleUnit caster)
+    public override int GetSuppressionOnHit(BattleUnit _caster)
     {
-        // 루트1일 때만 trainingSuppressionOnHit 값을 돌려줌
-        return (GetRoute(caster) == 1) ? Mathf.Max(0, trainingSuppressionOnHit) : 0;
+        int route = GetRoute(_caster);
+        if (trainingSuppressionOnHit <= 0) return 0;
+        if (routeForSuppression < 0) return 0;
+        return (route == routeForSuppression) ? Mathf.Max(0, trainingSuppressionOnHit) : 0;
     }
 
-    public override int GetEffectiveCooldownTurns(BattleUnit caster)
+    public override int GetEffectiveCooldownTurns(BattleUnit _caster)
     {
         int cd = cooldownTurns;
 
-        int route = GetRoute(caster);
-        if (route == 2 && trainingCooldownDeltaRoute2 != 0)
+        int route = GetRoute(_caster);
+        if (trainingCooldownDelta != 0 && routeForCooldown >= 0 && route == routeForCooldown)
         {
-            cd = Mathf.Max(0, cd + trainingCooldownDeltaRoute2);
+            cd = Mathf.Max(0, cd + trainingCooldownDelta);
         }
 
         return cd;
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        int cost = GetEffectiveMpCost(_caster);
+        string mpColor = "#00A2FF";
+        string baseDesc;
+        if (!string.IsNullOrEmpty(description))
+        {
+            if (cost > 0)
+                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
+            else
+                baseDesc = description;
+        }
+        else
+        {
+            baseDesc = base.GetFullDescriptionRich(_caster);
+        }
+
+        int route = _caster.GetTrainingRouteIndex(this);
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
     }
 
 }

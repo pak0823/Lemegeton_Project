@@ -38,3 +38,9 @@ public interface ISkillCustomPreview
     Tilemap GetTargetMap(BattleManager bm, BattleUnit caster);
 }
 public interface IInstantTileSkill { } // 타일 클릭 시 공격/투사체 연출 없이 즉시 Resolve
+
+public interface ITrainingRouteInfoProvider //인덱스에 해당하는 Title/설명 가져오기
+{
+    string GetTrainingRouteTitle(int routeIndex);
+    string GetTrainingRouteDescription(int routeIndex);
+}
