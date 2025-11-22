@@ -22,6 +22,11 @@ public class StateStatModifierDB : ScriptableObject
         [Header("Hostility")]
         public float hostilityStatMultiplier = 1f; // x1 = 변화 없음
         public int hostilityStatFlatAdd = 0;
+
+        [Header("Skill damage taken multipliers")]
+        public float physicalTakenMultiplier = 1f;   // 0이면 물리 면역
+        public float magicalTakenMultiplier = 1f;   // 0이면 마법 면역
+        public float allSkillTakenMultiplier = 1f;   // 0이면 모든 스킬 피해 면역
     }
 
     [Serializable]
@@ -96,5 +101,38 @@ public class StateStatModifierDB : ScriptableObject
         }
 
         return (atk, mag, def, agi, hostMul, hostAdd);
+    }
+
+    public float GetDamageTakenMultiplier(UnitStateController usc, DamageSchool school)
+    {
+        if (usc == null) return 1f;
+
+        float mul = 1f;
+
+        // 1) 상태(UnitStateId) 기준 누적
+        foreach (var s in usc.GetAll())
+        {
+            var e = Get(s);
+            if (e == null) continue;
+
+            // 모든 스킬 피해 공통 배율
+            mul *= e.allSkillTakenMultiplier;
+
+            // 스쿨별 배율
+            switch (school)
+            {
+                case DamageSchool.Physical:
+                    mul *= e.physicalTakenMultiplier;
+                    break;
+                case DamageSchool.Magical:
+                    mul *= e.magicalTakenMultiplier;
+                    break;
+            }
+        }
+
+        // 2) 버프(UnitStateBuffId)도 나중에 필요하면 비슷하게 확장 가능
+        // (지금은 버프에는 스킬 피해 배율 필드가 없으니 생략)
+
+        return mul;
     }
 }

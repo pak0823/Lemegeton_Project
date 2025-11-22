@@ -70,8 +70,13 @@ public class SingleStrike : SkillAsset
                 if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
 
                 float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
-                int dmg = Mathf.Max(1, Mathf.RoundToInt(caster.PhysicalDamage * mult));
-                actualTarget.TakeDamage(dmg);
+                float baseDamage = caster.PhysicalDamage * mult;
+
+                int finalDamage = Mathf.Max(0, Mathf.RoundToInt(baseDamage));
+                if (bm != null)
+                    finalDamage = bm.GetFinalSkillDamage(actualTarget, this, baseDamage);
+
+                actualTarget.TakeDamage(finalDamage);
             }
         };
 
@@ -88,8 +93,13 @@ public class SingleStrike : SkillAsset
             if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
 
             float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
-            int dmg = Mathf.Max(1, Mathf.RoundToInt(caster.PhysicalDamage * mult));
-            actualTarget.TakeDamage(dmg);
+            float baseDamage = caster.PhysicalDamage * mult;
+
+            int finalDamage = Mathf.Max(0, Mathf.RoundToInt(baseDamage));
+            if (bm != null)
+                finalDamage = bm.GetFinalSkillDamage(actualTarget, this, baseDamage);
+
+            actualTarget.TakeDamage(finalDamage);
         }
     }
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)

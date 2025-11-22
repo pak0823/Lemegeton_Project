@@ -106,6 +106,9 @@ public class BattleManager : MonoBehaviour
     BattleUnit _pendingKnockbackTarget;
     Vector3Int _pendingKnockbackDest;
 
+    [Header("DBs")]
+    [SerializeField] private StateStatModifierDB stateStatDb;
+
 
     [Header("Training")]
     public TrainingDB trainingDB;   // 인스펙터로 TrainingDB 할당
@@ -553,6 +556,9 @@ public class BattleManager : MonoBehaviour
         var sc = _unit.GetComponent<StatusController>();
         if (sc != null) sc.OnTurnStart();
 
+        var usc = _unit.GetComponent<UnitStateController>();
+        usc?.OnTurnStart();
+
         // 캐스팅 성공 턴 소비 처리
         if (_unit.team == Team.Enemy)
         {
@@ -739,7 +745,22 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    public IEnumerable<BattleUnit> GetLivingEnemiesOf(BattleUnit _battleunit)
+    public IEnumerable<BattleUnit> GetLivingAlliesOf(BattleUnit unit)   //살아 있는 아군 유닛 확인
+    {
+        if (unit == null) yield break;
+
+        var all = FindObjectsOfType<BattleUnit>();
+        foreach (var u in all)
+        {
+            if (u == null) continue;
+            if (u.IsDead || u.IsRetreated) continue;
+            if (u.team != unit.team) continue;
+
+            yield return u;
+        }
+    }
+
+    public IEnumerable<BattleUnit> GetLivingEnemiesOf(BattleUnit _battleunit)   //살아 있는 적 유닛 확인
     {
         if (_battleunit == null) yield break;
 
@@ -1940,6 +1961,23 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    public int GetFinalSkillDamage(BattleUnit target, SkillAsset source, float baseDamage)
+    {
+        if (target == null || source == null)
+            return Mathf.Max(0, Mathf.RoundToInt(baseDamage));
+
+        // 1) 우선 대상 유닛이 들고 있는 DB를 사용
+        StateStatModifierDB stateStatDb = null;
+        stateStatDb = target.stateStatDB;
+
+        if (stateStatDb == null)
+            return Mathf.Max(0, Mathf.RoundToInt(baseDamage));
+
+        var usc = target.GetComponent<UnitStateController>();
+        float mul = stateStatDb.GetDamageTakenMultiplier(usc, source.school);
+        return Mathf.Max(0, Mathf.RoundToInt(baseDamage * mul));
+    }
+
     public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
     {
         if (caster == null || source == null) return;
@@ -1957,7 +1995,12 @@ public class BattleManager : MonoBehaviour
                     targetCell = v.Cell
                 };
 
-                int damage = Mathf.Max(1, source.ComputeDamage(caster, v, ctx));
+                // 기본 대미지 계산
+                float baseDamage = source.ComputeDamage(caster, v, ctx);
+
+                // 최종 적용 대미지
+                int damage = GetFinalSkillDamage(v, source, baseDamage);
+
                 v.PlayHit();
                 v.TakeDamage(damage);
 

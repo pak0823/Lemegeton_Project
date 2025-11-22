@@ -27,11 +27,14 @@ public class UnitStateController : MonoBehaviour
 {
     private readonly HashSet<UnitStateId> _active = new();        // 본래 상태
     private readonly HashSet<UnitStateBuffId> _buffs = new();     // 버프 상태
+    readonly Dictionary<UnitStateId, int> _durations = new();   //턴이 지나면 사라지는 상태용 duration 테이블
 
     public event Action OnStatesChanged;
     public event Action OnBuffsChanged;
 
     private BattleUnit _owner;
+
+    int _forcedMoveImmuneTurns;
 
     void OnEnable()
     {
@@ -62,6 +65,7 @@ public class UnitStateController : MonoBehaviour
     public bool Remove(UnitStateId id)
     {
         bool removed = _active.Remove(id);
+        _durations.Remove(id);
         if (removed) OnStatesChanged?.Invoke();
         return removed;
     }
@@ -71,6 +75,7 @@ public class UnitStateController : MonoBehaviour
     {
         if (_active.Count == 0) return;
         _active.Clear();
+        _durations.Clear();
         OnStatesChanged?.Invoke();
     }
 
@@ -82,6 +87,22 @@ public class UnitStateController : MonoBehaviour
     {
         bool added = _buffs.Add(id);
         if (added) OnBuffsChanged?.Invoke();
+        return added;
+    }
+    // turnCount 동안 유지되는 상태 부여.
+    // turnCount <= 0 이면 그냥 Apply와 동일하게 취급(무기한).
+    // 이미 같은 상태가 있으면 duration을 새 값으로 갱신.
+    public bool ApplyForTurns(UnitStateId id, int turnCount)
+    {
+        if (turnCount <= 0)
+        {
+            // 무기한으로 그냥 등록
+            return Apply(id);
+        }
+
+        bool added = _active.Add(id);
+        _durations[id] = turnCount;
+        OnStatesChanged?.Invoke();
         return added;
     }
     public bool RemoveBuff(UnitStateBuffId id)
@@ -96,6 +117,45 @@ public class UnitStateController : MonoBehaviour
         _buffs.Clear();
         OnBuffsChanged?.Invoke();
     }
+
+    public void ApplyForcedMoveImmunityForTurns(int turns)
+    {
+        _forcedMoveImmuneTurns = Mathf.Max(_forcedMoveImmuneTurns, turns);
+    }
+
+    public bool IsForcedMoveImmune => _forcedMoveImmuneTurns > 0;
+
+    // 이 유닛의 턴이 시작될 때 호출.
+    // duration이 붙은 상태들의 남은 턴 수를 1씩 감소시키고 0 이하이면 제거.
+    public void OnTurnStart()
+    {
+        if (_durations.Count == 0) return;
+
+        bool changed = false;
+        var toRemove = new List<UnitStateId>();
+
+        // 키 복사 후 루프 (딕셔너리 수정 안전하게)
+        var keys = new List<UnitStateId>(_durations.Keys);
+        foreach (var id in keys)
+        {
+            int remain = _durations[id] - 1;
+            if (remain <= 0)
+            {
+                _durations.Remove(id);
+                // active 목록에서도 제거
+                if (_active.Remove(id))
+                    changed = true;
+            }
+            else
+            {
+                _durations[id] = remain;
+            }
+        }
+
+        if (changed)
+            OnStatesChanged?.Invoke();
+    }
+
     public bool HasBuff(UnitStateBuffId id) => _buffs.Contains(id);
     public IReadOnlyCollection<UnitStateBuffId> GetAllBuffs() => _buffs;
 
