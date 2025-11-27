@@ -12,8 +12,8 @@ public class StateStatModifierDB : ScriptableObject
         [Header("Multipliers (x1 = no change)")]
         public float atkMultiplier = 1f;   // PhysicalDamage
         public float magMultiplier = 1f;   // MagicDamage
-        public float defMultiplier = 1f;   // Defense (있다면)
         public float agiMultiplier = 1f;   // AGI
+        public float insMultiplier = 1f;   // INS
 
         [Header("Additive")]
         public int hpFlatAdd = 0;          // 최대 HP 가산이 필요하면
@@ -37,8 +37,8 @@ public class StateStatModifierDB : ScriptableObject
         [Header("Multipliers (x1 = no change)")]
         public float atkMultiplier = 1f;
         public float magMultiplier = 1f;
-        public float defMultiplier = 1f;
         public float agiMultiplier = 1f;   // 연막 AGI 버프는 여기 1.7 설정
+        public float insMultiplier = 1f;
 
         [Header("Additive")]
         public int hpFlatAdd = 0;
@@ -80,7 +80,6 @@ public class StateStatModifierDB : ScriptableObject
                 if (e == null) continue;
                 atk *= e.atkMultiplier;
                 mag *= e.magMultiplier;
-                def *= e.defMultiplier;
                 agi *= e.agiMultiplier;
                 hostMul *= e.hostilityStatMultiplier;
                 hostAdd += e.hostilityStatFlatAdd;
@@ -93,8 +92,7 @@ public class StateStatModifierDB : ScriptableObject
                 if (be == null) continue;
                 atk *= be.atkMultiplier;
                 mag *= be.magMultiplier;
-                def *= be.defMultiplier;
-                agi *= be.agiMultiplier;              // ← 연막 AgiUp(1.7) 여기서 반영
+                agi *= be.agiMultiplier;              // 연막 AgiUp(1.7) 여기서 반영
                 hostMul *= be.hostilityStatMultiplier;
                 hostAdd += be.hostilityStatFlatAdd;
             }

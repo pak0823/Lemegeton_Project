@@ -3,15 +3,26 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum StatusId { None = 0 ,Slow = 1 , ShootingStack = 2 , Bleed = 3 , GuardStack = 4}
+public enum StatusId { None = 0 ,Slow = 1 , ShootingStack = 2 , Bleed = 3 , GuardStack = 4, MoveResist = 5, CounterStack = 6}
 
 public static class DebuffTuning
 {
-    // index = 둔화 스택 수 (0~6)
-    public static readonly float[] SlowAgilityMult = { 1.0f, 0.9f, 0.8f, 0.7f, 0.5f, 0.3f, 0.1f };
-    public const int SlowMaxStacks = 6;
+    // index = 스택 수 (0~6)
+    public static readonly float[] Mult =
+    {
+        1.0f,  // 0스택: 100% 피해
+        0.8f,  // 1스택
+        0.6f,  // 2스택
+        0.4f,  // 3스택
+        0.3f,  // 4스택
+        0.2f,  // 5스택
+        0.1f   // 6스택: 10% 피해
+    };
+    public const int MaxStacks = 6;
     // 출혈 스택당 체력 비율(1% = 0.01f), 최대 6스택 동일 상한 사용
     public const float BleedPercentPerStack = 0.01f;
+
+    public const float GuardPerStackMult = 0.9f; // 방어 중첩 1스택당 0.9배
 }
 
 [Serializable]
@@ -98,7 +109,7 @@ public class StatusController : MonoBehaviour
         if (_map.TryGetValue(id, out var e))
         {
             // 스택 증가 + 최대 6중첩 캡
-            e.stacks = Mathf.Min(e.stacks + stacks, DebuffTuning.SlowMaxStacks);
+            e.stacks = Mathf.Min(e.stacks + stacks, DebuffTuning.MaxStacks);
 
             // 지속시간은 '새로 부여된 둔화' 기준으로 리셋
             e.remainingTurns = durationTurns;
@@ -106,7 +117,7 @@ public class StatusController : MonoBehaviour
         else
         {
             // 새로 부여된 상태를 추가
-            _map[id] = new StatusEntry(id, Mathf.Min(stacks, DebuffTuning.SlowMaxStacks), durationTurns);
+            _map[id] = new StatusEntry(id, Mathf.Min(stacks, DebuffTuning.MaxStacks), durationTurns);
         }
 
         OnStatusChanged?.Invoke();
@@ -123,8 +134,8 @@ public class StatusController : MonoBehaviour
     public float GetAgilityMultiplier() //민첩 배율 계산
     {
         int s = GetStacks(StatusId.Slow);
-        s = Mathf.Clamp(s, 0, DebuffTuning.SlowMaxStacks);
-        return DebuffTuning.SlowAgilityMult[s];
+        s = Mathf.Clamp(s, 0, DebuffTuning.MaxStacks);
+        return DebuffTuning.Mult[s];
     }
 
     // 편의용 민첩 배율 계산
@@ -157,6 +168,15 @@ public class StatusController : MonoBehaviour
         }
         foreach (var id in toRemove) _map.Remove(id);
         if (changed) OnStatusChanged?.Invoke();
+    }
+
+    public float GetPhysicalGuardMultiplier()
+    {
+        int s = GetStacks(StatusId.GuardStack); // 방어 중첩 스택
+        s = Mathf.Clamp(s, 0, DebuffTuning.MaxStacks);
+
+        if (s <= 0) return 1f; // 0스택이면 감소 없음
+        return Mathf.Pow(DebuffTuning.GuardPerStackMult, s);
     }
 
     /// <summary>UI 표시에 사용할 태그 문자열.</summary>

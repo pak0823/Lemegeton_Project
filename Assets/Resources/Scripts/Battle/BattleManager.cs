@@ -72,8 +72,6 @@ public class BattleManager : MonoBehaviour
     private HashSet<Vector3Int> customPreviewCells;
     public BattleUnit ActingUnit => acting;
 
-    // === 수동 종료 감지용 ===
-    bool manualEndRequested = false;
 
     // ATB UI 업데이트용 이벤트
     public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
@@ -545,7 +543,6 @@ public class BattleManager : MonoBehaviour
         usedActions.Clear();
         ClearAllPreviews();
         ClearTargetSelection();
-        manualEndRequested = false;
         OnAnyUnitTurnStarted?.Invoke(_unit);
         EmitActionLabel(null, "");
         OnHint?.Invoke(string.Empty);
@@ -607,7 +604,6 @@ public class BattleManager : MonoBehaviour
     public void OnClickEndTurn()
     {
         if (acting == null || acting.team != Team.Player) return;
-        manualEndRequested = true;   // 회복 판정용 플래그만 남김
         EndPlayerTurn();             // 종료 로직은 한 군데로 집약
     }
     #endregion
@@ -714,6 +710,12 @@ public class BattleManager : MonoBehaviour
     #region Action Consumption
     void OnActionConsumed(BattleAction act)
     {
+        if (acting == null)
+        {
+            // 이미 HandleUnitDied/Retreat에서 턴/ATB 정리 끝난 상태이므로
+            return;
+        }
+
         usedActions.Add(act);
         remainingActions = Mathf.Max(0, remainingActions - 1);
 
@@ -783,13 +785,6 @@ public class BattleManager : MonoBehaviour
     {
         ClearAllPreviews();
         ClearTargetSelection();
-
-        if (manualEndRequested && usedActions.Count == 0)
-        {
-            acting.Heal(-1);
-            //Debug.Log("[EndPlayerTurn] 행동 없이 수동 종료 → HP회복");
-        }
-        manualEndRequested = false;
 
         // ATB 재개(다음 턴은 Update()가 자동 감지)
         OnUnitEndTurn?.Invoke(acting);
@@ -1201,6 +1196,14 @@ public class BattleManager : MonoBehaviour
 
     void EndEnemyTurn(BattleUnit enemy)
     {
+        if (enemy == null)
+        {
+            Debug.LogWarning("[Battle] EndEnemyTurn called with null enemy");
+            atbPaused = false;
+            state = BattleState.Idle;
+            return;
+        }
+
         enemyRoutine = null;
 
         // 캐스팅 중이면 다음 스킬 선점/라벨 갱신 금지
@@ -1238,7 +1241,7 @@ public class BattleManager : MonoBehaviour
         float successChance01 = Mathf.Clamp01(acting.EffectiveAGI / enemyAgiSum);
 
         // 퍼센트 변환
-        int percent = Mathf.RoundToInt(successChance01 * 100f);
+        int percent = Mathf.FloorToInt(successChance01 * 100f);
 
         // 공통 확인 팝업
         string unitName = GetUnitLabel(acting);
@@ -1964,18 +1967,29 @@ public class BattleManager : MonoBehaviour
     public int GetFinalSkillDamage(BattleUnit target, SkillAsset source, float baseDamage)
     {
         if (target == null || source == null)
-            return Mathf.Max(0, Mathf.RoundToInt(baseDamage));
+            return Mathf.Max(0, Mathf.FloorToInt(baseDamage));
 
         // 1) 우선 대상 유닛이 들고 있는 DB를 사용
         StateStatModifierDB stateStatDb = null;
         stateStatDb = target.stateStatDB;
 
         if (stateStatDb == null)
-            return Mathf.Max(0, Mathf.RoundToInt(baseDamage));
+            return Mathf.Max(0, Mathf.FloorToInt(baseDamage));
 
         var usc = target.GetComponent<UnitStateController>();
         float mul = stateStatDb.GetDamageTakenMultiplier(usc, source.school);
-        return Mathf.Max(0, Mathf.RoundToInt(baseDamage * mul));
+
+        // GuardStack 기반 물리 피해 감소
+        if (source.school == DamageSchool.Physical)
+        {
+            var sc = target.GetComponent<StatusController>();
+            if (sc != null)
+            {
+                mul *= sc.GetPhysicalGuardMultiplier();
+            }
+        }
+
+        return Mathf.Max(0, Mathf.FloorToInt(baseDamage * mul));
     }
 
     public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
@@ -2000,6 +2014,71 @@ public class BattleManager : MonoBehaviour
 
                 // 최종 적용 대미지
                 int damage = GetFinalSkillDamage(v, source, baseDamage);
+
+                // === 경계 상태 처리 추가 ===
+                var usc = v.GetComponent<UnitStateController>();
+                bool hasVigilance = usc != null && usc.Has(UnitStateId.Vigilance);
+
+                if (hasVigilance && source.school == DamageSchool.Physical)
+                {
+                    // (1) 이 유닛이 실제로 들고 있는 SelfVigilanceSkill 찾기
+                    SelfVigilanceSkill vigilanceSkill = null;
+                    var data = v.data;
+                    if (data != null && data.skills != null)
+                    {
+                        for (int i = 0; i < data.skills.Length; i++)
+                        {
+                            vigilanceSkill = data.skills[i] as SelfVigilanceSkill;
+                            if (vigilanceSkill != null)
+                                break;
+                        }
+                    }
+
+                    // (2) 찾은 경계 스킬 기준으로 훈련 루트 조회
+                    int routeForVigilance = -1;
+                    if (vigilanceSkill != null)
+                        routeForVigilance = v.GetTrainingRouteIndex(vigilanceSkill);
+
+                    // (3) 자신을 공격한 적의 통찰 약화 (훈련 옵션 켜져 있고, 루트 일치 시)
+                    if (vigilanceSkill != null &&
+                        vigilanceSkill.trainingUseInsightDebuff &&
+                        vigilanceSkill.routeForInsightDebuff >= 0 &&
+                        routeForVigilance == vigilanceSkill.routeForInsightDebuff)
+                    {
+                        var atkUSC = caster.GetComponent<UnitStateController>();
+                        var atkUnit = caster;
+                        if (atkUSC != null && atkUnit != null)
+                        {
+                            int beforeINS = atkUnit.INS;
+                            float beforeCrit = atkUnit.CritChance;
+
+                            atkUSC.ApplyBuff(UnitStateBuffId.InsightDown);
+
+                            int afterINS = atkUnit.INS;
+                            float afterCrit = atkUnit.CritChance;
+
+                            Debug.Log(
+                                $"[Vigilance] 통찰 약화: {atkUnit.name} " +
+                                $"INS {beforeINS} -> {afterINS}, " +
+                                $"Crit {beforeCrit:P1} -> {afterCrit:P1}"
+                            );
+                        }
+                    }
+
+                    // (4) 이번 물리 피해는 0으로 만들고, 경계를 즉시 제거
+                    Debug.Log(
+                        $"[Vigilance] {v.name} 이(가) 물리 공격을 경계로 무효화: {damage} -> 0 (skill={source.name}, school={source.school})"
+                    );
+
+                    damage = 0;
+                    usc.Remove(UnitStateId.Vigilance);
+                }
+
+                // 공통 디버그: 실제로 어떤 피해가 적용되었는지
+                Debug.Log(
+                    $"[Damage] {caster.name} -> {v.name} / skill={source.name}, school={source.school}, finalDamage={damage}"
+                );
+
 
                 v.PlayHit();
                 v.TakeDamage(damage);
@@ -2040,10 +2119,14 @@ public class BattleManager : MonoBehaviour
                         !v.IsDead &&
                         v.CurrentMap == map)
                     {
-                        // 목적지가 여전히 유효하고 비어 있는지 확인
                         var dest = _pendingKnockbackDest;
                         bool canMove = map.HasTile(dest);
-                        if (canMove)
+
+                        // 이동 저항 상태가 있으면, 강제 이동 자체를 막는다
+                        var sc = v.GetComponent<StatusController>();
+                        bool hasMoveResist = sc != null && sc.Has(StatusId.MoveResist); // 또는 sc.HasMoveResist()
+
+                        if (canMove && !hasMoveResist)
                         {
                             var units = GetUnitsInArea(map, new[] { dest });
                             foreach (var u in units)
@@ -2056,7 +2139,7 @@ public class BattleManager : MonoBehaviour
                             }
                         }
 
-                        if (canMove)
+                        if (canMove && !hasMoveResist)
                         {
                             // 그리드 점유 갱신
                             if (grid != null)
@@ -2068,7 +2151,7 @@ public class BattleManager : MonoBehaviour
                                 grid.SetOccupied(v.team, v.Cell, true);
                         }
 
-                        // 한 번 사용 후 클리어
+                        // 한 번 사용 후 클리어 (이동은 막혀도 pending은 소비)
                         _pendingKnockbackSkill = null;
                         _pendingKnockbackTarget = null;
                     }

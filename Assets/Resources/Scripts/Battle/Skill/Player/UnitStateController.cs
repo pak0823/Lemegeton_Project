@@ -7,13 +7,15 @@ public enum UnitStateId
     None = 0,
     Support = 1, //지원
     Steam = 2,  //증기
-    Isolation = 3   //쇄국
+    Isolation = 3,   //쇄국
+    Vigilance = 4   //경계
 }
 public enum UnitStateBuffId
 {
     None = 0,
-    AgiUp = 1,
-    MagicUp = 2
+    AgiUp = 1,  //민첩 강화
+    MagicUp = 2, //총명 강화
+    InsightDown //통찰 약화
 }
 
 /// <summary>

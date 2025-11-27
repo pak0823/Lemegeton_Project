@@ -12,37 +12,40 @@ using UnityEngine.Tilemaps;
     fileName = "SelfIsolationTimedSkill")]
 public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
 {
-    [Header("State")]
-    [Tooltip("부여할 UnitState")]
-    public UnitStateId stateId = UnitStateId.Isolation;
-
-    [Tooltip("지속 턴 수 (예: 1턴)")]
-    [Min(1)] public int durationTurns = 1;
+    [Header("기본 방어 중첩 효과")]
+    [Tooltip("기본 방어 상태 ID")]
+    public StatusId baseDefenseStatusId = StatusId.GuardStack;
+    [Min(1)] public int baseDefenseStacks = 3;
+    [Min(1)] public int baseDefenseDurationTurns = 1;
 
     [Header("Training")]
-    [Header("아군 방어 중첩 적용")]
-    [Tooltip("모든 아군에게 방어 중첩을 부여할지 여부")]
-    public bool trainingApplyDefenseStacks = false;
-    [Tooltip("방어 중첩을 적용할 훈련 루트(-1이면 비활성)")]
-    [Range(-1, 2)] public int routeForDefenseStacks = -1;
-    [Tooltip("부여할 방어 상태 ID")]
-    public StatusId trainingDefenseStatusId = StatusId.None;
-    [Min(1)] public int trainingDefenseStacks = 3;
-    [Min(1)] public int trainingDefenseDurationTurns = 1;
+
+    [Header("자원 절약 효과")]
+    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
+    public bool trainingUseMpOverride = false;
+    [Tooltip("MP 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 보통 0 = 1번 루트)")]
+    [Range(-1, 2)] public int routeForMpOverride = 0;
+    [Tooltip("해당 루트에서 실제로 사용할 MP 비용")]
+    public int trainingMpCostRoute0 = 2;
 
     [Header("강제 이동 방지")]
     [Tooltip("이 스킬로 부여된 상태가 강제 이동을 막게 할지 여부")]
     public bool trainingPreventForcedMove = false;
     [Tooltip("강제 이동 방지 효과를 적용할 훈련 루트(-1이면 비활성)")]
     [Range(-1, 2)] public int routeForPreventForcedMove = -1;
+    [Tooltip("강제 이동을 막는 데 사용할 상태 ID (예: MoveResist)")]
+    public StatusId moveResistStatusId = StatusId.MoveResist;
+    [Tooltip("이동 저항 상태의 지속 턴수")]
+    [Min(1)] public int moveResistDurationTurns = 1;
 
-    [Header("적의 증가 적용")]
-    [Tooltip("자신의 적의를 배수로 증가시킬지 여부")]
-    public bool trainingMultiplyHostility = false;
-    [Tooltip("적의 배수 적용 훈련 루트(-1이면 비활성)")]
-    [Range(-1, 2)] public int routeForHostilityMultiplier = -1;
-    [Tooltip("현재 적의에 곱할 배수")]
-    public float trainingHostilityMultiplier = 5.0f;
+    [Header("방어 중첩 지속턴 증가")]
+    [Tooltip("훈련으로 방어 중첩 지속 턴을 늘릴지 여부")]
+    public bool trainingExtendDefenseDuration = false;
+    [Tooltip("방어 중첩 지속 턴 증가가 적용될 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)] public int routeForExtendDefenseDuration = -1;
+    [Tooltip("지속 턴 증가 시 사용할 턴 수")]
+    [Min(1)] public int extendedDefenseDurationTurns = 2;
+
 
 
     public bool SelfCastOnSelect => true;
@@ -73,7 +76,7 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
         target = caster;
 
         // MP 비용 계산 (훈련 반영)
-        int cost = mpCost;
+        int cost = GetEffectiveMpCost(caster);
         if (cost > 0 && !caster.TryConsumeMP(cost))
         {
             Debug.Log($"[SelfIsolationTimedSkill] MP 부족: {displayName} (필요 {cost})");
@@ -84,51 +87,58 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
         if (usc == null)
             usc = caster.gameObject.AddComponent<UnitStateController>();
 
-        // Isolation n턴 부여
-        int turns = Mathf.Max(1, durationTurns);
-        usc.ApplyForTurns(stateId, turns);
-
         int route = GetRoute(caster);
 
-        // 모든 아군에게 방어 중첩 부여
-        if (trainingApplyDefenseStacks &&
-            routeForDefenseStacks >= 0 &&
-            route == routeForDefenseStacks &&
-            trainingDefenseStatusId != StatusId.None)
+        // 실제 적용할 지속 턴 계산
+        int defenseDuration = baseDefenseDurationTurns;
+        if (trainingExtendDefenseDuration &&
+            routeForExtendDefenseDuration >= 0 &&
+            route == routeForExtendDefenseDuration)
         {
-            foreach (var ally in bm.GetLivingAlliesOf(caster))
+            defenseDuration = Mathf.Max(defenseDuration, extendedDefenseDurationTurns);
+        }
+
+        StatusId defId = baseDefenseStatusId;
+        int defStacks = Mathf.Max(1, baseDefenseStacks);
+        var allUnits = Object.FindObjectsOfType<BattleUnit>();
+
+        // 방어 중첩 적용
+        if (defId != StatusId.None)
+        {
+            foreach (var u in allUnits)
             {
-                var sc = ally.GetComponent<StatusController>();
-                if (sc != null)
-                {
-                    sc.ApplyWithTurnContext(
-                        trainingDefenseStatusId,
-                        Mathf.Max(1, trainingDefenseStacks),
-                        Mathf.Max(1, trainingDefenseDurationTurns)
-                    );
-                }
+                if (u == null || u.IsDead || u.IsRetreated) continue;
+
+                var sc = u.GetComponent<StatusController>();
+                if (sc == null) continue;
+
+                sc.ApplyWithTurnContext(
+                    defId,
+                    defStacks,
+                    Mathf.Max(1, defenseDuration)
+                );
             }
         }
 
-        // 강제 이동 방지 플래그 부여 (아래 2.에서 설명할 UnitStateController 확장 사용)
+        // 강제 이동 방지용 이동 저항 상태 1턴 부여
         if (trainingPreventForcedMove &&
             routeForPreventForcedMove >= 0 &&
-            route == routeForPreventForcedMove)
+            route == routeForPreventForcedMove &&
+            moveResistStatusId != StatusId.None)
         {
-            usc.ApplyForcedMoveImmunityForTurns(turns);
-        }
+            foreach (var u in allUnits)
+            {
+                if (u == null || u.IsDead || u.IsRetreated) continue;
 
-        // 자신의 적의 xN
-        if (trainingMultiplyHostility &&
-            routeForHostilityMultiplier >= 0 &&
-            route == routeForHostilityMultiplier &&
-            trainingHostilityMultiplier > 0f)
-        {
-            float current = Mathf.Max(0f, caster.Hostility);
-            float targetHost = current * trainingHostilityMultiplier;
-            float delta = targetHost - current;
-            if (delta > 0f)
-                caster.AddHostility(delta);
+                var sc = u.GetComponent<StatusController>();
+                if (sc == null) continue;
+
+                sc.ApplyWithTurnContext(
+                    moveResistStatusId,
+                    1,                                   // 스택 1
+                    Mathf.Max(1, moveResistDurationTurns) // 기본 1턴
+                );
+            }
         }
 
         yield break;
@@ -137,6 +147,21 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
         yield break;
+    }
+
+    public override int GetEffectiveMpCost(BattleUnit caster)
+    {
+        int cost = mpCost;
+        if (caster == null) return cost;
+
+        int route = caster.GetTrainingRouteIndex(this);
+        if (trainingUseMpOverride &&
+            routeForMpOverride >= 0 &&
+            route == routeForMpOverride)
+        {
+            cost = Mathf.Max(0, trainingMpCostRoute0);
+        }
+        return cost;
     }
 
     public override string GetFullDescriptionRich(BattleUnit caster)

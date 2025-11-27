@@ -13,16 +13,20 @@ MonoBehaviour:
   m_Name: Fluid
   m_EditorClassIdentifier: 
   DisplayName: Fluid
-  team: 0
-  MaxHP: 16
-  MaxMP: 32
-  MaxRage: 100
-  PhysicalDamage: 4
-  MagicDamage: 14
+  MaxHP: 0
+  MaxMP: 0
+  MaxRage: 0
+  Hostility: 1
+  PhysicalDamage: 2
+  MagicDamage: 6
   AGI: 3
-  Hostility: 10
+  BDY: 2
+  MND: 4
+  INS: 1
+  team: 0
   isBoss: 0
   skills:
   - {fileID: 11400000, guid: f6fc5d4f764e7fa45857001a341ec640, type: 2}
   - {fileID: 11400000, guid: 4019e27c7ad75c94790c7be2c28caf08, type: 2}
+  passives: []
   UnitIcon: {fileID: 21300000, guid: cf4c134b35514d145ac2166194066b28, type: 3}

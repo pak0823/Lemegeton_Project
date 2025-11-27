@@ -80,8 +80,20 @@ public class ParametricDamageSkill : SkillAsset
     [Tooltip("출혈을 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
     [Range(-1, 2)]
     public int routeForBleed = -1;
-    [Range(1, DebuffTuning.SlowMaxStacks)] public int trainingBleedStacks = 1;
+    [Range(1, DebuffTuning.MaxStacks)] public int trainingBleedStacks = 1;
     [Min(1)] public int trainingBleedDurationTurns = 2;
+
+    [Header("방어 중첩 버프")]
+    [Tooltip("특정 훈련 루트에서 시전자에게 방어 중첩 상태를 부여할지 여부")]
+    public bool trainingApplyDefenseStacks = false;
+    [Tooltip("방어 중첩 상태를 적용할 훈련 루트(-1이면 미사용, 0~2)")]
+    [Range(-1, 2)] public int routeForDefenseStacks = -1;
+    [Tooltip("부여할 StatusId (StackableStatusVisualDB에 아이콘/이름 연결 가능)")]
+    public StatusId trainingDefenseStatusId = StatusId.None;
+    [Tooltip("한 번에 부여할 방어 중첩 수")]
+    [Min(1)] public int trainingDefenseStacks = 1;
+    [Tooltip("방어 중첩 지속 턴")]
+    [Min(1)] public int trainingDefenseDurationTurns = 3;
 
     [Header("턴수 변화 설정")]
     [Tooltip("쿨다운 변화를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
@@ -376,6 +388,23 @@ public class ParametricDamageSkill : SkillAsset
                             .Where(u => u != null && !u.IsDead && u.team != _caster.team)
                             .ToList();
 
+        // 방어 중첩 훈련 처리 (시전자에게 부여)
+        if (trainingApplyDefenseStacks &&
+            routeForDefenseStacks >= 0 &&
+            route == routeForDefenseStacks &&
+            trainingDefenseStatusId != StatusId.None)
+        {
+            var sc = _caster.GetComponent<StatusController>();
+            if (sc != null)
+            {
+                sc.ApplyWithTurnContext(
+                    trainingDefenseStatusId,
+                    Mathf.Max(1, trainingDefenseStacks),
+                    Mathf.Max(1, trainingDefenseDurationTurns)
+                );
+            }
+        }
+
         _bm.ExecuteSkillDamage(_caster, areaVictims, this, _map, _centerCell);
     }
 
@@ -392,7 +421,7 @@ public class ParametricDamageSkill : SkillAsset
             mult *= Mathf.Max(0f, frontlineMultiplier);
 
         // 최종
-        int dmg = Mathf.Max(0, Mathf.RoundToInt(baseDmg * mult));
+        int dmg = Mathf.Max(0, Mathf.FloorToInt(baseDmg * mult));
         return dmg;
     }
 

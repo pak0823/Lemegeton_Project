@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class TargetMarker : MonoBehaviour
 {
-    public Vector3 offset = new Vector3(0f, 0.3f, 0f); // 赣府 困 率
+    public Vector3 Offset = new Vector3(0f, 0.3f, 0f); // 赣府 困 率
     BattleUnit current;
 
     public void Attach(BattleUnit unit)
@@ -25,6 +25,10 @@ public class TargetMarker : MonoBehaviour
 
     void UpdatePosition()
     {
-        transform.position = current.transform.position + offset;
+        if(current != null)
+        {
+            transform.position = current.transform.position + Offset;
+        }
+        
     }
 }

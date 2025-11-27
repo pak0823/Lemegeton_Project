@@ -13,19 +13,26 @@ MonoBehaviour:
   m_Name: Gigant
   m_EditorClassIdentifier: 
   DisplayName: Gigant
-  team: 0
-  MaxHP: 48
-  MaxMP: 14
+  MaxHP: 0
+  MaxMP: 0
   MaxRage: 0
-  PhysicalDamage: 9
-  MagicDamage: 2
-  AGI: 3
   Hostility: 10
+  PhysicalDamage: 5
+  MagicDamage: 2
+  AGI: 15
+  BDY: 6
+  MND: 50
+  INS: 2
+  team: 0
   isBoss: 0
   skills:
   - {fileID: 11400000, guid: ecb152556ddc522478fd548247b1f9b6, type: 2}
   - {fileID: 11400000, guid: 370d030e53bfb6942bdf7828ee91c19d, type: 2}
+  - {fileID: 11400000, guid: 2a40a0dae4acb5640b3df7fab1e4476e, type: 2}
   - {fileID: 11400000, guid: 899aed9a30b007c48aadd147b57add58, type: 2}
   - {fileID: 11400000, guid: f1ee0868842544549857cd643c56060c, type: 2}
-  passives: []
+  passives:
+  - {fileID: 11400000, guid: a0c8db05d76f2094ebd7e0ef1bbf86e3, type: 2}
+  - {fileID: 11400000, guid: ed59ea20b6fe7ad4c8ba02c1b773cbef, type: 2}
+  - {fileID: 11400000, guid: ae3039e8bb7cd8845bdd3cdd0460033e, type: 2}
   UnitIcon: {fileID: 21300000, guid: 7392d99f9194e734787ee2eca7b3b2c5, type: 3}

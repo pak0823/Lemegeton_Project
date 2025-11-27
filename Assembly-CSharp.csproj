@@ -62,11 +62,13 @@
   <ItemGroup>
     <Compile Include="Assets\Resources\Scripts\UI\ModalWindowBase.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\TargetMarker.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\LuckySix\ReactiveMoveAttackPassive.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RegionDisplay.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\RetreatConfirmPopup.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\GameSpeedController.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\PopupManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\Trap\TrapBehavior.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\Gigant\CounterStackPassive.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattleManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UnitStatusPanelUI.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\ExplorationResetUi.cs" />
@@ -101,6 +103,7 @@
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Enemy\WebCastWebTrap.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\HudController.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\PushObject.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\LuckySix\ReactiveAfterMoveAttackPassive.cs" />
     <Compile Include="Assets\Resources\Scripts\Common\TilemapDebugger.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Active\SmokeBombSkill.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\IExplorationPersistable.cs" />
@@ -112,9 +115,10 @@
     <Compile Include="Assets\Resources\Scripts\Battle\BattlegridManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Active\SelfIsolationTimedSkill.cs" />
     <Compile Include="Assets\Resources\Scripts\Player\PlayerDebuffController.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Active\SelfVigilanceSkill.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\SceneUIProfile.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\HintAnchor.cs" />
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\ReactiveAfterMoveAttackPassive.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\Gigant\StrengthToBodyPassive.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\ActionPanelUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Player\PlayerMovement.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\StackableStatusVisualDB.cs" />
@@ -134,6 +138,7 @@
     <Compile Include="Assets\Resources\Scripts\Battle\EnemyAI.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\TitleMenuUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageRuntimeContext.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\LuckySix\ShootingInsightPassive.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\DescriptionData.cs" />
     <Compile Include="Assets\Resources\Scripts\Object\Box\BoxInteract.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\StateStatModifierDB.cs" />
@@ -162,17 +167,16 @@
     <Compile Include="Assets\Resources\Scripts\Manager\MapManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Active\StateConditionalMulti.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\MapToggleManager.cs" />
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\ReactiveMoveAttackPassive.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Active\ParametricDamageSkill.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\BattleUnit.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\TurnOrderManager.cs" />
     <Compile Include="Assets\Resources\Scripts\UI\UiModalManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Data\StageQuizMapData.cs" />
+    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\Gigant\EndTurnRegenPassive.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UnitStateVisualDB.cs" />
     <Compile Include="Assets\Resources\Scripts\Manager\SceneTransitionManager.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\TurnBarUI.cs" />
     <Compile Include="Assets\Resources\Scripts\Battle\Ui\UIArrowNavigator.cs" />
-    <Compile Include="Assets\Resources\Scripts\Battle\Skill\Player\Passive\ShootingInsightPassive.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

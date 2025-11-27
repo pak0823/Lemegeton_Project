@@ -108,7 +108,7 @@ public abstract class SkillAsset : ScriptableObject
                 if (mod.attr == attribute) { mult *= Mathf.Max(0f, mod.mult); break; }
         }
 
-        return Mathf.Max(1, Mathf.RoundToInt(baseStat * mult));
+        return Mathf.Max(1, Mathf.FloorToInt(baseStat * mult));
     }
 
     public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> potentialTargets)

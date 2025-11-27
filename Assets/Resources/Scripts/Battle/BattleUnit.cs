@@ -78,15 +78,19 @@ public class BattleUnit : MonoBehaviour
     public StateStatModifierDB stateStatDB;
 
     // 베이스 스탯(인스펙터/데이터로 세팅)
-    [SerializeField] private int basePhysicalDamage = 1;
-    [SerializeField] private int baseMagicDamage = 1;
     [SerializeField] private int baseMaxHP = 100;
     [SerializeField] private int baseMaxMP = 100;
     [SerializeField] private int baseMaxRage = 100;
+    [SerializeField] private int basePhysicalDamage = 1;
+    [SerializeField] private int baseMagicDamage = 1;
+    [SerializeField] private int baseBDY = 1;
+    [SerializeField] private int baseMND = 1;
+    [SerializeField] private int baseINS = 1;
 
     [Header("Passives (runtime)")]
     // UnitData.passives를 복사해 두고, 활성 상태만 OnAttach 호출
     private readonly List<PassiveAsset> _activePassives = new();
+    int _passiveBDYBonus = 0;
 
     // 상태 컨트롤러 캐시/보정 캐시
     UnitStateController unitStateController;
@@ -94,21 +98,20 @@ public class BattleUnit : MonoBehaviour
 
     struct StatMult
     {
-        public float atk, mag, def, spd;
+        public float atk, mag, def, agi, ins;
         public int hpAdd, mpAdd;
         public float hostilityGain, hostilityDecay;
-
         public float hostilityGenerationMultiplier;
 
-        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, def = 1f, spd = 1f, hpAdd = 0, mpAdd = 0, hostilityGenerationMultiplier = 1.0f};
+        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, agi = 1f, ins = 1f, hpAdd = 0, mpAdd = 0, hostilityGenerationMultiplier = 1.0f};
 
         public void Apply(StateStatModifierDB.Entry e)
         {
             if (e == null) return;
             atk *= Mathf.Max(0f, e.atkMultiplier);
             mag *= Mathf.Max(0f, e.magMultiplier);
-            def *= Mathf.Max(0f, e.defMultiplier);
-            spd *= Mathf.Max(0f, e.agiMultiplier);
+            agi *= Mathf.Max(0f, e.agiMultiplier);
+            ins *= Mathf.Max(0f, e.insMultiplier);
             hpAdd += e.hpFlatAdd;
             mpAdd += e.mpFlatAdd;
             hostilityGenerationMultiplier *= Mathf.Max(0f, e.hostilityStatMultiplier);
@@ -120,8 +123,8 @@ public class BattleUnit : MonoBehaviour
 
             atk *= e.atkMultiplier;
             mag *= e.magMultiplier;
-            def *= e.defMultiplier;
-            spd *= e.agiMultiplier;
+            agi *= e.agiMultiplier;
+            ins *= e.insMultiplier;
 
             hpAdd += e.hpFlatAdd;
             mpAdd += e.mpFlatAdd;
@@ -131,11 +134,36 @@ public class BattleUnit : MonoBehaviour
     }
     StatMult _cachedMult = StatMult.Identity;
 
+    struct StatSnapshot
+    {
+        public int MaxHP, MaxMP;
+        public int PhysicalDamage, MagicDamage;
+        public float EffectiveAGI;
+        public int EffectiveINS;
+        public float CritChance;
 
+        public static StatSnapshot From(BattleUnit u)
+        {
+            return new StatSnapshot
+            {
+                MaxHP = u.MaxHP,
+                MaxMP = u.MaxMP,
+                PhysicalDamage = u.PhysicalDamage,
+                MagicDamage = u.MagicDamage,
+                EffectiveAGI = u.EffectiveAGI,
+                EffectiveINS = u.INS,
+                CritChance = u.CritChance,
+            };
+        }
+    }
+
+    StatSnapshot _lastSnapshot;
+    bool _hasSnapshot = false;
 
     void InvalidateStatCache() 
     { 
         _statCacheDirty = true;
+
         // 최대치가 줄어들 땐 현재값도 즉시 맞추기
         HP = Mathf.Min(HP, MaxHP);
         MP = Mathf.Min(MP, MaxMP);
@@ -143,15 +171,43 @@ public class BattleUnit : MonoBehaviour
 
         if (debugLogStats)
         {
-            // Mult getter를 한 번 읽으면 즉시 재평가됨(캐시 갱신)
+            // 새 값 계산 강제 (Mult, MaxHP, EffectiveAGI 등)
             var _ = Mult;
+            var newSnap = StatSnapshot.From(this);
 
-            Debug.Log(
-                $"[STAT] {name} " +
-                $"ATK={PhysicalDamage}  MAG={MagicDamage} " +
-                $"HOSTILITY(스탯)={Hostility}  " +
-                $"HP={HP}/{MaxHP}  MP={MP}/{MaxMP}"
-            );
+            if (!_hasSnapshot)
+            {
+                _lastSnapshot = newSnap;
+                _hasSnapshot = true;
+
+                Debug.Log(
+                    $"[STAT] {name} 초기 스냅샷: " +
+                    $"HP={HP}/{newSnap.MaxHP}, MP={MP}/{newSnap.MaxMP}, " +
+                    $"ATK={newSnap.PhysicalDamage}, MAG={newSnap.MagicDamage}, " +
+                    $"AGI={newSnap.EffectiveAGI:F2}, INS={newSnap.EffectiveINS}, " +
+                    $"Crit={newSnap.CritChance:P1}"
+                );
+            }
+            else
+            {
+                // 바뀐 항목만 로그 출력
+                if (newSnap.MaxHP != _lastSnapshot.MaxHP)
+                    Debug.Log($"[STATΔ] {name} MaxHP: {_lastSnapshot.MaxHP} -> {newSnap.MaxHP}");
+                if (newSnap.MaxMP != _lastSnapshot.MaxMP)
+                    Debug.Log($"[STATΔ] {name} MaxMP: {_lastSnapshot.MaxMP} -> {newSnap.MaxMP}");
+                if (newSnap.PhysicalDamage != _lastSnapshot.PhysicalDamage)
+                    Debug.Log($"[STATΔ] {name} ATK: {_lastSnapshot.PhysicalDamage} -> {newSnap.PhysicalDamage}");
+                if (newSnap.MagicDamage != _lastSnapshot.MagicDamage)
+                    Debug.Log($"[STATΔ] {name} MAG: {_lastSnapshot.MagicDamage} -> {newSnap.MagicDamage}");
+                if (Mathf.Abs(newSnap.EffectiveAGI - _lastSnapshot.EffectiveAGI) > 0.0001f)
+                    Debug.Log($"[STATΔ] {name} AGI: {_lastSnapshot.EffectiveAGI:F2} -> {newSnap.EffectiveAGI:F2}");
+                if (newSnap.EffectiveINS != _lastSnapshot.EffectiveINS)
+                    Debug.Log($"[STATΔ] {name} INS: {_lastSnapshot.EffectiveINS} -> {newSnap.EffectiveINS}");
+                if (Mathf.Abs(newSnap.CritChance - _lastSnapshot.CritChance) > 0.0001f)
+                    Debug.Log($"[STATΔ] {name} Crit: {_lastSnapshot.CritChance:P1} -> {newSnap.CritChance:P1}");
+
+                _lastSnapshot = newSnap;
+            }
         }
     }
 
@@ -187,16 +243,34 @@ public class BattleUnit : MonoBehaviour
     }
 
     // === 외부에서 그대로 쓰던 이름을 '프로퍼티'로 유지 (상태 보정 반영) ===
-    public int PhysicalDamage => Mathf.Max(1, Mathf.RoundToInt(basePhysicalDamage * Mult.atk));
-    public int MagicDamage => Mathf.Max(1, Mathf.RoundToInt(baseMagicDamage * Mult.mag));
-    public int MaxHP => baseMaxHP + Mult.hpAdd;
-    public int MaxMP => baseMaxMP + Mult.mpAdd;
+    public int MaxHP
+    {
+        get
+        {
+            // Mult.hpAdd 는 StateStatModifierDB에서 오는 추가 HP (버프/상태) :contentReference[oaicite:2]{index=2}
+            int fromBody = BDY * 3;
+            int fromStr = PhysicalDamage; // 근력도 HP에 직접 기여하도록
+            int basePlusBuff = baseMaxHP + Mult.hpAdd; // 기존 구조와 호환용
+
+            // 원하는 쪽으로 가중치를 조정해도 됨
+            return Mathf.Max(1, basePlusBuff + fromBody + fromStr);
+        }
+    }
+    public int MaxMP => Mathf.Max(0, (baseMND * 3) + MagicDamage + Mult.mpAdd);
+    public int PhysicalDamage => Mathf.Max(1, Mathf.FloorToInt(basePhysicalDamage * Mult.atk));
+    public int MagicDamage => Mathf.Max(1, Mathf.FloorToInt(baseMagicDamage * Mult.mag));
+    public int BDY => Mathf.Max(0, baseBDY + _passiveBDYBonus);
+    public int INS => Mathf.Max(0, Mathf.FloorToInt(baseINS * Mult.ins));
     public int MaxRage => baseMaxRage;
     public float Hostility { get; private set; } = 1.0f; // 전투 시작 시 기본 적대감 (0으로 시작하면 첫 타겟팅이 불가능하므로 1 등으로 설정)
 
     public void AddHostility(float amount)
     {
-        Hostility = Mathf.Max(0, Hostility + amount); // 적대감은 0 밑으로 내려가지 않도록 합니다.
+        float before = Hostility;
+        Hostility = Mathf.FloorToInt(Hostility + amount);
+        float after = Hostility;
+
+        Debug.Log($"[HOSTILITY] {name} Hostility: {before:F2} -> {after:F2} (Δ={amount:F2})");
     }
 
     public void ResetHostility()
@@ -206,6 +280,8 @@ public class BattleUnit : MonoBehaviour
 
     // 상태 효과가 적용된 최종 적대감 '생성량' 배율 (예: 도발 상태일 때 2.0f)
     public float HostilityGenerationMultiplier => Mult.hostilityGenerationMultiplier;
+
+    public float CritChance => baseINS * Mult.ins * 0.01f;  // 예: INS 30 → 30% 크리티컬
     #endregion
 
     #region Unity Callbacks
@@ -264,12 +340,15 @@ public class BattleUnit : MonoBehaviour
         {
             name = data.DisplayName;
             team = data.team;
-            basePhysicalDamage = data.PhysicalDamage;
-            baseMagicDamage = data.MagicDamage;
             baseMaxHP = data.MaxHP;
             baseMaxMP = data.MaxMP;
             baseMaxRage = data.MaxRage;
+            basePhysicalDamage = data.PhysicalDamage;
+            baseMagicDamage = data.MagicDamage;
             AGI = data.AGI;
+            baseBDY = data.BDY;
+            baseMND = data.MND;
+            baseINS = data.INS;
             isBoss = data.isBoss;
             Hostility = data.Hostility;
         }
@@ -332,6 +411,13 @@ public class BattleUnit : MonoBehaviour
             Overfill = 0f;
 
         ATB = Mathf.Min(100f, raw);
+    }
+
+    public void AddBodyBonusFromPassive(int delta)
+    {
+        _passiveBDYBonus += delta;
+        // BDY가 바뀌면 MaxHP도 다시 계산되도록 캐시 갱신
+        InvalidateStatCache();
     }
 
     public float EffectiveAGI

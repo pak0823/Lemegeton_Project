@@ -16,10 +16,29 @@ public class SingleStrike : SkillAsset
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }  // 에디터에서 항상 Unit로 고정
 #endif
+    void OnEnable()
+    {
+        targetMode = SkillTargetMode.Unit;
+        school = DamageSchool.Physical;
+        // power는 ComputeDamage에서 안 쓰니 0 또는 1 아무거나 상관 없음
+    }
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
     {
         yield return originCell; // 단일 대상이므로 원점 셀만
+    }
+
+    public override int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
+    {
+        if (caster == null || target == null) return 0;
+
+        bool targetHasSlow = false;
+        var sc = target.GetComponent<StatusController>();
+        if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
+
+        float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
+        float raw = caster.PhysicalDamage * mult;
+        return Mathf.Max(0, Mathf.FloorToInt(raw));
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
@@ -61,22 +80,13 @@ public class SingleStrike : SkillAsset
             caster.OnAttackImpact -= impact;
             impactDone = true;
 
-            if (actualTarget != null && !actualTarget.IsDead)
+            if (actualTarget != null && !actualTarget.IsDead && bm != null)
             {
-                actualTarget.PlayHit();
+                var victims = new List<BattleUnit> { actualTarget };
+                var map = actualTarget.CurrentMap ?? caster.CurrentMap;
+                var originCell = actualTarget.Cell;
 
-                bool targetHasSlow = false;
-                var sc = actualTarget.GetComponent<StatusController>();
-                if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
-
-                float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
-                float baseDamage = caster.PhysicalDamage * mult;
-
-                int finalDamage = Mathf.Max(0, Mathf.RoundToInt(baseDamage));
-                if (bm != null)
-                    finalDamage = bm.GetFinalSkillDamage(actualTarget, this, baseDamage);
-
-                actualTarget.TakeDamage(finalDamage);
+                bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
             }
         };
 
@@ -84,23 +94,14 @@ public class SingleStrike : SkillAsset
         yield return caster.AnimateAttack(actualTarget);
 
         // 안전장치: 애니 이벤트 누락 시 폴백
-        if (!impactDone && actualTarget != null && !actualTarget.IsDead)
-        {
-            actualTarget.PlayHit();
+if (!impactDone && actualTarget != null && !actualTarget.IsDead && bm != null)
+{
+    var victims = new List<BattleUnit> { actualTarget };
+    var map = actualTarget.CurrentMap ?? caster.CurrentMap;
+    var originCell = actualTarget.Cell;
 
-            bool targetHasSlow = false;
-            var sc = actualTarget.GetComponent<StatusController>();
-            if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
-
-            float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
-            float baseDamage = caster.PhysicalDamage * mult;
-
-            int finalDamage = Mathf.Max(0, Mathf.RoundToInt(baseDamage));
-            if (bm != null)
-                finalDamage = bm.GetFinalSkillDamage(actualTarget, this, baseDamage);
-
-            actualTarget.TakeDamage(finalDamage);
-        }
+    bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
+}
     }
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
