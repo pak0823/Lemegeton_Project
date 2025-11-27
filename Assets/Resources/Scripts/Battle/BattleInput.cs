@@ -1,5 +1,6 @@
 using Project.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Tilemaps;
 
 public class BattleInput : MonoBehaviour
@@ -117,6 +118,10 @@ public class BattleInput : MonoBehaviour
     void HandleMouseInput()
     {
         if (PopupManager.IsModalOpen) return;
+        
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
         if (!Input.GetMouseButtonDown(0)) return;
 
         hudCtrl?.Show();    //HUD가 꺼진 상태에서 마우스 클릭이 확인될 시 켜짐
@@ -221,6 +226,10 @@ public class BattleInput : MonoBehaviour
         // === 스킬 타겟팅 중 호버 미리보기 ===
         if (canTargetSkill)
         {
+            // 타겟 확정도 UI 위 클릭이면 무시
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+                return;
+
             Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
             world.z = 0f;
 

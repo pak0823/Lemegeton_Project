@@ -165,6 +165,9 @@ public class SkillPanelUI : MonoBehaviour
                 int capture = i;
                 button.onClick.AddListener(() =>
                 {
+                    Debug.Log($"[SkillButton] click index={capture}, asset={asset?.name}");
+
+
                     // 하이라이트를 먼저 현재 버튼으로 고정
                     UIArrowNavigator navigator = (panel != null ? panel.GetComponent<UIArrowNavigator>() : null)
                                 ?? GetComponentInChildren<UIArrowNavigator>(true);

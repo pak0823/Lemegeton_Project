@@ -63,6 +63,9 @@ public class SmokeZoneRuntime : MonoBehaviour
 
         if (_battlemanager != null) _battlemanager.OnUnitEndTurn += HandleUnitEndTurn;
 
+        // 턴 시작 이벤트 구독
+        BattleManager.OnAnyUnitTurnStarted += HandleUnitTurnStart;
+
         Active.Add(this);
     }
 
@@ -75,7 +78,12 @@ public class SmokeZoneRuntime : MonoBehaviour
 
     void OnDestroy()
     {
-        if (battleManager != null) battleManager.OnUnitEndTurn -= HandleUnitEndTurn;
+        if (battleManager != null)
+        {
+            battleManager.OnUnitEndTurn -= HandleUnitEndTurn;
+            BattleManager.OnAnyUnitTurnStarted -= HandleUnitTurnStart;
+        }
+            
         Active.Remove(this);
 
         // AGI 버프 모드일 때 남아있는 유닛에서 정리
@@ -169,16 +177,22 @@ public class SmokeZoneRuntime : MonoBehaviour
         // 도메인 리로드/씬 전환 시에도 안전하게 정리
         CleanupPlayableGraphs();
     }
-    void HandleUnitEndTurn(BattleUnit unit)
+    void HandleUnitTurnStart(BattleUnit unit)
     {
+        // 시전자의 턴 시작 기준으로만 지속턴 감소
         if (unit == caster)
         {
             turnsLeft--;
             if (turnsLeft <= 0)
-                Destroy(gameObject); // OnDestroy에서 VFX도 함께 정리
+            {
+                // 2번째 턴 시작 시(예: durationCasterTurns=2) 바로 삭제
+                Destroy(gameObject);
+            }
         }
-
-        // Route1: 연막존 안에서 턴을 끝낸 아군의 MP 회복
+    }
+    void HandleUnitEndTurn(BattleUnit unit)
+    {
+        // 연막존 안에서 턴을 끝낸 아군의 MP 회복
         if (enableMpRegen && unit != null && unit.team == caster.team)
         {
             if (map != null && cells != null && cells.Contains(unit.Cell))

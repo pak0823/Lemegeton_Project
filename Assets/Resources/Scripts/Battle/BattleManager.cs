@@ -19,6 +19,7 @@ public class BattleManager : MonoBehaviour
     bool atbPaused = false; // 턴 중 ATB 충전 멈춤
     BattleUnit acting;
     List<Vector3Int> moveOptions = new();
+    bool _isResolvingSelfCast = false;    // Self-cast 재진입 가드
 
     // === 추가턴 설계 ===
     [SerializeField] int baseActionsPerTurn = 1; // 기본 행동 토큰(기본 1)
@@ -1343,6 +1344,8 @@ public class BattleManager : MonoBehaviour
 
     public void SelectSkill(int index)
     {
+        Debug.Log($"[BattleManager] SelectSkill({index}) 호출");
+
         var list = acting?.data?.skills;
         if (list == null || index < 0 || index >= list.Length) return;
 
@@ -1377,6 +1380,14 @@ public class BattleManager : MonoBehaviour
 
         if (skill is ISelfCastSkill self && self.SelfCastOnSelect)
         {
+            if (_isResolvingSelfCast)
+            {
+                Debug.LogWarning($"[SelfCast] 이미 처리 중인 self-cast 스킬입니다. 중복 SelectSkill 무시: {skill.name}");
+                return;
+            }
+
+            _isResolvingSelfCast = true;
+
             // 실제 MP 소비는 SelfStateSkill.ResolveOnUnit 내부에서 처리
             bool isFreeAction = false;
 
@@ -1797,37 +1808,46 @@ public class BattleManager : MonoBehaviour
 
     IEnumerator Co_ResolveSelfCastThenFinish(SkillAsset skill, BattleUnit caster, bool freeAction)
     {
-        if (skill == null || caster == null) yield break;
-
-        // 자기 자신 대상으로 Resolve
-        yield return skill.ResolveOnUnit(this, caster, caster);
-
-        // ResolveOnUnit 안에서 MP 부족이면 그냥 yield break 해서 아무 변화 없이 끝나므로,
-        // 여기서는 쿨다운만 공통 처리
-        caster.ApplyCooldown(skill);
-
-        if (!freeAction)
+        if (skill == null || caster == null)
         {
-            // 기본: 기존과 동일하게 행동을 1회 소비 (공격으로 간주)
-            FinishActionAfterSkill();
+            _isResolvingSelfCast = false;
+            yield break;
         }
-        else
+
+        try
         {
-            // ==== 무료 행동 ====
-            // 스킬 패널/타겟 상태 초기화만 하고, 행동 토큰/턴은 그대로 유지
-            ClearSkillPreview();
-            CloseSkillPanel();
+            // 자기 자신 대상으로 Resolve
+            yield return skill.ResolveOnUnit(this, caster, caster);
 
-            currentSkill = default;
-            currentSkillSO = null;
-            currentSkillTargetMap = null;
-            customPreviewCells = null;
-            customPreviewMap = null;
-            UpdateTargetingHint();
+            // ResolveOnUnit 안에서 MP 부족이면 그냥 yield break 해서 아무 변화 없이 끝나므로,
+            // 여기서는 쿨다운만 공통 처리
+            caster.ApplyCooldown(skill);
 
-            // 플레이어 턴의 "행동 선택" 상태로 유지
-            if (IsPlayerTurn)
-                state = BattleState.ActionSelect;
+            if (!freeAction)
+            {
+                // 기본: 행동 1회 소비
+                FinishActionAfterSkill();
+            }
+            else
+            {
+                // ==== 무료 행동 ====
+                ClearSkillPreview();
+                CloseSkillPanel();
+
+                currentSkill = default;
+                currentSkillSO = null;
+                currentSkillTargetMap = null;
+                customPreviewCells = null;
+                customPreviewMap = null;
+                UpdateTargetingHint();
+
+                if (IsPlayerTurn)
+                    state = BattleState.ActionSelect;
+            }
+        }
+        finally
+        {
+            _isResolvingSelfCast = false;
         }
     }
 

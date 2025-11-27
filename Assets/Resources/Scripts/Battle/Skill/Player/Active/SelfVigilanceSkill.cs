@@ -75,7 +75,10 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
 
         var usc = caster.GetComponent<UnitStateController>();
         if (usc == null)
-            usc = caster.gameObject.AddComponent<UnitStateController>();
+        {
+            Debug.LogError("[Vigilance] UnitStateController 없는 유닛에 경계를 적용하려 했습니다. 프리팹에 UnitStateController를 붙이세요.");
+            yield break;
+        }
 
         // 1턴 지속 경계 상태 부여
         usc.ApplyForTurns(UnitStateId.Vigilance, durationTurns);
