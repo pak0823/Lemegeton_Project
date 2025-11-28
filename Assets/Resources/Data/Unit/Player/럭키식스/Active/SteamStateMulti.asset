@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 492f0b7ae9548a84098a9e4545fd6b7c, type: 3}
+  m_Name: SteamStateMulti
+  m_EditorClassIdentifier: 
+  displayName: "\uC99D\uAE30\uAE30\uAD00 \uAC00\uB3D9"
+  descriptionImage: {fileID: 21300000, guid: 53f9425c3ddc30947bb9094c4b63a4bd, type: 3}
+  description: "\uC790\uC2E0\uC5D0\uAC8C \uC99D\uAE30 \uC0C1\uD0DC\uB97C \uBD80\uC5EC\uD569\uB2C8\uB2E4."
+  school: 0
+  attribute: 0
+  power: 1
+  mpCost: 3
+  targetMode: 0
+  cooldownTurns: 0
+  useGapCloseJump: 0
+  legacyId: 1
+  trainingRoutes:
+  - title: "\uC790\uC6D0 \uC808\uC57D \uD6C8\uB828"
+    description: "\uC774 \uAE30\uC220\uC774 \uC18C\uBAA8\uD558\uB294 \uC790\uC6D0\uC774
+      \uAC10\uC18C\uD569\uB2C8\uB2E4. (2)\r"
+  - title: "\uCD1D\uBA85 \uAC15\uD654 \uD6C8\uB828"
+    description: "\uB7ED\uD0A4\uC2DD\uC2A4\uAC00 \uC99D\uAE30 \uC0C1\uD0DC\uB77C\uBA74
+      \uB7ED\uD0A4\uC2DD\uC2A4\uC758 \uCD1D\uBA85\uC744 \uAC15\uD654\uD569\uB2C8\uB2E4."
+  - title: "\uC5F0\uC18D \uD589\uB3D9 \uD6C8\uB828"
+    description: "\uC774 \uAE30\uC220\uC744 \uC0AC\uC6A9\uD574\uB3C4 \uD134\uC744
+      \uB9C8\uCE58\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
+  rules:
+  - name: "\uC99D\uAE30\uAE30\uAD00 \uAC00\uB3D9"
+    requireAll: 02000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 89087ab064d71c74390b3252740b76da, type: 2}
+    overrideAreaPreset: 0
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: "\uAC00\uB3D9 \uC911\uC9C0"
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  defaultSkill: {fileID: 11400000, guid: 74f200cb10b277249bd2f481b4a54056, type: 2}

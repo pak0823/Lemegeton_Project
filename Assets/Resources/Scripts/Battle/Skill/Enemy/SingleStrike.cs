@@ -48,7 +48,13 @@ public class SingleStrike : SkillAsset
         // 생존 플레이어 수집
         var players = Object.FindObjectsOfType<BattleUnit>()
             .Where(u => u != null && u.team == Team.Player && !u.IsDead)
+            .Where(u =>
+            {
+                var usc = u.GetComponent<UnitStateController>();
+                return usc == null || !usc.Has(UnitStateId.Ambush); // 잠복이면 제외
+            })
             .ToList();
+
         if (players.Count == 0) yield break;
 
         // 둔화 보유자 우선 선정

@@ -109,6 +109,15 @@ public class ParametricDamageSkill : SkillAsset
     [Range(-1, 2)]
     public int routeForKnockback = -1;
 
+    [Header("추가 이동 설정")]
+    [Tooltip("훈련으로 '기술 사용 후 1칸 이동' 효과를 사용할 것인지")]
+    public bool trainingUsePostMove = false;
+    [Tooltip("추가 이동 효과가 활성화될 훈련 루트 인덱스 (-1이면 비활성, 0~2)")]
+    [Range(-1, 2)]
+    public int routeForPostMove = -1;
+    [Tooltip("기술 사용 후 이동할 수 있는 최대 칸 수(헥사 거리)")]
+    [Min(1)] public int trainingPostMoveRange = 1;
+
     [Header("전체 공격 설정")]
     [Tooltip("이 효과(전체 적군 타격)를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
     [Range(-1, 2)]

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -100,10 +101,13 @@ public class BattleManager : MonoBehaviour
     public event System.Action<BattleUnit> OnUnitTurnLabel;// 유닛 턴 시작 라벨용
     public event System.Action<BattleUnit, string> OnUnitActionLabel; //유닛 스킬 표시용
 
-    // === Knockback (ParametricDamage 전용) ===
+    // ParametricDamage 전용
+    //Knockback
     ParametricDamageSkill _pendingKnockbackSkill;
     BattleUnit _pendingKnockbackTarget;
     Vector3Int _pendingKnockbackDest;
+    //skill extra move
+    bool _isPostSkillMoveInProgress = false;
 
     [Header("DBs")]
     [SerializeField] private StateStatModifierDB stateStatDb;
@@ -557,6 +561,12 @@ public class BattleManager : MonoBehaviour
         var usc = _unit.GetComponent<UnitStateController>();
         usc?.OnTurnStart();
 
+        var ambushSkill = GetAmbushSkillFor(_unit);
+        if (ambushSkill != null)
+        {
+            TryApplyAmbushTurnStartHeal(_unit, ambushSkill);
+        }
+
         // 캐스팅 성공 턴 소비 처리
         if (_unit.team == Team.Enemy)
         {
@@ -634,7 +644,16 @@ public class BattleManager : MonoBehaviour
             if (clickedMap == acting.CurrentMap && moveOptions.Contains(clickedCell))
             {
                 state = BattleState.Resolving; // 입력 잠금
-                StartCoroutine(Co_MoveThenConsume(acting, clickedMap, clickedCell, BattleAction.Move));
+                if (_isPostSkillMoveInProgress)
+                {
+                    // 스킬 사용 후 추가 이동
+                    StartCoroutine(Co_MoveAfterSkillThenConsume(acting, clickedMap, clickedCell));
+                }
+                else
+                {
+                    // 일반 이동
+                    StartCoroutine(Co_MoveThenConsume(acting, clickedMap, clickedCell, BattleAction.Move));
+                }
                 ClearAllPreviews();
                 moveOptions.Clear();
                 return;
@@ -835,6 +854,22 @@ public class BattleManager : MonoBehaviour
         }
         if (state == BattleState.Moving)
         {
+            // 스킬 후 보너스 이동을 취소했을 때
+            if (_isPostSkillMoveInProgress)
+            {
+                ClearMovePreview();
+                ClearTargetSelection();
+                customPreviewCells = null;
+                customPreviewMap = null;
+
+                _isPostSkillMoveInProgress = false;
+
+                // 이동은 하지 않고, 스킬은 이미 사용했으므로
+                // 공격 토큰을 소비하고 턴을 진행
+                OnActionConsumed(BattleAction.Attack);
+                return;
+            }
+
             ClearMovePreview();
             ClearTargetSelection();
             customPreviewCells = null;
@@ -1047,6 +1082,56 @@ public class BattleManager : MonoBehaviour
     }
     #endregion
 
+    bool IsAmbushHiddenTarget(BattleUnit u)
+    {
+        if (!u) return false;
+        var usc = u.GetComponent<UnitStateController>();
+        if (usc == null) return false;
+
+        // 잠복 상태면 적이 타겟팅할 수 없음
+        return usc.Has(UnitStateId.Ambush);
+    }
+    SelfAmbushSkill GetAmbushSkillFor(BattleUnit unit)
+    {
+        if (unit == null || unit.data == null || unit.data.skills == null)
+            return null;
+
+        foreach (var s in unit.data.skills)
+        {
+            if (s is SelfAmbushSkill ambush)
+                return ambush;
+        }
+        return null;
+    }
+
+    void TryApplyAmbushTurnStartHeal(BattleUnit unit, SelfAmbushSkill skill)
+    {
+        if (unit == null || skill == null) return;
+
+        var usc = unit.GetComponent<UnitStateController>();
+        if (usc == null || !usc.Has(UnitStateId.Ambush))
+            return;
+
+        int route = unit.GetTrainingRouteIndex(skill);
+
+        if (!skill.trainingHealOnTurnStart ||
+            skill.routeForHealOnTurnStart < 0 ||
+            route != skill.routeForHealOnTurnStart)
+            return;
+
+        int amount = skill.ComputeTurnStartHeal(unit);
+        if (amount <= 0) return;
+
+        int before = unit.HP;
+        unit.Heal(amount);
+        int after = unit.HP;
+
+        if (after > before)
+        {
+            Debug.Log($"[Ambush] Route(Heal={skill.routeForHealOnTurnStart}): {unit.name} 턴 시작 회복 +{after - before} (healPerClv={skill.healPerClv})");
+        }
+    }
+
     #region Enemy AI
     IEnumerator EnemyTurnRoutine(BattleUnit enemy)
     {
@@ -1054,8 +1139,10 @@ public class BattleManager : MonoBehaviour
 
         // 생존 플레이어 수집
         var players = FindObjectsOfType<BattleUnit>()
-            .Where(u => u.team == Team.Player && !u.IsDead)
+            .Where(u => u.team == Team.Player && !u.IsDead && !IsAmbushHiddenTarget(u))
             .ToList();
+
+        // 대상 지정 가능 플레이어가 아무도 없으면 이번 적 턴은 할 대상이 없다고 보고 종료
         if (players.Count == 0) { EndEnemyTurn(enemy); yield break; }
 
         BattleUnit target = players[Random.Range(0, players.Count)]; // 랜덤 1인 지정
@@ -2221,6 +2308,24 @@ public class BattleManager : MonoBehaviour
         OnHint?.Invoke(string.Empty);
     }
 
+    bool ShouldOfferPostSkillMove(BattleUnit unit, SkillAsset skill)
+    {
+        if (unit == null || skill == null) return false;
+        if (!IsPlayerTurn) return false; // 적 턴에는 사용하지 않음
+
+        if (skill is ParametricDamageSkill dmg)
+        {
+            if (!dmg.trainingUsePostMove) return false;
+
+            int route = unit.GetTrainingRouteIndex(dmg);
+            if (dmg.routeForPostMove < 0) return false;
+
+            return route == dmg.routeForPostMove;
+        }
+
+        return false;
+    }
+
     IEnumerator Co_SelectKnockbackThenResolve(
     ParametricDamageSkill dmgSkill,
     BattleUnit caster,
@@ -2305,6 +2410,49 @@ public class BattleManager : MonoBehaviour
         caster.ApplyCooldown(skill);
         FinishActionAfterSkill();
     }
+    IEnumerator Co_PostSkillMoveThenConsume(BattleUnit unit)
+    {
+        if (unit == null || grid == null)
+        {
+            // 안전상 바로 행동 소비
+            OnActionConsumed(BattleAction.Attack);
+            yield break;
+        }
+
+        _isPostSkillMoveInProgress = true;
+
+        // 이동 후보: 기본 Move와 동일하게 인접 워커블 셀
+        state = BattleState.Moving;
+        moveOptions = grid.GetAdjacentWalkable(unit.team, unit.Cell).ToList();
+
+        // 갈 수 있는 칸이 하나도 없으면 → 그냥 행동 소비 후 턴 진행
+        if (moveOptions.Count == 0)
+        {
+            _isPostSkillMoveInProgress = false;
+            OnActionConsumed(BattleAction.Attack);
+            yield break;
+        }
+
+        ShowMovePreview(unit.CurrentMap, moveOptions);
+
+        // 플레이어가 칸을 선택할 때까지 대기
+        while (_isPostSkillMoveInProgress)
+            yield return null;
+    }
+    IEnumerator Co_MoveAfterSkillThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell)
+    {
+        var fromCell = unit.Cell;
+        grid.SetOccupied(unit.team, fromCell, false);
+        yield return unit.AnimateMoveTo(map, toCell);
+        grid.SetOccupied(unit.team, unit.Cell, true);
+
+        // 이동 선택 종료
+        _isPostSkillMoveInProgress = false;
+
+        // 이 스킬은 '공격'으로 간주되어 행동 토큰 1개를 소비하고 턴을 마무리
+        OnActionConsumed(BattleAction.Attack);
+    }
+
 
     bool IsEnemyOf(BattleUnit a, BattleUnit b)
     {
@@ -2314,10 +2462,31 @@ public class BattleManager : MonoBehaviour
 
     void FinishActionAfterSkill()
     {
+        // 어떤 스킬이었는지, 누구 차례였는지 로컬로 잡아둔다
+        var skill = currentSkillSO;
+        var unit = acting;
+
         // 하이라이트/선택 상태 정리
         ClearSkillPreview();
         // 스킬 실행 완료 → 패널 닫기 + 스킬 선택 해제
         CloseSkillPanel();   // 이벤트까지 함께 발행됨
+
+        // 기술 사용 후 1칸 이동
+        if (unit != null && skill != null && ShouldOfferPostSkillMove(unit, skill))
+        {
+            // 스킬 쿨다운/MP는 이미 처리된 상태이므로,
+            // 여기서는 '공격 토큰'을 바로 소모하지 않고 이동 기회를 먼저 준다.
+            currentSkill = default;
+            currentSkillSO = null;
+            currentSkillTargetMap = null;
+            customPreviewCells = null;
+            customPreviewMap = null;
+            UpdateTargetingHint();
+
+            StartCoroutine(Co_PostSkillMoveThenConsume(unit));
+            return;
+        }
+
         // 스킬은 '공격'으로 간주하여 행동 토큰 소모 로직 재사용
         OnActionConsumed(BattleAction.Attack);
 

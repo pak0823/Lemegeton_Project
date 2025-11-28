@@ -8,14 +8,17 @@ public enum UnitStateId
     Support = 1, //지원
     Steam = 2,  //증기
     Isolation = 3,   //쇄국
-    Vigilance = 4   //경계
+    Vigilance = 4,   //경계
+
+    Ambush = 100    //잠복
 }
 public enum UnitStateBuffId
 {
     None = 0,
     AgiUp = 1,  //민첩 강화
     MagicUp = 2, //총명 강화
-    InsightDown //통찰 약화
+    InsightDown = 3, //통찰 약화
+    AmbushAgiCancel = 100   //잠복 AGI 페널티 상쇄용
 }
 
 /// <summary>
