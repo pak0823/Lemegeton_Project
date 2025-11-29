@@ -199,7 +199,7 @@ public class SmokeZoneRuntime : MonoBehaviour
             {
                 float ratio = Mathf.Clamp01(mpRegenRatio); // 보통 0.3
                                                            // MaxMP 프로퍼티가 있다고 가정 (없다면 유사 필드 사용)
-                int amount = Mathf.RoundToInt(unit.MaxMP * ratio);
+                int amount = Mathf.FloorToInt(unit.MaxMP * ratio);
                 if (amount > 0)
                 {
                     unit.GainMP(amount);

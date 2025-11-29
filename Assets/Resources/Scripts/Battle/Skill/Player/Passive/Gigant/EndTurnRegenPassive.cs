@@ -65,13 +65,12 @@ public class EndTurnRegenPassive : PassiveAsset
         if (!_owners.Contains(unit)) return;
         if (unit.IsDead) return;
 
-        int amount = Mathf.RoundToInt(unit.MaxHP * healRatio);
-        if (clampToAtLeast1 && amount < 1)
-            amount = 1;
+        float before = unit.HP;
 
-        if (amount <= 0) return;
-
-        unit.Heal(amount);                 // 기존 Heal 로직 사용
+        unit.HealPercent(healRatio);       // 기존 Heal 로직 사용
         unit.AnnouncePassive(displayName); // 패시브 라벨 표시
+
+        Debug.Log($"{name} [Passive Heal] +{unit.HP - before} → {unit.HP}/{unit.MaxHP}");
+
     }
 }

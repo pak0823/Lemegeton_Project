@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 
 public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, TargetingKnockback, EndTurn }
-public enum BattleAction { Move, Attack }
+public enum BattleAction { Move, Attack, Rest, Calm }
 
 public class BattleManager : MonoBehaviour
 {
@@ -612,10 +612,74 @@ public class BattleManager : MonoBehaviour
         _lastAGISum = alive.Sum(u => u.EffectiveAGI);
         _lastAGICount = alive.Count;
     }
-    public void OnClickEndTurn()
+    public void OnClickRest()
     {
-        if (acting == null || acting.team != Team.Player) return;
-        EndPlayerTurn();             // 종료 로직은 한 군데로 집약
+        if (acting == null || !IsPlayerTurn) return;
+        if (remainingActions <= 0) return;
+
+        // 프리뷰/타겟팅 정리
+        ClearAllPreviews();
+        ClearTargetSelection();
+
+        // 휴식: 최대 HP의 10% 회복
+        float before = acting.HP;
+        acting.HealPercent(0.10f);
+        float after = acting.HP;
+
+        if (after > before)
+        {
+            Debug.Log($"[Rest] {acting.name} 휴식: HP {before} -> {after} (+{after - before})");
+        }
+        else
+        {
+            Debug.Log($"[Rest] {acting.name} 휴식: 회복 없음 (이미 최대 체력)");
+        }
+
+        // 행동 1회 소비 → 지금 구조에서는 baseActionsPerTurn=1이라 사실상 턴 종료와 동일
+        OnActionConsumed(BattleAction.Rest);
+    }
+    public void OnClickCalm()
+    {
+        if (acting == null || !IsPlayerTurn) return;
+        if (remainingActions <= 0) return;
+
+        ClearAllPreviews();
+        ClearTargetSelection();
+
+        // MP 회복: MaxMP의 10% → 소수점 버림
+        float beforeMP = acting.MP;
+
+        int mpGain = Mathf.FloorToInt(acting.MaxMP * 0.1f);
+        if (mpGain <= 0 && acting.MaxMP > 0)
+            mpGain = 1;
+
+        if (mpGain > 0)
+        {
+            acting.GainMP(mpGain);   // 이미 int를 받아 MaxMP 범위에서 클램프 
+        }
+
+        float afterMP = acting.MP;
+
+        if (afterMP > beforeMP)
+        {
+            Debug.Log($"[Calm] {acting.name} 진정: MP {beforeMP} -> {afterMP} (+{afterMP - beforeMP})");
+        }
+        else
+        {
+            Debug.Log($"[Calm] {acting.name} 진정: MP 회복 없음 (이미 최대 MP 또는 Gain=0)");
+        }
+
+        // "현재 Rage의 10%"만큼 감소
+        float beforeRage = acting.Rage;
+        acting.ReduceRageByRatio(0.1f); // 위에서 추가한 헬퍼
+        float afterRage = acting.Rage;
+
+        if (!Mathf.Approximately(beforeRage, afterRage))
+        {
+            Debug.Log($"[Calm] {acting.name} 진정: Rage {beforeRage:F2} -> {afterRage:F2}");
+        }
+
+        OnActionConsumed(BattleAction.Calm);
     }
     #endregion
 
@@ -1122,9 +1186,9 @@ public class BattleManager : MonoBehaviour
         int amount = skill.ComputeTurnStartHeal(unit);
         if (amount <= 0) return;
 
-        int before = unit.HP;
+        float before = unit.HP;
         unit.Heal(amount);
-        int after = unit.HP;
+        float after = unit.HP;
 
         if (after > before)
         {
@@ -1663,6 +1727,10 @@ public class BattleManager : MonoBehaviour
         // 아군 교대/후퇴 스킬이면, 먼저 후퇴 후보 칸부터 선택
         if (skill is AllyRetreatSwapSkill allySkill)
         {
+            // 자기 자신은 타겟 불가
+            if (target == acting)
+                return;
+
             // 반드시 아군만 대상으로 사용
             if (target.team != acting.team)
                 return;
@@ -2156,12 +2224,12 @@ public class BattleManager : MonoBehaviour
                         var atkUnit = caster;
                         if (atkUSC != null && atkUnit != null)
                         {
-                            int beforeINS = atkUnit.INS;
+                            float beforeINS = atkUnit.INS;
                             float beforeCrit = atkUnit.CritChance;
 
                             atkUSC.ApplyBuff(UnitStateBuffId.InsightDown);
 
-                            int afterINS = atkUnit.INS;
+                            float afterINS = atkUnit.INS;
                             float afterCrit = atkUnit.CritChance;
 
                             Debug.Log(

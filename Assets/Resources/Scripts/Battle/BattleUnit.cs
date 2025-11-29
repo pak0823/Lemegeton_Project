@@ -41,9 +41,9 @@ public class BattleUnit : MonoBehaviour
 
     [SerializeField] private bool debugLogStats = false; //스탯 확인 임시용 - 사용 후 제거하기
 
-    public int HP { get; private set; }
-    public int MP { get; private set; }
-    public int Rage { get; private set; }
+    public float HP { get; private set; }
+    public float MP { get; private set; }
+    public float Rage { get; private set; }
     #endregion
 
     #region Visual
@@ -78,14 +78,11 @@ public class BattleUnit : MonoBehaviour
     public StateStatModifierDB stateStatDB;
 
     // 베이스 스탯(인스펙터/데이터로 세팅)
-    [SerializeField] private int baseMaxHP = 100;
-    [SerializeField] private int baseMaxMP = 100;
-    [SerializeField] private int baseMaxRage = 100;
-    [SerializeField] private int basePhysicalDamage = 1;
-    [SerializeField] private int baseMagicDamage = 1;
-    [SerializeField] private int baseBDY = 1;
-    [SerializeField] private int baseMND = 1;
-    [SerializeField] private int baseINS = 1;
+    [SerializeField] private float basePhysicalDamage = 1;
+    [SerializeField] private float baseMagicDamage = 1;
+    [SerializeField] private float baseBDY = 1;
+    [SerializeField] private float baseMND = 1;
+    [SerializeField] private float baseINS = 1;
 
     [Header("Passives (runtime)")]
     // UnitData.passives를 복사해 두고, 활성 상태만 OnAttach 호출
@@ -136,10 +133,10 @@ public class BattleUnit : MonoBehaviour
 
     struct StatSnapshot
     {
-        public int MaxHP, MaxMP;
-        public int PhysicalDamage, MagicDamage;
+        public float MaxHP, MaxMP;
+        public float PhysicalDamage, MagicDamage;
         public float EffectiveAGI;
-        public int EffectiveINS;
+        public float EffectiveINS;
         public float CritChance;
 
         public static StatSnapshot From(BattleUnit u)
@@ -243,33 +240,82 @@ public class BattleUnit : MonoBehaviour
     }
 
     // === 외부에서 그대로 쓰던 이름을 '프로퍼티'로 유지 (상태 보정 반영) ===
-    public int MaxHP
+    public float MaxHP
     {
         get
         {
-            // Mult.hpAdd 는 StateStatModifierDB에서 오는 추가 HP (버프/상태) :contentReference[oaicite:2]{index=2}
-            int fromBody = BDY * 3;
-            int fromStr = PhysicalDamage; // 근력도 HP에 직접 기여하도록
-            int basePlusBuff = baseMaxHP + Mult.hpAdd; // 기존 구조와 호환용
+            float fromBody = BDY * 3f;
+            float fromStr = PhysicalDamage;
+            float buffAdd = Mult.hpAdd;
 
-            // 원하는 쪽으로 가중치를 조정해도 됨
-            return Mathf.Max(1, basePlusBuff + fromBody + fromStr);
+            // 체력 공식 = (BDY * 3) + PhysicalDamage + 상태/버프에서 온 hpFlatAdd
+            float raw = fromBody + fromStr + buffAdd;
+            return Mathf.Max(1, Mathf.FloorToInt(raw));
         }
     }
-    public int MaxMP => Mathf.Max(0, (baseMND * 3) + MagicDamage + Mult.mpAdd);
-    public int PhysicalDamage => Mathf.Max(1, Mathf.FloorToInt(basePhysicalDamage * Mult.atk));
-    public int MagicDamage => Mathf.Max(1, Mathf.FloorToInt(baseMagicDamage * Mult.mag));
-    public int BDY => Mathf.Max(0, baseBDY + _passiveBDYBonus);
-    public int INS => Mathf.Max(0, Mathf.FloorToInt(baseINS * Mult.ins));
-    public int MaxRage => baseMaxRage;
+
+    public float MaxMP
+    {
+        get
+        {
+            float raw = (baseMND * 3f) + MagicDamage + Mult.mpAdd;
+            return Mathf.Max(0, Mathf.FloorToInt(raw));
+        }
+    }
+    public float MaxRage
+    {
+        get
+        {
+            // 현재 전투 상황이 반영된 6 스탯
+            float str = PhysicalDamage;   // 근력
+            float mag = MagicDamage;      // 마력
+            float agi = EffectiveAGI;     // 민첩
+            float bdy = BDY;              // 신체
+            float mnd = baseMND;          // 정신
+            float ins = INS;              // 통찰
+
+            return Mathf.Max(0f, str + mag + agi + bdy + mnd + ins);
+        }
+    }
+    public float PhysicalDamage => Mathf.Max(0f, basePhysicalDamage * Mult.atk);
+    public float MagicDamage => Mathf.Max(0f, baseMagicDamage * Mult.mag);
+    public float BDY => Mathf.Max(0, baseBDY + _passiveBDYBonus);
+    public float INS => Mathf.Max(0, (baseINS * Mult.ins));
     public float Hostility { get; private set; } = 1.0f; // 전투 시작 시 기본 적대감 (0으로 시작하면 첫 타겟팅이 불가능하므로 1 등으로 설정)
 
+    // === Rage 조작 헬퍼 ===
+    public void AddRage(float amount)
+    {
+        if (Mathf.Approximately(amount, 0f)) return;
+
+        float before = Rage;
+        Rage = Mathf.Clamp(before + amount, 0f, MaxRage);
+
+        Debug.Log($"[RAGE] {name} Rage: {before:F2} -> {Rage:F2} (Δ={amount:F2})");
+    }
+
+    public void ReduceRageByRatio(float ratio)
+    {
+        ratio = Mathf.Clamp01(ratio);
+        if (ratio <= 0f) return;
+
+        float before = Rage;
+        float delta = before * ratio;
+        if (delta <= 0f) return;
+
+        Rage = Mathf.Clamp(before - delta, 0f, MaxRage);
+        Debug.Log($"[RAGE] {name} Rage Calm: {before:F2} -> {Rage:F2} (-{delta:F2}, ratio={ratio * 100f:F1}%)");
+    }
+
+    // === Hostility 조작 헬퍼 ===
     public void AddHostility(float amount)
     {
         float before = Hostility;
-        Hostility = Mathf.FloorToInt(Hostility + amount);
-        float after = Hostility;
 
+        // 음수로 내려가면 0 밑으로는 안 떨어지게 클램프
+        Hostility = Mathf.Max(0f, Hostility + amount);
+
+        float after = Hostility;
         Debug.Log($"[HOSTILITY] {name} Hostility: {before:F2} -> {after:F2} (Δ={amount:F2})");
     }
 
@@ -340,9 +386,6 @@ public class BattleUnit : MonoBehaviour
         {
             name = data.DisplayName;
             team = data.team;
-            baseMaxHP = data.MaxHP;
-            baseMaxMP = data.MaxMP;
-            baseMaxRage = data.MaxRage;
             basePhysicalDamage = data.PhysicalDamage;
             baseMagicDamage = data.MagicDamage;
             AGI = data.AGI;
@@ -670,8 +713,14 @@ public class BattleUnit : MonoBehaviour
     }
     public void GainMP(int amount)
     {
-        if (amount <= 0) return;
-        MP = Mathf.Clamp(MP + amount, 0, MaxMP);
+        int MPInt = Mathf.FloorToInt(amount);
+        if (MPInt <= 0)
+            return;
+
+        float before = MP;
+        int maxThrPer = Mathf.FloorToInt(MaxMP * 0.3f);
+
+        MP = Mathf.Min(MaxMP, MP + MPInt);
     }
 
     public void Retreat()
@@ -718,23 +767,30 @@ public class BattleUnit : MonoBehaviour
 
         Debug.Log($"Damaged: {name} damage={amount}");
     }
-
-    public void Heal(int amount)
+    public void HealPercent(float ratio)
     {
-        if (amount <= 0 && amount > -1) return;
+        ratio = Mathf.Clamp01(ratio);
+        int amount = Mathf.FloorToInt(MaxHP * ratio);
+        Heal(amount);
+    }
 
-        int before = HP;
-        int Max_ThrPer = (int)(MaxHP * 0.3f);
-        int Max_tenPer = (int)(MaxHP * 0.1f);
+    public void Heal(float amount)
+    {
+        int healInt = Mathf.FloorToInt(amount);
+        if (healInt <= 0)
+            return;
 
-        if (amount == -1) amount = Max_tenPer;  //수동 턴 종료일 때의 회복량
+        float before = HP;
+        int maxThrPer = Mathf.FloorToInt(MaxHP * 0.3f);
 
-        HP = Mathf.Min(MaxHP, HP + amount);
+        HP = Mathf.Min((int)MaxHP, HP + healInt);
 
-        if(HP > Max_ThrPer)  //회복 후 위험상태에서 벗어났을 시
-            if (animator) animator.SetBool("Warning", false);
+        // 회복 후 위험 상태에서 벗어났으면 Warning 끔
+        if (HP > maxThrPer && animator)
+            animator.SetBool("Warning", false);
 
-        //if (HP != before) Debug.Log($"{name} Heal +{HP - before} → {HP}/{MaxHP}");
+        // 필요하면 디버그 로그
+        //Debug.Log($"{name} Heal +{HP - before} → {HP}/{MaxHP}");
     }
     #endregion
 

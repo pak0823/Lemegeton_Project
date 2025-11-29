@@ -78,7 +78,7 @@ public abstract class SkillAsset : ScriptableObject
     //스킬별 대미지 계산. 필요시 하위 클래스에서 override
     public virtual int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
     {
-        int baseStat;
+        float baseStat;
 
         switch (school)
         {

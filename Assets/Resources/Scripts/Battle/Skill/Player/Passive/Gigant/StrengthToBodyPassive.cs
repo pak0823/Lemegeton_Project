@@ -22,7 +22,7 @@ public class StrengthToBodyPassive : PassiveAsset
         if (owner == null) return;
 
         // 현재 근력(상태/버프까지 반영된 값)을 기준으로 계산
-        int curPhysical = owner.PhysicalDamage;
+        float curPhysical = owner.PhysicalDamage;
         int bonusBDY = Mathf.RoundToInt(curPhysical * ratio);
 
         if (bonusBDY <= 0)
@@ -35,17 +35,17 @@ public class StrengthToBodyPassive : PassiveAsset
         _bonusBdyByUnit[owner] = bonusBDY;
 
         // BDY 증가 전 HP 기준 기록
-        int oldMaxHP = owner.MaxHP;
-        int oldHP = owner.HP;
+        float oldMaxHP = owner.MaxHP;
+        float oldHP = owner.HP;
 
         // BattleUnit 쪽에 BDY 보너스를 더해주는 helper를 따로 두고 호출
         owner.AddBodyBonusFromPassive(bonusBDY);
 
         // BDY 증가 후 새로운 MaxHP 계산됨
-        int newMaxHP = owner.MaxHP;
+        float newMaxHP = owner.MaxHP;
 
         // 증가한 만큼 현재 HP도 올려줌
-        int deltaHP = newMaxHP - oldMaxHP;
+        float deltaHP = newMaxHP - oldMaxHP;
         if (deltaHP > 0)
         {
             owner.Heal(deltaHP); // 내부적으로 MaxHP 넘지 않음
