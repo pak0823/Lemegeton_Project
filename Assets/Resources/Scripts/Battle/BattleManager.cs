@@ -143,6 +143,19 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    [System.Serializable]
+    public class BeastDomainZone
+    {
+        public BattleUnit owner;      // 영역을 만든 유닛
+        public Tilemap map;          // 영역이 올라간 타일맵
+        public Vector3Int center;    // 생성 시 중심 셀
+        public int radius;           // 헥사 거리 반경
+        public int remainingTurns;   // 남은 턴 (owner의 차례 기준)
+
+        // 이 영역을 표현하는 Highlighter 그룹 토큰(임시)
+        public int highlightToken;
+    }
+    List<BeastDomainZone> _beastZones = new List<BeastDomainZone>();
     #region Unity Callbacks
     void Awake()
     {
@@ -542,7 +555,6 @@ public class BattleManager : MonoBehaviour
     void StartTurn(BattleUnit _unit)
     {
         if (_unit == null) return;
-
         acting = _unit;
         remainingActions = baseActionsPerTurn;
         usedActions.Clear();
@@ -556,16 +568,35 @@ public class BattleManager : MonoBehaviour
         Debug.Log($"[Battle] StartTurn -> {acting.name}");
 
         var sc = _unit.GetComponent<StatusController>();
-        if (sc != null) sc.OnTurnStart();
-
         var usc = _unit.GetComponent<UnitStateController>();
-        usc?.OnTurnStart();
+
+
+        // 이 턴 시작 시점에 Fear가 있었는지 먼저 체크
+        bool hadFear = (usc != null && usc.Has(UnitStateId.Fear));
+
+        if (sc != null) sc.OnTurnStart();
+        if (usc != null) usc?.OnTurnStart();
 
         var ambushSkill = GetAmbushSkillFor(_unit);
         if (ambushSkill != null)
         {
             TryApplyAmbushTurnStartHeal(_unit, ambushSkill);
         }
+
+        // 공포 상태 처리: 다른 행동보다 우선 적용
+        if (hadFear)
+        {
+            Debug.Log($"[Fear] {_unit.name} 공포 상태 턴 시작 → 강제 후퇴 진행");
+            state = BattleState.Resolving;
+            remainingActions = 0;
+            usedActions.Clear();
+
+            StartCoroutine(Co_HandleFearTurn(_unit));
+            return; // 여기서 턴 로직 종료 (이동/공격 선택 화면 안 뜸)
+        }
+
+
+        TickBeastDomainOnTurnStart(_unit);
 
         // 캐스팅 성공 턴 소비 처리
         if (_unit.team == Team.Enemy)
@@ -646,16 +677,27 @@ public class BattleManager : MonoBehaviour
         ClearAllPreviews();
         ClearTargetSelection();
 
-        // MP 회복: MaxMP의 10% → 소수점 버림
-        float beforeMP = acting.MP;
+        // Rage가 0이면 전환할 게 없으니 MP 회복도 안 되게 처리
+        if (acting.Rage <= 0f)
+        {
+            Debug.Log($"[Calm] {acting.name} 진정: Rage가 0이라 MP를 회복할 수 없습니다.");
+            return;
+        }
 
-        int mpGain = Mathf.FloorToInt(acting.MaxMP * 0.1f);
-        if (mpGain <= 0 && acting.MaxMP > 0)
+        float maxMP = acting.MaxMP;
+        float maxRage = acting.MaxRage;
+
+        float beforeMP = acting.MP;
+        float beforeRage = acting.Rage;
+
+        // MP 회복량: MaxMP의 10% (내림, 최소 1 보장)
+        int mpGain = Mathf.FloorToInt(maxMP * 0.10f);
+        if (mpGain <= 0 && maxMP > 0f)
             mpGain = 1;
 
         if (mpGain > 0)
         {
-            acting.GainMP(mpGain);   // 이미 int를 받아 MaxMP 범위에서 클램프 
+            acting.GainMP(mpGain);   // GainMP 안에서 클램프 수행
         }
 
         float afterMP = acting.MP;
@@ -666,18 +708,30 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            Debug.Log($"[Calm] {acting.name} 진정: MP 회복 없음 (이미 최대 MP 또는 Gain=0)");
+            Debug.Log($"[Calm] {acting.name} 진정: MP 회복 없음 (이미 최대 MP이거나 Gain=0)");
         }
 
-        // "현재 Rage의 10%"만큼 감소
-        float beforeRage = acting.Rage;
-        acting.ReduceRageByRatio(0.1f); // 위에서 추가한 헬퍼
+        // 최대 Rage의 10%"를 목표로 사용
+        // 현재 Rage가 그보다 적으면 '있던 Rage 전부 소모'
+        float rageCostTarget = maxRage * 0.10f;
+
+        // MaxRage가 0이거나 음수면, 현재 Rage 전체를 소모 대상으로 본다 (안전 폴백)
+        if (rageCostTarget <= 0f)
+            rageCostTarget = beforeRage;
+
+        float spend = Mathf.Min(beforeRage, rageCostTarget);   // 실제로 쓸 Rage 양
+
+        if (spend > 0f)
+        {
+            acting.AddRage(-spend);    // AddRage 헬퍼 사용 (로그 + 클램프) 
+        }
+
         float afterRage = acting.Rage;
 
-        if (!Mathf.Approximately(beforeRage, afterRage))
-        {
-            Debug.Log($"[Calm] {acting.name} 진정: Rage {beforeRage:F2} -> {afterRage:F2}");
-        }
+        Debug.Log(
+            $"[Calm] {acting.name} 진정: Rage {beforeRage:F2} -> {afterRage:F2} " +
+            $"(소모 {spend:F2} / 목표 {rageCostTarget:F2}, MaxRage={maxRage:F2})"
+        );
 
         OnActionConsumed(BattleAction.Calm);
     }
@@ -753,11 +807,32 @@ public class BattleManager : MonoBehaviour
 
     IEnumerator Co_MoveThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell, BattleAction act)
     {
-        var fromCell = unit.Cell;
+        if (unit == null || map == null) yield break;
+
+        Vector3Int fromCell = unit.Cell;
+
+        // 실제로 이동(애니메이션 + 점유 갱신)
         grid.SetOccupied(unit.team, fromCell, false);
         yield return unit.AnimateMoveTo(map, toCell);
         grid.SetOccupied(unit.team, unit.Cell, true);
-        OnActionConsumed(act); // 이동 1회 소비 → 남은 토큰 판단
+
+        // 야수의 영역 안에서의 이동인지 체크
+        bool freeMove = IsBeastDomainFreeMove(unit, map, fromCell, toCell);
+
+        if (freeMove)
+        {
+            Debug.Log($"[BeastDomain] {unit.name} 야수의 영역 안 이동: 행동 토큰 소비 없음");
+
+            if (unit.team == Team.Player)
+            {
+                state = BattleState.ActionSelect;
+                EmitActionLabel(unit, "");
+            }
+            yield break;
+        }
+
+        // 평소처럼 이동 행동 1회 소비
+        OnActionConsumed(act);
     }
     #endregion
 
@@ -2014,6 +2089,9 @@ public class BattleManager : MonoBehaviour
         bool projEnded = false;
         bool fired = false; // 임팩트(발사) 수신 여부
 
+        //훈련 포함 최종 MP코스트를 계산
+        int cost = skill.GetEffectiveMpCost(caster);
+
         // 캐스터 모션 종료 훅
         System.Action onCastEnd = null;
         onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
@@ -2027,7 +2105,7 @@ public class BattleManager : MonoBehaviour
             fired = true; // 임팩트 수신
 
             // 발사 순간 최종 차감
-            if (!caster.TryConsumeMP(skill.mpCost))
+            if (!caster.TryConsumeMP(cost))
             {
                 Debug.Log("[Skill] 발사 시 MP 부족 → 취소");
                 projEnded = true; // 종료 플래그만 세우고 끝
@@ -2071,7 +2149,7 @@ public class BattleManager : MonoBehaviour
         // 임팩트 이벤트를 못 받았을 때: 여기서 직접 MP 차감 후 즉시 해결
         if (!fired && !projEnded)
         {
-            if (!caster.TryConsumeMP(skill.mpCost))
+            if (!caster.TryConsumeMP(cost))
             {
                 Debug.Log("[Skill] 임팩트 미수신 폴백 시 MP 부족 → 취소");
                 projEnded = true;
@@ -2144,26 +2222,40 @@ public class BattleManager : MonoBehaviour
         if (target == null || source == null)
             return Mathf.Max(0, Mathf.FloorToInt(baseDamage));
 
-        // 1) 우선 대상 유닛이 들고 있는 DB를 사용
-        StateStatModifierDB stateStatDb = null;
-        stateStatDb = target.stateStatDB;
-
-        if (stateStatDb == null)
+        var stateDb = target.stateStatDB;
+        if (stateDb == null)
             return Mathf.Max(0, Mathf.FloorToInt(baseDamage));
 
         var usc = target.GetComponent<UnitStateController>();
-        float mul = stateStatDb.GetDamageTakenMultiplier(usc, source.school);
+        var sc = target.GetComponent<StatusController>();
 
-        // GuardStack 기반 물리 피해 감소
-        if (source.school == DamageSchool.Physical)
+        // 상태(UnitState) 기반 기본 배율
+        float mul = stateDb.GetDamageTakenMultiplier(usc, source.school);
+
+        // 스택형 상태 기반 배율
+        if (sc != null)
         {
-            var sc = target.GetComponent<StatusController>();
-            if (sc != null)
+            if (source.school == DamageSchool.Physical)
             {
-                mul *= sc.GetPhysicalGuardMultiplier();
+                // 탈진/방어 스택 수 (모두 '대상' 기준)
+                int exhaustStacks = sc.GetStacks(StatusId.Exhaust); // 탈진
+                int guardStacks = sc.GetStacks(StatusId.GuardStack);   // 방어
+
+                mul *= Mathf.Pow(1.20f, exhaustStacks);
+                mul *= Mathf.Pow(0.80f, guardStacks);
+            }
+            else if (source.school == DamageSchool.Magical)
+            {
+                // 나약/저항 스택 수
+                int weaknessStacks = sc.GetStacks(StatusId.WeakStack); // 나약
+                int resistStacks = sc.GetStacks(StatusId.Resist);   // 저항
+
+                mul *= Mathf.Pow(1.20f, weaknessStacks);
+                mul *= Mathf.Pow(0.80f, resistStacks);
             }
         }
 
+        //최종 피해: baseDamage × mul, 그리고 소수점 버림
         return Mathf.Max(0, Mathf.FloorToInt(baseDamage * mul));
     }
 
@@ -2519,6 +2611,204 @@ public class BattleManager : MonoBehaviour
 
         // 이 스킬은 '공격'으로 간주되어 행동 토큰 1개를 소비하고 턴을 마무리
         OnActionConsumed(BattleAction.Attack);
+    }
+
+    public Highlighter beastDomainHighlighter; // 야수의 영역 임시 하이라이트
+
+    public void SpawnBeastDomainZone(Tilemap map, BattleUnit owner, Vector3Int centerCell, int radius, int durationTurns)
+    {
+        if (!owner || !map) return;
+
+
+        // 같은 유닛이 만든 이전 영역 제거 + 하이라이트도 함께 삭제
+        for (int i = _beastZones.Count - 1; i >= 0; i--)
+        {
+            var old = _beastZones[i];
+            if (old.owner != owner) continue;
+
+            if (old.highlightToken != 0 && beastDomainHighlighter != null)
+                beastDomainHighlighter.ClearGroup(old.highlightToken);   // Highlighter 그룹 제거
+
+            _beastZones.RemoveAt(i);
+        }
+
+        // 이번 영역의 셀 집합 계산
+        var cells = new List<Vector3Int>();
+        foreach (var c in AreaShapes.BeastDomainArea(centerCell, radius))
+            cells.Add(c);
+
+        // 하이라이트 그룹 생성 후 셀 지정
+        int token = 0;
+        if (cells.Count > 0 && beastDomainHighlighter != null)
+        {
+            token = beastDomainHighlighter.CreateGroup();
+            beastDomainHighlighter.SetGroupCells(token, map, cells);
+        }
+
+        // 4) 영역 등록
+        var zone = new BeastDomainZone
+        {
+            owner = owner,
+            map = map,
+            center = centerCell,
+            radius = radius,
+            remainingTurns = durationTurns,
+            highlightToken = token,
+        };
+        _beastZones.Add(zone);
+
+        Debug.Log(
+            $"[BeastDomain] {owner.name} 야수의 영역 생성 - " +
+            $"center:{centerCell}, r:{radius}, turns:{durationTurns}, token:{token}");
+    }
+    void TickBeastDomainOnTurnStart(BattleUnit unitWhoseTurnStarted)
+    {
+        if (unitWhoseTurnStarted == null) return;
+
+        for (int i = _beastZones.Count - 1; i >= 0; i--)
+        {
+            var z = _beastZones[i];
+            if (z.owner != unitWhoseTurnStarted)
+                continue;
+
+            z.remainingTurns--;
+            Debug.Log($"[BeastDomain] {z.owner.name} 턴 시작 - 야수의 영역 남은 턴: {z.remainingTurns}");
+
+            if (z.remainingTurns <= 0)
+            {
+                Debug.Log($"[BeastDomain] {z.owner.name} 야수의 영역이 사라집니다 (center:{z.center})");
+
+                // 영역 끝날 때 하이라이트 제거
+                if (z.highlightToken != 0 && beastDomainHighlighter != null)
+                    beastDomainHighlighter.ClearGroup(z.highlightToken);
+
+                _beastZones.RemoveAt(i);
+            }
+        }
+    }
+
+    // 공포(Fear) 턴 처리
+    public IEnumerator Co_HandleFearTurn(BattleUnit unit)
+    {
+        if (unit == null)
+            yield break;
+
+        var usc = unit.GetComponent<UnitStateController>();
+        if (usc == null)
+            yield break;
+
+        var map = unit.CurrentMap;
+        if (map == null || grid == null)
+        {
+            Debug.LogWarning("[Fear] 맵 또는 그리드가 없습니다.");
+            yield break;
+        }
+
+        // 뒤로 한 칸 이동 가능한 후보들 계산
+        var candidates = GetFearRetreatCandidates(unit);
+        if (candidates == null || candidates.Count == 0)
+        {
+            Debug.Log($"[Fear] {unit.name} 공포 상태지만 뒤로 이동할 수 있는 칸이 없습니다.");
+        }
+        else
+        {
+            // 후보 중 랜덤 하나 선택
+            var dest = candidates[Random.Range(0, candidates.Count)];
+
+            var from = unit.Cell;
+            grid.SetOccupied(unit.team, from, false);
+            yield return unit.AnimateMoveTo(map, dest);
+            grid.SetOccupied(unit.team, unit.Cell, true);
+
+            Debug.Log($"[Fear] {unit.name} 이(가) {from} → {dest} 로 후퇴했습니다.");
+        }
+
+        // 이 턴은 공포 때문에 아무 행동도 못 하고 바로 종료
+        if (unit.team == Team.Player)
+            EndPlayerTurn();
+        else
+            EndEnemyTurn(unit);
+    }
+    // 공포 상태일 때 "한 칸 뒤"로 물러날 수 있는 후보 칸들 계산
+    List<Vector3Int> GetFearRetreatCandidates(BattleUnit unit)
+    {
+        var result = new List<Vector3Int>();
+        if (unit == null || grid == null)
+            return result;
+
+        var map = unit.CurrentMap;
+        if (map == null)
+            return result;
+
+        var origin = unit.Cell;
+
+        // 팀별 "뒤쪽" 방향 오프셋 정의
+        // 예시 기준:
+        // - 플레이어: (-1,0), (-1,-1)
+        // - 적군:    ( 1,0), ( 0, 1)
+        Vector3Int[] offsets;
+        if (unit.team == Team.Player)
+        {
+            offsets = new[]
+            {
+            new Vector3Int(-1, 0, 0),
+            new Vector3Int(-1, -1, 0),
+        };
+        }
+        else // Team.Enemy
+        {
+            offsets = new[]
+            {
+            new Vector3Int(1, 0, 0),
+            new Vector3Int(0, 1, 0),
+        };
+        }
+
+        foreach (var off in offsets)
+        {
+            var dest = origin + off;
+
+            // 타일이 존재하고, 해당 팀 기준으로 워커블인지 검사
+            if (!map.HasTile(dest))
+                continue;
+
+            if (!IsWalkableCell(map, dest))
+                continue;
+
+            result.Add(dest);
+        }
+
+        return result;
+    }
+
+    int HexDistance(Vector3Int a, Vector3Int b)
+    {
+        var axA = SkillLibrary.OffsetToAxial(a);
+        var axB = SkillLibrary.OffsetToAxial(b);
+
+        int dq = Mathf.Abs(axA.x - axB.x);
+        int dr = Mathf.Abs(axA.y - axB.y);
+        int ds = Mathf.Abs((-axA.x - axA.y) - (-axB.x - axB.y));
+
+        return (dq + dr + ds) / 2;
+    }
+    bool IsBeastDomainFreeMove(BattleUnit unit, Tilemap map, Vector3Int fromCell, Vector3Int toCell)
+    {
+        if (unit == null || map == null) return false;
+
+        foreach (var z in _beastZones)
+        {
+            if (z.owner != unit) continue;
+            if (z.map != map) continue;
+
+            bool fromIn = HexDistance(z.center, fromCell) <= z.radius;
+            bool toIn = HexDistance(z.center, toCell) <= z.radius;
+
+            if (fromIn && toIn)
+                return true;
+        }
+
+        return false;
     }
 
 

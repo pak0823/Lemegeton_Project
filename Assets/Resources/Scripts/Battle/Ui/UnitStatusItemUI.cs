@@ -20,12 +20,12 @@ public class UnitStatusItemUI : MonoBehaviour
     [SerializeField] private Transform chipRoot;                 // 공용 칩 루트 (오른쪽 정렬)
     [SerializeField] private HorizontalLayoutGroup chipLayout;   // ChipRoot에 붙은 LayoutGroup
 
-    [Header("Visual DB (ScriptableObject)")]
+    [Header("Visual DB (상태 버프)")]
     [SerializeField] private UnitStateVisualDB visualDB;
     [SerializeField] private GameObject stateChipPrefab;
     [SerializeField] private Sprite defaultIcon;           // 매핑 없을 때 대체
 
-    [Header("Stackable Status (중첩 디버프)")]
+    [Header("Stackable Status (중첩 버프)")]
     [SerializeField] private StackableStatusVisualDB stackVisualDB; 
     [SerializeField] private GameObject stackChipPrefab;// 아이콘 칩 프리팹(둔화에서 쓰던 것)
     [SerializeField] private Sprite defaultDebuffIcon;

@@ -3,7 +3,19 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum StatusId { None = 0 ,Slow = 1 , ShootingStack = 2 , Bleed = 3 , GuardStack = 4, MoveResist = 5, CounterStack = 6}
+public enum StatusId 
+{ 
+    None = 0 ,  // 없음
+    Slow = 1 , // 민첩 감소
+    ShootingStack = 2 , // 럭키식스 패시브 스택
+    Bleed = 3 , // 출혈
+    GuardStack = 4, // 방어
+    MoveResist = 5, // 강제 이동 저항
+    CounterStack = 6, // 대응
+    WeakStack = 7 , // 나약
+    Exhaust = 8, // 탈진
+    Resist = 9  // 저항
+}
 
 public static class DebuffTuning
 {
@@ -91,14 +103,17 @@ public class StatusController : MonoBehaviour
             return;
         }
 
+        int maxStacks = GetMaxStacks(id);
+        int clampedStacks = Mathf.Min(stacks, maxStacks);
+
         if (_map.TryGetValue(id, out var e))
         {
-            e.stacks = stacks;
+            e.stacks = clampedStacks;
             e.remainingTurns = durationTurns;
         }
         else
         {
-            _map[id] = new StatusEntry(id, stacks, durationTurns);
+            _map[id] = new StatusEntry(id, clampedStacks, durationTurns);
         }
 
         OnStatusChanged?.Invoke();
@@ -106,18 +121,21 @@ public class StatusController : MonoBehaviour
 
     public void ApplyWithTurnContext(StatusId id, int stacks, int durationTurns)
     {
+        int maxStacks = GetMaxStacks(id);
+
         if (_map.TryGetValue(id, out var e))
         {
-            // 스택 증가 + 최대 6중첩 캡
-            e.stacks = Mathf.Min(e.stacks + stacks, DebuffTuning.MaxStacks);
+            // 스택 증가 + 상태별 최대 중첩 캡
+            e.stacks = Mathf.Min(e.stacks + stacks, maxStacks);
 
-            // 지속시간은 '새로 부여된 둔화' 기준으로 리셋
+            // 지속시간은 '새로 부여된 상태' 기준으로 리셋
             e.remainingTurns = durationTurns;
         }
         else
         {
             // 새로 부여된 상태를 추가
-            _map[id] = new StatusEntry(id, Mathf.Min(stacks, DebuffTuning.MaxStacks), durationTurns);
+            int clampedStacks = Mathf.Min(stacks, maxStacks);
+            _map[id] = new StatusEntry(id, clampedStacks, durationTurns);
         }
 
         OnStatusChanged?.Invoke();
@@ -130,6 +148,24 @@ public class StatusController : MonoBehaviour
 
     public bool Has(StatusId id) => _map.ContainsKey(id);
     public int GetStacks(StatusId id) => _map.TryGetValue(id, out var e) ? e.stacks : 0;
+
+    //상태별 최대 중첩 수를 반환한다.
+    // GuardStack / WeakStack / Exhaust / Resist : 9중첩
+    // 나머지 6중첩
+    int GetMaxStacks(StatusId id)
+    {
+        switch (id)
+        {
+            case StatusId.GuardStack:
+            case StatusId.WeakStack:
+            case StatusId.Exhaust:
+            case StatusId.Resist:
+                return 9;
+
+            default:
+                return DebuffTuning.MaxStacks; // Slow, Bleed 등은 기존 상한 유지
+        }
+    }
 
     public float GetAgilityMultiplier() //민첩 배율 계산
     {
@@ -169,17 +205,6 @@ public class StatusController : MonoBehaviour
         foreach (var id in toRemove) _map.Remove(id);
         if (changed) OnStatusChanged?.Invoke();
     }
-
-    public float GetPhysicalGuardMultiplier()
-    {
-        int s = GetStacks(StatusId.GuardStack); // 방어 중첩 스택
-        s = Mathf.Clamp(s, 0, DebuffTuning.MaxStacks);
-
-        if (s <= 0) return 1f; // 0스택이면 감소 없음
-        return Mathf.Pow(DebuffTuning.GuardPerStackMult, s);
-    }
-
-    /// <summary>UI 표시에 사용할 태그 문자열.</summary>
 
     public StatusView[] GetStatusViews()
     {

@@ -13,7 +13,8 @@ public class UnitStateVisualDB : ScriptableObject
         public Sprite icon;
         public Color tint = Color.white;
         public int sortOrder = 0;     // 낮을수록 앞에 배치
-        public string displayName;    // (선택) UI 텍스트에 쓸 이름
+        public string displayName;    // UI 텍스트에 쓸 이름
+        public bool showTurns = true;
     }
 
     [SerializeField] private List<Entry> entries = new();
@@ -44,5 +45,10 @@ public class UnitStateVisualDB : ScriptableObject
     {
         var e = GetEntry(id);
         return e != null ? e.sortOrder : 0;
+    }
+    public bool GetShowTurns(UnitStateId id)
+    {
+        var e = GetEntry(id);
+        return e != null && e.showTurns;
     }
 }

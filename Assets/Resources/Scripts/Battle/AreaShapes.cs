@@ -115,4 +115,22 @@ public static class AreaShapes
         foreach (var d in new[] { dirs[left], dirs[idx], dirs[right] })
             yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
     }
+
+    public static IEnumerable<Vector3Int> BeastDomainArea(Vector3Int originCell, int radius)
+    {
+        var originAx = SkillLibrary.OffsetToAxial(originCell);
+
+        for (int dq = -radius; dq <= radius; dq++)
+        {
+            for (int dr = -radius; dr <= radius; dr++)
+            {
+                int ds = -dq - dr;
+                if (Mathf.Abs(dq) > radius || Mathf.Abs(dr) > radius || Mathf.Abs(ds) > radius)
+                    continue;
+
+                var axial = new Vector2Int(originAx.x + dq, originAx.y + dr);
+                yield return SkillLibrary.AxialToOffset(axial);
+            }
+        }
+    }
 }

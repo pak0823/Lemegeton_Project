@@ -38,19 +38,25 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     public SkillTargetMode selectionMode = SkillTargetMode.Tile; // 타일 지목
 
     [Header("Training")]
-    [Tooltip("Route 0에서 MP 비용을 덮어쓸지 여부")]
+    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
     public bool trainingUseMpOverride = false;
-    [Tooltip("Route 2에서 범위를 덮어쓸지 여부")]
-    public bool trainingUseZoneAreaOverride = true;
-
-    [Tooltip("Route 0 선택 시 실제 소모 MP")]
+    [Tooltip("MP 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 보통 0 = 1번 루트)")]
+    [Range(-1, 2)] public int routeForMpOverride = 0;
+    [Tooltip("해당 루트에서 실제로 사용할 MP 비용")]
     public int trainingMpCostRoute0 = 5;
 
-    [Tooltip("Route 1 선택 시 증가할 수치 값")]
+    [Tooltip("연막 위에서 MP 회복을 활성화할지 여부")]
+    public bool trainingEnableMpRegen = true;
+    [Tooltip("MP 회복이 적용될 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)] public int routeForMpRegen = 1;
+    [Tooltip("Route에서 사용할 MP 회복 비율(0~1)")]
     [Range(0f, 1f)] public float trainingMpRegenRatio = 0.3f;
 
-    [Tooltip("Training Route2 (Zone Area Override)")]
-
+    [Tooltip("훈련에서 존 범위를 덮어쓸지 여부")]
+    public bool trainingUseZoneAreaOverride = true;
+    [Tooltip("존 범위 오버라이드가 적용될 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)] public int routeForZoneAreaOverride = 2;
+    [Tooltip("훈련에서 사용할 존 범위 프리셋")]
     public ParametricDamageSkill.AreaPreset trainingZoneAreaPreset =
         ParametricDamageSkill.AreaPreset.Ring;
 
@@ -62,6 +68,12 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         targetMode = selectionMode;
         power = 0f; // 피해 없음
         school = DamageSchool.Physical;
+    }
+
+    int GetRoute(BattleUnit caster)
+    {
+        if (!caster) return -1;
+        return caster.GetTrainingRouteIndex(this);
     }
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOdd)
@@ -88,9 +100,6 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
              bm, map, cells, originCell, caster, durationCasterTurns, visibilityHostilityFactor,
             smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder
         );
-
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0) caster.TryConsumeMP(cost);
 
         yield break;
     }
@@ -128,9 +137,11 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         durationTurns,
         effectMode == SmokeEffectMode.HostilityVisibility ? visibilityHostilityFactor : 1f);
 
-        int route = caster.GetTrainingRouteIndex(this);
-        // --- route1: MP 회복 활성화 ---
-        if (route == 1)
+        int route = GetRoute(caster);
+        // --- MP 회복 활성화 (지정 루트) ---
+        if (trainingEnableMpRegen &&
+            routeForMpRegen >= 0 &&
+            route == routeForMpRegen)
         {
             comp.enableMpRegen = true;
             comp.mpRegenRatio = trainingMpRegenRatio;
@@ -141,13 +152,14 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
             comp.mpRegenRatio = 0f;
         }
 
-        // --- route2: 존 범위 오버라이드 ---
-        if (route == 2 && trainingUseZoneAreaOverride)
+        // --- 존 범위 오버라이드 (지정 루트) ---
+        if (trainingUseZoneAreaOverride &&
+            routeForZoneAreaOverride >= 0 &&
+            route == routeForZoneAreaOverride)
         {
-            // 중심 기준 Ring 셀 목록 계산
             var ringCells = AreaShapes.GetCells(
                 centerCell,
-                trainingZoneAreaPreset,   // 보통 Ring
+                trainingZoneAreaPreset,
                 diagUseNEAxis: true
             );
             comp.OverrideAreaCells(ringCells);
@@ -164,8 +176,10 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         int cost = mpCost;
         if (caster == null) return cost;
 
-        int route = caster.GetTrainingRouteIndex(this);
-        if (route == 0 && trainingUseMpOverride)
+        int route = GetRoute(caster);
+        if (trainingUseMpOverride &&
+            routeForMpOverride >= 0 &&
+            route == routeForMpOverride)
         {
             cost = Mathf.Max(0, trainingMpCostRoute0);
         }

@@ -9,6 +9,7 @@ public enum UnitStateId
     Steam = 2,  //증기
     Isolation = 3,   //쇄국
     Vigilance = 4,   //경계
+    Fear = 5,   //공포
 
     Ambush = 100    //잠복
 }
@@ -129,6 +130,13 @@ public class UnitStateController : MonoBehaviour
     }
 
     public bool IsForcedMoveImmune => _forcedMoveImmuneTurns > 0;
+
+    public int GetRemainingTurns(UnitStateId id)
+    {
+        if (_durations.TryGetValue(id, out var turns))
+            return turns;
+        return -1; // -1이면 “무기한”으로 취급
+    }
 
     // 이 유닛의 턴이 시작될 때 호출.
     // duration이 붙은 상태들의 남은 턴 수를 1씩 감소시키고 0 이하이면 제거.
