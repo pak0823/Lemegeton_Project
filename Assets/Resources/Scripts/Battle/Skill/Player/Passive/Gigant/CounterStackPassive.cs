@@ -14,7 +14,7 @@ public class CounterStackPassive : PassiveAsset
 {
     [Header("Counter Stack Settings")]
     [Tooltip("대응 중첩으로 사용할 StatusId")]
-    public StatusId counterStatusId = StatusId.CounterStack;
+    public StatusId counterStatusId = StatusId.Action;
 
     [Tooltip("이 수치에 도달하면 즉시 턴을 얻습니다.")]
     public int stacksForExtraTurn = 5;

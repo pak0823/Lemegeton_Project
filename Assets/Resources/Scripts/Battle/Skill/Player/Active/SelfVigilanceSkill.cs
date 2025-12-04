@@ -81,7 +81,7 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
         }
 
         // 1턴 지속 경계 상태 부여
-        usc.ApplyForTurns(UnitStateId.Vigilance, durationTurns);
+        usc.ApplyForTurns(UnitStateId.Guard, durationTurns);
 
         int route = GetRoute(caster);
 

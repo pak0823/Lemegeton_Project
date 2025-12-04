@@ -14,7 +14,7 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
 
     [Header("조건: 출혈이 있는 대상에게만 공포 부여")]
     [Tooltip("출혈 상태 ID (보통 Bleed)")]
-    public StatusId bleedStatusId = StatusId.Bleed;
+    public StatusId bleedStatusId = StatusId.Bleeding;
 
     [Tooltip("공포 유닛 상태 ID (보통 UnitStateId.Fear)")]
     public UnitStateId fearStateId = UnitStateId.Fear;

@@ -37,7 +37,7 @@ public abstract class SkillAsset : ScriptableObject
     public Sprite descriptionImage; //스킬 범위 설명 이미지(패널에 표시)
     [TextArea] public string description;   // 스킬 설명(패널에 표시)
 
-    [Header("Damage (default)")]
+    [Header("Damage Type")]
     public DamageSchool school = DamageSchool.Physical;
     public AttackAttr attribute = AttackAttr.None;
     public float power = 1f; // 기본 배수(예: 1.0 = 원 공격력)
@@ -56,10 +56,10 @@ public abstract class SkillAsset : ScriptableObject
     [Tooltip("Unit 타겟 스킬일 때, 대상에게 뛰어가서 공격할지 여부. false면 제자리에서 시전.")]
     public bool useGapCloseJump = true;
 
-    [Header("Compat (임시)")]
+    [Header("Compat")]
     public SkillId legacyId = SkillId.Skill1; // 기존 분기 로직 호환용
 
-    [Header("Training (UI only)")]
+    [Header("Training")]
     [Tooltip("훈련 UI에 표시할 3개 루트의 제목/설명. 비어 있으면 기본 텍스트로 대체.")]
     public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
 

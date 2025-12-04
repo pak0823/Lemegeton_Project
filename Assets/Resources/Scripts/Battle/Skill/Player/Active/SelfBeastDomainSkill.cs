@@ -19,6 +19,7 @@ public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
     [Header("영역 반경 (타일 거리)")]
     public int radius = 2;
 
+
     public bool SelfCastOnSelect => true;
 
 #if UNITY_EDITOR

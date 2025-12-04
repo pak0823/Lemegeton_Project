@@ -44,7 +44,7 @@ public class ShootingInsightPassive : PassiveAsset
 
         StatusController statusController = _dealer.GetComponent<StatusController>();
         if (statusController != null)
-            statusController.SetStacks(StatusId.ShootingStack, cur, 0); // showTurns=false 이라 duration은 의미 없음
+            statusController.SetStacks(StatusId.Shooting, cur, 0); // showTurns=false 이라 duration은 의미 없음
 
         // 5스택 도달: 통찰 강화 트리거 (현재는 로그/플레이스홀더만)
         if (cur == triggerStacks)
@@ -62,7 +62,7 @@ public class ShootingInsightPassive : PassiveAsset
             Debug.Log($"[Passive:ShootingInsight] {_dealer.name} 스택 리셋");
             cur = 0;
             if (statusController != null)
-                statusController.SetStacks(StatusId.ShootingStack, 0); // 아이콘 제거
+                statusController.SetStacks(StatusId.Shooting, 0); // 아이콘 제거
             // TODO: 여기서 사격 중첩/통찰 버프 상태 제거
         }
 

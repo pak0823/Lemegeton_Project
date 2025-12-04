@@ -327,6 +327,14 @@ public class BattleUnit : MonoBehaviour
     // 상태 효과가 적용된 최종 적대감 '생성량' 배율 (예: 도발 상태일 때 2.0f)
     public float HostilityGenerationMultiplier => Mult.hostilityGenerationMultiplier;
 
+    public void SetPassiveAgilityMultiplier(float multiplier)
+    {
+        _passiveAgilityMultiplier = Mathf.Max(0f, multiplier);
+        // AGI가 변하면 ATB도 영향을 받으므로 재계산
+        RecomputeATBFromRefs();
+    }
+    private float _passiveAgilityMultiplier = 1f;
+
     public float CritChance => baseINS * Mult.ins * 0.01f;  // 예: INS 30 → 30% 크리티컬
     #endregion
 
@@ -475,7 +483,7 @@ public class BattleUnit : MonoBehaviour
             if (stateStatDB != null && unitStateController != null)
                 stateMul = stateStatDB.ComputeMultipliers(unitStateController).agi;
 
-            return AGI * mul * stateMul;
+            return AGI * mul * stateMul * _passiveAgilityMultiplier;
         }
     }
 

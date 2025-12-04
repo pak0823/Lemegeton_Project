@@ -928,7 +928,7 @@ public class BattleManager : MonoBehaviour
         // 씬에 존재하는 모든 유닛 기준으로 계산
         var currentUnit = FindObjectsOfType<BattleUnit>();
 
-        foreach (var units in currentUnit) // ← 기존에 쓰는 유닛 리스트/배열 이름 사용
+        foreach (var units in currentUnit)
         {
             if (units == null) continue;
             if (units == _battleunit) continue;
@@ -2238,8 +2238,8 @@ public class BattleManager : MonoBehaviour
             if (source.school == DamageSchool.Physical)
             {
                 // 탈진/방어 스택 수 (모두 '대상' 기준)
-                int exhaustStacks = sc.GetStacks(StatusId.Exhaust); // 탈진
-                int guardStacks = sc.GetStacks(StatusId.GuardStack);   // 방어
+                int exhaustStacks = sc.GetStacks(StatusId.Exhaustion); // 탈진
+                int guardStacks = sc.GetStacks(StatusId.Defense);   // 방어
 
                 mul *= Mathf.Pow(1.20f, exhaustStacks);
                 mul *= Mathf.Pow(0.80f, guardStacks);
@@ -2247,8 +2247,8 @@ public class BattleManager : MonoBehaviour
             else if (source.school == DamageSchool.Magical)
             {
                 // 나약/저항 스택 수
-                int weaknessStacks = sc.GetStacks(StatusId.WeakStack); // 나약
-                int resistStacks = sc.GetStacks(StatusId.Resist);   // 저항
+                int weaknessStacks = sc.GetStacks(StatusId.Weakness); // 나약
+                int resistStacks = sc.GetStacks(StatusId.Resistance);   // 저항
 
                 mul *= Mathf.Pow(1.20f, weaknessStacks);
                 mul *= Mathf.Pow(0.80f, resistStacks);
@@ -2284,7 +2284,7 @@ public class BattleManager : MonoBehaviour
 
                 // === 경계 상태 처리 추가 ===
                 var usc = v.GetComponent<UnitStateController>();
-                bool hasVigilance = usc != null && usc.Has(UnitStateId.Vigilance);
+                bool hasVigilance = usc != null && usc.Has(UnitStateId.Guard);
 
                 if (hasVigilance && source.school == DamageSchool.Physical)
                 {
@@ -2338,7 +2338,7 @@ public class BattleManager : MonoBehaviour
                     );
 
                     damage = 0;
-                    usc.Remove(UnitStateId.Vigilance);
+                    usc.Remove(UnitStateId.Guard);
                 }
 
                 // 공통 디버그: 실제로 어떤 피해가 적용되었는지
@@ -2372,7 +2372,7 @@ public class BattleManager : MonoBehaviour
                         if (sc != null)
                         {
                             sc.ApplyWithTurnContext(
-                                StatusId.Bleed,
+                                StatusId.Bleeding,
                                 Mathf.Max(1, dmgSkill.trainingBleedStacks),
                                 Mathf.Max(1, dmgSkill.trainingBleedDurationTurns)
                             );
@@ -2391,7 +2391,7 @@ public class BattleManager : MonoBehaviour
 
                         // 이동 저항 상태가 있으면, 강제 이동 자체를 막는다
                         var sc = v.GetComponent<StatusController>();
-                        bool hasMoveResist = sc != null && sc.Has(StatusId.MoveResist); // 또는 sc.HasMoveResist()
+                        bool hasMoveResist = sc != null && sc.Has(StatusId.Fixing); // 또는 sc.HasMoveResist()
 
                         if (canMove && !hasMoveResist)
                         {

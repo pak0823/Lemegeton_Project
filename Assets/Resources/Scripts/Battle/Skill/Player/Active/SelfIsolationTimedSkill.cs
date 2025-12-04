@@ -14,7 +14,7 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
 {
     [Header("기본 방어 중첩 효과")]
     [Tooltip("기본 방어 상태 ID")]
-    public StatusId baseDefenseStatusId = StatusId.GuardStack;
+    public StatusId baseDefenseStatusId = StatusId.Defense;
     [Min(1)] public int baseDefenseStacks = 3;
     [Min(1)] public int baseDefenseDurationTurns = 1;
 
@@ -34,7 +34,7 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
     [Tooltip("강제 이동 방지 효과를 적용할 훈련 루트(-1이면 비활성)")]
     [Range(-1, 2)] public int routeForPreventForcedMove = -1;
     [Tooltip("강제 이동을 막는 데 사용할 상태 ID (예: MoveResist)")]
-    public StatusId moveResistStatusId = StatusId.MoveResist;
+    public StatusId moveResistStatusId = StatusId.Fixing;
     [Tooltip("이동 저항 상태의 지속 턴수")]
     [Min(1)] public int moveResistDurationTurns = 1;
 

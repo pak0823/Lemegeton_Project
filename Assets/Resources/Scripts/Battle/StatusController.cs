@@ -3,18 +3,28 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+
+/*
+ 1 - 20: ½ºÅ³ ÁßÃ¸
+ 21 - 40: ÇÇÇØ ÁßÃ¸
+ 50 - 55: Áö¼Óµô ÁßÃ¸
+ */
 public enum StatusId 
 { 
     None = 0 ,  // ¾øÀ½
-    Slow = 1 , // ¹ÎÃ¸ °¨¼Ò
-    ShootingStack = 2 , // ·°Å°½Ä½º ÆÐ½Ãºê ½ºÅÃ
-    Bleed = 3 , // ÃâÇ÷
-    GuardStack = 4, // ¹æ¾î
-    MoveResist = 5, // °­Á¦ ÀÌµ¿ ÀúÇ×
-    CounterStack = 6, // ´ëÀÀ
-    WeakStack = 7 , // ³ª¾à
-    Exhaust = 8, // Å»Áø
-    Resist = 9  // ÀúÇ×
+    Shooting = 1, // ·°Å°½Ä½º »ç°Ý ÁßÃ¸
+    Action = 2, // ±â°£Æ® ´ëÀÀ ÁßÃ¸
+    Fixing = 3, // ÀÌµ¿ ÀúÇ× »óÅÂ(ÇöÀç´Â ½ºÅÃ ±¸Çö¿¡ ÀÖ´Âµ¥ »óÅÂ·Î º¯°æÇØ¾ßÇÔ)
+
+    Defense = 21, // ¹æ¾î ÁßÃ¸
+    Resistance = 22,  // ÀúÇ× ÁßÃ¸
+    Weakness = 23, // ³ª¾à ÁßÃ¸
+    Exhaustion = 24, // Å»Áø ÁßÃ¸
+    Slow = 25 , // ¹ÎÃ¸ °¨¼Ò ÁßÃ¸
+    
+    Bleeding = 50, // ÃâÇ÷ ÁßÃ¸
+    Poisoning = 51, // Áßµ¶ ÁßÃ¸
+    Ignition = 52 // ¹ßÈ­ ÁßÃ¸
 }
 
 public static class DebuffTuning
@@ -156,10 +166,10 @@ public class StatusController : MonoBehaviour
     {
         switch (id)
         {
-            case StatusId.GuardStack:
-            case StatusId.WeakStack:
-            case StatusId.Exhaust:
-            case StatusId.Resist:
+            case StatusId.Defense:
+            case StatusId.Weakness:
+            case StatusId.Exhaustion:
+            case StatusId.Resistance:
                 return 9;
 
             default:
@@ -182,7 +192,7 @@ public class StatusController : MonoBehaviour
     public void OnTurnStart()
     {
         // ÃâÇ÷ Æ½: ½ºÅÃ ¡¿ 1% ¡¿ MaxHP
-        int bleedStacks = GetStacks(StatusId.Bleed);
+        int bleedStacks = GetStacks(StatusId.Bleeding);
         if (bleedStacks > 0 && _owner != null && !_owner.IsDead)
         {
             float p = DebuffTuning.BleedPercentPerStack * bleedStacks;

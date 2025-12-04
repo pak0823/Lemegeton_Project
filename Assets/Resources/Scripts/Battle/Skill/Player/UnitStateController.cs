@@ -4,14 +4,19 @@ using UnityEngine;
 
 public enum UnitStateId 
 { 
+    // 1 - 50: 유닛 스킬 상태
     None = 0,
-    Support = 1, //지원
-    Steam = 2,  //증기
-    Isolation = 3,   //쇄국
-    Vigilance = 4,   //경계
-    Fear = 5,   //공포
+    Support = 1, // 플루이드 지원 상태
+    Steam = 2,  // 럭키식스 증기 상태
+    Isolation = 3,   //기간트 쇄국 상태
+    Guard = 4,   //기간트 경계 상태
+    Ambush = 5,    //잠복
 
-    Ambush = 100    //잠복
+    // 51 - 100: 공통 상태
+    Moribundity = 51, //빈사 상태
+    Confusion = 52, // 혼란 상태
+    Fury = 53, // 격양 상태
+    Fear = 54,   //공포 상태
 }
 public enum UnitStateBuffId
 {

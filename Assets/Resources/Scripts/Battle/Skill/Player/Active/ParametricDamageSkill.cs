@@ -419,19 +419,13 @@ public class ParametricDamageSkill : SkillAsset
 
     public override int ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
     {
-        // 기본 산식(속성/저항 포함)은 부모 호출
-        int baseDmg = base.ComputeDamage(_caster, _target, _skillruntime);
+        // 복합 대미지는 고정 대미지: 기술 위력 × (근력 + 총명)
+        float baseStat = _caster.PhysicalDamage + _caster.MagicDamage;
 
-        // 추가 배수: 상태 기반
-        float mult = GetMultiplierFor(_target);
+        float dmg = baseStat * power;
 
-        // 추가 배수: 전방 보너스
-        if (useFrontlineBonus && _caster != null && IsInFrontline(_caster, frontlineDepth))
-            mult *= Mathf.Max(0f, frontlineMultiplier);
-
-        // 최종
-        int dmg = Mathf.Max(0, Mathf.FloorToInt(baseDmg * mult));
-        return dmg;
+        // 소수점 버림, 최소 1
+        return Mathf.Max(1, Mathf.FloorToInt(dmg));
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager _bm, BattleUnit _caster, BattleUnit _target)
