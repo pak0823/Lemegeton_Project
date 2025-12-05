@@ -20,17 +20,18 @@ MonoBehaviour:
   school: 0
   attribute: 0
   power: 1
-  mpCost: 0
+  mpCost: 30
   targetMode: 0
   cooldownTurns: 6
   useGapCloseJump: 0
   legacyId: 4
   trainingRoutes:
+  - title: "\uC790\uC6D0 \uC808\uC57D \uD6C8\uB828"
+    description: "\uAE30\uC220\uC774 \uC18C\uBAA8\uD558\uB294 \uC790\uC6D0\uC744
+      \uAC10\uC18C\uD569\uB2C8\uB2E4."
   - title: "\uC800\uD56D \uC57D\uD654 \uD6C8\uB828"
     description: "\uB300\uC0C1\uC5D0\uAC8C 1\uD134 \uB3D9\uC548 \uB098\uC57D \uC911\uCCA9\uC744
       3 \uBD80\uC5EC\uD569\uB2C8\uB2E4."
-  - title: "\uAE30\uC220 \uC219\uB828 \uD6C8\uB828"
-    description: "\uC7AC\uC0AC\uC6A9 \uB300\uAE30 \uC2DC\uAC04\uC744 \uB2E8\uCD95\uD569\uB2C8\uB2E4."
   - title: "\uC740\uC2E0 \uAC04\uD30C \uD6C8\uB828"
     description: "\uB300\uC0C1\uC5D0\uAC8C \uB300\uC0C1\uC73C\uB85C \uC9C0\uC815\uD560
       \uC218 \uC5C6\uB294 \uC0C1\uD0DC\uAC00 \uC788\uB2E4\uBA74 \uC81C\uAC70\uD569\uB2C8\uB2E4."
@@ -38,12 +39,12 @@ MonoBehaviour:
   bleedStatusId: 50
   fearStateId: 54
   trainingApplyWeakness: 1
-  routeForWeakness: 0
+  routeForWeakness: 1
   weaknessStatusId: 23
   weaknessStacks: 3
-  trainingUseCooldownDelta: 1
-  routeForCooldown: 1
-  trainingCooldownDelta: -2
+  trainingUseMpOverride: 1
+  routeForMpOverride: 0
+  trainingMpCostRoute0: 25
   trainingRemoveUntargetable: 1
   routeForRemoveUntargetable: 2
   untargetableStatesToClear: 64000000

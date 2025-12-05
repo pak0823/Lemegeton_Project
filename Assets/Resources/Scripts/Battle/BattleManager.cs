@@ -1640,6 +1640,17 @@ public class BattleManager : MonoBehaviour
                 }
             }
 
+            // SelfBeastDomainSkill: routeForFreeAction 기반
+            if (!isFreeAction && skill is SelfBeastDomainSkill bds)
+            {
+                if (bds.trainingUseFreeAction &&
+                    bds.routeForFreeAction >= 0 &&
+                    route == bds.routeForFreeAction)
+                {
+                    isFreeAction = true;
+                }
+            }
+
             // 코루틴으로 처리해서, 끝난 뒤 무료/일반 행동을 분기
             StartCoroutine(Co_ResolveSelfCastThenFinish(skill, acting, isFreeAction));
             return;
@@ -2263,6 +2274,8 @@ public class BattleManager : MonoBehaviour
     {
         if (caster == null || source == null) return;
 
+        bool killRefundDone = false;   // 이번 스킬 사용 중 자원 환급은 1번만
+
         foreach (var v in victims)
         {
             if (v == null) continue;
@@ -2288,7 +2301,7 @@ public class BattleManager : MonoBehaviour
 
                 if (hasVigilance && source.school == DamageSchool.Physical)
                 {
-                    // (1) 이 유닛이 실제로 들고 있는 SelfVigilanceSkill 찾기
+                    // 이 유닛이 실제로 들고 있는 SelfVigilanceSkill 찾기
                     SelfVigilanceSkill vigilanceSkill = null;
                     var data = v.data;
                     if (data != null && data.skills != null)
@@ -2301,12 +2314,12 @@ public class BattleManager : MonoBehaviour
                         }
                     }
 
-                    // (2) 찾은 경계 스킬 기준으로 훈련 루트 조회
+                    // 찾은 경계 스킬 기준으로 훈련 루트 조회
                     int routeForVigilance = -1;
                     if (vigilanceSkill != null)
                         routeForVigilance = v.GetTrainingRouteIndex(vigilanceSkill);
 
-                    // (3) 자신을 공격한 적의 통찰 약화 (훈련 옵션 켜져 있고, 루트 일치 시)
+                    // 자신을 공격한 적의 통찰 약화 (훈련 옵션 켜져 있고, 루트 일치 시)
                     if (vigilanceSkill != null &&
                         vigilanceSkill.trainingUseInsightDebuff &&
                         vigilanceSkill.routeForInsightDebuff >= 0 &&
@@ -2332,7 +2345,7 @@ public class BattleManager : MonoBehaviour
                         }
                     }
 
-                    // (4) 이번 물리 피해는 0으로 만들고, 경계를 즉시 제거
+                    // 이번 물리 피해는 0으로 만들고, 경계를 즉시 제거
                     Debug.Log(
                         $"[Vigilance] {v.name} 이(가) 물리 공격을 경계로 무효화: {damage} -> 0 (skill={source.name}, school={source.school})"
                     );
@@ -2346,9 +2359,10 @@ public class BattleManager : MonoBehaviour
                     $"[Damage] {caster.name} -> {v.name} / skill={source.name}, school={source.school}, finalDamage={damage}"
                 );
 
-
+                float hpBefore = v.HP;
                 v.PlayHit();
                 v.TakeDamage(damage);
+                bool diedNow = (hpBefore > 0f && v.IsDead);
 
                 // 훈련 강화 처리 (ParametricDamageSkill 전용)
                 if (source is ParametricDamageSkill dmgSkill && caster != null)
@@ -2379,8 +2393,60 @@ public class BattleManager : MonoBehaviour
                             Debug.Log( $"[Bleed] {v.name} ← {dmgSkill.name} " + $"stacks+={dmgSkill.trainingBleedStacks}, duration={dmgSkill.trainingBleedDurationTurns}");
                         }
                     }
+                    // 공격받은 대상의 민첩 약화 (UnitStateBuffId 기반 디버프)
+                    if (route == dmgSkill.routeForAgiDebuff &&
+                        dmgSkill.trainingApplyAgiDebuff &&
+                        dmgSkill.targetAgiDebuffId != UnitStateBuffId.None)
+                    {
+                        var uscTarget = v.GetComponent<UnitStateController>();
+                        if (uscTarget != null)
+                        {
+                            int duration = Mathf.Max(1, dmgSkill.targetAgiDebuffDurationTurns);
 
-                    // ==== 넉백 처리 (대상 살아있고, pending knockback이 나 자신일 때) ====
+                            uscTarget.ApplyBuffForTurns(dmgSkill.targetAgiDebuffId, duration);
+
+                            Debug.Log(
+                                $"[ParametricDamage] AGI Debuff Buff: {v.name} buff={dmgSkill.targetAgiDebuffId}, duration={duration}"
+                            );
+                        }
+                    }
+                    // 공포 상태 부여
+                    if (dmgSkill.trainingApplyFear &&
+                        dmgSkill.routeForFear >= 0 &&
+                        route == dmgSkill.routeForFear &&
+                        !v.IsDead)
+                    {
+                        var uscFear = v.GetComponent<UnitStateController>();
+                        if (uscFear != null)
+                        {
+                            int fearTurns = Mathf.Max(1, dmgSkill.fearDurationTurns);
+                            uscFear.ApplyForTurns(UnitStateId.Fear, fearTurns);
+
+                            Debug.Log(
+                                $"[ParametricDamage] Fear: {v.name} 공포 상태 부여 {fearTurns}턴 (route={route})"
+                            );
+                        }
+                    }
+
+                    // 이 히트로 대상이 사망했다면 소비한 자원(MP)을 환급
+                    if (diedNow &&
+                        !killRefundDone &&
+                        route == dmgSkill.routeForRefundOnKill &&
+                        dmgSkill.trainingRefundOnKill)
+                    {
+                        int cost = dmgSkill.GetEffectiveMpCost(caster);
+                        if (cost > 0)
+                        {
+                            caster.GainMP(cost);
+                            Debug.Log(
+                                $"[ParametricDamage] Kill Refund: {caster.name} MP +{cost} (route={route})"
+                            );
+                        }
+
+                        killRefundDone = true;
+                    }
+
+                    // 넉백 처리
                     if (_pendingKnockbackSkill == dmgSkill &&
                         _pendingKnockbackTarget == v &&
                         !v.IsDead &&
@@ -2671,6 +2737,9 @@ public class BattleManager : MonoBehaviour
             if (z.owner != unitWhoseTurnStarted)
                 continue;
 
+            // 훈련: 영역 주인의 턴 시작에 '자기 자신' Rage 감소
+            TryApplyBeastDomainRageTraining(z.owner);
+
             z.remainingTurns--;
             Debug.Log($"[BeastDomain] {z.owner.name} 턴 시작 - 야수의 영역 남은 턴: {z.remainingTurns}");
 
@@ -2685,6 +2754,37 @@ public class BattleManager : MonoBehaviour
                 _beastZones.RemoveAt(i);
             }
         }
+    }
+    void TryApplyBeastDomainRageTraining(BattleUnit owner)
+    {
+        if (owner == null) return;
+        if (owner.data == null || owner.data.skills == null) return;
+
+        // 이 유닛이 들고 있는 SelfBeastDomainSkill 찾기
+        SelfBeastDomainSkill domainSkill = null;
+        foreach (var s in owner.data.skills)
+        {
+            domainSkill = s as SelfBeastDomainSkill;
+            if (domainSkill != null)
+                break;
+        }
+        if (domainSkill == null) return;
+
+        int route = owner.GetTrainingRouteIndex(domainSkill);
+
+        if (!domainSkill.trainingReduceRageOnTurnStart ||
+            domainSkill.routeForRageReduceOnTurnStart < 0 ||
+            route != domainSkill.routeForRageReduceOnTurnStart)
+            return;
+
+        float amount = 0f;
+        float clv = owner.MagicDamage; 
+        amount = clv * domainSkill.rageReducePerClv;
+
+        if (amount <= 0f) return;
+
+        owner.AddRage(-amount);
+        Debug.Log($"[BeastDomain] Rage 훈련: {owner.name} 자신에게 Rage {amount:F2} 감소");
     }
 
     // 공포(Fear) 턴 처리

@@ -125,6 +125,46 @@ public class ParametricDamageSkill : SkillAsset
     [Tooltip("이 스킬을 맵 상의 모든 적군에게 적중시키기")]
     public bool trainingHitAllEnemies = false;
 
+    [Header("멀티 히트 설정")]
+    [Tooltip("훈련으로 멀티 히트(2타 이상) 효과를 사용할 것인지")]
+    public bool trainingUseMultiHit = false;
+    [Tooltip("한 번 사용 시 몇 타까지 때릴지 (기본 2타)")]
+    [Min(1)] public int trainingHitCount = 2;
+
+    [Header("물리 대미지 버프 설정")]
+    [Tooltip("훈련으로: 기술 사용 후 자신의 물리대미지를 일정 턴 동안 강화")]
+    public bool trainingUseSelfAtkBuff = false;
+    [Tooltip("이 루트가 선택되었을 때 자기 물리대미지 버프를 부여")]
+    public int routeForSelfAtkBuff = -1;
+    [Tooltip("부여할 버프 ID (StateStatModifierDB.BuffEntry에서 atkMultiplier를 1.4 등으로 설정)")]
+    public UnitStateBuffId selfAtkBuffId = UnitStateBuffId.Self_AtkUp;
+    [Tooltip("자신의 턴 기준 지속 턴 수 (실제 적용 시 +1 해서 사용 턴을 건너뜀)")]
+    public int selfAtkBuffDurationTurns = 1;
+
+    [Header("타겟 민첩 약화 적용 설정")]
+    [Tooltip("공격받은 대상의 민첩을 약화")]
+    public bool trainingApplyAgiDebuff = false;
+    [Tooltip("이 루트가 선택되었을 때 대상에게 민첩 디버프 버프를 건다")]
+    public int routeForAgiDebuff = -1;
+    [Tooltip("부여할 버프 ID (StateStatModifierDB.BuffEntry에서 agiMultiplier를 0.6 등으로 설정)")]
+    public UnitStateBuffId targetAgiDebuffId = UnitStateBuffId.Target_AgiDown;
+    [Tooltip("지속 턴수")]
+    public int targetAgiDebuffDurationTurns = 1;
+
+    [Header("공포 상태 부여 설정")]
+    [Tooltip("공격받는 대상에게 공포 상태를 부여할지 여부")]
+    public bool trainingApplyFear = false;
+    [Tooltip("이 루트가 선택되었을 때 대상에게 공포 상태를 건다")]
+    public int routeForFear = -1;
+    [Tooltip("공포 상태 지속 턴 수")]
+    public int fearDurationTurns = 1;
+
+    [Header("자원 반환 설정")]
+    [Tooltip("훈련으로: 공격받은 대상의 생명이 0이 되면 소비한 자원을 돌려받음")]
+    public bool trainingRefundOnKill = false;
+    [Tooltip("이 루트가 선택되었을 때, 이 스킬로 적을 처치하면 MP를 돌려받음")]
+    public int routeForRefundOnKill = -1;
+
     [Header("Frontline Bonus(전방 보너스)")]
     [SerializeField] private bool useFrontlineBonus = false;   // 전방 보너스 사용 여부
     [SerializeField] private int frontlineDepth = 2;            // "앞 N열"
@@ -376,6 +416,13 @@ public class ParametricDamageSkill : SkillAsset
 
         int route = GetRoute(_caster);
 
+        // === 멀티 히트 횟수 계산 ===
+        int hits = 1;
+        if (trainingUseMultiHit)
+        {
+            hits = Mathf.Max(1, trainingHitCount);
+        }
+
         //전체 적군 공격 (이 스킬에서 trainingHitAllEnemiesOnRoute0를 켠 경우)
         if (trainingHitAllEnemies && routeForHitAllEnemies >= 0 && route == routeForHitAllEnemies)
         {
@@ -414,7 +461,31 @@ public class ParametricDamageSkill : SkillAsset
             }
         }
 
-        _bm.ExecuteSkillDamage(_caster, areaVictims, this, _map, _centerCell);
+        // 실제 타격: hits 만큼 반복
+        for (int i = 0; i < hits; i++)
+        {
+            _bm.ExecuteSkillDamage(_caster, areaVictims, this, _map, _centerCell);
+        }
+        // 모든 히트가 끝난 뒤, 자기 물리 대미지 버프를 1번만 적용
+        if (trainingUseSelfAtkBuff &&
+            routeForSelfAtkBuff >= 0 &&
+            route == routeForSelfAtkBuff &&
+            selfAtkBuffId != UnitStateBuffId.None)
+        {
+            var uscSelf = _caster.GetComponent<UnitStateController>();
+            if (uscSelf != null)
+            {
+                int baseTurns = Mathf.Max(1, selfAtkBuffDurationTurns);
+                int duration = baseTurns + 1;   // 사용 턴은 건너뛰고 다음 턴 1턴 동안 유지
+
+                uscSelf.ApplyBuffForTurns(selfAtkBuffId, duration);
+
+                Debug.Log(
+                    $"[ParametricDamage] Self ATK Buff(BuffId, Post-Skill): {_caster.name} " +
+                    $"buff={selfAtkBuffId}, duration={duration} (base={baseTurns})"
+                );
+            }
+        }
     }
 
     public override int ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
@@ -432,6 +503,14 @@ public class ParametricDamageSkill : SkillAsset
     {
         if (!_bm || !_caster) yield break;
 
+        // MP 소비
+        int cost = GetEffectiveMpCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeMP(cost))
+        {
+            Debug.Log($"[ParametricDamageSkill] MP 부족: {displayName} (필요 {cost})");
+            yield break;
+        }
+
         BattleUnit primary = (useProvidedUnitTarget && _target != null && !_target.IsDead)
                                 ? _target
                                 : PickPrimaryTarget();
@@ -448,6 +527,14 @@ public class ParametricDamageSkill : SkillAsset
     public override IEnumerator ResolveOnTile(BattleManager _bm, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
         if (!_bm || !_caster || !_map) yield break;
+
+        // MP 소비
+        int cost = GetEffectiveMpCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeMP(cost))
+        {
+            Debug.Log($"[ParametricDamageSkill] (Tile) MP 부족: {displayName} (필요 {cost})");
+            yield break;
+        }
 
         int route = GetRoute(_caster);
         Debug.Log($"[Training] (Tile) {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");

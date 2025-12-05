@@ -12,13 +12,34 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 51578956f6cb10842b9819166dba7839, type: 3}
   m_Name: Spider_Add
   m_EditorClassIdentifier: 
-  entries: []
+  entries:
+  - state: 0
+    atkMultiplier: 0
+    magMultiplier: 0
+    agiMultiplier: 0
+    insMultiplier: 0
+    hpFlatAdd: 0
+    mpFlatAdd: 0
+    hostilityStatMultiplier: 0
+    hostilityStatFlatAdd: 0
+    physicalTakenMultiplier: 0
+    magicalTakenMultiplier: 0
+    allSkillTakenMultiplier: 0
   buffEntries:
   - buff: 3
     atkMultiplier: 1
     magMultiplier: 1
     agiMultiplier: 1
     insMultiplier: 0.5
+    hpFlatAdd: 0
+    mpFlatAdd: 0
+    hostilityStatMultiplier: 1
+    hostilityStatFlatAdd: 0
+  - buff: 4
+    atkMultiplier: 1
+    magMultiplier: 1
+    agiMultiplier: 0.6
+    insMultiplier: 1
     hpFlatAdd: 0
     mpFlatAdd: 0
     hostilityStatMultiplier: 1

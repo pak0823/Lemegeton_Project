@@ -19,7 +19,7 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
     [Tooltip("공포 유닛 상태 ID (보통 UnitStateId.Fear)")]
     public UnitStateId fearStateId = UnitStateId.Fear;
 
-    [Header("훈련 1: 나약 중첩 부여")]
+    [Header("나약 중첩 부여 훈련")]
     [Tooltip("이 루트일 때, 대상에게 나약 중첩을 부여합니다.")]
     public bool trainingApplyWeakness = true;
     [Range(-1, 2)] public int routeForWeakness = 0;
@@ -28,14 +28,17 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
     [Tooltip("부여할 나약 중첩 수 (기본 3)")]
     public int weaknessStacks = 3;
 
-    [Header("훈련 2: 재사용 대기 시간 변경")]
-    [Tooltip("이 루트일 때, 쿨타임에 delta를 더합니다. (예: -1)")]
-    public bool trainingUseCooldownDelta = true;
-    [Range(-1, 2)] public int routeForCooldown = 1;
-    [Tooltip("쿨타임 증감량 (음수면 단축)")]
-    public int trainingCooldownDelta = -1;
+    [Header("자원 절약 훈련")]
+    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
+    public bool trainingUseMpOverride = false;
+    [Tooltip("MP 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 0 = 1번 루트)")]
+    [Range(-1, 2)]
+    public int routeForMpOverride = -1;
 
-    [Header("훈련 3: 타겟의 '대상 지정 불가' 상태 제거")]
+    [Tooltip("해당 루트에서 실제로 사용할 MP 비용")]
+    public int trainingMpCostRoute0 = 0;
+
+    [Header("대상 지정 불가 상태 제거 훈련")]
     [Tooltip("이 루트일 때, 타겟의 '대상 지정 불가' 관련 상태를 제거합니다.")]
     public bool trainingRemoveUntargetable = true;
     [Range(-1, 2)] public int routeForRemoveUntargetable = 2;
@@ -149,23 +152,21 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
         yield break;
     }
 
-    // 훈련 2: 쿨타임 조정
-    public override int GetEffectiveCooldownTurns(BattleUnit caster)
+    public override int GetEffectiveMpCost(BattleUnit _caster)
     {
-        int cd = cooldownTurns;
+        int cost = mpCost;
+        if (_caster == null)
+            return cost;
 
-        if (!caster || !trainingUseCooldownDelta)
-            return cd;
-
-        int route = GetRoute(caster);
-        if (routeForCooldown >= 0 &&
-            trainingCooldownDelta != 0 &&
-            route == routeForCooldown)
+        int route = GetRoute(_caster);
+        if (trainingUseMpOverride &&
+            routeForMpOverride >= 0 &&
+            route == routeForMpOverride)
         {
-            cd = Mathf.Max(0, cd + trainingCooldownDelta);
+            cost = Mathf.Max(0, trainingMpCostRoute0);
         }
 
-        return cd;
+        return cost;
     }
 
     public override string GetFullDescriptionRich(BattleUnit caster)

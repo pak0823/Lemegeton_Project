@@ -15,7 +15,7 @@ public class StackableStatusVisualDB : ScriptableObject
         public int sortOrder = 0;  // 낮을수록 앞쪽
         public bool showStacks = true;
         public bool showTurns = true;
-        public string displayName; // (선택) 툴팁/대체텍스트
+        public string displayName; // 툴팁/대체텍스트
     }
 
     [SerializeField] private List<Entry> entries = new();

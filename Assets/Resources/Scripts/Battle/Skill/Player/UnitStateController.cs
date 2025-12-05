@@ -24,6 +24,10 @@ public enum UnitStateBuffId
     AgiUp = 1,  //민첩 강화
     MagicUp = 2, //총명 강화
     InsightDown = 3, //통찰 약화
+
+    Target_AgiDown = 4, // 민첩 디버프
+    Self_AtkUp = 5,     // 물리 대미지 버프
+
     AmbushAgiCancel = 100   //잠복 AGI 페널티 상쇄용
 }
 
@@ -39,6 +43,7 @@ public class UnitStateController : MonoBehaviour
     private readonly HashSet<UnitStateId> _active = new();        // 본래 상태
     private readonly HashSet<UnitStateBuffId> _buffs = new();     // 버프 상태
     readonly Dictionary<UnitStateId, int> _durations = new();   //턴이 지나면 사라지는 상태용 duration 테이블
+    readonly Dictionary<UnitStateBuffId, int> _buffDurations = new();
 
     public event Action OnStatesChanged;
     public event Action OnBuffsChanged;
@@ -97,6 +102,9 @@ public class UnitStateController : MonoBehaviour
     public bool ApplyBuff(UnitStateBuffId id)
     {
         bool added = _buffs.Add(id);
+
+        _buffDurations.Remove(id);
+
         if (added) OnBuffsChanged?.Invoke();
         return added;
     }
@@ -116,9 +124,23 @@ public class UnitStateController : MonoBehaviour
         OnStatesChanged?.Invoke();
         return added;
     }
+    public bool ApplyBuffForTurns(UnitStateBuffId id, int turnCount)
+    {
+        if (turnCount <= 0)
+        {
+            // 0이하면 무기한 처리
+            return ApplyBuff(id);
+        }
+
+        bool added = _buffs.Add(id);
+        _buffDurations[id] = turnCount;
+        OnBuffsChanged?.Invoke();
+        return added;
+    }
     public bool RemoveBuff(UnitStateBuffId id)
     {
         bool removed = _buffs.Remove(id);
+        _buffDurations.Remove(id);
         if (removed) OnBuffsChanged?.Invoke();
         return removed;
     }
@@ -126,6 +148,7 @@ public class UnitStateController : MonoBehaviour
     {
         if (_buffs.Count == 0) return;
         _buffs.Clear();
+        _buffDurations.Clear();
         OnBuffsChanged?.Invoke();
     }
 
@@ -147,31 +170,55 @@ public class UnitStateController : MonoBehaviour
     // duration이 붙은 상태들의 남은 턴 수를 1씩 감소시키고 0 이하이면 제거.
     public void OnTurnStart()
     {
-        if (_durations.Count == 0) return;
-
-        bool changed = false;
-        var toRemove = new List<UnitStateId>();
-
-        // 키 복사 후 루프 (딕셔너리 수정 안전하게)
-        var keys = new List<UnitStateId>(_durations.Keys);
-        foreach (var id in keys)
+        if (_durations.Count > 0)
         {
-            int remain = _durations[id] - 1;
-            if (remain <= 0)
+            bool changed = false;
+            var toRemove = new List<UnitStateId>();
+
+            var keys = new List<UnitStateId>(_durations.Keys);
+            foreach (var id in keys)
             {
-                _durations.Remove(id);
-                // active 목록에서도 제거
-                if (_active.Remove(id))
-                    changed = true;
+                int remain = _durations[id] - 1;
+                if (remain <= 0)
+                {
+                    _durations.Remove(id);
+                    if (_active.Remove(id))
+                        changed = true;
+                }
+                else
+                {
+                    _durations[id] = remain;
+                }
             }
-            else
-            {
-                _durations[id] = remain;
-            }
+
+            if (changed)
+                OnStatesChanged?.Invoke();
         }
 
-        if (changed)
-            OnStatesChanged?.Invoke();
+        // 버프(UnitStateBuffId) 쪽 처리 추가
+        if (_buffDurations.Count > 0)
+        {
+            bool changedBuff = false;
+            var buffKeys = new List<UnitStateBuffId>(_buffDurations.Keys);
+
+            foreach (var id in buffKeys)
+            {
+                int remain = _buffDurations[id] - 1;
+                if (remain <= 0)
+                {
+                    _buffDurations.Remove(id);
+                    if (_buffs.Remove(id))
+                        changedBuff = true;
+                }
+                else
+                {
+                    _buffDurations[id] = remain;
+                }
+            }
+
+            if (changedBuff)
+                OnBuffsChanged?.Invoke();
+        }
     }
 
     public bool HasBuff(UnitStateBuffId id) => _buffs.Contains(id);
