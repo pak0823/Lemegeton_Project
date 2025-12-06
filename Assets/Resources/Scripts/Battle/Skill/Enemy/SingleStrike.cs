@@ -28,7 +28,7 @@ public class SingleStrike : SkillAsset
         yield return originCell; // 단일 대상이므로 원점 셀만
     }
 
-    public override int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
+    public override float ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
     {
         if (caster == null || target == null) return 0;
 

@@ -20,7 +20,7 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
 
     [Tooltip("특정 상태를 켰을 때 마법 공격력 버프를 추가로 부여할지 여부")]
     public bool trainingApplyMagicBuffOnRoute1 = false;
-    public UnitStateBuffId trainingMagicBuffId = UnitStateBuffId.MagicUp;
+    public UnitStateBuffId trainingMagicBuffId = UnitStateBuffId.Smoke_MagicUp;
 
     [Tooltip("이 스킬을 사용해도 턴을 소비하지 않음(무료 행동)")]
     public bool trainingFreeActionOnRoute2 = false;

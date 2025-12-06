@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using static ParametricDamageSkill;
 
 public enum DamageSchool { Physical, Magical, Composite }  //근력, 총명 , 복합
 public enum AttackAttr { None, Pierce, Strike, Slash }
@@ -76,39 +77,37 @@ public abstract class SkillAsset : ScriptableObject
     public abstract IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster);
 
     //스킬별 대미지 계산. 필요시 하위 클래스에서 override
-    public virtual int ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
+    public virtual float ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
     {
-        float baseStat;
+        if (caster == null)
+            return 0f;
 
+        // 기본 공격 스탯 선택
+        float stat = 0f;
         switch (school)
         {
             case DamageSchool.Physical:
-                baseStat = Mathf.Max(1, caster.PhysicalDamage);
+                stat = caster.PhysicalDamage;
                 break;
 
             case DamageSchool.Magical:
-                baseStat = Mathf.Max(1, caster.MagicDamage);
+                stat = caster.MagicDamage;
                 break;
 
             case DamageSchool.Composite:
-                // 물리 + 마법 합산
-                baseStat = Mathf.Max(1, caster.PhysicalDamage + caster.MagicDamage);
+                // 고정 대미지 STR + MAG
+                stat = caster.PhysicalDamage + caster.MagicDamage;
                 break;
 
             default:
-                baseStat = Mathf.Max(1, caster.PhysicalDamage);
+                stat = caster.PhysicalDamage; // 혹은 0f
                 break;
         }
 
-        float mult = Mathf.Max(0f, power);
+        // 기술 위력 적용
+        float dmg = stat * power;
 
-        if (attribute != AttackAttr.None && target != null && target.resistTable != null)
-        {
-            foreach (var mod in target.resistTable)
-                if (mod.attr == attribute) { mult *= Mathf.Max(0f, mod.mult); break; }
-        }
-
-        return Mathf.Max(1, Mathf.FloorToInt(baseStat * mult));
+        return dmg;
     }
 
     public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> potentialTargets)

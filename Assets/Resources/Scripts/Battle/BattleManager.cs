@@ -1895,6 +1895,10 @@ public class BattleManager : MonoBehaviour
             customPreviewCells = null;
             customPreviewMap = null;
 
+            int cost = currentSkillSO.GetEffectiveMpCost(acting);
+            if (cost > 0 && !acting.TryConsumeMP(cost))
+                return;
+
             if (!freeAction)
             {
                 // 기본: 행동 1회 소비(공격으로 간주)
@@ -2228,46 +2232,55 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    public int GetFinalSkillDamage(BattleUnit target, SkillAsset source, float baseDamage)
+    public int GetFinalSkillDamage(BattleUnit caster, BattleUnit target, SkillAsset source, float baseDamage)
     {
+        // 기본 방어측 상태 보정이 아예 없을 때를 대비한 최소 처리
+        float finalBase = Mathf.Max(0f, baseDamage);
+
         if (target == null || source == null)
-            return Mathf.Max(0, Mathf.FloorToInt(baseDamage));
+            return Mathf.Max(0, Mathf.FloorToInt(finalBase));
 
         var stateDb = target.stateStatDB;
-        if (stateDb == null)
-            return Mathf.Max(0, Mathf.FloorToInt(baseDamage));
-
         var usc = target.GetComponent<UnitStateController>();
         var sc = target.GetComponent<StatusController>();
 
-        // 상태(UnitState) 기반 기본 배율
-        float mul = stateDb.GetDamageTakenMultiplier(usc, source.school);
+        // 1) 대상(UnitState) 기반 기본 배율
+        float mul = 1f;
+        if (stateDb != null)
+            mul *= stateDb.GetDamageTakenMultiplier(usc, source.school);
 
-        // 스택형 상태 기반 배율
+        // 2) 스택형 상태(탈진/방어/나약/저항) 보정은 기존 그대로 유지
         if (sc != null)
         {
             if (source.school == DamageSchool.Physical)
             {
-                // 탈진/방어 스택 수 (모두 '대상' 기준)
                 int exhaustStacks = sc.GetStacks(StatusId.Exhaustion); // 탈진
-                int guardStacks = sc.GetStacks(StatusId.Defense);   // 방어
+                int guardStacks = sc.GetStacks(StatusId.Defense);    // 방어
 
                 mul *= Mathf.Pow(1.20f, exhaustStacks);
                 mul *= Mathf.Pow(0.80f, guardStacks);
             }
             else if (source.school == DamageSchool.Magical)
             {
-                // 나약/저항 스택 수
-                int weaknessStacks = sc.GetStacks(StatusId.Weakness); // 나약
-                int resistStacks = sc.GetStacks(StatusId.Resistance);   // 저항
+                int weaknessStacks = sc.GetStacks(StatusId.Weakness);   // 나약
+                int resistStacks = sc.GetStacks(StatusId.Resistance); // 저항
 
                 mul *= Mathf.Pow(1.20f, weaknessStacks);
                 mul *= Mathf.Pow(0.80f, resistStacks);
             }
+            // DamageSchool.Composite 인 경우에는 stateStatDB 쪽 설정으로만 처리
+            // (필요하면 여기서 탈진/나약을 함께 곱해도 됨)
         }
 
-        //최종 피해: baseDamage × mul, 그리고 소수점 버림
-        return Mathf.Max(0, Mathf.FloorToInt(baseDamage * mul));
+        // 3) Rage 보정: (1 + 0.01 × 자신의 현재 Rage)
+        float rageMult = 1f;
+        if (caster != null && caster.Rage > 0f)
+        {
+            rageMult += 0.01f * caster.Rage;
+        }
+
+        float raw = finalBase * rageMult * mul;
+        return Mathf.Max(0, Mathf.FloorToInt(raw));
     }
 
     public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
@@ -2293,7 +2306,7 @@ public class BattleManager : MonoBehaviour
                 float baseDamage = source.ComputeDamage(caster, v, ctx);
 
                 // 최종 적용 대미지
-                int damage = GetFinalSkillDamage(v, source, baseDamage);
+                int damage = GetFinalSkillDamage(caster, v, source, baseDamage);
 
                 // === 경계 상태 처리 추가 ===
                 var usc = v.GetComponent<UnitStateController>();
@@ -2872,7 +2885,7 @@ public class BattleManager : MonoBehaviour
             if (!map.HasTile(dest))
                 continue;
 
-            if (!IsWalkableCell(map, dest))
+            if (grid.IsOccupied(Team.Player, dest) || grid.IsOccupied(Team.Enemy, dest))
                 continue;
 
             result.Add(dest);

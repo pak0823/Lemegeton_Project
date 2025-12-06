@@ -22,7 +22,7 @@ public enum UnitStateBuffId
 {
     None = 0,
     AgiUp = 1,  //민첩 강화
-    MagicUp = 2, //총명 강화
+    Smoke_MagicUp = 2, //총명 강화
     InsightDown = 3, //통찰 약화
 
     Target_AgiDown = 4, // 민첩 디버프
@@ -51,6 +51,18 @@ public class UnitStateController : MonoBehaviour
     private BattleUnit _owner;
 
     int _forcedMoveImmuneTurns;
+
+    public struct BuffView
+    {
+        public UnitStateBuffId id;
+        public int remainingTurns;
+
+        public BuffView(UnitStateBuffId id, int remaining)
+        {
+            this.id = id;
+            this.remainingTurns = remaining;
+        }
+    }
 
     void OnEnable()
     {
@@ -164,6 +176,12 @@ public class UnitStateController : MonoBehaviour
         if (_durations.TryGetValue(id, out var turns))
             return turns;
         return -1; // -1이면 “무기한”으로 취급
+    }
+    public int GetRemainingBuffTurns(UnitStateBuffId id)
+    {
+        if (_buffDurations.TryGetValue(id, out var turns))
+            return turns;
+        return -1; // -1이면 무기한
     }
 
     // 이 유닛의 턴이 시작될 때 호출.

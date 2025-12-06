@@ -3,6 +3,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using static StatusController;
+using static UnitStateController;
 
 public class UnitStatusItemUI : MonoBehaviour
 {
@@ -29,6 +30,11 @@ public class UnitStatusItemUI : MonoBehaviour
     [SerializeField] private StackableStatusVisualDB stackVisualDB; 
     [SerializeField] private GameObject stackChipPrefab;// 아이콘 칩 프리팹(둔화에서 쓰던 것)
     [SerializeField] private Sprite defaultDebuffIcon;
+
+    [Header("UnitState Buff (버프)")]
+    [SerializeField] private UnitStateBuffVisualDB buffVisualDB;
+    [SerializeField] private GameObject buffChipPrefab;     // 없으면 stateChipPrefab 재사용해도 됨
+    [SerializeField] private Sprite defaultBuffIcon;
 
     [Header("Highlight (둘 중 하나/둘 다 가능)")]
     public Image highlightOverlay;                 // 예: 전체를 덮는 Image
@@ -231,10 +237,27 @@ public class UnitStatusItemUI : MonoBehaviour
     {
         var states = usc != null ? usc.GetAll() : null;            // SelfState 집합
         var stacks = sc != null ? sc.GetStatusViews() : null;     // 중첩 디버프 뷰들
-        RefreshChips(states, stacks);
+
+        BuffView[] buffs = null;
+        if (usc != null)
+        {
+            var allBuffs = usc.GetAllBuffs(); // ← 이미 있는 API
+            var list = new List<BuffView>();
+            foreach (var b in allBuffs)
+            {
+                int remain = usc.GetRemainingBuffTurns(b); // 새로 추가한 함수
+                list.Add(new BuffView(b, remain));
+            }
+            buffs = list.ToArray();
+        }
+
+        RefreshChips(states, buffs, stacks);
     }
 
-    public void RefreshChips(IReadOnlyCollection<UnitStateId> states, IEnumerable<StatusView> stacks)
+    public void RefreshChips(
+    IReadOnlyCollection<UnitStateId> states,
+    IEnumerable<BuffView> buffs,
+    IEnumerable<StatusView> stacks)
     {
         if (!chipRoot) return;
 
@@ -242,18 +265,23 @@ public class UnitStatusItemUI : MonoBehaviour
         for (int i = chipRoot.childCount - 1; i >= 0; i--)
             Destroy(chipRoot.GetChild(i).gameObject);
 
-        // 1) 상태칩을 먼저 만들어 '맨 오른쪽'에 고정
+        // 1) UnitStateId 상태칩 (오른쪽)
         GameObject rightmostState = null;
         if (states != null && states.Count > 0)
         {
             foreach (var s in states)
             {
                 var go = Instantiate(stateChipPrefab, chipRoot);
-                // ─ 아이콘 세팅(기존 코드 그대로) ─
                 var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
                 var sprite = visualDB ? (visualDB.GetIcon(s) ?? defaultIcon) : defaultIcon;
                 var color = visualDB ? visualDB.GetColor(s) : Color.white;
-                if (icon) { icon.sprite = sprite; icon.color = color; icon.enabled = (sprite != null); }
+                if (icon)
+                {
+                    icon.sprite = sprite;
+                    icon.color = color;
+                    icon.enabled = (sprite != null);
+                }
+
                 // 상태칩은 텍스트 숨김
                 var texts = go.GetComponentsInChildren<Text>(true);
                 var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
@@ -261,22 +289,70 @@ public class UnitStatusItemUI : MonoBehaviour
                 if (tTurn) tTurn.gameObject.SetActive(false);
                 if (tStack) tStack.gameObject.SetActive(false);
 
-                go.transform.SetAsLastSibling();  // ★ 맨 오른쪽으로
-                rightmostState = go;              // 여러 개면 마지막 것이 맨 오른쪽
+                go.transform.SetAsLastSibling();
+                rightmostState = go;
             }
         }
 
-        // 2) 중첩칩을 ‘상태칩 바로 왼쪽’부터 생성
+        // 2) UnitStateBuffId 버프칩 (상태 바로 왼쪽)
+        if (buffs != null)
+        {
+            foreach (var v in buffs)
+            {
+                var go = Instantiate(buffChipPrefab ? buffChipPrefab : stateChipPrefab, chipRoot);
+                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
+
+                Sprite sprite = defaultBuffIcon;
+                Color color = Color.white;
+                bool showTurns = true;
+
+                if (buffVisualDB != null)
+                {
+                    sprite = buffVisualDB.GetIcon(v.id) ?? defaultBuffIcon;
+                    color = buffVisualDB.GetColor(v.id);
+                    showTurns = buffVisualDB.GetShowTurns(v.id);
+                }
+
+                if (icon)
+                {
+                    icon.sprite = sprite;
+                    icon.color = color;
+                    icon.enabled = (sprite != null);
+                }
+
+                var texts = go.GetComponentsInChildren<Text>(true);
+                var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
+                var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
+
+                if (tStack) tStack.gameObject.SetActive(false);           // 버프는 스택 없음
+                if (tTurn)
+                {
+                    tTurn.gameObject.SetActive(showTurns);
+                    if (showTurns)
+                        tTurn.text = (v.remainingTurns > 0) ? v.remainingTurns.ToString() : "∞";
+                }
+
+                if (rightmostState)
+                {
+                    int idx = rightmostState.transform.GetSiblingIndex();
+                    go.transform.SetSiblingIndex(idx);  // 상태칩 바로 왼쪽
+                }
+                else
+                {
+                    go.transform.SetAsLastSibling();
+                    rightmostState = go;
+                }
+            }
+        }
+
+        // 3) 기존 Stackable Status 칩 (디버프)
         if (stacks != null)
         {
-            // 생성 순서대로 오른쪽→왼쪽이 되려면: 오른쪽에 가까울수록 '더 먼저 생성된 것'
-            // => 최신순으로 먼저 붙이고, 오래된 것이 나중에 들어가 상태칩에 더 가까워지도록 역순 삽입
             var list = stacks.ToList();
-            for (int i = list.Count - 1; i >= 0; --i)   // newest → oldest 순으로 루프
+            for (int i = list.Count - 1; i >= 0; --i)
             {
                 var v = list[i];
                 var go = Instantiate(stackChipPrefab, chipRoot);
-                // ─ 아이콘/텍스트 세팅(기존 코드 그대로) ─
                 var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(ii => ii.name == "Icon");
                 var tStk = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Stack");
                 var tTurn = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Turn");
@@ -291,19 +367,17 @@ public class UnitStatusItemUI : MonoBehaviour
 
                 if (rightmostState)
                 {
-                    // 상태칩 바로 왼쪽 위치로 삽입(형제 인덱스 고정)
                     int idx = rightmostState.transform.GetSiblingIndex();
                     go.transform.SetSiblingIndex(idx);
                 }
                 else
                 {
-                    // 상태칩이 없을 때는 그냥 오른쪽 정렬에서 오른쪽으로 붙음
                     go.transform.SetAsLastSibling();
                 }
             }
         }
 
-        // 3) 레이아웃 즉시 갱신
+        // 4) 레이아웃 강제 갱신
         var rt = chipRoot as RectTransform;
         if (rt)
         {

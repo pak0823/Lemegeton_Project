@@ -43,7 +43,7 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     [Tooltip("MP 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 보통 0 = 1번 루트)")]
     [Range(-1, 2)] public int routeForMpOverride = 0;
     [Tooltip("해당 루트에서 실제로 사용할 MP 비용")]
-    public int trainingMpCostRoute0 = 5;
+    public int trainingMpCostRoute0 = 0;
 
     [Tooltip("연막 위에서 MP 회복을 활성화할지 여부")]
     public bool trainingEnableMpRegen = true;

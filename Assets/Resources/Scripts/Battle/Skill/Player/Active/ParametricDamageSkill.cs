@@ -488,17 +488,6 @@ public class ParametricDamageSkill : SkillAsset
         }
     }
 
-    public override int ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
-    {
-        // 복합 대미지는 고정 대미지: 기술 위력 × (근력 + 총명)
-        float baseStat = _caster.PhysicalDamage + _caster.MagicDamage;
-
-        float dmg = baseStat * power;
-
-        // 소수점 버림, 최소 1
-        return Mathf.Max(1, Mathf.FloorToInt(dmg));
-    }
-
     public override IEnumerator ResolveOnUnit(BattleManager _bm, BattleUnit _caster, BattleUnit _target)
     {
         if (!_bm || !_caster) yield break;
