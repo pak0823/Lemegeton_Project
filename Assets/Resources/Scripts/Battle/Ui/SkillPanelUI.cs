@@ -155,7 +155,12 @@ public class SkillPanelUI : MonoBehaviour
                         ?.GetValue(Shared.BattleManager) as BattleUnit : null;
 
                     if (actor != null)
-                        usable = !actor.IsSkillOnCooldown(asset) && actor.HasMP(asset.mpCost);
+                    {
+                        // 훈련/상태가 반영된 실제 MP 소모값 사용
+                        int effectiveCost = asset.GetEffectiveMpCost(actor);
+
+                        usable = !actor.IsSkillOnCooldown(asset) && actor.HasMP(effectiveCost);
+                    }
                 }
 
                 button.interactable = usable;

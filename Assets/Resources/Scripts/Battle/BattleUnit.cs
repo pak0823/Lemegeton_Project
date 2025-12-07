@@ -312,6 +312,15 @@ public class BattleUnit : MonoBehaviour
     {
         float before = Hostility;
 
+        float applied = amount;
+
+        // 적의가 증가할 때만 각종 배율 적용
+        if (applied > 0f)
+        {
+            applied *= HostilityGenerationMultiplier;
+            applied *= SmokeZoneRuntime.GetHostilityGenerationMultiplier(this);
+        }
+
         // 음수로 내려가면 0 밑으로는 안 떨어지게 클램프
         Hostility = Mathf.Max(0f, Hostility + amount);
 

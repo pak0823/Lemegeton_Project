@@ -677,13 +677,6 @@ public class BattleManager : MonoBehaviour
         ClearAllPreviews();
         ClearTargetSelection();
 
-        // Rage가 0이면 전환할 게 없으니 MP 회복도 안 되게 처리
-        if (acting.Rage <= 0f)
-        {
-            Debug.Log($"[Calm] {acting.name} 진정: Rage가 0이라 MP를 회복할 수 없습니다.");
-            return;
-        }
-
         float maxMP = acting.MaxMP;
         float maxRage = acting.MaxRage;
 
@@ -694,6 +687,15 @@ public class BattleManager : MonoBehaviour
         int mpGain = Mathf.FloorToInt(maxMP * 0.10f);
         if (mpGain <= 0 && maxMP > 0f)
             mpGain = 1;
+
+        // Rage가 0이어도 최소 MP 회복 0.1 보장
+        if (acting.Rage <= 0f)
+        {
+            acting.GainMP(mpGain);
+            Debug.Log($"[Calm] {acting.name} Rage=0 → 최소 회복 MP +0.1");
+            OnActionConsumed(BattleAction.Calm);
+            return;
+        }
 
         if (mpGain > 0)
         {

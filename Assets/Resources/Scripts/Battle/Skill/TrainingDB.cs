@@ -43,7 +43,10 @@ public class TrainingDB : ScriptableObject
     public int GetRoute(UnitData unit, SkillAsset skill)
     {
         var e = FindEntry(unit, skill);
-        return e != null ? e.routeIndex : -1;
+        int route = e != null ? e.routeIndex : -1;
+
+        Debug.Log($"[TrainingDB.GetRoute] unit={unit?.name} skill={skill?.name} legacy={skill?.legacyId} route={route}");
+        return route;
     }
 
     public void SetRoute(UnitData _unit, SkillAsset _skill, int _routeIndex)

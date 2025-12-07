@@ -209,6 +209,29 @@ public class SmokeZoneRuntime : MonoBehaviour
         }
     }
 
+    public static float GetHostilityGenerationMultiplier(BattleUnit unit)
+    {
+        // 기본은 1
+        if (!unit) return 1f;
+
+        float mult = 1f;
+
+        foreach (var z in Active)   // 이미 가지고 있는 active 리스트
+        {
+            if (z == null) continue;
+            if (z.mode != SmokeEffectMode.HostilityVisibility) continue;
+            if (z.map != unit.CurrentMap) continue;
+
+            // 연막 안에 있을 때만
+            if (z.cells.Contains(unit.Cell))
+            {
+                mult *= z.factor;  // 인스펙터에서 0.7로 세팅해 둔 값
+            }
+        }
+
+        return mult;
+    }
+
     // Route2에서 범위 바꿀 때 사용할 헬퍼
     public void OverrideAreaCells(IEnumerable<Vector3Int> _newCells)
     {

@@ -56,10 +56,26 @@ public class UnitStatusItemUI : MonoBehaviour
 
     BattleUnit Battleunit;
     StatusController StatusController;
+    UnitStateController unitStateController;
 
     // 패널에서 주입 가능하도록 열어둠
     public void SetVisualDB(UnitStateVisualDB db) => visualDB = db;
     public void SetStackVisualDB(StackableStatusVisualDB db) => stackVisualDB = db;
+
+    void Unsubscribe()
+    {
+        if (StatusController != null)
+            StatusController.OnStatusChanged -= HandleStatusChanged;
+
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged -= HandleStatesChanged;
+            unitStateController.OnBuffsChanged -= HandleStatesChanged;
+        }
+
+        if (Battleunit != null)
+            Battleunit.OnDied -= HandleUnitDied;
+    }
 
     private void Awake()
     {
@@ -67,8 +83,20 @@ public class UnitStatusItemUI : MonoBehaviour
         if (highlightOverlay) highlightOverlay.enabled = false;
     }
 
+    void OnDisable()
+    {
+        Unsubscribe();
+    }
+    void OnDestroy()
+    {
+        Unsubscribe();
+    }
+
     public void Bind(BattleUnit u)
     {
+        // 이전 유닛과의 구독 해제
+        Unsubscribe();
+
         Battleunit = u;
 
         if (nameText)
@@ -109,13 +137,25 @@ public class UnitStatusItemUI : MonoBehaviour
         if (rageText) rageText.text = (u != null ? u.Rage : 0).ToString();  // 현재 Rage 텍스트 세팅
 
         StatusController = u ? u.GetComponent<StatusController>() : null;
-        if (Battleunit != null) Battleunit.OnDied += HandleUnitDied;
+        unitStateController = u ? u.GetComponent<UnitStateController>() : null;
+
+        // 이벤트 구독
+        if (StatusController != null)
+            StatusController.OnStatusChanged += HandleStatusChanged;
+
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged += HandleStatesChanged;
+            unitStateController.OnBuffsChanged += HandleStatesChanged;
+        }
+
+        if (Battleunit != null)
+            Battleunit.OnDied += HandleUnitDied;
+
+        // 현재 상태/버프/스택으로 아이콘 한 번 갱신
+        RefreshFromControllers(unitStateController, StatusController);
     }
 
-    void OnDestroy()
-    {
-        if (Battleunit != null) Battleunit.OnDied -= HandleUnitDied;
-    }
     void HandleUnitDied(BattleUnit dead)
     {
         ClearChildren(chipRoot);
@@ -252,6 +292,16 @@ public class UnitStatusItemUI : MonoBehaviour
         }
 
         RefreshChips(states, buffs, stacks);
+    }
+
+    void HandleStatusChanged()
+    {
+        RefreshFromControllers(unitStateController, StatusController);
+    }
+
+    void HandleStatesChanged()
+    {
+        RefreshFromControllers(unitStateController, StatusController);
     }
 
     public void RefreshChips(
