@@ -36,6 +36,21 @@ public class PlayerMovement : MonoBehaviour
     ContactFilter2D _castFilter;
     readonly RaycastHit2D[] _castHits = new RaycastHit2D[4];
 
+    // 타일 경로 기반 이동 상태
+    [Header("타일 경로 이동 설정")]
+    [SerializeField] private GameObject pathMarkerPrefab;   // 경로 표시용 프리팹
+
+    // 현재 선택된 경로(셀 단위)
+    private List<Vector3Int> currentPathCells = new List<Vector3Int>();
+    // 현재 선택된 목표 셀 (첫 번째 클릭으로 선택된 타일)
+    private Vector3Int? selectedTargetCell = null;
+    // 경로를 따라 실제 이동 중인지 여부
+    private bool isMovingByPath = false;
+    // 경로 이동 코루틴 핸들
+    private Coroutine pathMoveRoutine = null;
+    // 화면에 찍힌 경로 마커들
+    private readonly List<GameObject> activePathMarkers = new List<GameObject>();
+
     private SpriteRenderer spriterenderer;
     private Animator animator;
     private PlayerDebuffController PlayerDebuffController;
@@ -83,30 +98,6 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        // 마우스 우클릭 목표 지정 (밀기모드/일시정지/잠금 아닐 때만)
-        if (!isPushMode && Input.GetMouseButtonDown(1))
-        {
-            var cam = Camera.main;
-            if (cam != null)
-            {
-                float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-                Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x,
-                                                                Input.mousePosition.y,
-                                                                zDist));
-                wp.z = transform.position.z;   // 2D 평면 z 고정(대개 0)
-
-                mouseMoveTarget = wp;
-                mouseMoveActive = true;
-
-                input = Vector2.zero;
-                path.Clear();
-
-                var dir = (Vector2)(mouseMoveTarget - rb.position);
-                if (dir.sqrMagnitude > 0.0001f)
-                    spriterenderer.flipX = dir.x > 0f;
-            }
-        }
-
         HandleSurveyKeyPreAction();
 
         inputDir = GetHexDirectionArrowKey();
@@ -115,6 +106,11 @@ public class PlayerMovement : MonoBehaviour
             HandlePushDetection();
 
         HandleCommunicationKey();
+
+        if (!isPushMode)
+        {
+            HandleTileClickInput();
+        }
 
         if (isPushMode)
         {
@@ -171,29 +167,6 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        // 키 입력 이동 (화살표 키만 허용)
-        float h = Input.GetKey(leftDirectionKey) ? -1f : Input.GetKey(rightDirectionKey) ? 1f : 0f;
-        float v = Input.GetKey(upDirectionKey) ? 1f : Input.GetKey(downDirectionKey) ? -1f : 0f;
-
-        input = new Vector2(h, v).normalized;
-
-        float x = input.x;
-        float y = input.y;
-
-        if (input != Vector2.zero)
-        {
-            if (Mathf.Abs(x) > 0.01f)
-            {
-                spriterenderer.flipX = x > 0;
-            }
-            else if (Mathf.Abs(y) > 0.01f)
-            {
-                spriterenderer.flipX = y > 0;
-            }
-
-            path.Clear();
-        }
-
         // 밀기 모드 진입
         if (!isPushMode && (Input.GetKeyDown(surveyKey) && selectedBox != null))
         {
@@ -230,60 +203,72 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        // 마우스 직선 이동 우선 처리
-        if (mouseMoveActive)
+        //animator.SetInteger("Move", (path.Count > 0 || input.sqrMagnitude > 0f) ? 1 : 0);
+    }
+
+    // --- 타일 클릭 입력 처리 ---
+    void HandleTileClickInput()
+    {
+        // 이미 경로를 따라 이동 중이면 새로운 입력을 무시
+        if (isMovingByPath)
+            return;
+
+        if (floorTilemap == null)
+            return;
+
+        var cam = Camera.main;
+        if (cam == null)
+            return;
+
+        float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
+        Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x,
+                                                        Input.mousePosition.y,
+                                                        zDist));
+        wp.z = transform.position.z;
+
+        Vector3Int clickedCell = floorTilemap.WorldToCell(wp);
+        Vector3Int currentCell = floorTilemap.WorldToCell(rb.position);
+
+        // 왼쪽 클릭: 경로 프리뷰 or 이동 실행
+        if (Input.GetMouseButtonDown(0))
         {
-            Vector2 pos = rb.position;
-            Vector2 to = mouseMoveTarget - pos;
-            float dist = to.magnitude;
-
-            // 도착 판정
-            if (dist <= clickArrivalThreshold)
+            // 이미 같은 타일이 선택된 상태에서 다시 왼쪽 클릭 → 이동 실행
+            if (selectedTargetCell.HasValue
+                && selectedTargetCell.Value == clickedCell
+                && currentPathCells != null
+                && currentPathCells.Count >= 2)
             {
-                mouseMoveActive = false;
-                HaltImmediately();                  // 애니메이션도 0으로
+                StartPathMove(currentPathCells);
                 return;
             }
 
-            Vector2 dir = to / Mathf.Max(dist, 0.0001f);
-            float step = defaultMoveSpeed * Time.fixedDeltaTime;
-            Vector2 wanted = pos + dir * step;
+            // 새 경로 계산
+            var newPath = FindPath(currentCell, clickedCell);
 
-            // 스프라이트 방향 갱신
-            spriterenderer.flipX = dir.x > 0f;
-
-            // 본인 콜라이더를 자동으로 무시하는 Rigidbody 캐스트 사용
-            int hitCount = rb.Cast(dir, _castFilter, _castHits, step);
-            bool hitGeom = hitCount > 0;
-
-            // 다음 셀의 통행 가능 여부도 체크(타일/벽/박스 중심에 걸치는 경우)
-            Vector3Int tgtCell = floorTilemap.WorldToCell(wanted);
-            bool walkable = IsWalkableCell(tgtCell);
-
-            if (hitGeom || !walkable)
+            // 경로가 없거나 1칸(제자리)이면 선택/프리뷰 해제
+            if (newPath == null || newPath.Count <= 1)
             {
-                // 충돌 → 즉시 정지
-                mouseMoveActive = false;
-                HaltImmediately();
+                selectedTargetCell = null;
+                currentPathCells.Clear();
+                ClearPathPreview();
                 return;
             }
 
-            // 정상 이동
-            rb.MovePosition(wanted);
-            if (animator != null) animator.SetInteger("Move", 1);
+            // 첫 번째 클릭: 경로만 표시
+            selectedTargetCell = clickedCell;
+            currentPathCells = newPath;
+            ShowPathPreview(newPath);
             return;
         }
 
-        animator.SetInteger("Move", (path.Count > 0 || input.sqrMagnitude > 0f) ? 1 : 0);
-
-        // 키 이동 처리
-        if (input.sqrMagnitude > 0f)
+        // 오른쪽 클릭: 같은 타일을 클릭하면 선택/프리뷰 취소
+        if (Input.GetMouseButtonDown(1))
         {
-            Vector2 newPos = rb.position + input * defaultMoveSpeed * Time.fixedDeltaTime;
-            Vector3Int tgtCell = floorTilemap.WorldToCell(newPos);
-            if (IsWalkableCell(tgtCell))
+            if (selectedTargetCell.HasValue && selectedTargetCell.Value == clickedCell)
             {
-                rb.MovePosition(newPos);
+                selectedTargetCell = null;
+                currentPathCells.Clear();
+                ClearPathPreview();
             }
         }
     }
@@ -310,6 +295,182 @@ public class PlayerMovement : MonoBehaviour
         return collider2d != null && collider2d.GetComponent<TrapBehavior>() != null;
     }
 
+    #region Movement
+    // 화면에서 경로 표시 제거
+    void ClearPathPreview()
+    {
+        if (activePathMarkers.Count > 0)
+        {
+            foreach (var marker in activePathMarkers)
+            {
+                if (marker != null)
+                    Destroy(marker);
+            }
+            activePathMarkers.Clear();
+        }
+    }
+    // 경로 프리뷰 생성 (2칸 이상일 때만 표시)
+    void ShowPathPreview(List<Vector3Int> cells)
+    {
+        ClearPathPreview();
+
+        currentPathCells = cells ?? new List<Vector3Int>();
+        if (cells == null || cells.Count < 2) return; // 1칸(제자리) 이동이면 표시하지 않음
+
+        for (int i = 1; i < cells.Count; i++) // 시작 셀은 제외
+        {
+            Vector3Int cell = cells[i];
+            Vector3 world = floorTilemap.GetCellCenterWorld(cell);
+            world.z = transform.position.z;
+
+            var marker = Instantiate(pathMarkerPrefab, world, Quaternion.identity);
+            activePathMarkers.Add(marker);
+        }
+    }
+    // --- 타일 기반 최소 경로 탐색 (BFS) ---
+
+    List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal)
+    {
+        // 시작과 목표가 같으면 1칸짜리 경로 반환
+        if (start == goal)
+        {
+            return new List<Vector3Int> { start };
+        }
+
+        var queue = new Queue<Vector3Int>();
+        var cameFrom = new Dictionary<Vector3Int, Vector3Int>();
+
+        queue.Enqueue(start);
+        cameFrom[start] = start;
+
+        // 탐색에 사용할 6방향
+        Direction[] dirs =
+        {
+            Direction.West,
+            Direction.East,
+            Direction.NW,
+            Direction.NE,
+            Direction.SW,
+            Direction.SE
+        };
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+
+            if (current == goal)
+                break;
+
+            bool odd = (current.y & 1) != 0;
+
+            foreach (var dir in dirs)
+            {
+                Vector3Int offset = GetOffsetForDirection(dir, odd);
+                Vector3Int next = current + offset;
+
+                if (cameFrom.ContainsKey(next))
+                    continue;
+
+                if (!IsWalkableCell(next))
+                    continue;
+
+                cameFrom[next] = current;
+                queue.Enqueue(next);
+            }
+        }
+
+        // goal 에 도달하지 못한 경우
+        if (!cameFrom.ContainsKey(goal))
+        {
+            return null;
+        }
+
+        // goal 에서 start 까지 역추적 후 뒤집기
+        var path = new List<Vector3Int>();
+        var cur = goal;
+        while (true)
+        {
+            path.Add(cur);
+            if (cur == start) break;
+            cur = cameFrom[cur];
+        }
+        path.Reverse();
+        return path;
+    }
+    // --- 경로를 따라 실제로 이동 ---
+
+    void StartPathMove(List<Vector3Int> cells)
+    {
+        if (cells == null || cells.Count < 2) return; // 제자리이거나 잘못된 경로
+
+        // 이동 중이면 먼저 정리
+        if (pathMoveRoutine != null)
+        {
+            StopCoroutine(pathMoveRoutine);
+            pathMoveRoutine = null;
+        }
+
+        isMovingByPath = true;
+        // 프리뷰는 이동 시작 시 지움
+        ClearPathPreview();
+
+        pathMoveRoutine = StartCoroutine(Co_MoveAlongPath(cells));
+    }
+
+    IEnumerator Co_MoveAlongPath(List<Vector3Int> cells)
+    {
+        // 시작 셀은 현재 위치라고 가정, 1번째 인덱스부터 끝까지 순서대로 이동
+        for (int i = 1; i < cells.Count; i++)
+        {
+            Vector3 start = rb.position;
+            Vector3 end = floorTilemap.GetCellCenterWorld(cells[i]);
+            end.z = transform.position.z;
+
+            // 방향 벡터 및 거리 계산
+            Vector2 to = end - start;
+            float dist = to.magnitude;
+            if (dist < 0.0001f)
+                continue;
+
+            Vector2 dir = to / dist;
+            float speed = Mathf.Max(0.01f, defaultMoveSpeed);
+            float duration = dist / speed;
+            float t = 0f;
+
+            // 스프라이트 방향
+            if (dir.sqrMagnitude > 0.0001f)
+                spriterenderer.flipX = dir.x > 0f;
+
+            if (animator != null)
+                animator.SetInteger("Move", 1);
+
+            while (t < 1f)
+            {
+                if (GamePause.IsPaused)
+                {
+                    // 일시정지 중에는 프레임만 넘김
+                    yield return null;
+                    continue;
+                }
+
+                t += Time.deltaTime / duration;
+                Vector3 pos = Vector3.Lerp(start, end, Mathf.Clamp01(t));
+                rb.MovePosition(pos);
+                yield return null;
+            }
+
+            rb.MovePosition(end);
+        }
+
+        if (animator != null)
+            animator.SetInteger("Move", 0);
+
+        isMovingByPath = false;
+        selectedTargetCell = null;
+        currentPathCells.Clear();
+        pathMoveRoutine = null;
+    }
+    #endregion
     void HandlePushDetection()
     {
         if (isPushMode) return;
@@ -565,7 +726,23 @@ public class PlayerMovement : MonoBehaviour
         return false;
     }
 
-    public void ClearPath() => path.Clear();
+    public void ClearPath()
+    {
+        // 기존 마우스 경로 리스트 정리
+        path.Clear();
+
+        // 타일 경로 이동 상태 정리
+        currentPathCells.Clear();
+        selectedTargetCell = null;
+        isMovingByPath = false;
+        ClearPathPreview();
+
+        if (pathMoveRoutine != null)
+        {
+            StopCoroutine(pathMoveRoutine);
+            pathMoveRoutine = null;
+        }
+    }
 
     bool IsWalkableCell(Vector3Int cell)
     {
@@ -651,14 +828,29 @@ public class PlayerMovement : MonoBehaviour
         };
     }
 
-    public void HaltImmediately()   //플레이어 이동 강제 즉시 정지(이동 중 생기는 버그를 위한)
+    public void HaltImmediately()
     {
-        // 입력과 경로를 모두 초기화해서 FixedUpdate가 더 이상 움직이지 않게 함
+        // 타일 경로 이동 즉시 중단
+        if (pathMoveRoutine != null)
+        {
+            StopCoroutine(pathMoveRoutine);
+            pathMoveRoutine = null;
+        }
+        isMovingByPath = false;
+
+        // 프리뷰 및 경로 정보 초기화
+        ClearPathPreview();
+        currentPathCells.Clear();
+        selectedTargetCell = null;
+
+        // 기존 마우스 이동/키 입력도 모두 정지
         input = Vector2.zero;
         inputDir = Direction.None; // 이미 ResetInput()도 있지만 여기서 직접 처리
         mouseMoveActive = false;
-        ClearPath();
-        if (animator != null) animator.SetInteger("Move", 0);
+        path.Clear();
+
+        if (animator != null)
+            animator.SetInteger("Move", 0);
     }
 
     public void ResetInput() //디버프 시 이동 방향 초기화

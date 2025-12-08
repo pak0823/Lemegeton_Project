@@ -41,6 +41,9 @@ public class WeakOnLowestHpPassive : PassiveAsset
         if (target == null || target.IsDead) return;
         if (target.team == owner.team) return; // 아군은 제외
 
+        // 이 공격을 맞기 전 대상 HP 복원
+        float targetHpBefore = target.HP + Mathf.Max(0, damage);
+
         // 현재 생존 중인 적들 중에서 HP가 가장 낮은 애들 찾기
         var candidates = new List<BattleUnit>();
         float minHp = float.MaxValue;
@@ -48,7 +51,9 @@ public class WeakOnLowestHpPassive : PassiveAsset
         foreach (var enemy in battle.GetLivingEnemiesOf(owner))
         {
             if (enemy == null) continue;
-            float hp = enemy.HP;
+
+            float hp = (enemy == target) ? targetHpBefore : enemy.HP;   // 공격받은 대상은 "맞기 전 HP"로 비교
+
             if (hp < minHp - 0.01f)
             {
                 minHp = hp;

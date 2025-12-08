@@ -45,7 +45,6 @@ public class TrainingDB : ScriptableObject
         var e = FindEntry(unit, skill);
         int route = e != null ? e.routeIndex : -1;
 
-        Debug.Log($"[TrainingDB.GetRoute] unit={unit?.name} skill={skill?.name} legacy={skill?.legacyId} route={route}");
         return route;
     }
 
