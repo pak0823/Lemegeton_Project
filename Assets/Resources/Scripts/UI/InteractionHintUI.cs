@@ -14,21 +14,21 @@ public class InteractionHintUI : MonoBehaviour
     [SerializeField] GameObject surveyRoot;
     [SerializeField] RectTransform surveyRect;
     [SerializeField] Text surveyLabel;
-    [SerializeField] Vector2 defaultSurveyOffset = new Vector2(60f, 0f); // 기본 힌트 위치 F
+    [SerializeField] Vector2 defaultSurveyOffset = new Vector2(60f, 0f); // 기본 힌트 위치
     Vector2 _surveyOffset;   // 현재 적용중
 
     [Header("Communication")]
     [SerializeField] GameObject commRoot;
     [SerializeField] Text commLabel;
     [SerializeField] RectTransform commRect;
-    [SerializeField] Vector2 defaultCommOffset = new Vector2(0f, 80f);  // 기본 힌트 위치 E
+    [SerializeField] Vector2 defaultCommOffset = new Vector2(0f, 80f);  // 기본 힌트 위치
     Vector2 _commOffset;     // 현재 적용중
 
     [Header("Cancel")]
     [SerializeField] GameObject cancelRoot;
     [SerializeField] Text cancelLabel;
     [SerializeField] RectTransform cancelRect;
-    [SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // 기본 힌트 위치 F
+    [SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // 기본 힌트 위치
     Vector2 _cancelOffset;   // 현재 적용중
 
     RectTransform rootRect;
@@ -126,7 +126,7 @@ public class InteractionHintUI : MonoBehaviour
     }
     public void ShowCommunication()
     {
-        if (commLabel) commLabel.text = "소통";
+        if (commLabel) commLabel.text = "관찰";
         if (commRoot) commRoot.SetActive(true);
         ShowRoot();
     }
@@ -139,8 +139,8 @@ public class InteractionHintUI : MonoBehaviour
 
     public void ShowBoth()
     {
-        ShowSurvey();
-        ShowCommunication();
+        ShowSurvey();   //조사
+        ShowCommunication();    //관찰
     }
 
     public void HideBoth()
@@ -164,12 +164,30 @@ public class InteractionHintUI : MonoBehaviour
     void ShowRoot()
     {
         if (!group) return;
-        group.alpha = 1f; group.blocksRaycasts = false; group.interactable = false;
+        group.alpha = 1f; 
+        group.blocksRaycasts = true; 
+        group.interactable = true;
     }
     void TryHideRoot()
     {
         if (!group) return;
         bool any = (surveyRoot && surveyRoot.activeSelf) || (commRoot && commRoot.activeSelf) || (cancelRoot && cancelRoot.activeSelf);
         if (!any) HideAll();
+    }
+
+    // === UI 버튼에서 호출할 이벤트 ===
+    public void OnClickSurveyButton()
+    {
+        Shared.PlayerMovement?.OnClickSurveyButton();
+    }
+
+    public void OnClickCommunicationButton()
+    {
+        Shared.PlayerMovement?.OnClickCommunicationButton();
+    }
+
+    public void OnClickCancelButton()
+    {
+        Shared.PlayerMovement?.OnClickCancelButton();
     }
 }

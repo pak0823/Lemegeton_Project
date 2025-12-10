@@ -1,6 +1,11 @@
 using UnityEngine;
 
 public enum ISBOSS { None, Boss }  //보스 구별
+public struct SkillAnimBinding
+{
+    public SkillId skillId;     // SkillAsset.legacyId 와 동일한 값
+    public string triggerName;  // 이 유닛이 그 스킬을 쓸 때 사용할 애니메이션 트리거
+}
 
 [CreateAssetMenu(menuName = "Battle/UnitData", fileName = "UnitData")]
 public class UnitData : ScriptableObject
@@ -28,6 +33,10 @@ public class UnitData : ScriptableObject
 
     [Header("Passives (per character)")]
     public PassiveAsset[] passives; // 패시브 스킬들 (해금 여부는 런타임에서 결정)
+
+    [Header("Animation")]
+    [Tooltip("이 유닛이 사용하는 각 스킬(legacyId)에 대해, 유닛 고유의 애니메이션 트리거를 매핑합니다.")]
+    public SkillAnimBinding[] skillAnimBindings;
 
     [Header("UI")]
     public Sprite UnitIcon; // ATB 아이콘용 스프라이트

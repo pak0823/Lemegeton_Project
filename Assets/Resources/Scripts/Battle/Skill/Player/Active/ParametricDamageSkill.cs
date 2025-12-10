@@ -167,7 +167,7 @@ public class ParametricDamageSkill : SkillAsset
 
     [Header("Frontline Bonus(전방 보너스)")]
     [SerializeField] private bool useFrontlineBonus = false;   // 전방 보너스 사용 여부
-    [SerializeField] private int frontlineDepth = 2;            // "앞 N열"
+    //[SerializeField] private int frontlineDepth = 2;            // "앞 N열"
     [SerializeField] private float frontlineMultiplier = 1.5f;  // 배수(예: 1.5)
     [SerializeField] private bool useManualFrontier = true;
 

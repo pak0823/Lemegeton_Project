@@ -99,7 +99,6 @@ public class PlayerDebuffController : MonoBehaviour
             if (playerMovement != null)
             {
                 playerMovement.ClearPath();
-                playerMovement.ResetInput();
             }
         }
 

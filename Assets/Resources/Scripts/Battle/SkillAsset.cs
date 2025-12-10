@@ -15,6 +15,14 @@ public enum TargetPriorityMode
     HighestHostility,
     PreferredStatusThenHighestHostility,  // 예: Slow 우선 → 그 안에서 적대감 최고
 }
+public enum SkillAnimKind
+{
+    None,       // 애니메이션 없이 바로 효과 (희귀)
+    Melee,      // 근접 공격
+    Ranged,     // 원거리 발사/투사체
+    SelfCast,   // 자기 강화/버프 캐스팅 모션
+    Special     // 아주 특수한 스킬 (코드에서 개별 처리)
+}
 
 public struct SkillRuntime
 {
@@ -52,6 +60,13 @@ public abstract class SkillAsset : ScriptableObject
     [Header("Cooldown")]
     [Tooltip("해당 스킬 사용 후 다시 사용할 때까지 필요한 '자신의 턴 수'. 0이면 쿨다운 없음.")]
     public int cooldownTurns = 0;
+
+    [Header("Animation")]
+    [Tooltip("이 스킬의 애니메이션 타입. 근접, 원거리, 자기 강화 등.")]
+    public SkillAnimKind animKind = SkillAnimKind.Melee;
+
+    [Tooltip("이 스킬의 기본 애니메이션 트리거 이름. 비워두면 타입별 기본값(Attack/Ranged/Casting 등)을 사용.")]
+    public string animTriggerOverride;
 
     [Header("Melee / Gap Close")]
     [Tooltip("Unit 타겟 스킬일 때, 대상에게 뛰어가서 공격할지 여부. false면 제자리에서 시전.")]

@@ -1,9 +1,11 @@
 // PlayerMovement.cs
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.EventSystems;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -21,18 +23,12 @@ public class PlayerMovement : MonoBehaviour
     float movementLockUntil = 0f;
     int _hardLockTokens = 0; // 무기한 잠금 토큰
 
-    private Direction inputDir;
     public bool isPushMode { private set; get; }
     private Direction pendingDirectionKey = Direction.None;
     private PushObject selectedBox = null;
     private List<PushObject> contactBoxes = new();
     private bool isPerformingPush = false;
 
-    // 마우스 이동 상태
-    bool mouseMoveActive = false;
-    Vector2 mouseMoveTarget;
-    [SerializeField] float clickArrivalThreshold = 0.1f; // 도착 판정
-    //[SerializeField] float clickProbeRadius = 0.15f;      // 충돌 예측 반경
     ContactFilter2D _castFilter;
     readonly RaycastHit2D[] _castHits = new RaycastHit2D[4];
 
@@ -51,18 +47,21 @@ public class PlayerMovement : MonoBehaviour
     // 화면에 찍힌 경로 마커들
     private readonly List<GameObject> activePathMarkers = new List<GameObject>();
 
+    // 경로 도착 시 실행할 콜백 (예: 상자 열기)
+    private Action pathArrivalCallback = null;
+
+    // 상호작용 이동용으로 선택된 상자(있다면)
+    private BoxInteract pendingChest = null;
+
+    // 현재 상호작용 대상(관찰/조사 버튼이 가리키는 대상)
+    private Collider2D currentInteractTarget = null;
+    private DescriptionData currentDescData = null;
+
     private SpriteRenderer spriterenderer;
     private Animator animator;
     private PlayerDebuffController PlayerDebuffController;
 
-    private BoxInteract highlightedChest = null;
-    Collider2D _lastHintTarget;     // 마지막으로 힌트를 띄우게 한 대상
-    DescriptionData _lastDescData;  // 그 대상의 설명 데이터(있으면)
-
     [SerializeField] private KeyCode surveyKey = KeyCode.F; //탐험 조사 키
-    [SerializeField] private KeyCode communicationKey = KeyCode.E; //탐험 소통 키
-    [SerializeField] private KeyCode upDirectionKey = KeyCode.W; //탐험 위 방향키
-    [SerializeField] private KeyCode downDirectionKey = KeyCode.S; //탐험 아래 방향키
     [SerializeField] private KeyCode leftDirectionKey = KeyCode.A; //탐험 왼쪽 방향키
     [SerializeField] private KeyCode rightDirectionKey = KeyCode.D; //탐험 오른쪽 방향키
 
@@ -83,6 +82,20 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
+        // 관찰/대화 Dialog가 열려 있을 때: 
+        // 좌클릭으로 닫기
+        // 닫히기 전까지는 이동/타일 클릭을 전부 막는다
+        if (Shared.descriptionDialogUI != null && Shared.descriptionDialogUI.IsOpen)
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                Shared.descriptionDialogUI.Hide();
+            }
+
+            HaltImmediately();
+            return;
+        }
+
         // 입력 차단 조건을 한 곳에서 체크
         bool isInputBlocked =
                                 (Time.time < movementLockUntil)
@@ -98,18 +111,10 @@ public class PlayerMovement : MonoBehaviour
             return;
         }
 
-        HandleSurveyKeyPreAction();
-
-        inputDir = GetHexDirectionArrowKey();
-
-        if (!isPushMode)
-            HandlePushDetection();
-
-        HandleCommunicationKey();
-
         if (!isPushMode)
         {
-            HandleTileClickInput();
+            HandlePushDetection();      // 푸시 박스 탐지만 남김 (힌트 UI 없이)
+            HandleTileClickInput();     // 타일 클릭/상자 클릭 이동
         }
 
         if (isPushMode)
@@ -163,7 +168,6 @@ public class PlayerMovement : MonoBehaviour
                 }
             }
 
-            HandleCommunicationKey();
             return;
         }
 
@@ -182,16 +186,6 @@ public class PlayerMovement : MonoBehaviour
             }
             return;
         }
-
-        // 선택된 푸시 오브젝트가 없고, 포커스된 상자가 있을 때만 열기
-        if (!isPushMode && selectedBox == null && highlightedChest != null
-        && Input.GetKeyDown(surveyKey))
-        {
-            Shared.interactionHintUI?.HideAll();
-            highlightedChest.OpenChest();
-            highlightedChest = null; // 열렸으니 참조 해제
-            return;
-        }
     }
 
     void FixedUpdate()
@@ -202,8 +196,6 @@ public class PlayerMovement : MonoBehaviour
             if (animator != null) animator.SetInteger("Move", 0);
             return;
         }
-
-        //animator.SetInteger("Move", (path.Count > 0 || input.sqrMagnitude > 0f) ? 1 : 0);
     }
 
     // --- 타일 클릭 입력 처리 ---
@@ -220,6 +212,10 @@ public class PlayerMovement : MonoBehaviour
         if (cam == null)
             return;
 
+        // UI 위를 클릭한 경우에는 타일 입력을 처리하지 않음
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
         float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
         Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x,
                                                         Input.mousePosition.y,
@@ -229,48 +225,208 @@ public class PlayerMovement : MonoBehaviour
         Vector3Int clickedCell = floorTilemap.WorldToCell(wp);
         Vector3Int currentCell = floorTilemap.WorldToCell(rb.position);
 
+        // 먼저, 클릭 지점에 상호작용 가능한 오브젝트가 있는지 검사
+        BoxInteract clickedChest = null;
+        Collider2D clickedCollider = null;
+        DescriptionData clickedDesc = null;
+
+        var hits = Physics2D.OverlapPointAll(wp);
+        foreach (var h in hits)
+        {
+            // 상자(부모 포함) 검사
+            var chest = h.GetComponentInParent<BoxInteract>();
+            if (chest != null)
+            {
+                // 이미 열린 상자는 완전히 무시 (모든 콜라이더 포함)
+                if (chest.IsOpened)
+                    continue;
+
+                // 닫힌 상자라면 상자 정보만 저장 (클릭 대상 우선)
+                if (clickedChest == null)
+                    clickedChest = chest;
+
+                // 상자 콜라이더도 상호작용 대상 콜라이더로 인정
+                if (!clickedCollider)
+                    clickedCollider = h;
+            }
+
+            // 설명 데이터는 상자/기타 공통으로 가져온다
+            if (clickedDesc == null && h.TryGetComponent<DescriptionData>(out var descriptiondata))
+            {
+                clickedDesc = descriptiondata;
+                if (!clickedCollider)
+                    clickedCollider = h;
+            }
+        }
+
         // 왼쪽 클릭: 경로 프리뷰 or 이동 실행
         if (Input.GetMouseButtonDown(0))
         {
+            // 1) 오브젝트(상자, NPC, 기타) 클릭
+            if (clickedChest != null || clickedCollider != null)
+            {
+                // 목표가 될 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
+                Transform targetTr = clickedChest ? clickedChest.transform : clickedCollider.transform;
+
+                // 대상 셀
+                Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
+                
+
+                // ▶ 현재 셀이 대상 셀과 같은 셀이거나, 인접 6칸 중 하나라면 "이동 없이 상호작용 가능"
+                bool isAdjacentOrSame = false;
+                {
+                    if (currentCell == targetCell)
+                    {
+                        isAdjacentOrSame = true;
+                    }
+                    else
+                    {
+                        Direction[] dirs =
+                        {
+                            Direction.West,
+                            Direction.East,
+                            Direction.NW,
+                            Direction.NE,
+                            Direction.SW,
+                            Direction.SE
+                        };
+
+                        bool odd = (targetCell.y & 1) != 0;
+                        foreach (var dir in dirs)
+                        {
+                            Vector3Int offset = GetOffsetForDirection(dir, odd);
+                            Vector3Int adj = targetCell + offset;
+                            if (adj == currentCell)
+                            {
+                                isAdjacentOrSame = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (isAdjacentOrSame)
+                {
+                    // 이동 없이 바로 상호작용할 수 있는 거리
+                    selectedTargetCell = currentCell;
+                    currentPathCells = new List<Vector3Int> { currentCell };
+
+                    // 현재 상호작용 대상/관찰 대상 저장
+                    currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
+                    currentDescData = clickedDesc;
+                    pendingChest = clickedChest;
+
+                    // 제자리에선 경로 프리뷰는 필요 없으니 호출해도 표시가 안 됨(Count < 2라서)
+                    ShowPathPreview(currentPathCells);
+
+                    // HintUI를 대상 위치에 표시 (조사/관찰/취소 버튼 모두)
+                    Shared.interactionHintUI?.ShowBothAt(targetTr);
+                    Shared.interactionHintUI?.ShowCancel();
+                    return;
+                }
+
+
+                var newPath = FindPathToAdjacentCell(currentCell, targetCell);
+
+                if (newPath == null || newPath.Count < 2)
+                {
+                    // 도달 불가 → 선택/프리뷰 해제
+                    selectedTargetCell = null;
+                    currentPathCells.Clear();
+                    ClearPathPreview();
+                    pendingChest = null;
+                    pathArrivalCallback = null;
+                    currentInteractTarget = null;
+                    currentDescData = null;
+                    Shared.interactionHintUI?.HideAll();
+                    return;
+                }
+
+                selectedTargetCell = newPath[newPath.Count - 1];
+                currentPathCells = newPath;
+
+                // 현재 상호작용 대상/관찰 대상 저장
+                currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
+                currentDescData = clickedDesc;
+
+                pendingChest = clickedChest;
+
+                ShowPathPreview(newPath);
+
+                // HintUI를 대상 위치에 표시 (조사/관찰/취소 버튼 모두)
+                Shared.interactionHintUI?.ShowBothAt(targetTr); // 조사 + 관찰
+                Shared.interactionHintUI?.ShowCancel();         // 취소 버튼 추가
+                return;
+            }
+
+            // 2) 오브젝트가 아닌 "그냥 타일" 클릭인 경우
+            // 원거리 상자 상호작용이 예약된 상황에서는
+            // 타일 더블클릭으로는 이동을 시작하지 않는다.
+            if (pendingChest != null)
+            {
+                // 왼쪽 클릭은 무시 (버튼으로만 이동 시작)
+                return;
+            }
+
             // 이미 같은 타일이 선택된 상태에서 다시 왼쪽 클릭 → 이동 실행
             if (selectedTargetCell.HasValue
                 && selectedTargetCell.Value == clickedCell
                 && currentPathCells != null
                 && currentPathCells.Count >= 2)
             {
-                StartPathMove(currentPathCells);
+                StartPathMove(currentPathCells, pathArrivalCallback);
                 return;
             }
 
             // 새 경로 계산
-            var newPath = FindPath(currentCell, clickedCell);
+            var newPath2 = FindPath(currentCell, clickedCell);
 
             // 경로가 없거나 1칸(제자리)이면 선택/프리뷰 해제
-            if (newPath == null || newPath.Count <= 1)
+            if (newPath2 == null || newPath2.Count <= 1)
             {
                 selectedTargetCell = null;
                 currentPathCells.Clear();
                 ClearPathPreview();
+                pendingChest = null;
+                pathArrivalCallback = null;
+                currentInteractTarget = null;
+                currentDescData = null;
+                Shared.interactionHintUI?.HideAll();
                 return;
             }
 
-            // 첫 번째 클릭: 경로만 표시
+            // 첫 번째 클릭: 경로만 표시 (이 경우 관찰 대상은 없음)
             selectedTargetCell = clickedCell;
-            currentPathCells = newPath;
-            ShowPathPreview(newPath);
+            currentPathCells = newPath2;
+            pendingChest = null;
+            pathArrivalCallback = null;
+            currentInteractTarget = null;
+            currentDescData = null;
+            ShowPathPreview(newPath2);
+            Shared.interactionHintUI?.HideAll();
             return;
         }
 
         // 오른쪽 클릭: 같은 타일을 클릭하면 선택/프리뷰 취소
         if (Input.GetMouseButtonDown(1))
         {
-            if (selectedTargetCell.HasValue && selectedTargetCell.Value == clickedCell)
+            if (selectedTargetCell.HasValue || (currentPathCells != null && currentPathCells.Count > 0))
             {
-                selectedTargetCell = null;
-                currentPathCells.Clear();
-                ClearPathPreview();
+                CancelSelectionAndHint();
             }
         }
+    }
+    //HintUi 공통 취소 메서드
+    void CancelSelectionAndHint()
+    {
+        selectedTargetCell = null;
+        currentPathCells.Clear();
+        ClearPathPreview();
+        pendingChest = null;
+        pathArrivalCallback = null;
+        currentInteractTarget = null;
+        currentDescData = null;
+        Shared.interactionHintUI?.HideAll();
     }
 
     // 외부에서 잠금 요청
@@ -288,11 +444,6 @@ public class PlayerMovement : MonoBehaviour
     {
         _hardLockTokens = Mathf.Max(0, _hardLockTokens - 1);
         HaltImmediately();
-    }
-    bool IsCommunicationBlocked(Collider2D collider2d)
-    {
-        // 소통 금지 대상들을 여기서 중앙집중 관리
-        return collider2d != null && collider2d.GetComponent<TrapBehavior>() != null;
     }
 
     #region Movement
@@ -317,7 +468,8 @@ public class PlayerMovement : MonoBehaviour
         currentPathCells = cells ?? new List<Vector3Int>();
         if (cells == null || cells.Count < 2) return; // 1칸(제자리) 이동이면 표시하지 않음
 
-        for (int i = 1; i < cells.Count; i++) // 시작 셀은 제외
+        // 플레이어 현재 위치(시작 셀)도 포함해서 전부 표시
+        for (int i = 0; i < cells.Count; i++)
         {
             Vector3Int cell = cells[i];
             Vector3 world = floorTilemap.GetCellCenterWorld(cell);
@@ -397,9 +549,45 @@ public class PlayerMovement : MonoBehaviour
         path.Reverse();
         return path;
     }
-    // --- 경로를 따라 실제로 이동 ---
 
-    void StartPathMove(List<Vector3Int> cells)
+    // 특정 오브젝트 셀 주변(인접 6칸) 중 하나까지의 최단 경로를 찾는다.
+    List<Vector3Int> FindPathToAdjacentCell(Vector3Int start, Vector3Int objectCell)
+    {
+        Direction[] dirs =
+        {
+            Direction.West,
+            Direction.East,
+            Direction.NW,
+            Direction.NE,
+            Direction.SW,
+            Direction.SE
+        };
+
+        List<Vector3Int> bestPath = null;
+
+        bool odd = (objectCell.y & 1) != 0;
+
+        foreach (var dir in dirs)
+        {
+            Vector3Int offset = GetOffsetForDirection(dir, odd);
+            Vector3Int adj = objectCell + offset;
+
+            if (!IsWalkableCell(adj))
+                continue;
+
+            var path = FindPath(start, adj);
+            if (path == null || path.Count < 2)
+                continue;
+
+            if (bestPath == null || path.Count < bestPath.Count)
+                bestPath = path;
+        }
+
+        return bestPath;
+    }
+
+    // 경로를 따라 실제로 이동
+    void StartPathMove(List<Vector3Int> cells, Action onArrive = null)
     {
         if (cells == null || cells.Count < 2) return; // 제자리이거나 잘못된 경로
 
@@ -411,6 +599,10 @@ public class PlayerMovement : MonoBehaviour
         }
 
         isMovingByPath = true;
+
+        // 도착 콜백 설정
+        pathArrivalCallback = onArrive;
+
         // 프리뷰는 이동 시작 시 지움
         ClearPathPreview();
 
@@ -469,217 +661,171 @@ public class PlayerMovement : MonoBehaviour
         selectedTargetCell = null;
         currentPathCells.Clear();
         pathMoveRoutine = null;
+
+        // 도착 후 콜백 실행
+        var cb = pathArrivalCallback;
+
+        // 이동 상태 초기화
+        isMovingByPath = false;
+        selectedTargetCell = null;
+        currentPathCells.Clear();
+        pathMoveRoutine = null;
+
+        // 콜백을 먼저 실행
+        cb?.Invoke();
+
+        // 마지막으로 필드 정리
+        pathArrivalCallback = null;
+        pendingChest = null;
     }
     #endregion
     void HandlePushDetection()
     {
         if (isPushMode) return;
 
+        // 이전에 선택된 박스 하이라이트 해제
         if (selectedBox != null)
         {
             selectedBox.SetHighlight(false);
             selectedBox = null;
         }
 
-        // 기존에 켜진 상자 하이라이트 해제(포커스 갱신 전 초기화)
-        if (highlightedChest != null)
-        {
-            highlightedChest.SetFocused(false);   // 이전 포커스 해제
-            highlightedChest.SetHighlight(false);
-            highlightedChest = null;
-        }
-
         contactBoxes.Clear();
         Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, 0.15f);
+
+        PushObject closestBox = null;
+        float bestSqr = float.MaxValue;
+        Vector3 p = transform.position;
 
         foreach (var hit in hits)
         {
             if (hit.TryGetComponent<PushObject>(out var box))
             {
-                selectedBox = box;
-                contactBoxes.Add(box);
-                box.SetHighlight(true);
-
-                Shared.interactionHintUI?.ShowBothAt(box.transform);
-
-                Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
-                Vector3Int boxCell = floorTilemap.WorldToCell(box.transform.position);
-                Vector3Int delta = boxCell - playerCell;
-
-                bool odd = Mathf.Abs(playerCell.y) % 2 == 1;
-                pendingDirectionKey = GetDirectionFromDelta(delta, odd);
-
-                var (blend, flipX) = GetPushBlend(pendingDirectionKey);
-                animator.SetFloat("PushX", blend.x);
-                animator.SetFloat("PushY", blend.y);
-                spriterenderer.flipX = flipX;
-
-                return;
-            }
-
-            // 2) 상자 1개만 포커스/하이라이트
-            BoxInteract closest = null;
-            float bestSqr = float.MaxValue;
-            Vector3 p = transform.position;
-
-            foreach (var hitBox in hits)
-            {
-                if (hitBox.TryGetComponent<BoxInteract>(out var chest) && !chest.IsOpened)// 열린 상자는 제외하고, 닫혀있으면 하이라이트
+                float d = (box.transform.position - p).sqrMagnitude;
+                if (d < bestSqr)
                 {
-                    float d = (chest.transform.position - p).sqrMagnitude;
-                    if (d < bestSqr)
-                    {
-                        bestSqr = d;
-                        closest = chest;
-                    }
+                    bestSqr = d;
+                    closestBox = box;
                 }
             }
-
-            if (closest != null)
-            {
-                highlightedChest = closest;
-                highlightedChest.SetFocused(true);    // 포커스 부여(= UI/입력 허용)
-                highlightedChest.SetHighlight(true);  // 선택 1개만 하이라이트
-                Shared.interactionHintUI?.ShowBothAt(closest.transform);
-                return;
-            }
-
-            if (hit.TryGetComponent<PortalController>(out var potal))
-            {
-                Shared.interactionHintUI?.ShowBothAt(potal.transform);
-                return;
-            }
-            else if(hit.TryGetComponent<HintAnchor>(out var hint))
-            {
-                Shared.interactionHintUI?.ShowBothAt(hint.transform);
-                return;
-            }
-
-            // Fallback으로(푸시/상자 외) 힌트 대상 탐색
-            HandleInteractionHintsFallback();
-
-            // 대상이 전혀 없을 때만 힌트 숨김
-            Shared.interactionHintUI?.HideAll();
-        }
-    }
-    void HandleInteractionHintsFallback()
-    {
-        // 이미 기존 로직으로 대상이 정해졌다면(푸시/상자 등) 거기에 맞춰 힌트는 켜져 있을 것.
-        // 여기서는 아무 대상도 못 찾았을 때만 "설명 전용" 힌트를 켠다.
-        if (selectedBox != null || highlightedChest != null) return;
-
-        var hits = Physics2D.OverlapCircleAll(transform.position, 0.2f);
-        Collider2D best = null;
-        float bestDist = float.MaxValue;
-        DescriptionData bestDesc = null;
-
-        foreach (var h in hits)
-        {
-            if (IsCommunicationBlocked(h)) continue;    // 함정은 소통 대상에서 제외
-
-            if (h.isTrigger == false && h.attachedRigidbody == null) continue; // 너무 무차별 감지 방지 (필요시 조정)
-                                                                               // 조건 1: DescriptionData가 있다면 최우선
-            if (h.TryGetComponent<DescriptionData>(out var dd) && (dd.enableHintOnContact))
-            {
-                float d = Vector2.SqrMagnitude((Vector2)h.bounds.ClosestPoint(transform.position) - (Vector2)transform.position);
-                if (d < bestDist) { best = h; bestDist = d; bestDesc = dd; }
-                continue;
-            }
-            //// 조건 2: 태그로만 힌트를 줄 수도 있음
-            //if (best == null && h.CompareTag("Interactable"))
-            //{
-            //    best = h; bestDist = 0.21f; // 가벼운 우선순위
-            //    bestDesc = null;
-            //}
         }
 
-        if (best != null)
+        if (closestBox != null)
         {
-            _lastHintTarget = best;
-            _lastDescData = bestDesc;
+            selectedBox = closestBox;
+            contactBoxes.Add(closestBox);
+            closestBox.SetHighlight(true);
 
-            // "무엇이든 접촉" → 두 키 모두 보이게
-            Shared.interactionHintUI?.ShowBothAt(best.transform);
+            Vector3Int playerCell = floorTilemap.WorldToCell(rb.position);
+            Vector3Int boxCell = floorTilemap.WorldToCell(closestBox.transform.position);
+            Vector3Int delta = boxCell - playerCell;
+
+            bool odd = Mathf.Abs(playerCell.y) % 2 == 1;
+            pendingDirectionKey = GetDirectionFromDelta(delta, odd);
+
+            var (blend, flipX) = GetPushBlend(pendingDirectionKey);
+            animator.SetFloat("PushX", blend.x);
+            animator.SetFloat("PushY", blend.y);
+            spriterenderer.flipX = flipX;
         }
         else
         {
-            _lastHintTarget = null;
-            _lastDescData = null;
+            pendingDirectionKey = Direction.None;
+        }
+    }
+    // === Hint UI 버튼용 콜백 ===
+    public void OnClickSurveyButton()
+    {
+        Shared.descriptionDialogUI?.Hide();
+
+        if (isMovingByPath)
+            return;
+
+        // 이동 없이 즉시 실행해야 하는 경우 (한 칸 이내)
+        if (currentPathCells == null || currentPathCells.Count < 2)
+        {
+            if (pendingChest != null)
+            {
+                pendingChest.OpenChest();
+                Shared.interactionHintUI?.HideAll();
+            }
+            // 나중에 조사 대상이 더 생기면 여기에 else-if로 추가
+
+            // 상태 정리
+            ClearPath();
+            return;
+        }
+
+        // 여기부터는 "이동 후 실행" 케이스
+        if (currentPathCells != null && currentPathCells.Count >= 2)
+        {
+            Action onArrive = null;
+            if (pendingChest != null)
+                onArrive = () => pendingChest.OpenChest();
+
+            StartPathMove(currentPathCells, onArrive);
+        }
+    }
+    public void OnClickCommunicationButton()
+    {
+        if (isMovingByPath)
+            return;
+
+        // 한 칸 이내면 이동 없이 즉시 관찰
+        if (currentPathCells == null || currentPathCells.Count < 2)
+        {
+            if (currentDescData != null && !string.IsNullOrWhiteSpace(currentDescData.description))
+            {
+                Shared.descriptionDialogUI?.Toggle(currentDescData.description);
+                Shared.interactionHintUI?.HideAll();
+            }
+            return;
+        }
+
+        // 이동 후 관찰
+        if (currentPathCells != null && currentPathCells.Count >= 2)
+        {
+            Action onArrive = null;
+            if (currentDescData != null && !string.IsNullOrWhiteSpace(currentDescData.description))
+            {
+                onArrive = () =>
+                {
+                    Shared.descriptionDialogUI?.Toggle(currentDescData.description);
+                    Shared.interactionHintUI?.HideAll();
+                };
+            }
+
+            StartPathMove(currentPathCells, onArrive);
+        }
+    }
+    public void OnClickCancelButton()
+    {
+        // 경로/상호작용 예약만 취소 (이동 중이 아닐 때)
+        if (!isMovingByPath)
+        {
+            CancelSelectionAndHint();
+        }
+
+        // 밀기 모드라면 종료 처리
+        if (isPushMode)
+        {
+            animator.SetInteger("Move", 0);
+            selectedBox?.SetHighlight(false);
+            selectedBox = null;
+            isPushMode = false;
+            pendingDirectionKey = Direction.None;
+            animator.SetFloat("PushX", 0f);
+            animator.SetFloat("PushY", 0f);
+            animator.SetBool("IsPushIdle", false);
             Shared.interactionHintUI?.HideAll();
-            Shared.descriptionDialogUI?.Hide();
+            Debug.Log("[Push] 밀기 모드 종료 (버튼)");
         }
     }
-
-    void HandleCommunicationKey()
-    {
-        if (!Input.GetKeyDown(communicationKey)) return;
-
-        if (_lastHintTarget != null && IsCommunicationBlocked(_lastHintTarget)) return; // 예외 안전장치: 함정이면 즉시 무시
-
-        string text = null;
-
-        // 상자 포커스 중이면 상자 설명 우선
-        if (highlightedChest != null)
-        {
-            // 상자 기본 문구
-            text = "아이템 상자 기본 문구가 비어있음.";
-            // 혹시 상자에 DescriptionData가 있다면 그 문구가 우선
-            if (highlightedChest.TryGetComponent<DescriptionData>(out var dd) && !string.IsNullOrEmpty(dd.description))
-                text = dd.description;
-        }
-        // 푸시 박스 포커스 중이면
-        else if (selectedBox != null)
-        {
-            if (selectedBox.TryGetComponent<DescriptionData>(out var dd) && !string.IsNullOrEmpty(dd.description))
-                text = dd.description;
-            else
-                text = "밀기 상자 기본 문구가 비어있음.";
-        }
-        // 그 외 최근 접촉 대상
-        else if (_lastHintTarget != null)
-        {
-            if (_lastDescData != null && !string.IsNullOrEmpty(_lastDescData.description))
-                text = _lastDescData.description;
-            else
-                text = "무언가 상호작용할 수 있을 것 같다.";
-        }
-
-        if (!string.IsNullOrEmpty(text))
-        {
-            Shared.descriptionDialogUI?.Toggle(text);
-        }
-    }
-
-    // F가 눌릴 때는 설명창을 닫고 기존 로직 수행(진입/종료/오픈 등)
-    void HandleSurveyKeyPreAction()
-    {
-        if (Input.GetKeyDown(surveyKey))
-        {
-            Shared.descriptionDialogUI?.Hide();
-        }
-    }
-
     public void TeleportTo(Vector3 worldPos)
     {
         rb.position = worldPos;
         transform.position = worldPos;
         ClearPath();
-    }
-
-    Direction GetHexDirectionArrowKey()
-    {
-        bool up = Input.GetKey(upDirectionKey);
-        bool down = Input.GetKey(downDirectionKey);
-        bool left = Input.GetKeyDown(leftDirectionKey);
-        bool right = Input.GetKeyDown(rightDirectionKey);
-
-        if (up && left) return Direction.NW;
-        if (up && right) return Direction.NE;
-        if (down && left) return Direction.SW;
-        if (down && right) return Direction.SE;
-        if (left) return Direction.West;
-        if (right) return Direction.East;
-        return Direction.None;
     }
 
     Direction GetDirectionFromDelta(Vector3Int delta, bool odd)
@@ -742,6 +888,11 @@ public class PlayerMovement : MonoBehaviour
             StopCoroutine(pathMoveRoutine);
             pathMoveRoutine = null;
         }
+
+        pathArrivalCallback = null;
+        pendingChest = null;
+        currentInteractTarget = null;
+        currentDescData = null;
     }
 
     bool IsWalkableCell(Vector3Int cell)
@@ -842,20 +993,15 @@ public class PlayerMovement : MonoBehaviour
         ClearPathPreview();
         currentPathCells.Clear();
         selectedTargetCell = null;
+        pathArrivalCallback = null;
+        pendingChest = null;
+        currentInteractTarget = null;
+        currentDescData = null;
 
         // 기존 마우스 이동/키 입력도 모두 정지
-        input = Vector2.zero;
-        inputDir = Direction.None; // 이미 ResetInput()도 있지만 여기서 직접 처리
-        mouseMoveActive = false;
         path.Clear();
 
         if (animator != null)
             animator.SetInteger("Move", 0);
-    }
-
-    public void ResetInput() //디버프 시 이동 방향 초기화
-    {
-        input = Vector2.zero;
-        inputDir = Direction.None;
     }
 }

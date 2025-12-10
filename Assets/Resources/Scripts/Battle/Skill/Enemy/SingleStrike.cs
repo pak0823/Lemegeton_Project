@@ -97,7 +97,7 @@ public class SingleStrike : SkillAsset
         };
 
         caster.OnAttackImpact += impact;
-        yield return caster.AnimateAttack(actualTarget);
+        yield return caster.AnimateAttack(actualTarget, null);
 
         // 안전장치: 애니 이벤트 누락 시 폴백
 if (!impactDone && actualTarget != null && !actualTarget.IsDead && bm != null)

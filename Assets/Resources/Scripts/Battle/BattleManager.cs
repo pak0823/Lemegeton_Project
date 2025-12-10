@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using static UnityEngine.GraphicsBuffer;
 
 public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, TargetingKnockback, EndTurn }
 public enum BattleAction { Move, Attack, Rest, Calm }
@@ -1332,7 +1333,7 @@ public class BattleManager : MonoBehaviour
         };
         caster.OnAttackImpact += impact;
 
-        yield return caster.AnimateAttack(target); // 제자리 근접 모션
+        yield return caster.AnimateAttack(target, null); // 제자리 근접 모션
 
         if (!impactDone) // 애니 이벤트 누락 대비
             ResolveSkillAtCell(def, target.CurrentMap, target.Cell, caster);
@@ -1721,8 +1722,6 @@ public class BattleManager : MonoBehaviour
         // 스킬이 확정되어 타게팅 상태일 때만 힌트 노출
         if (state == BattleState.Targeting && currentSkillSO != null)
         {
-            if(currentSkillSO)
-
             if (currentSkillSO.targetMode == SkillTargetMode.Tile)
                 OnHint?.Invoke("위치를 선택하세요");
             else
@@ -1964,7 +1963,6 @@ public class BattleManager : MonoBehaviour
 
         bool resolved = false;
 
-        // 임팩트 타이밍에 스킬 처리 (기존 로직 재사용)
         void OnImpact()
         {
             caster.OnAttackImpact -= OnImpact;
@@ -1973,10 +1971,11 @@ public class BattleManager : MonoBehaviour
 
         caster.OnAttackImpact += OnImpact;
 
-        // 공격/시전 모션 (점프를 안 쓰더라도 근접 모션은 그대로 쓸 수 있음)
-        yield return caster.AnimateAttack(target);
+        // 스킬/유닛 기반 트리거 결정 후 애니메이션 재생
+        string trigger = caster.GetAnimTriggerForSkill(skill);
+        yield return caster.AnimateAttack(target, trigger);
 
-        // 혹시 애니에서 임팩트 이벤트가 안 들어온 경우 대비해 타임아웃 처리 등 기존 코드 유지
+        // 혹시 애니에서 임팩트 이벤트가 안 들어온 경우 대비
         float timeout = 0.35f;
         while (!resolved && timeout > 0f)
         {
@@ -1985,18 +1984,13 @@ public class BattleManager : MonoBehaviour
         }
         caster.OnAttackImpact -= OnImpact;
 
-        // 폴백 처리: 임팩트 이벤트를 못 받았으면 여기서 직접 ResolveOnUnit 실행
         if (!resolved)
         {
-            // 애니메이션 이벤트 누락 등 안전망
+            // 애니메이션 이벤트 누락 대비 폴백
             yield return skill.ResolveOnUnit(this, caster, target);
         }
 
         caster.ApplyCooldown(skill);
-
-        // 원위치 복귀
-        caster.transform.position = originalW;
-
         FinishActionAfterSkill();
     }
 
@@ -2037,7 +2031,8 @@ public class BattleManager : MonoBehaviour
         caster.OnAttackImpact += OnImpact;
 
         // 공격 모션 (애니메이션 이벤트가 있으면 그 타이밍에 Resolve)
-        yield return caster.AnimateAttack(target);
+        string trigger = caster.GetAnimTriggerForSkill(skill);
+        yield return caster.AnimateAttack(target, trigger);
 
         caster.OnAttackImpact -= OnImpact;
 
@@ -2160,8 +2155,12 @@ public class BattleManager : MonoBehaviour
         };
         caster.OnAttackImpact += onFire;
 
-        // 원거리 모션
-        yield return caster.AnimateRanged();
+        string trigger = caster.GetAnimTriggerForSkill(skill);
+        // 근접/원거리 animKind에 따라 Attack vs Ranged 중 선택할지 결정
+        if (skill.animKind == SkillAnimKind.Ranged)
+            yield return caster.AnimateRanged(trigger);
+        else
+            yield return caster.AnimateAttack(null, trigger);
 
         // 임팩트 이벤트를 못 받았을 때: 여기서 직접 MP 차감 후 즉시 해결
         if (!fired && !projEnded)

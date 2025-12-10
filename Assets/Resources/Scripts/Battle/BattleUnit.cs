@@ -322,10 +322,10 @@ public class BattleUnit : MonoBehaviour
         }
 
         // 음수로 내려가면 0 밑으로는 안 떨어지게 클램프
-        Hostility = Mathf.Max(0f, Hostility + amount);
+        Hostility = Mathf.Max(0f, Hostility + applied);
 
         float after = Hostility;
-        Debug.Log($"[HOSTILITY] {name} Hostility: {before:F2} -> {after:F2} (Δ={amount:F2})");
+        Debug.Log($"[HOSTILITY] {name} Hostility: {before:F2} -> {after:F2} (Δ={applied:F2})");
     }
 
     public void ResetHostility()
@@ -584,6 +584,48 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Movement
+    /// <summary>
+    /// 주어진 스킬에 대해, 이 유닛이 사용할 애니메이션 트리거 이름을 결정합니다.
+    /// 우선순위: UnitData.skillAnimBindings → SkillAsset.animTriggerOverride → animKind 기본값
+    /// </summary>
+    public string GetAnimTriggerForSkill(SkillAsset skill)
+    {
+        if (skill == null)
+            return "Attack";
+
+        // 1) UnitData에 유닛별 매핑이 있으면 우선 사용
+        if (data != null && data.skillAnimBindings != null)
+        {
+            foreach (var b in data.skillAnimBindings)
+            {
+                if (b.skillId == skill.legacyId && !string.IsNullOrEmpty(b.triggerName))
+                    return b.triggerName;
+            }
+        }
+
+        // 2) 스킬 자체에서 오버라이드 지정된 경우
+        if (!string.IsNullOrEmpty(skill.animTriggerOverride))
+            return skill.animTriggerOverride;
+
+        // 3) animKind 에 따른 기본값
+        switch (skill.animKind)
+        {
+            case SkillAnimKind.Ranged:
+                return "Ranged";
+            case SkillAnimKind.SelfCast:
+                // 자기 강화용 캐스팅 트리거 (Animator에 따라 이름 다를 수 있음)
+                return "Casting";
+            case SkillAnimKind.None:
+                // 애니메이션 없이 처리할 예정이므로, 아무거나 리턴해도 되지만 기본값 유지
+                return "Attack";
+            case SkillAnimKind.Special:
+                // 특수 스킬은 Animator 설계에 따라 별도 트리거를 지정해두는 편이 좋음
+                return "Attack";
+            case SkillAnimKind.Melee:
+            default:
+                return "Attack";
+        }
+    }
 
     public IEnumerator AnimateMoveTo(Tilemap map, Vector3Int toCell)
     {
@@ -635,9 +677,13 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Attack
-    public IEnumerator AnimateAttack(BattleUnit target) //근접공격 애니메이션
+    /// 지정된 트리거 이름으로 근접 공격 애니메이션을 재생합니다.
+    /// triggerOverride 가 null/빈 문자열이면 기존 "Attack" 을 사용합니다.
+    public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride)
     {
-        if (animator) animator.SetTrigger("Attack");
+        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Attack" : triggerOverride;
+
+        if (animator) animator.SetTrigger(trigger);
 
         bool ended = false;
         Action onEnd = () => ended = true;
@@ -653,14 +699,23 @@ public class BattleUnit : MonoBehaviour
         OnAttackEnded -= onEnd;
     }
 
-    public IEnumerator AnimateRanged()  //원거리 공격 애니메이션
+    public IEnumerator AnimateRanged(string triggerOverride)
     {
-        if (animator) animator.SetTrigger("Ranged");
+        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Ranged" : triggerOverride;
+
+        if (animator) animator.SetTrigger(trigger);
+
         bool ended = false;
         Action onEnd = () => ended = true;
         OnAttackEnded += onEnd;
+
         float timeout = 2f;
-        while (!ended && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
+        while (!ended && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
         OnAttackEnded -= onEnd;
     }
 
