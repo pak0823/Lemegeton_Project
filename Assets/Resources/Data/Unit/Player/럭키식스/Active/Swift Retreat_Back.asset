@@ -23,9 +23,11 @@ MonoBehaviour:
   school: 0
   attribute: 0
   power: 0
-  mpCost: 10
+  mpCost: 1
   targetMode: 1
   cooldownTurns: 1
+  animKind: 0
+  animTriggerOverride: 
   useGapCloseJump: 1
   legacyId: 2
   trainingRoutes:
@@ -41,8 +43,11 @@ MonoBehaviour:
   direction: 0
   maxScanCells: 0
   dashAnimate: 1
-  dashDuration: 0.15
+  dashDuration: 0.35
   dashArc: 0.2
+  forwardDashTrigger: DashForward
+  backwardDashTrigger: DashBack
+  useDirectionalDashTrigger: 1
   trainingUseMpOverride: 1
   routeForMpOverride: 0
   trainingMpCostRoute0: 5

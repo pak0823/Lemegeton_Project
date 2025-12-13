@@ -14,6 +14,8 @@ public class ParametricDamageSkillEditor : Editor
     SerializedProperty useGapCloseJumpProp;
     SerializedProperty legacyIdProp;
     SerializedProperty trainingRoutesProp;
+    SerializedProperty animKindProp;
+SerializedProperty animTriggerOverrideProp;
 
     // ParametricDamage 고유 + 래핑 필드
     SerializedProperty priorityMode;
@@ -98,6 +100,9 @@ public class ParametricDamageSkillEditor : Editor
         useGapCloseJumpProp = serializedObject.FindProperty("useGapCloseJump");
         legacyIdProp = serializedObject.FindProperty("legacyId");
         trainingRoutesProp = serializedObject.FindProperty("trainingRoutes");
+        animKindProp = serializedObject.FindProperty("animKind");
+        animTriggerOverrideProp = serializedObject.FindProperty("animTriggerOverride");
+        priorityMode = serializedObject.FindProperty("priorityMode");
 
         // === ParametricDamageSkill 고유 필드 ===
         priorityMode = serializedObject.FindProperty("priorityMode");
@@ -185,6 +190,14 @@ public class ParametricDamageSkillEditor : Editor
         EditorGUILayout.PropertyField(cooldownTurnsProp, new GUIContent("Cooldown Turns"));
         EditorGUILayout.PropertyField(useGapCloseJumpProp, new GUIContent("Use Gap Close Jump"));
         EditorGUILayout.PropertyField(legacyIdProp, new GUIContent("Legacy Id"));
+
+        // === Animation 설정 표시 ===
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Animation", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(animKindProp, new GUIContent("Anim Kind"));
+        EditorGUILayout.PropertyField(animTriggerOverrideProp, new GUIContent("Anim Trigger Override"));
+
+        EditorGUILayout.Space();
         EditorGUILayout.PropertyField(trainingRoutesProp, true);
 
         EditorGUILayout.Space();

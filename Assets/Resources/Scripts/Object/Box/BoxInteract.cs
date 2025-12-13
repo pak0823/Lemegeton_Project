@@ -20,6 +20,10 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     [Header("확률 설명 (상자 열 때)")]
     public WeightedDescriptionsSO openDescriptions;
 
+    [Header("열린 후 처리")]
+    [SerializeField] private bool removeOnOpen = true; // true면 열고 나서 상자를 화면/충돌에서 제거
+    private float removeOnOpenDelay = 1.5f; // 애니메이션 보여줄 시간 (초)
+
     // 인식된 상자 확인
     private bool isFocused = false;
 
@@ -127,9 +131,49 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
         if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
 
         // 열린 뒤에는 포커스/하이라이트/안내 UI 정리
-        SetHighlight(false);
-        //if (targetMarker != null) targetMarker.SetActive(false);
+        SetHighlight(false);;
         isFocused = false;
+        // 열린 뒤 잠깐 애니메이션을 보여준 다음 제거/비활성 처리
+        if (removeOnOpen)
+        {
+            StartCoroutine(Co_DelayedPostOpen());
+        }
+    }
+
+    // 상자가 열린 뒤 후처리
+    // removeOnOpen == true 이면, 화면/충돌에서 제거 (타일 통행 가능)
+    private void ApplyPostOpenBehavior()
+    {
+        if (!removeOnOpen)
+            return;
+
+        // 모든 콜라이더 비활성화 → impassableLayerMask 충돌 제거 + 클릭 불가
+        foreach (var col in GetComponents<Collider2D>())
+        {
+            if (col) col.enabled = false;
+        }
+
+        // 모든 SpriteRenderer 비활성화 → 시각적으로 완전히 사라짐
+        foreach (var sr in GetComponentsInChildren<SpriteRenderer>())
+        {
+            if (sr) sr.enabled = false;
+        }
+
+        // 필요하다면 Animator도 더 이상 돌지 않게 막을 수 있음
+        if (animator != null)
+        {
+            animator.enabled = false;
+        }
+    }
+
+    // 딜레이 후 오브잭트 제거
+    // 애니메이션이 끝난 후 제거가 되게 하기 위해
+    private IEnumerator Co_DelayedPostOpen()
+    {
+        if (removeOnOpenDelay > 0f)
+            yield return new WaitForSeconds(removeOnOpenDelay);
+
+        ApplyPostOpenBehavior();
     }
 
     void OnTriggerEnter2D(Collider2D other)
@@ -165,6 +209,9 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
         // 복원/즉시 열기 시에도 같은 처리
         var descriptiondata = GetComponent<DescriptionData>();
         if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
+
+        // 복원 시에도 "이미 열린 상자"는 제거/비활성 처리
+        ApplyPostOpenBehavior();
     }
 
     private void ForceOpenedVisual()

@@ -196,23 +196,32 @@ public class MapManager : MonoBehaviour
             }
 
             // 없으면(랜덤 스폰되던 Chest/Trap)만 프리팹으로 재생성
-            if (s.kind == "Chest" || s.kind == "Trap")
+            if (s.kind == "Chest" || s.kind == "Trap" || s.kind == "Encounter")
             {
+                // Trap: 발동/비활성이면 스킵
                 if (s.kind == "Trap" && (s.b1 || !s.b2))
                     continue;
+
+                // Encounter: consumed면 스킵
+                if (s.kind == "Encounter" && s.b1)
+                    continue;
+
                 var prefab = FindPrefabByName(s.prefabName);
                 if (prefab == null)
                 {
                     Debug.LogWarning($"[Snapshot] prefab '{s.prefabName}' not found for {s.kind}/{s.id}");
                     continue;
                 }
+
                 var obj = Instantiate(prefab, s.position, Quaternion.identity, container);
                 var pid = obj.GetComponent<ExplorationPersistId>();
                 if (!pid) pid = obj.AddComponent<ExplorationPersistId>();
                 pid.OverrideIdForRestore(s.id);
                 obj.name = prefab.name;
+
                 if (obj.TryGetComponent<PushObject>(out var push))
                     push.SetTilemaps(floorMap, wallMap);
+
                 if (obj.TryGetComponent<MonoBehaviour>(out var mb) && mb is IExplorationPersistable ip2)
                     ip2.LoadState(s);
             }

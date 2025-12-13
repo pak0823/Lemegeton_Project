@@ -1992,6 +1992,13 @@ public class BattleManager : MonoBehaviour
 
         caster.ApplyCooldown(skill);
         FinishActionAfterSkill();
+
+        // 원위치 복귀
+        caster.transform.position = originalW;
+
+        // 더 안전하게는 셀 중심으로 스냅(셀은 이동한 적이 없으므로 Cell 기준이 정답)
+        if (caster.CurrentMap != null)
+            caster.transform.position = caster.CurrentMap.GetCellCenterWorld(caster.Cell);
     }
 
     // 턴/행동 토큰/스킬 패널에 영향을 주지 않는 "무료 반응 공격"으로 동작
@@ -2058,10 +2065,13 @@ public class BattleManager : MonoBehaviour
 
         try
         {
-            // 자기 자신 대상으로 Resolve
+            // 애니메이션 재생
+            string trigger = caster.GetAnimTriggerForSkill(skill); // SelfCast면 기본 "Casting"
+            yield return caster.AnimateAttack(null, trigger);
+
+            // 효과 적용
             yield return skill.ResolveOnUnit(this, caster, caster);
 
-            // ResolveOnUnit 안에서 MP 부족이면 그냥 yield break 해서 아무 변화 없이 끝나므로,
             // 여기서는 쿨다운만 공통 처리
             caster.ApplyCooldown(skill);
 

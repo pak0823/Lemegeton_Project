@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UIElements;
 
-public class PushObject : MonoBehaviour, IExplorationPersistable
+public class PushObject : MonoBehaviour //,IExplorationPersistable
 {
     private ExplorationPersistId pid;
     public Tilemap floorTilemap;
@@ -111,16 +111,16 @@ public class PushObject : MonoBehaviour, IExplorationPersistable
 
     // IExplorationPersistable
     public string PersistID => pid.Id;
-    public ExplorationObjectState SaveState()
-    {
-        return new ExplorationObjectState
-        {
-            id = PersistID,
-            kind = "Push",
-            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
-            position = transform.position
-        };
-    }
+    //public ExplorationObjectState SaveState()
+    //{
+    //    return new ExplorationObjectState
+    //    {
+    //        id = PersistID,
+    //        kind = "Push",
+    //        prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
+    //        position = transform.position
+    //    };
+    //}
     public void LoadState(ExplorationObjectState s)
     {
         transform.position = s.position;

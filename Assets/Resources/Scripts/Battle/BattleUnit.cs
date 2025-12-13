@@ -64,6 +64,9 @@ public class BattleUnit : MonoBehaviour
     public Vector3Int Cell { get; private set; }
     #endregion
 
+    [SerializeField] private float defaultAnimEndTimeout = 8f; // 기존 2f 대신, "비상용"으로 충분히 크게
+    private const float MinTimeout = 0.25f;
+
     #region Events
     public event Action<int> OnDamaged;  //피격 이벤트
     public event Action<BattleUnit> OnDied; // 사망 이벤트
@@ -591,7 +594,7 @@ public class BattleUnit : MonoBehaviour
     public string GetAnimTriggerForSkill(SkillAsset skill)
     {
         if (skill == null)
-            return "Attack";
+            return "BaseAttack";
 
         // 1) UnitData에 유닛별 매핑이 있으면 우선 사용
         if (data != null && data.skillAnimBindings != null)
@@ -617,13 +620,13 @@ public class BattleUnit : MonoBehaviour
                 return "Casting";
             case SkillAnimKind.None:
                 // 애니메이션 없이 처리할 예정이므로, 아무거나 리턴해도 되지만 기본값 유지
-                return "Attack";
+                return "BaseAttack";
             case SkillAnimKind.Special:
                 // 특수 스킬은 Animator 설계에 따라 별도 트리거를 지정해두는 편이 좋음
-                return "Attack";
+                return "BaseAttack";
             case SkillAnimKind.Melee:
             default:
-                return "Attack";
+                return "BaseAttack";
         }
     }
 
@@ -632,7 +635,7 @@ public class BattleUnit : MonoBehaviour
         Vector3 fromW = transform.position;
         Vector3 toW = map.GetCellCenterWorld(toCell);
 
-        if (animator) animator.SetBool("IsMoving", true);
+        if (animator) animator.SetBool("Move", true);
 
         float t = 0f;
         while (t < 1f)
@@ -645,7 +648,13 @@ public class BattleUnit : MonoBehaviour
         transform.position = toW; // 셀 스냅/상태 갱신
         MoveTo(map, toCell);
 
-        if (animator) animator.SetBool("IsMoving", false);
+        if (animator) animator.SetBool("Move", false);
+    }
+    public void PlayTrigger(string triggerName)
+    {
+        if (!animator || string.IsNullOrEmpty(triggerName)) return;
+        animator.ResetTrigger(triggerName);
+        animator.SetTrigger(triggerName);
     }
 
     public void Bind(Tilemap map, Vector3Int startCell)
@@ -677,46 +686,29 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Attack
-    /// 지정된 트리거 이름으로 근접 공격 애니메이션을 재생합니다.
-    /// triggerOverride 가 null/빈 문자열이면 기존 "Attack" 을 사용합니다.
     public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride)
+     => AnimateAttack(target, triggerOverride, null);
+
+    public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride, float? timeoutOverride)
     {
-        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Attack" : triggerOverride;
-
-        if (animator) animator.SetTrigger(trigger);
-
-        bool ended = false;
-        Action onEnd = () => ended = true;
-        OnAttackEnded += onEnd;
-
-        float timeout = 2f; // 안전 타임아웃
-        while (!ended && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
-
-        OnAttackEnded -= onEnd;
+        string trigger = string.IsNullOrEmpty(triggerOverride) ? "BaseAttack" : triggerOverride;
+        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "BaseAttack(Override)");
     }
 
     public IEnumerator AnimateRanged(string triggerOverride)
+     => AnimateRanged(triggerOverride, null);
+
+    public IEnumerator AnimateRanged(string triggerOverride, float? timeoutOverride)
     {
         string trigger = string.IsNullOrEmpty(triggerOverride) ? "Ranged" : triggerOverride;
+        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "Ranged(Override)");
+    }
 
-        if (animator) animator.SetTrigger(trigger);
-
-        bool ended = false;
-        Action onEnd = () => ended = true;
-        OnAttackEnded += onEnd;
-
-        float timeout = 2f;
-        while (!ended && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
-
-        OnAttackEnded -= onEnd;
+    public IEnumerator AnimateShootWeb()
+    {
+        // 기존 로직 유지: ShootWeb 있으면 ShootWeb, 없으면 Ranged
+        string trigger = HasParam("ShootWeb") ? "ShootWeb" : "Ranged";
+        yield return PlayTriggerAndWaitEnd(trigger, null, "ShootWeb");
     }
 
     //점프 애니메이션 및 기능
@@ -726,8 +718,6 @@ public class BattleUnit : MonoBehaviour
     float? speedUnitsPerSec = null,         // 또는 속도로 지정(거리/속도 = 시간)
     float arcHeight = 0.15f)
     {
-        if (animator) animator.SetTrigger("Jump");
-
         Vector3 from = transform.position;
         float distance = Vector3.Distance(from, toWorld);
         float duration = durationOverride ?? (speedUnitsPerSec.HasValue
@@ -747,24 +737,6 @@ public class BattleUnit : MonoBehaviour
     public void SetCasting(bool on) //캐스팅 애니메이션 실행
     {
         if (animator) animator.SetBool("Casting", on);
-    }
-
-    public IEnumerator AnimateShootWeb()    //실뿜기 애니메이션 실행 - Spider
-    {
-        if (animator)
-        {
-            if (HasParam("ShootWeb")) animator.SetTrigger("ShootWeb");
-            else animator.SetTrigger("Ranged");
-        }
-
-        bool ended = false;
-        Action onEnd = () => ended = true;
-        OnAttackEnded += onEnd;
-
-        float timeout = 2f;
-        while (!ended && timeout > 0f) { timeout -= Time.deltaTime; yield return null; }
-
-        OnAttackEnded -= onEnd;
     }
 
     bool HasParam(string name)
@@ -829,12 +801,12 @@ public class BattleUnit : MonoBehaviour
 
         if (HP == 0) //죽었을 시
         {
-            if (animator && Team.Player == team) animator.SetBool("Warning", false);
+            if (animator && Team.Player == team) animator.SetBool("hurt", false);
             OnDied?.Invoke(this);
         }
         else if (HP <= (MaxHP * 0.3f)) // 최대체력의 30% Hp보다 작거나 같을 때
         {
-            if (animator) animator.SetBool("Warning", true);
+            if (animator) animator.SetBool("hurt", true);
         }
 
         Debug.Log($"Damaged: {name} damage={amount}");
@@ -859,7 +831,7 @@ public class BattleUnit : MonoBehaviour
 
         // 회복 후 위험 상태에서 벗어났으면 Warning 끔
         if (HP > maxThrPer && animator)
-            animator.SetBool("Warning", false);
+            animator.SetBool("hurt", false);
 
         // 필요하면 디버그 로그
         //Debug.Log($"{name} Heal +{HP - before} → {HP}/{MaxHP}");
@@ -902,5 +874,41 @@ public class BattleUnit : MonoBehaviour
     public void NotifyDealtDamage(BattleUnit victim, int damage, SkillAsset source)
     {
         OnDealtDamage?.Invoke(this, victim, damage, source);
+    }
+
+    private IEnumerator PlayTriggerAndWaitEnd(string trigger, float? timeoutOverride, string debugTag)
+    {
+        if (!animator)
+            yield break;
+
+        if (string.IsNullOrEmpty(trigger))
+            trigger = "Attack";
+
+        bool ended = false;
+        Action onEnd = () => ended = true;
+        OnAttackEnded += onEnd;
+
+        animator.ResetTrigger(trigger);  // 선택: 트리거 꼬임 방지(프로젝트 전반 영향 낮음)
+        animator.SetTrigger(trigger);
+
+        float timeout = Mathf.Max(MinTimeout, timeoutOverride ?? defaultAnimEndTimeout);
+
+        while (!ended && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
+        OnAttackEnded -= onEnd;
+
+        if (!ended)
+        {
+            // watchdog 발동: "End 이벤트 누락/전이 문제"를 실제로 잡아내기 위한 경고
+            var state = animator.GetCurrentAnimatorStateInfo(0);
+            Debug.LogWarning(
+                $"[AnimTimeout] Unit='{name}', Trigger='{trigger}', Tag='{debugTag}', " +
+                $"StateHash={state.shortNameHash}, NormalizedTime={state.normalizedTime:F2}. " +
+                $"Check AnimationEvent 'AnimEvent_AttackEnd' on the clip and transitions.");
+        }
     }
 }

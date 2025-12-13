@@ -57,6 +57,9 @@ public class PlayerMovement : MonoBehaviour
     private Collider2D currentInteractTarget = null;
     private DescriptionData currentDescData = null;
 
+    [SerializeField] private LayerMask encounterLayerMask;
+    [SerializeField] private string battleSceneName = "BattleScene"; // 실제 전투씬 이름으로
+
     private SpriteRenderer spriterenderer;
     private Animator animator;
     private PlayerDebuffController PlayerDebuffController;
@@ -586,6 +589,25 @@ public class PlayerMovement : MonoBehaviour
         return bestPath;
     }
 
+    //심볼 인카운터 몬스터 체크
+    bool TryGetEncounterAtCell(Vector3Int cell, out EncounterMonster monster)
+    {
+        monster = null;
+        var world = floorTilemap.GetCellCenterWorld(cell);
+        var hits = Physics2D.OverlapCircleAll(world, 0.05f, encounterLayerMask);
+        foreach (var h in hits)
+        {
+            if (!h) continue;
+            var m = h.GetComponentInParent<EncounterMonster>();
+            if (m != null && m.IsActive)
+            {
+                monster = m;
+                return true;
+            }
+        }
+        return false;
+    }
+
     // 경로를 따라 실제로 이동
     void StartPathMove(List<Vector3Int> cells, Action onArrive = null)
     {
@@ -652,6 +674,43 @@ public class PlayerMovement : MonoBehaviour
             }
 
             rb.MovePosition(end);
+            // 도착 셀에서 인카운터 체크
+            if (TryGetEncounterAtCell(cells[i], out var monster))
+            {
+                // 남은 경로 구성: 현재(몬스터 셀)부터 끝까지
+                var remaining = new List<Vector3Int>();
+                for (int k = i; k < cells.Count; k++)
+                    remaining.Add(cells[k]);
+
+                // 잠시 멈춤(연출용)
+                if (animator != null) animator.SetInteger("Move", 0);
+
+                // 이동 상태 정리(코루틴 종료)
+                isMovingByPath = false;
+                pathMoveRoutine = null;
+
+                // 복귀 컨텍스트 저장
+                var stm = Shared.SceneTransitionManager;
+                if (stm != null)
+                {
+                    stm.SetResumePath(remaining);
+
+                    // "전투씬으로 이동하기 전 타일(몬스터 타일)"을 복귀지점으로 저장
+                    var returnPos = floorTilemap.GetCellCenterWorld(cells[i]);
+                    stm.SaveReturnPoint(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, returnPos);
+
+                    // 탐험 스냅샷 저장
+                    stm.SaveExplorationSnapshot(stm.BuildExplorationSnapshotFromScene());
+
+                    // 몬스터는 중복 인카운터 방지 처리(필요)
+                    monster.MarkConsumed();
+
+                    // 전투 씬으로
+                    stm.FadeToScene(battleSceneName);
+                }
+
+                yield break;
+            }
         }
 
         if (animator != null)
@@ -677,6 +736,19 @@ public class PlayerMovement : MonoBehaviour
         // 마지막으로 필드 정리
         pathArrivalCallback = null;
         pendingChest = null;
+    }
+
+    //탐험씬 복귀 후 남은 경로 이동
+    public void ResumePathAfterBattle(List<Vector3Int> resumeCells)
+    {
+        if (resumeCells == null || resumeCells.Count < 2) return;
+        if (isMovingByPath) return;
+
+        // 복귀 직후 다른 선택/힌트 상태 정리
+        CancelSelectionAndHint();
+
+        // 콜백은 기본 이동으로 취급(필요하면 나중에 확장)
+        StartPathMove(resumeCells, null);
     }
     #endregion
     void HandlePushDetection()

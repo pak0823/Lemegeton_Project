@@ -21,6 +21,8 @@ MonoBehaviour:
   mpCost: 0
   targetMode: 0
   cooldownTurns: 0
+  animKind: 1
+  animTriggerOverride: BaseAttack
   useGapCloseJump: 0
   legacyId: 0
   trainingRoutes:
@@ -63,8 +65,22 @@ MonoBehaviour:
   trainingPostMoveRange: 1
   routeForHitAllEnemies: -1
   trainingHitAllEnemies: 0
+  trainingUseMultiHit: 0
+  trainingHitCount: 2
+  trainingUseSelfAtkBuff: 0
+  routeForSelfAtkBuff: -1
+  selfAtkBuffId: 5
+  selfAtkBuffDurationTurns: 1
+  trainingApplyAgiDebuff: 0
+  routeForAgiDebuff: -1
+  targetAgiDebuffId: 4
+  targetAgiDebuffDurationTurns: 1
+  trainingApplyFear: 0
+  routeForFear: -1
+  fearDurationTurns: 1
+  trainingRefundOnKill: 0
+  routeForRefundOnKill: -1
   useFrontlineBonus: 0
-  frontlineDepth: 2
   frontlineMultiplier: 1.5
   useManualFrontier: 1
   manualFrontierPlayer: []

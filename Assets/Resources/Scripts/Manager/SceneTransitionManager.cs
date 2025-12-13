@@ -25,6 +25,10 @@ public class SceneTransitionManager : MonoBehaviour
     public bool HasExplorationSnapshot => explorationSnapshot != null;
     private bool _isReturning = false;        // 복귀 중복 실행 가드
 
+    // 전투 복귀 후 이어서 이동할 경로(셀 기준)
+    public List<Vector3Int> pendingResumeCells;
+    public bool HasPendingResume => pendingResumeCells != null && pendingResumeCells.Count >= 2;
+
     public void SaveExplorationSnapshot(ExplorationSnapshot snap)
     {
         explorationSnapshot = snap;
@@ -93,6 +97,18 @@ public class SceneTransitionManager : MonoBehaviour
         StartCoroutine(ReturnCoroutine());
     }
 
+    public void SetResumePath(List<Vector3Int> cells)
+    {
+        pendingResumeCells = cells;
+    }
+
+    public List<Vector3Int> ConsumeResumePath()
+    {
+        var tmp = pendingResumeCells;
+        pendingResumeCells = null;
+        return tmp;
+    }
+
     IEnumerator ReturnCoroutine()
     {
         // 페이드 아웃
@@ -115,6 +131,10 @@ public class SceneTransitionManager : MonoBehaviour
         if (Shared.PlayerMovement != null)
         {
             Shared.PlayerMovement.TeleportTo(pendingReturnPosition);
+            // 남은 경로가 있으면 이어서 이동
+            var resume = ConsumeResumePath();
+            if (resume != null && resume.Count >= 2)
+                Shared.PlayerMovement.ResumePathAfterBattle(resume);
             Debug.Log($"[Return] Teleport to {pendingReturnPosition}");
         }
         else
@@ -134,5 +154,38 @@ public class SceneTransitionManager : MonoBehaviour
         // 1회성 컨텍스트 정리
         pendingReturnScene = null;
         _isReturning = false;   // 가드 해제
+    }
+
+    //IExplorationPersistable를 가지고 있는 오브젝트는 모두 스냅샷에 추가
+    public ExplorationSnapshot BuildExplorationSnapshotFromScene()
+    {
+        var snap = new ExplorationSnapshot();
+
+        // 씬 내 모든 Persistable 상태 수집
+        foreach (var mb in FindObjectsOfType<MonoBehaviour>(true))
+        {
+            if (mb is IExplorationPersistable ip)
+            {
+                snap.objects.Add(ip.SaveState());
+            }
+        }
+
+        // ObjectGaugeManager 스냅샷은 프로젝트 코드가 없어 확정할 수 없어서,
+        // 있으면 리플렉션으로 값을 읽어 채우고, 없으면 0 유지(= 복원 호출에서 내부 기본값 유지 필요)
+        var og = Shared.ObjectGaugeManager;
+        if (og != null)
+        {
+            try
+            {
+                var t = og.GetType();
+                snap.totalBoxes = (int)(t.GetField("totalBoxes")?.GetValue(og) ?? snap.totalBoxes);
+                snap.openedBoxes = (int)(t.GetField("openedBoxes")?.GetValue(og) ?? snap.openedBoxes);
+                snap.triggeredTraps = (int)(t.GetField("triggeredTraps")?.GetValue(og) ?? snap.triggeredTraps);
+                snap.thresholdReached = (bool)(t.GetField("thresholdReached")?.GetValue(og) ?? snap.thresholdReached);
+            }
+            catch { /* gauge가 다르면 무시 */ }
+        }
+
+        return snap;
     }
 }

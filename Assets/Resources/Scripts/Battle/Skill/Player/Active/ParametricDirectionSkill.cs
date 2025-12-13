@@ -39,6 +39,16 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     [Tooltip("대시 포물선 높이(0이면 직선)")]
     public float dashArc = 0.0f;
 
+    [Header("Animation")]
+    [Tooltip("앞으로 이동할 때 쓸 대시 트리거 이름")]
+    public string forwardDashTrigger = "DashForward";
+
+    [Tooltip("뒤로 이동(백스텝)할 때 쓸 대시 트리거 이름")]
+    public string backwardDashTrigger = "DashBack";
+
+    [Tooltip("앞/뒤 방향에 따라 다른 트리거를 쓸지 여부")]
+    public bool useDirectionalDashTrigger = true;
+
     [Header("Training")]
     [Header("소모값 감소 적용")]
     [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
@@ -291,34 +301,76 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         }
         return true;
     }
+    bool IsBackMove(Team team, Vector3Int start, Vector3Int dest)
+    {
+        // 프로젝트 기준: 플레이어는 오른쪽( +X )이 전방, 적은 왼쪽( -X )이 전방이라고 가정
+        if (team == Team.Player)
+        {
+            // X 감소(왼쪽) = 뒤로 물러나는 방향
+            return dest.x < start.x;
+        }
+        else // Team.Enemy
+        {
+            // X 증가(오른쪽) = 뒤로 물러나는 방향
+            return dest.x > start.x;
+        }
+    }
 
     bool IsCellWithin(Tilemap map, Vector3Int cell) => map.cellBounds.Contains(cell);
     bool HasTile(Tilemap map, Vector3Int cell) => map.GetTile(cell) != null;
 
     IEnumerator MoveCasterTo(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int landing)
     {
+        if (!caster || !map)
+            yield break;
+
         var endW = map.GetCellCenterWorld(landing);
+        var startCell = caster.Cell;
 
         //이동 시 현재 칸 점유 해제
-        var startCell = caster.Cell;
         if (bm != null && bm.grid != null)
             bm.grid.SetOccupied(caster.team, startCell, false);
 
         if (dashAnimate)
         {
+            // 1) Animator 트리거
+            var anim = caster.GetComponentInChildren<Animator>();
+            if (anim != null)
+            {
+                string trigger = null;
+
+                if (useDirectionalDashTrigger)
+                {
+                    bool isBack = IsBackMove(caster.team, startCell, landing);
+                    trigger = isBack ? backwardDashTrigger : forwardDashTrigger;
+                }
+                else
+                {
+                    trigger = forwardDashTrigger;
+                }
+
+                if (!string.IsNullOrEmpty(trigger))
+                    anim.SetTrigger(trigger);
+            }
+
+            // 2) 위치 보간(대시 모션)
             var startW = caster.transform.position;
+            float dur = Mathf.Max(0.0001f, dashDuration);
             float t = 0f;
-            while (t < dashDuration)
+
+            while (t < dur)
             {
                 t += Time.deltaTime;
-                float u = Mathf.Clamp01(t / Mathf.Max(0.0001f, dashDuration));
+                float u = Mathf.Clamp01(t / dur);
 
                 Vector3 pos = Vector3.Lerp(startW, endW, u);
+
                 if (dashArc > 0f)
                 {
                     float h = Mathf.Sin(u * Mathf.PI) * dashArc;
                     pos += Vector3.up * h;
                 }
+
                 caster.transform.position = pos;
                 yield return null;
             }

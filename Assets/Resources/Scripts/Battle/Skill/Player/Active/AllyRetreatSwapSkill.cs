@@ -205,10 +205,23 @@ public class AllyRetreatSwapSkill : SkillAsset
         // 우선 아군 후퇴  그 다음 캐스터 이동
         if (useDashAnimate)
         {
-            // 아군 후퇴
+            // 캐스터 고유 트리거
+            caster.PlayTrigger("Moving"); // Animator에 추가할 트리거
+
+            // 캐스터 점프/대시 이동 연출 (dashDuration/dashArc 활용)
+            Vector3 casterToW = map.GetCellCenterWorld(allyStartCell);
+            yield return caster.AnimateJumpToWorld(
+                casterToW,
+                durationOverride: dashDuration,
+                speedUnitsPerSec: null,
+                arcHeight: dashArc
+            );
+
+            // 이동 후 셀 스냅(점프는 transform만 옮기므로 Cell/Map 갱신 필요)
+            caster.MoveTo(map, allyStartCell);
+
+            // 아군 기존 기본 이동 애니메이션(Move bool) 유지
             yield return ally.AnimateMoveTo(map, retreatCell);
-            // 캐스터가 아군의 원래 자리로 이동
-            yield return caster.AnimateMoveTo(map, allyStartCell);
         }
         else
         {
