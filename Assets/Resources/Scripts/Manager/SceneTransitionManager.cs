@@ -25,9 +25,17 @@ public class SceneTransitionManager : MonoBehaviour
     public bool HasExplorationSnapshot => explorationSnapshot != null;
     private bool _isReturning = false;        // 복귀 중복 실행 가드
 
+    [Header("활기 스냅샷")]
+    public int savedVigor = -1;
+    public bool HasSavedVigor => savedVigor >= 0;
+
     // 전투 복귀 후 이어서 이동할 경로(셀 기준)
     public List<Vector3Int> pendingResumeCells;
     public bool HasPendingResume => pendingResumeCells != null && pendingResumeCells.Count >= 2;
+
+    [Header("전투 복귀 후 정산할 이동 활기 비용(전투 전 이동분)")]
+    public int pendingPlannedMoveVigorCost = 0;
+    public bool HasDeferredMoveCost => pendingPlannedMoveVigorCost > 0;
 
     public void SaveExplorationSnapshot(ExplorationSnapshot snap)
     {
@@ -109,6 +117,18 @@ public class SceneTransitionManager : MonoBehaviour
         return tmp;
     }
 
+    public void SetDeferredMoveCost(int cost)
+    {
+        pendingPlannedMoveVigorCost = Mathf.Max(0, cost);
+    }
+
+    public int ConsumeDeferredMoveCost()
+    {
+        int tmp = pendingPlannedMoveVigorCost;
+        pendingPlannedMoveVigorCost = 0;
+        return tmp;
+    }
+
     IEnumerator ReturnCoroutine()
     {
         // 페이드 아웃
@@ -131,6 +151,13 @@ public class SceneTransitionManager : MonoBehaviour
         if (Shared.PlayerMovement != null)
         {
             Shared.PlayerMovement.TeleportTo(pendingReturnPosition);
+
+            if (HasSavedVigor && Shared.VigorManager != null)
+            {
+                int v = ConsumeVigor();
+                Shared.VigorManager.SetCurrentVigor(v);
+            }
+
             // 남은 경로가 있으면 이어서 이동
             var resume = ConsumeResumePath();
             if (resume != null && resume.Count >= 2)
@@ -170,22 +197,14 @@ public class SceneTransitionManager : MonoBehaviour
             }
         }
 
-        // ObjectGaugeManager 스냅샷은 프로젝트 코드가 없어 확정할 수 없어서,
-        // 있으면 리플렉션으로 값을 읽어 채우고, 없으면 0 유지(= 복원 호출에서 내부 기본값 유지 필요)
-        var og = Shared.ObjectGaugeManager;
-        if (og != null)
-        {
-            try
-            {
-                var t = og.GetType();
-                snap.totalBoxes = (int)(t.GetField("totalBoxes")?.GetValue(og) ?? snap.totalBoxes);
-                snap.openedBoxes = (int)(t.GetField("openedBoxes")?.GetValue(og) ?? snap.openedBoxes);
-                snap.triggeredTraps = (int)(t.GetField("triggeredTraps")?.GetValue(og) ?? snap.triggeredTraps);
-                snap.thresholdReached = (bool)(t.GetField("thresholdReached")?.GetValue(og) ?? snap.thresholdReached);
-            }
-            catch { /* gauge가 다르면 무시 */ }
-        }
-
         return snap;
+    }
+
+    public void SaveVigor(int v) => savedVigor = Mathf.Max(0, v);
+    public int ConsumeVigor()
+    {
+        int v = savedVigor;
+        savedVigor = -1;
+        return v;
     }
 }

@@ -1,10 +1,13 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class ExplorationLogUI : MonoBehaviour
 {
+    private bool pauseGameOnPush = false;          // 로그가 뜰 때 게임도 멈출지
+
     [Header("Layout")]
     [SerializeField] Transform contentRoot;     // VerticalLayoutGroup 붙어있는 컨테이너
     [SerializeField] Text logItemPrefab;        // 한 줄용 Text 프리팹
@@ -34,6 +37,8 @@ public class ExplorationLogUI : MonoBehaviour
     [SerializeField] bool pauseOnPush = true;  // 로그 띄울 때 잠깐 정지(플레이어+탐험 타이머)
     [SerializeField] float pushPauseSeconds = 1.0f;
 
+    private Coroutine _pauseCo;
+
     class Entry
     {
         public GameObject go;
@@ -53,6 +58,30 @@ public class ExplorationLogUI : MonoBehaviour
     {
         // Shared에 연결(다른 스크립트에서 접근)
         Shared.explorationLogUI = this;
+    }
+
+    // 게임 일시정지 예약
+    private void PauseGameForSeconds(float seconds)
+    {
+        var speed = Shared.GameSpeedController;
+        if (speed == null) return;
+
+        // 이미 예약되어 있으면 끊고 새로 예약(가장 최근 로그 기준으로 타이밍 갱신)
+        if (_pauseCo != null) StopCoroutine(_pauseCo);
+
+        speed.RequestPause();
+        _pauseCo = StartCoroutine(Co_ReleasePauseAfter(seconds));
+    }
+
+    private IEnumerator Co_ReleasePauseAfter(float seconds)
+    {
+        float end = Time.unscaledTime + Mathf.Max(0f, seconds);
+        while (Time.unscaledTime < end)
+            yield return null;
+
+        var speed = Shared.GameSpeedController;
+        if (speed != null) speed.ReleasePause();
+        _pauseCo = null;
     }
 
     public void Push(string message, float? lifetime = null, bool? pause = null, float? pauseSeconds = null)
@@ -122,7 +151,9 @@ public class ExplorationLogUI : MonoBehaviour
         {
             float sec = Mathf.Max(0.01f, (float)(pauseSeconds ?? pushPauseSeconds));
             Shared.PlayerMovement?.LockMovementFor(sec);    // 이동만 잠금
-            Shared.ExplorationTimerUi?.PauseForRealtime(sec);   // 타이머만 멈춤
+
+            if (pauseGameOnPush)
+                PauseGameForSeconds(sec);
         }
     }
 

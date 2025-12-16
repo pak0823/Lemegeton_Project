@@ -7,7 +7,7 @@ public static class Shared
     public static SceneTransitionManager SceneTransitionManager;
     public static MapToggleManager MapToggleManager;
     public static PuzzleManager PuzzleManager;
-    public static ObjectGaugeManager ObjectGaugeManager;
+    public static VigorManager VigorManager;
     public static ExplorationTimerUi ExplorationTimerUi;
 
     public static BattleManager BattleManager;

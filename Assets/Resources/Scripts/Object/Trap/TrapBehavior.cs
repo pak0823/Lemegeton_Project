@@ -1,156 +1,75 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
-[RequireComponent(typeof(Collider2D))]
 public class TrapBehavior : MonoBehaviour
 {
-    [Tooltip("적용할 디버프 데이터")] public DebuffData debuffData;
-    [Tooltip("한 번만 적용할지, 계속 적용할지")] public bool applyOnce = true;
+    public static readonly List<TrapBehavior> allTraps = new List<TrapBehavior>();
 
-    private bool isTriggered = false;
-    private Vector3 initialPosition;
-    private Quaternion initialRotation;
-    private TrapPersist TrapPersist;
+    [Header("Trap Settings")]
+    [SerializeField] private bool applyOnce = true;
+    [SerializeField] private WeightedDescriptionsSO triggerDescriptions;
 
-    [Header("발동 조건 보정")]
-    [SerializeField] bool requireSameCellForPush = true;          // 박스는 '같은 타일'일 때만 발동
-    [SerializeField] float fallbackCellSize = 1.0f;               // 타일맵이 없을 때 거리기반 폴백
-    bool _pendingTriggeredByPush = false; // Enter에서 놓친 경우 Stay에서 한 번 더 판정
+    // (선택) 타일을 명시적으로 박아두고 싶으면 사용
+    // 비워두면 transform.position을 floorMap.WorldToCell로 환산해서 사용
+    [SerializeField] private bool useExplicitCell = false;
+    [SerializeField] private Vector3Int explicitCell;
 
-    [Header("확률 설명 (트랩 발동 시)")]
-    public WeightedDescriptionsSO triggerDescriptions;
-
-    private static List<TrapBehavior> allTraps = new();
-    public static IReadOnlyList<TrapBehavior> AllTraps => allTraps;
+    private bool isTriggered;
 
     void Awake()
     {
-        initialPosition = transform.position;
-        initialRotation = transform.rotation;
         if (!allTraps.Contains(this))
             allTraps.Add(this);
     }
 
-    void Start()
-    {
-
-        TrapPersist = GetComponent<TrapPersist>();
-
-        if(TrapPersist != null)
-        {
-            // 1회용이고 이미 발동(=비활성)이면 GO 자체 비활성
-            if (applyOnce && !TrapPersist.IsActive)
-                gameObject.SetActive(false);
-        }
-    }
     void OnDestroy()
     {
         if (allTraps.Contains(this))
             allTraps.Remove(this);
     }
 
-    void OnTriggerEnter2D(Collider2D other)
-    {
-        var controller = other.GetComponent<PlayerDebuffController>();
-        if (controller != null && debuffData != null)
-        {
-            TriggerTrap(other);
-            return;
-        }
-
-        var pushBox = other.GetComponent<PushObject>();
-        if (pushBox != null)
-        {
-            if (!ShouldTriggerByPush(pushBox))    // 같은 셀 아니면 무시
-            {
-                _pendingTriggeredByPush = true;   // Stay에서 재판정
-                return;
-            }
-
-            TrapPersist?.MarkTriggered();
-            Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
-            TriggerTrap(other);
-            return;
-        }
-    }
-
-    void OnTriggerStay2D(Collider2D other)
-    {
-        if (!_pendingTriggeredByPush || isTriggered) return;
-
-        var pushBox = other.GetComponent<PushObject>();
-        if (pushBox == null) return;
-
-        if (ShouldTriggerByPush(pushBox))
-        {
-            _pendingTriggeredByPush = false;
-            TrapPersist?.MarkTriggered();
-            Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
-            TriggerTrap(other);
-        }
-    }
-
-    bool ShouldTriggerByPush(PushObject push)
-    {
-        if (!requireSameCellForPush) return true;
-
-        // 1) 타일맵 기준 셀 비교 (정확)
-        if (push.floorTilemap != null)
-        {
-            var map = push.floorTilemap;
-            Vector3Int trapCell = map.WorldToCell(transform.position);
-            Vector3Int boxCell = map.WorldToCell(push.transform.position);
-            return trapCell == boxCell;
-        }
-
-        // 2) 폴백: 월드 거리로 근사 (타일 크기 절반 내에 들어왔을 때만)
-        float half = Mathf.Max(0.1f, fallbackCellSize * 0.5f);
-        return Vector2.Distance(transform.position, push.transform.position) <= half;
-    }
-
-    public void TriggerTrap(Collider2D other)
+    /// <summary>
+    /// 플레이어가 특정 "셀"에 들어왔을 때, 이 함정이 그 셀에 존재하면 발동.
+    /// 발동해도 이동을 멈추지 않는다(로그/활기만 처리).
+    /// </summary>
+    public void TryTriggerByPlayer(Tilemap floorMap, Vector3Int playerCell)
     {
         if (isTriggered) return;
+        if (floorMap == null) return;
+
+        Vector3Int trapCell = useExplicitCell ? explicitCell : floorMap.WorldToCell(transform.position);
+        if (trapCell != playerCell) return;
+
         isTriggered = true;
 
-        if (applyOnce)
-            gameObject.SetActive(false); // Destroy 대신 비활성화로 처리
+        // 활기 소모 (즉시 소모 유지)
+        var vigor = Shared.VigorManager;
+        if (vigor != null)
+        {
+            int cost = Mathf.Max(0, vigor.costTriggerTrap);
+            if (cost > 0 && !vigor.TrySpend(cost, VigorSpendReason.TriggerTrap))
+            {
+                vigor.FailExploration($"활기가 부족해 트랩 피해를 감당하지 못했습니다. (필요 {cost}, 현재 {vigor.CurrentVigor})");
+                return;
+            }
+        }
 
-        var player = other.GetComponent<PlayerDebuffController>();
-        if (player == null) return;  //플레이어 작동이 아닐 시
-        
-
+        // 로그 출력
         int idx = triggerDescriptions ? triggerDescriptions.PickIndex() : -1;
         if (idx >= 0 && idx < triggerDescriptions.entries.Length)
         {
-            switch (idx)
-            {
-                case 0:
-                    player.ApplyDebuff(debuffData);
-                    TrapPersist?.MarkTriggered();
-                    Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
-                    break;
-                case 1: Shared.ObjectGaugeManager.RegisterTrapTriggeredByPlayer(); break;
-                case 2:
-                    Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
-                    break;
-                case 3:
-                    player.ApplyDebuff(debuffData);
-                    TrapPersist?.MarkTriggered();
-                    Shared.ObjectGaugeManager.RegisterTrapClearedByPush();
-                    break;
-                default: /* 프리셋 확장 대비 */ break;
-            }
-
-            Debug.Log("idx: " + idx);
-
             var text = triggerDescriptions.entries[idx].text;
             if (!string.IsNullOrWhiteSpace(text))
             {
-                // 잠금형으로 1초 정도 유지
                 Shared.explorationLogUI?.Push(text);
+                // 여기서 UI를 닫는 게 “이동 정지”에 영향을 주는 구조가 아니라면 유지 가능
                 Shared.interactionHintUI?.HideAll();
-            }   
+            }
         }
+
+        // 1회성 함정이면 비활성화
+        if (applyOnce)
+            gameObject.SetActive(false);
     }
 }

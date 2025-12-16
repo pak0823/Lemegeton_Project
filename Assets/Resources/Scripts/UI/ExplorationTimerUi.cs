@@ -169,7 +169,6 @@ public class ExplorationTimerUi : MonoBehaviour
             if (currentStage < fibonacciMinutes.Count)
             {
                 StartNextStage();
-                Shared.ObjectGaugeManager.IncrementAwarenessByTimer();//인지 게이지 증가
             }
             else
             {
@@ -180,7 +179,6 @@ public class ExplorationTimerUi : MonoBehaviour
         }
 
         UpdateTimerUI();
-        GaugeTextUi();
     }
 
     private void StartNextStage()
@@ -252,12 +250,5 @@ public class ExplorationTimerUi : MonoBehaviour
         }
 
         endMessageText.gameObject.SetActive(false);
-    }
-
-    //임시용 함수
-    public void GaugeTextUi()
-    {
-        float percent = Shared.ObjectGaugeManager.GetGaugePercent();
-        objectGaugeText.text = $"조사 완료: {(percent * 100):F1}%"; // 소수점 1자리
     }
 }

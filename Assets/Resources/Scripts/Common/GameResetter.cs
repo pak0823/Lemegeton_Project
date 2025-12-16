@@ -32,12 +32,6 @@ namespace Project
             if (StageRuntimeContext.Instance != null)
                 Object.Destroy(StageRuntimeContext.Instance.gameObject);
 
-            if (Shared.ObjectGaugeManager != null)
-            {
-                // DontDestroyOnLoad로 살아있다면 안전하게 제거
-                Object.Destroy(Shared.ObjectGaugeManager.gameObject);
-                Shared.ObjectGaugeManager = null;
-            }
             if (Shared.PuzzleManager != null)
             {
                 Shared.PuzzleManager.ClearMaps(); // 타일맵/목표/캐시 비우기

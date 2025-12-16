@@ -72,9 +72,6 @@ public class MapObjectSpawner : MonoBehaviour
             floorCells.RemoveAt(idx);
         }
 
-        //오브젝트 게이지 처리
-        Shared.ObjectGaugeManager.RegisterTotalBoxes(chestCount);
-
         // 상자 배치
         for (int i = 0; i < chestCount && floorCells.Count > 0; i++)
         {

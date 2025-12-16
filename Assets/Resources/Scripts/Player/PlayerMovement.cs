@@ -6,6 +6,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.EventSystems;
+using TMPro;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -19,7 +20,6 @@ public class PlayerMovement : MonoBehaviour
 
     private Rigidbody2D rb;
     private List<Vector3> path = new();
-    private Vector2 input = Vector2.zero;
     float movementLockUntil = 0f;
     int _hardLockTokens = 0; // 무기한 잠금 토큰
 
@@ -57,12 +57,18 @@ public class PlayerMovement : MonoBehaviour
     private Collider2D currentInteractTarget = null;
     private DescriptionData currentDescData = null;
 
+    private int _pendingMoveVigorCost = 0;  //이동 비용
+
+    [Header("Path Cost Label (TMP)")]
+    [SerializeField] private float pathCostLabelScale = 0.05f;
+    private TextMeshPro _pathCostTMP = null;
+    private GameObject _pathCostLabelGO = null;
+
     [SerializeField] private LayerMask encounterLayerMask;
     [SerializeField] private string battleSceneName = "BattleScene"; // 실제 전투씬 이름으로
 
     private SpriteRenderer spriterenderer;
     private Animator animator;
-    private PlayerDebuffController PlayerDebuffController;
 
     [SerializeField] private KeyCode surveyKey = KeyCode.F; //탐험 조사 키
     [SerializeField] private KeyCode leftDirectionKey = KeyCode.A; //탐험 왼쪽 방향키
@@ -71,7 +77,6 @@ public class PlayerMovement : MonoBehaviour
     void Awake()
     {
         Shared.PlayerMovement = this;
-        PlayerDebuffController = GetComponent<PlayerDebuffController>();
         rb = GetComponent<Rigidbody2D>();
         spriterenderer = GetComponent<SpriteRenderer>();
         animator = GetComponent<Animator>();
@@ -104,13 +109,13 @@ public class PlayerMovement : MonoBehaviour
                                 (Time.time < movementLockUntil)
                               || (_hardLockTokens > 0)
                               || isPerformingPush
-                              || GamePause.IsPaused
-                              || (PlayerDebuffController != null && PlayerDebuffController.IsStunned)
-                              || (Shared.ObjectGaugeManager != null && Shared.ObjectGaugeManager.IsBattleNoticeActive);
+                              || GamePause.IsPaused;
 
         if (isInputBlocked)
         {
-            HaltImmediately();
+            if (!isMovingByPath)
+                HaltImmediately();
+
             return;
         }
 
@@ -122,8 +127,6 @@ public class PlayerMovement : MonoBehaviour
 
         if (isPushMode)
         {
-            input = Vector2.zero;
-
             if (Input.GetKeyDown(surveyKey))
             {
                 animator.SetInteger("Move", 0);
@@ -194,7 +197,7 @@ public class PlayerMovement : MonoBehaviour
     void FixedUpdate()
     {
         if (isPerformingPush) return;
-        if (GamePause.IsPaused || (Shared.ObjectGaugeManager != null && Shared.ObjectGaugeManager.IsBattleNoticeActive))
+        if (GamePause.IsPaused)
         {
             if (animator != null) animator.SetInteger("Move", 0);
             return;
@@ -436,7 +439,16 @@ public class PlayerMovement : MonoBehaviour
     public void LockMovementFor(float seconds)
     {
         movementLockUntil = Mathf.Max(movementLockUntil, Time.time + Mathf.Max(0f, seconds));
-        HaltImmediately(); // 즉시 멈춤 (애니/속도 초기화)
+
+        // 경로 이동 중에는 코루틴을 끊지 말고 입력만 잠금
+        if (!isMovingByPath)
+        {
+            HaltImmediately();
+        }
+        else
+        {
+            if (animator != null) animator.SetInteger("Move", 0);
+        }
     }
     public void LockMovementIndefinite()
     {
@@ -462,6 +474,12 @@ public class PlayerMovement : MonoBehaviour
             }
             activePathMarkers.Clear();
         }
+        if (_pathCostLabelGO != null)
+        {
+            Destroy(_pathCostLabelGO);
+            _pathCostLabelGO = null;
+            _pathCostTMP = null;
+        }
     }
     // 경로 프리뷰 생성 (2칸 이상일 때만 표시)
     void ShowPathPreview(List<Vector3Int> cells)
@@ -480,6 +498,36 @@ public class PlayerMovement : MonoBehaviour
 
             var marker = Instantiate(pathMarkerPrefab, world, Quaternion.identity);
             activePathMarkers.Add(marker);
+        }
+
+        // === 목표 지점에 총 필요 활기 표시 ===
+        var vigor = Shared.VigorManager;
+        if (vigor != null && floorTilemap != null && cells != null && cells.Count > 0)
+        {
+            int steps = Mathf.Max(0, cells.Count - 1);
+            int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
+
+            Vector3Int goalCell = cells[cells.Count - 1];
+            Vector3 goalWorld = floorTilemap.GetCellCenterWorld(goalCell);
+            goalWorld.z = transform.position.z;
+
+            if (_pathCostLabelGO == null)
+            {
+                _pathCostLabelGO = new GameObject("PathCostLabel_TMP");
+                _pathCostLabelGO.transform.localScale = Vector3.one * pathCostLabelScale;
+
+                _pathCostTMP = _pathCostLabelGO.AddComponent<TextMeshPro>();
+                _pathCostTMP.text = $"-{cost}";
+                _pathCostTMP.alignment = TextAlignmentOptions.Center;
+                _pathCostTMP.fontSize = 25;                // 스케일과 함께 튜닝
+                _pathCostTMP.enableWordWrapping = false;
+                _pathCostTMP.sortingOrder = 1000;          // 타일/마커 위로
+                _pathCostTMP.outlineWidth = 0.2f;          // 가독성 (필요 시)
+                _pathCostTMP.color = (cost <= vigor.CurrentVigor) ? Color.white : Color.red;
+            }
+
+            _pathCostLabelGO.transform.position = goalWorld;
+            _pathCostTMP.text = $"-{cost}";
         }
     }
     // --- 타일 기반 최소 경로 탐색 (BFS) ---
@@ -589,7 +637,7 @@ public class PlayerMovement : MonoBehaviour
         return bestPath;
     }
 
-    //심볼 인카운터 몬스터 체크
+    //심볼 인카운터 몬스터 타일 체크
     bool TryGetEncounterAtCell(Vector3Int cell, out EncounterMonster monster)
     {
         monster = null;
@@ -607,11 +655,48 @@ public class PlayerMovement : MonoBehaviour
         }
         return false;
     }
+    //함정 타일 체크
+    void TryTriggerTrapAtCell(Vector3Int cell)
+    {
+        if (floorTilemap == null) return;
+
+        var traps = TrapBehavior.allTraps;
+        for (int i = 0; i < traps.Count; i++)
+        {
+            var trap = traps[i];
+            if (!trap) continue;
+            trap.TryTriggerByPlayer(floorTilemap, cell);
+        }
+    }
 
     // 경로를 따라 실제로 이동
-    void StartPathMove(List<Vector3Int> cells, Action onArrive = null)
+    void StartPathMove(List<Vector3Int> cells, Action onArrive = null, int? overrideVigorCost = null)
     {
         if (cells == null || cells.Count < 2) return; // 제자리이거나 잘못된 경로
+
+        // 이동 비용 계산
+        _pendingMoveVigorCost = 0;
+        var vigor = Shared.VigorManager;
+
+        if (overrideVigorCost.HasValue)
+        {
+            // 복귀 후 이어서 이동: "총 예정 비용"을 그대로 이어받는다
+            _pendingMoveVigorCost = Mathf.Max(0, overrideVigorCost.Value);
+        }
+        else if (vigor != null)
+        {
+            int steps = Mathf.Max(0, cells.Count - 1);
+            int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
+
+            // 선 차감 대신 가능 여부만 확인
+            if (cost > 0 && !vigor.CanSpend(cost))
+            {
+                Shared.explorationLogUI?.Push($"활기가 부족합니다. 이동 필요: {cost}, 현재: {vigor.CurrentVigor}");
+                CancelSelectionAndHint();
+                return;
+            }
+            _pendingMoveVigorCost = cost;
+        }
 
         // 이동 중이면 먼저 정리
         if (pathMoveRoutine != null)
@@ -628,7 +713,8 @@ public class PlayerMovement : MonoBehaviour
         // 프리뷰는 이동 시작 시 지움
         ClearPathPreview();
 
-        pathMoveRoutine = StartCoroutine(Co_MoveAlongPath(cells));
+        var moveCells = new List<Vector3Int>(cells);   // 복사본 생성
+        pathMoveRoutine = StartCoroutine(Co_MoveAlongPath(moveCells));
     }
 
     IEnumerator Co_MoveAlongPath(List<Vector3Int> cells)
@@ -662,7 +748,13 @@ public class PlayerMovement : MonoBehaviour
             {
                 if (GamePause.IsPaused)
                 {
-                    // 일시정지 중에는 프레임만 넘김
+                    if (animator != null) animator.SetInteger("Move", 0);
+                    yield return null;
+                    continue;
+                }
+                if (Time.time < movementLockUntil)
+                {
+                    if (animator != null) animator.SetInteger("Move", 0);
                     yield return null;
                     continue;
                 }
@@ -674,6 +766,16 @@ public class PlayerMovement : MonoBehaviour
             }
 
             rb.MovePosition(end);
+
+            // 도착 셀 함정 체크
+            bool trapTriggered = false;
+            if (TrapBehavior.allTraps != null)
+            {
+                int beforeCount = TrapBehavior.allTraps.Count;
+                TryTriggerTrapAtCell(cells[i]);
+                trapTriggered = GamePause.IsPaused;
+            }
+
             // 도착 셀에서 인카운터 체크
             if (TryGetEncounterAtCell(cells[i], out var monster))
             {
@@ -685,14 +787,11 @@ public class PlayerMovement : MonoBehaviour
                 // 잠시 멈춤(연출용)
                 if (animator != null) animator.SetInteger("Move", 0);
 
-                // 이동 상태 정리(코루틴 종료)
-                isMovingByPath = false;
-                pathMoveRoutine = null;
-
                 // 복귀 컨텍스트 저장
                 var stm = Shared.SceneTransitionManager;
-                if (stm != null)
+                if (stm != null && Shared.VigorManager != null)
                 {
+                    stm.SetDeferredMoveCost(_pendingMoveVigorCost);
                     stm.SetResumePath(remaining);
 
                     // "전투씬으로 이동하기 전 타일(몬스터 타일)"을 복귀지점으로 저장
@@ -705,13 +804,28 @@ public class PlayerMovement : MonoBehaviour
                     // 몬스터는 중복 인카운터 방지 처리(필요)
                     monster.MarkConsumed();
 
+                    // 전투씬 이동 직전 현재 활기 저장
+                    stm.SaveVigor(Shared.VigorManager.CurrentVigor);
+
                     // 전투 씬으로
                     stm.FadeToScene(battleSceneName);
                 }
-
+                _pendingMoveVigorCost = 0;
                 yield break;
             }
         }
+
+        if (Shared.VigorManager != null && _pendingMoveVigorCost > 0)
+        {
+            if (!Shared.VigorManager.TrySpend(_pendingMoveVigorCost, VigorSpendReason.MoveTile))
+            {
+                // 이 케이스는 원칙적으로 발생하지 않음(시작 시 CanSpend 했기 때문)
+                // 그래도 안전망으로 처리
+                Shared.VigorManager.FailExploration($"탐색을 실패했습니다. (이동 결제 실패 / 필요 {_pendingMoveVigorCost}, 현재 {Shared.VigorManager.CurrentVigor})");
+                yield break;
+            }
+        }
+        _pendingMoveVigorCost = 0;
 
         if (animator != null)
             animator.SetInteger("Move", 0);
@@ -744,11 +858,14 @@ public class PlayerMovement : MonoBehaviour
         if (resumeCells == null || resumeCells.Count < 2) return;
         if (isMovingByPath) return;
 
-        // 복귀 직후 다른 선택/힌트 상태 정리
         CancelSelectionAndHint();
 
-        // 콜백은 기본 이동으로 취급(필요하면 나중에 확장)
-        StartPathMove(resumeCells, null);
+        // 전투 전에 저장해 둔 총 예정 이동 비용을 이어받는다
+        int plannedCost = 0;
+        var stm = Shared.SceneTransitionManager;
+        if (stm != null) plannedCost = stm.ConsumeDeferredMoveCost();
+
+        StartPathMove(resumeCells, null, plannedCost);
     }
     #endregion
     void HandlePushDetection()

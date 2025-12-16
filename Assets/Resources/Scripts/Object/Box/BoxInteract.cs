@@ -23,6 +23,8 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     [Header("열린 후 처리")]
     [SerializeField] private bool removeOnOpen = true; // true면 열고 나서 상자를 화면/충돌에서 제거
     private float removeOnOpenDelay = 1.5f; // 애니메이션 보여줄 시간 (초)
+    private int _pendingInspectCost = -1; // 상자 비용을 "사라질 때" 결제하기 위한 예약값
+    private string _pendingOpenLogText = null;
 
     // 인식된 상자 확인
     private bool isFocused = false;
@@ -101,9 +103,27 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     public void OpenChest()
     {
         if (isOpened) return;
+
+        // 활기 소모 상자 조사/개봉 비용 ===
+        var vigor = Shared.VigorManager;
+        if (vigor != null)
+        {
+            int cost = Mathf.Max(0, vigor.costInspectBox);
+            if (cost > 0 && !vigor.CanSpend(cost))
+            {
+                Shared.explorationLogUI?.Push($"활기가 부족합니다. (상자 조사 / 필요 {cost}, 현재 {vigor.CurrentVigor})");
+                return;
+            }
+
+            _pendingInspectCost = cost;
+        }
+        else
+        {
+            _pendingInspectCost = 0;
+        }
+
         isOpened = true;
         animator.SetBool("IsOpen", isOpened);
-        Shared.ObjectGaugeManager.IncrementChest();
 
         int idx = openDescriptions ? openDescriptions.PickIndex() : -1;
         if (idx >= 0 && idx < openDescriptions.entries.Length)
@@ -112,19 +132,18 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
             {
                 case 0: /* 40% 케이스 로직 */ break;
                 case 1: /* 30% 케이스 로직 */ break;
-                case 2: Shared.ObjectGaugeManager.TryIncrementAwarenessByChest(); break;    //20% 확률로 인지 게이지 증가
+                case 2:  break;
                 case 3: /* 10% 케이스 로직 */ break;
                 default: /* 예외 처리(프리셋이 더 길어질 수도) */ break;
             }
 
-            // 문구도 띄우고 싶다면
+            // 문구 출력
             var text = openDescriptions.entries[idx].text;
             if (!string.IsNullOrWhiteSpace(text))
             {
-                Shared.explorationLogUI?.Push(text); // 로그창에 한 줄 추가(10초 기본)
-                Shared.interactionHintUI?.HideAll();
+                _pendingOpenLogText = text; // 사라질 때 출력
             }
-                
+
         }
 
         var descriptiondata = GetComponent<DescriptionData>();
@@ -173,6 +192,25 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
         if (removeOnOpenDelay > 0f)
             yield return new WaitForSeconds(removeOnOpenDelay);
 
+        // 사라지는 순간 활기 소모
+        var vigor = Shared.VigorManager;
+        if (vigor != null && _pendingInspectCost > 0)
+        {
+            if (!vigor.TrySpend(_pendingInspectCost, VigorSpendReason.InspectBox))
+            {
+                vigor.FailExploration($"탐색을 실패했습니다. (상자 결제 실패 / 필요 {_pendingInspectCost}, 현재 {vigor.CurrentVigor})");
+                yield break;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_pendingOpenLogText))
+        {
+            Shared.explorationLogUI?.Push(_pendingOpenLogText);
+            Shared.interactionHintUI?.HideAll();
+            _pendingOpenLogText = null;
+        }
+
+        _pendingInspectCost = -1;
         ApplyPostOpenBehavior();
     }
 

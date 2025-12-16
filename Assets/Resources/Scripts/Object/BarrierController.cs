@@ -34,14 +34,9 @@ public class BarrierController : MonoBehaviour
         if (exitTrigger == null) Debug.LogError("ExitTrigger 콜라이더가 없습니다!");
         if (barrierCollider == null) Debug.LogError("BarrierCollider 콜라이더가 없습니다!");
 
-        if (Shared.ObjectGaugeManager != null)
-            Shared.ObjectGaugeManager.onThresholdReached.AddListener(Open);
-
         Close();
 
-        ObjectGaugeManager og = Shared.ObjectGaugeManager;
-        if (og != null && og.GetGaugePercent() >= og.thresholdPercent)
-            Open();
+        //Open();
     }
 
     void Update()

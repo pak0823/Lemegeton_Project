@@ -233,14 +233,6 @@ public class MapManager : MonoBehaviour
         }
 
         Debug.Log($"[Snapshot] applied objects = {snap.objects.Count}");
-
-
-        // Object 게이지 값 복원(초기화 방지)
-        var objectgauge = Shared.ObjectGaugeManager;
-        if (objectgauge != null)
-        {
-            objectgauge.SetObjectGaugeFromSnapshot(snap.totalBoxes, snap.openedBoxes, snap.triggeredTraps, snap.thresholdReached);
-        }
     }
 
     GameObject FindPrefabByName(string prefabName)
@@ -273,11 +265,6 @@ public class MapManager : MonoBehaviour
         {
             Destroy(Shared.PlayerMovement.gameObject);
             Shared.PlayerMovement = null;
-        }
-
-        if (Shared.ObjectGaugeManager != null)
-        {
-            Shared.ObjectGaugeManager.ResetState();
         }
 
         currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
