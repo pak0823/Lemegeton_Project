@@ -6,7 +6,6 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
 {
     private ExplorationPersistId pid;
     public Animator animator;
-    //public GameObject targetMarker;   //인식 표시
     public bool isPlayerNear = false;
     [SerializeField] private bool isOpened = false;
     private bool _applyOpenOnStart = false;  // 복원 시 다음 프레임에 반영
@@ -79,10 +78,6 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     {
         if (isFocused == on) return;
         isFocused = on;
-
-        // 포커스 기준으로만 안내 UI 제어
-        //if (targetMarker != null)
-        //    targetMarker.SetActive(isFocused && !isOpened);
     }
 
     // PushObject와 동일 패턴의 하이라이트 메서드
@@ -103,6 +98,9 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
     public void OpenChest()
     {
         if (isOpened) return;
+
+        // 상자 처리 중에는 플레이어 입력 완전 차단
+        Shared.PlayerMovement?.LockMovementIndefinite();
 
         // 활기 소모 상자 조사/개봉 비용 ===
         var vigor = Shared.VigorManager;
@@ -206,12 +204,15 @@ public class BoxInteract : MonoBehaviour, IExplorationPersistable
         if (!string.IsNullOrWhiteSpace(_pendingOpenLogText))
         {
             Shared.explorationLogUI?.Push(_pendingOpenLogText);
-            Shared.interactionHintUI?.HideAll();
+            //Shared.interactionHintUI?.HideAll();
             _pendingOpenLogText = null;
         }
 
         _pendingInspectCost = -1;
-        ApplyPostOpenBehavior();
+
+        ApplyPostOpenBehavior(); // 상자 제거
+                                 
+        Shared.PlayerMovement?.UnlockMovementIndefinite();// 입력 해제
     }
 
     void OnTriggerEnter2D(Collider2D other)

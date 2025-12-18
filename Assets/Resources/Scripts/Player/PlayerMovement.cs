@@ -807,8 +807,10 @@ public class PlayerMovement : MonoBehaviour
                     // 전투씬 이동 직전 현재 활기 저장
                     stm.SaveVigor(Shared.VigorManager.CurrentVigor);
 
-                    // 전투 씬으로
-                    stm.FadeToScene(battleSceneName);
+                    // 전투 진입 전 팝업 -> 약간 뒤 전투씬 이동
+                    string monsterName = monster != null ? monster.gameObject.name : "몬스터";
+                    stm.EnterBattleWithEncounterBanner(monsterName, battleSceneName);
+                    yield break;
                 }
                 _pendingMoveVigorCost = 0;
                 yield break;
@@ -926,6 +928,7 @@ public class PlayerMovement : MonoBehaviour
     public void OnClickSurveyButton()
     {
         Shared.descriptionDialogUI?.Hide();
+        Shared.interactionHintUI?.HideAll();
 
         if (isMovingByPath)
             return;

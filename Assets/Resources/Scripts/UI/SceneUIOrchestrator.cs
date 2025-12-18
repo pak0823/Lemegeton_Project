@@ -14,7 +14,6 @@ namespace Project.UI
         [SerializeField] private TurnBarUI turnBar;           // Battle
         [SerializeField] private SkillPanelUI skillPanel;     // Battle
         [SerializeField] private ActionPanelUI actionPanel;   // Battle
-        [SerializeField] private ExplorationTimerUi timerUI;             // Exploration
         [SerializeField] private ExplorationResetUi explorationReset;     // Exploration
         [SerializeField] private TitleMenuUI titleMenu; // Title
         [SerializeField] private OptionsMenuUI optionsMenu;   // Common (Exploration/Battle)
@@ -32,7 +31,6 @@ namespace Project.UI
             turnBar = turnBar ? turnBar : GetComponentInChildren<TurnBarUI>(true);
             skillPanel = skillPanel ? skillPanel : GetComponentInChildren<SkillPanelUI>(true);
             actionPanel = actionPanel ? actionPanel : GetComponentInChildren<ActionPanelUI>(true);
-            timerUI = timerUI ? timerUI : GetComponentInChildren<ExplorationTimerUi>(true);
             explorationReset = explorationReset ? explorationReset : GetComponentInChildren<ExplorationResetUi>(true);
             optionsMenu = optionsMenu ? optionsMenu : GetComponentInChildren<OptionsMenuUI>(true);
 
@@ -90,7 +88,6 @@ namespace Project.UI
             SetActive(turnBar, profile.showTurnBar);
             SetActive(skillPanel, profile.showSkillPanel);
             SetActive(actionPanel, profile.showActionPanel);
-            SetActive(timerUI, profile.showTimerUI);
             SetActive(explorationReset, profile.showExplorationResetUi);
             SetActive(titleMenu, profile.showTitleMenu);
             SetActive(optionsMenu, profile.showOptionsMenu);

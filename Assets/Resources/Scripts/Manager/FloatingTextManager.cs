@@ -14,7 +14,7 @@ public class FloatingTextManager : MonoBehaviour
     [SerializeField] private int prewarm = 20;
 
     [Header("Spawn Throttle")]
-    [SerializeField] private float spawnInterval = 0.08f; // 동시 요청 시 텍스트 간격(초)
+    private float spawnInterval = 0.3f; // 동시 요청 시 텍스트 간격(초)
     private Coroutine _drainCo;
 
     private readonly Queue<FloatingText> _pool = new();

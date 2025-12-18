@@ -35,7 +35,6 @@ namespace Project.UI
 
             if (!isOpen && pauseTimerWhileOpen)
             {
-                Shared.ExplorationTimerUi?.Pause();
                 Shared.PlayerMovement?.LockMovementIndefinite();
             }
 
@@ -48,7 +47,6 @@ namespace Project.UI
 
             if (isOpen && pauseTimerWhileOpen)
             {
-                Shared.ExplorationTimerUi?.Resume();
                 Shared.PlayerMovement?.UnlockMovementIndefinite();
             }
 

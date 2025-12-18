@@ -11,9 +11,6 @@ public class DescriptionDialogUI : MonoBehaviour
     float hideLockUntil = 0f;
     [SerializeField] float defaultMovementLock = 0.5f; // 0이면 잠금 안 함
 
-    [Header("Timer Pause")]
-    [SerializeField] bool pauseTimerWhileOpen = true;   // 창이 떠 있는 동안 탐험 타이머 일시정지
-
     void Awake()
     {
         HideImmediate();
@@ -32,9 +29,6 @@ public class DescriptionDialogUI : MonoBehaviour
         if (!group) return;
         if (bodyText) bodyText.text = text;
 
-        // 창이 막 열리는 시점에만 타이머 일시정지
-        if (!isOpen && pauseTimerWhileOpen)
-            Shared.ExplorationTimerUi?.Pause();
         isOpen = true;
 
         group.alpha = 1f;
@@ -50,10 +44,6 @@ public class DescriptionDialogUI : MonoBehaviour
 
         if (Time.time < hideLockUntil) return;  // 잠금 중이면 무시
         if (!group) return;
-
-        // 창이 닫히는 정확한 시점에 타이머 재개
-        if (isOpen && pauseTimerWhileOpen)
-            Shared.ExplorationTimerUi?.Resume();
 
         isOpen = false;
         group.alpha = 0f;

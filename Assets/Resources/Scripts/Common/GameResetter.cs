@@ -37,8 +37,6 @@ namespace Project
                 Shared.PuzzleManager.ClearMaps(); // 타일맵/목표/캐시 비우기
             }
 
-            ExplorationTimerUi.ClearSavedRuntime();   // 탐험 타이머 정적 메모리도 초기화
-
             // 저장 데이터 삭제(선택)
             if (deleteSaves)
             {

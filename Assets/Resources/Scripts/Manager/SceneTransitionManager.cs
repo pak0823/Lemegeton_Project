@@ -37,6 +37,8 @@ public class SceneTransitionManager : MonoBehaviour
     public int pendingPlannedMoveVigorCost = 0;
     public bool HasDeferredMoveCost => pendingPlannedMoveVigorCost > 0;
 
+    [SerializeField] private float encounterBannerSeconds = 0.8f;
+
     public void SaveExplorationSnapshot(ExplorationSnapshot snap)
     {
         explorationSnapshot = snap;
@@ -161,7 +163,24 @@ public class SceneTransitionManager : MonoBehaviour
             // 남은 경로가 있으면 이어서 이동
             var resume = ConsumeResumePath();
             if (resume != null && resume.Count >= 2)
-                Shared.PlayerMovement.ResumePathAfterBattle(resume);
+            {
+                // 보상창 닫힐 때까지 입력/이동 차단
+                Shared.PlayerMovement?.LockMovementIndefinite();
+
+                // 프레젠터 준비 대기(탐험 씬 UI가 아직 Awake 전일 수 있으므로)
+                yield return new WaitUntil(() => ExplorationModalPresenter.Instance != null);
+
+                ExplorationModalPresenter.Instance.ShowRewardPopup(() =>
+                {
+                    Shared.PlayerMovement?.UnlockMovementIndefinite();
+                    Shared.PlayerMovement?.ResumePathAfterBattle(resume);
+                });
+            }
+            else
+            {
+                // resume가 없으면 잠금 풀기(혹시 남아있다면)
+                Shared.PlayerMovement?.UnlockMovementIndefinite();
+            }
             Debug.Log($"[Return] Teleport to {pendingReturnPosition}");
         }
         else
@@ -207,4 +226,25 @@ public class SceneTransitionManager : MonoBehaviour
         savedVigor = -1;
         return v;
     }
+
+    public void EnterBattleWithEncounterBanner(string monsterName, string battleScene)
+    {
+        // 전투 진입 전까지 입력 차단(타일 클릭 등)
+        Shared.PlayerMovement?.LockMovementIndefinite();
+
+        var presenter = ExplorationModalPresenter.Instance;
+        if (presenter == null)
+        {
+            // 프레젠터가 없으면 즉시 진입(안전 fallback)
+            FadeToScene(battleScene);
+            return;
+        }
+
+        string msg = $"{monsterName}과 마주쳤습니다. 전투에 돌입합니다.";
+        presenter.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
+        {
+            FadeToScene(battleScene);
+        });
+    }
+
 }
