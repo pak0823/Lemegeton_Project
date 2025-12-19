@@ -78,7 +78,6 @@ GameObject:
   - component: {fileID: 6161648578280629588}
   - component: {fileID: 439372205131634721}
   - component: {fileID: 7445455275965035404}
-  - component: {fileID: 1409349991039346102}
   - component: {fileID: -3005220735742606062}
   - component: {fileID: 1166751783182966422}
   - component: {fileID: 8911249334309402656}
@@ -176,28 +175,13 @@ MonoBehaviour:
   impassableLayerMask:
     serializedVersion: 2
     m_Bits: 192
-  activeMoveSpeed: 0
   pathMarkerPrefab: {fileID: 3331784556236702830, guid: 938afb23c886dce4da63049a9bdb15ad, type: 3}
+  pushMarkerPrefab: {fileID: 3331784556236702830, guid: 938afb23c886dce4da63049a9bdb15ad, type: 3}
+  pathCostLabelScale: 0.05
   encounterLayerMask:
     serializedVersion: 2
     m_Bits: 16
   battleSceneName: BattleScene
-  surveyKey: 102
-  leftDirectionKey: 97
-  rightDirectionKey: 100
---- !u!114 &1409349991039346102
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6085547847459231341}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5d3ad245c9a2a224880e63ae05dac741, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  minSpeed: 0.5
 --- !u!114 &-3005220735742606062
 MonoBehaviour:
   m_ObjectHideFlags: 0

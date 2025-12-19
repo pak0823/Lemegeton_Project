@@ -29,10 +29,7 @@ public class TrapBehavior : MonoBehaviour
             allTraps.Remove(this);
     }
 
-    /// <summary>
-    /// 플레이어가 특정 "셀"에 들어왔을 때, 이 함정이 그 셀에 존재하면 발동.
-    /// 발동해도 이동을 멈추지 않는다(로그/활기만 처리).
-    /// </summary>
+    // 플레이어가 함정이 있는 셀에 존재하면 발동
     public void TryTriggerByPlayer(Tilemap floorMap, Vector3Int playerCell)
     {
         if (isTriggered) return;
@@ -69,6 +66,23 @@ public class TrapBehavior : MonoBehaviour
         }
 
         // 1회성 함정이면 비활성화
+        if (applyOnce)
+            gameObject.SetActive(false);
+    }
+
+    // 박스가가 함정이 있는 셀에 존재하면 발동
+    public void TryConsumeByBox(Tilemap floorMap, Vector3Int boxCell)
+    {
+        if (isTriggered) return;
+        if (floorMap == null) return;
+
+        Vector3Int trapCell = useExplicitCell ? explicitCell : floorMap.WorldToCell(transform.position);
+        if (trapCell != boxCell) return;
+
+        // “상자에 의해 제거”이므로 발동 처리(활기/로그 없음)
+        isTriggered = true;
+
+        // 1회성 함정이면 비활성화(또는 Destroy로 바꿔도 됨)
         if (applyOnce)
             gameObject.SetActive(false);
     }

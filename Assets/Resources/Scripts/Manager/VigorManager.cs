@@ -8,7 +8,7 @@ public enum VigorSpendReason
     MoveTile,
     InspectBox,
     TriggerTrap,
-    SymbolEncounter,
+    PushBox
 }
 
 public class VigorManager : MonoBehaviour
@@ -18,10 +18,10 @@ public class VigorManager : MonoBehaviour
     [SerializeField] private int currentVigor;
 
     [Header("Costs")]
-    public int costMovePerTile = 1;
-    public int costInspectBox = 3;
-    public int costTriggerTrap = 5;
-    public int costSymbolEncounter = 2;
+    public int costMovePerTile = 2; //타일 이동 1칸당 활기 소모값
+    public int costInspectBox = 1;  //상자 조사 1개당 활기 소모값
+    public int costTriggerTrap = 5; //함정 발동 1개당 활기 소모값
+    public int costPushBoxPerTile = 3;  //상자 밀기 1칸당 활기 소모값
 
     [Header("UI (optional)")]
     [SerializeField] private Text vigorText;

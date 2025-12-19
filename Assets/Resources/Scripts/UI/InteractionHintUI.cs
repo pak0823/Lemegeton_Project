@@ -149,6 +149,30 @@ public class InteractionHintUI : MonoBehaviour
         HideCommunication();
     }
 
+    public void ShowPushCancelAt(Transform t)
+    {
+        BindFollow(t);
+        SetOffsetsFrom(t);
+
+        // Survey 버튼을 "밀기"로 재사용
+        if (surveyLabel) surveyLabel.text = "밀기";
+        if (surveyRoot) surveyRoot.SetActive(true);
+
+        // Communication은 숨김(2버튼만)
+        if (commRoot) commRoot.SetActive(false);
+
+        // Cancel은 켬
+        if (cancelLabel) cancelLabel.text = "취소";
+        if (cancelRoot) cancelRoot.SetActive(true);
+
+        ShowRoot();
+    }
+
+    public void ResetSurveyLabel()
+    {
+        if (surveyLabel) surveyLabel.text = "조사";
+    }
+
     public void HideSurvey() { if (surveyRoot) surveyRoot.SetActive(false); TryHideRoot(); }
     public void HideCommunication() { if (commRoot) commRoot.SetActive(false); TryHideRoot(); }
     public void HideCancel() { if (cancelRoot) cancelRoot.SetActive(false);TryHideRoot(); }
