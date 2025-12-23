@@ -74,6 +74,7 @@ public class BattleManager : MonoBehaviour
     private Tilemap customPreviewMap;
     private HashSet<Vector3Int> customPreviewCells;
     public BattleUnit ActingUnit => acting;
+    bool _skillConfirmLocked = false;
 
 
     // ATB UI 업데이트용 이벤트
@@ -959,6 +960,8 @@ public class BattleManager : MonoBehaviour
 
     public void CancelCurrentAction()
     {
+        UnlockSkillConfirm();
+
         // 넉백 타겟팅 취소 처리 우선
         if (state == BattleState.TargetingKnockback && currentSkillSO != null)
         {
@@ -1593,7 +1596,7 @@ public class BattleManager : MonoBehaviour
         if (skill == null) return;
 
         // MP 부족 사전 차단
-        int effectiveCost = skill.GetEffectiveMpCost(acting);
+        int effectiveCost = skill.GetEffectiveCost(acting);
         if (!acting.HasMP(effectiveCost))
         {
             Debug.Log($"[Skill] MP 부족: {skill.displayName} (필요 {effectiveCost})");
@@ -1832,6 +1835,11 @@ public class BattleManager : MonoBehaviour
                 return;
             }
 
+            // 중복 확정 방지
+            if (_skillConfirmLocked) return;
+            _skillConfirmLocked = true;
+            state = BattleState.Resolving;
+
             // 후보가 1개 이상이면 후퇴 타일 선택 모드 진입
             StartCoroutine(Co_SelectAllyRetreatThenResolve(allySkill, acting, target, candidates));
             return;
@@ -1856,6 +1864,10 @@ public class BattleManager : MonoBehaviour
             }
         }
 
+        // 일반 스킬도 여기에서 락/Resolving
+        if (_skillConfirmLocked) return;
+        _skillConfirmLocked = true;
+        state = BattleState.Resolving;
         StartCoroutine(Co_GapCloseThenResolveOnTargetSO(skill, acting, target, doGapClose));
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int originCell)
@@ -1888,7 +1900,7 @@ public class BattleManager : MonoBehaviour
             if (currentSkillSO is ParametricDirectionSkill dirSkill && acting != null)
             {
                 int route = acting.GetTrainingRouteIndex(dirSkill);
-                if (route == 2 && dirSkill.trainingFreeActionOnRoute2)
+                if (route == 2 && dirSkill.trainingFreeActionOnRoute)
                     freeAction = true;
             }
 
@@ -1896,7 +1908,7 @@ public class BattleManager : MonoBehaviour
             customPreviewCells = null;
             customPreviewMap = null;
 
-            int cost = currentSkillSO.GetEffectiveMpCost(acting);
+            int cost = currentSkillSO.GetEffectiveCost(acting);
             if (cost > 0 && !acting.TryConsumeMP(cost))
                 return;
 
@@ -2092,6 +2104,7 @@ public class BattleManager : MonoBehaviour
                 customPreviewCells = null;
                 customPreviewMap = null;
                 UpdateTargetingHint();
+                UnlockSkillConfirm();
 
                 if (IsPlayerTurn)
                     state = BattleState.ActionSelect;
@@ -2112,7 +2125,7 @@ public class BattleManager : MonoBehaviour
         bool fired = false; // 임팩트(발사) 수신 여부
 
         //훈련 포함 최종 MP코스트를 계산
-        int cost = skill.GetEffectiveMpCost(caster);
+        int cost = skill.GetEffectiveCost(caster);
 
         // 캐스터 모션 종료 훅
         System.Action onCastEnd = null;
@@ -2129,6 +2142,7 @@ public class BattleManager : MonoBehaviour
             // 발사 순간 최종 차감
             if (!caster.TryConsumeMP(cost))
             {
+                UnlockSkillConfirm();
                 Debug.Log("[Skill] 발사 시 MP 부족 → 취소");
                 projEnded = true; // 종료 플래그만 세우고 끝
                 return;
@@ -2177,6 +2191,7 @@ public class BattleManager : MonoBehaviour
         {
             if (!caster.TryConsumeMP(cost))
             {
+                UnlockSkillConfirm();
                 Debug.Log("[Skill] 임팩트 미수신 폴백 시 MP 부족 → 취소");
                 projEnded = true;
             }
@@ -2251,16 +2266,22 @@ public class BattleManager : MonoBehaviour
         if (target == null || source == null)
             return Mathf.Max(0, Mathf.FloorToInt(finalBase));
 
+        // 전방 보너스
+        if (source is ParametricDamageSkill pds && pds.UseFrontlineBonus && pds.CheckFrontline(target))
+        {
+            finalBase *= pds.FrontlineMultiplier;
+        }
+
         var stateDb = target.stateStatDB;
         var usc = target.GetComponent<UnitStateController>();
         var sc = target.GetComponent<StatusController>();
 
-        // 1) 대상(UnitState) 기반 기본 배율
+        // 대상(UnitState) 기반 기본 배율
         float mul = 1f;
         if (stateDb != null)
             mul *= stateDb.GetDamageTakenMultiplier(usc, source.school);
 
-        // 2) 스택형 상태(탈진/방어/나약/저항) 보정은 기존 그대로 유지
+        // 스택형 상태(탈진/방어/나약/저항) 보정은 기존 그대로 유지
         if (sc != null)
         {
             if (source.school == DamageSchool.Physical)
@@ -2283,7 +2304,7 @@ public class BattleManager : MonoBehaviour
             // (필요하면 여기서 탈진/나약을 함께 곱해도 됨)
         }
 
-        // 3) Rage 보정: (1 + 0.01 × 자신의 현재 Rage)
+        //Rage 보정: (1 + 0.01 × 자신의 현재 Rage)
         float rageMult = 1f;
         if (caster != null && caster.Rage > 0f)
         {
@@ -2458,7 +2479,7 @@ public class BattleManager : MonoBehaviour
                         route == dmgSkill.routeForRefundOnKill &&
                         dmgSkill.trainingRefundOnKill)
                     {
-                        int cost = dmgSkill.GetEffectiveMpCost(caster);
+                        int cost = dmgSkill.GetEffectiveCost(caster);
                         if (cost > 0)
                         {
                             caster.GainMP(cost);
@@ -2649,7 +2670,7 @@ public class BattleManager : MonoBehaviour
         EndKnockbackSelection();
 
         // MP 비용 체크 (훈련/기본 반영)
-        int cost = skill.GetEffectiveMpCost(caster);
+        int cost = skill.GetEffectiveCost(caster);
         if (cost > 0 && !caster.TryConsumeMP(cost))
             yield break;
 
@@ -2942,6 +2963,11 @@ public class BattleManager : MonoBehaviour
         return a != null && b != null && a.team != b.team;
     }
 
+    void UnlockSkillConfirm()
+    {
+        _skillConfirmLocked = false;
+    }
+
     void FinishActionAfterSkill()
     {
         // 어떤 스킬이었는지, 누구 차례였는지 로컬로 잡아둔다
@@ -2952,6 +2978,9 @@ public class BattleManager : MonoBehaviour
         ClearSkillPreview();
         // 스킬 실행 완료 → 패널 닫기 + 스킬 선택 해제
         CloseSkillPanel();   // 이벤트까지 함께 발행됨
+
+        // 스킬 처리 종료 시 입력 락 해제
+        UnlockSkillConfirm();
 
         // 기술 사용 후 1칸 이동
         if (unit != null && skill != null && ShouldOfferPostSkillMove(unit, skill))

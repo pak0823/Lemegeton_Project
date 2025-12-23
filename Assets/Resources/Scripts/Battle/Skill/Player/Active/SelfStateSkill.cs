@@ -30,24 +30,29 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; } // 기존 파이프 재사용
 #endif
-    void OnEnable() { targetMode = SkillTargetMode.Unit; }
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.MP;
+    }
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
     {
         yield break; // 프리뷰 불필요
     }
 
-    public override System.Collections.IEnumerator ResolveOnUnit(BattleManager _bm, BattleUnit _caster, BattleUnit _target)
+    public override System.Collections.IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
         if (!_caster) yield break;
 
         var usc = _caster.GetComponent<UnitStateController>();
         if (usc == null) usc = _caster.gameObject.AddComponent<UnitStateController>();
 
-        int cost = GetEffectiveMpCost(_caster);
-        if (!_caster.TryConsumeMP(cost))
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost))
         {
-            Debug.Log($"[SelfStateSkill] MP 부족: {displayName} (필요 {cost})");
+            Debug.Log($"[SelfStateSkill] 자원 부족: {displayName} (필요 {cost}, {res})");
             yield break;
         }
 
@@ -67,14 +72,14 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
         yield break;
     }
 
-    public override System.Collections.IEnumerator ResolveOnTile(BattleManager _bm, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    public override System.Collections.IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
         yield break; // 사용 안 함
     }
 
-    public override int GetEffectiveMpCost(BattleUnit _caster)
+    public override int GetEffectiveCost(BattleUnit _caster)
     {
-        int baseCost = mpCost;
+        int baseCost = base.GetEffectiveCost(_caster);
         if (_caster == null) return baseCost;
 
         int route = _caster.GetTrainingRouteIndex(this);
@@ -88,27 +93,13 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
     }
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(_caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(_caster);
-        }
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        int route = _caster.GetTrainingRouteIndex(this);
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
         var info = trainingRoutes[route];
-
         return SkillTooltipUtil.AppendTrainingRouteDescription(
             baseDesc,
             info.title,

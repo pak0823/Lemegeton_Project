@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &30711003508987290
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3552177571417075376}
+  m_Layer: 0
+  m_Name: ItemBoxObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3552177571417075376
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 30711003508987290}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8511800602294339813}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &103573032074925881
 GameObject:
   m_ObjectHideFlags: 0
@@ -498,7 +529,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5927897959480819682}
   m_Layer: 0
-  m_Name: Object
+  m_Name: PushObject
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -520,6 +551,37 @@ Transform:
   - {fileID: 9127415923265220263}
   - {fileID: 4793028326952750051}
   - {fileID: 6490567664120689032}
+  m_Father: {fileID: 8511800602294339813}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1991210071302300837
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3645294907160859396}
+  m_Layer: 0
+  m_Name: TrapObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3645294907160859396
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1991210071302300837}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
   m_Father: {fileID: 8511800602294339813}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2180332901312060955
@@ -2210,6 +2272,37 @@ TilemapRenderer:
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
   m_MaskInteraction: 0
+--- !u!1 &2666307301923354372
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2455486188417478247}
+  m_Layer: 0
+  m_Name: PatternObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2455486188417478247
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2666307301923354372}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8511800602294339813}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &4911307203707388269
 GameObject:
   m_ObjectHideFlags: 0
@@ -8154,6 +8247,9 @@ Transform:
   - {fileID: 9193944485640527202}
   - {fileID: 3294854560812219838}
   - {fileID: 4040521805133353173}
+  - {fileID: 2455486188417478247}
+  - {fileID: 3645294907160859396}
+  - {fileID: 3552177571417075376}
   - {fileID: 5927897959480819682}
   - {fileID: 8713799751926095969}
   - {fileID: 882619604556746306}
@@ -8173,10 +8269,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trapPrefabs:
   - {fileID: 2053914866989125264, guid: 526622ffd224d2f40a93033a61e2d912, type: 3}
-  trapCount: 15
+  trapMinCount: 1
+  trapMaxCount: 20
   chestPrefabs:
   - {fileID: 8113640785338436112, guid: 9866026ff5140f34bbffbb54893a0d63, type: 3}
-  chestCount: 30
+  chestMinCount: 1
+  chestMaxCount: 20
+  patternPrefabs:
+  - {fileID: 5391353472287911942, guid: 884f6eb061260fb49b1c108f2a8782af, type: 3}
 --- !u!1 &9122011432442566652
 GameObject:
   m_ObjectHideFlags: 0

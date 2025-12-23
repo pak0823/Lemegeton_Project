@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2521280394065322774
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8144288035724550236}
+  m_Layer: 0
+  m_Name: ItemBoxObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8144288035724550236
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2521280394065322774}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2487105314326189310}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2532610584853097049
 GameObject:
   m_ObjectHideFlags: 0
@@ -648,6 +679,9 @@ Transform:
   - {fileID: 9125302110558126091}
   - {fileID: 160667311582886246}
   - {fileID: 6927440630532455650}
+  - {fileID: 1200885738086034388}
+  - {fileID: 9177660537822227398}
+  - {fileID: 8144288035724550236}
   - {fileID: 4165121133971752044}
   - {fileID: 8237453311175617594}
   - {fileID: 1258487311566629112}
@@ -667,10 +701,45 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   trapPrefabs:
   - {fileID: 2053914866989125264, guid: 526622ffd224d2f40a93033a61e2d912, type: 3}
-  trapCount: 15
+  trapMinCount: 1
+  trapMaxCount: 20
   chestPrefabs:
   - {fileID: 8113640785338436112, guid: 9866026ff5140f34bbffbb54893a0d63, type: 3}
-  chestCount: 30
+  chestMinCount: 1
+  chestMaxCount: 20
+  patternPrefabs:
+  - {fileID: 5391353472287911942, guid: 884f6eb061260fb49b1c108f2a8782af, type: 3}
+--- !u!1 &3947203008069802240
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1200885738086034388}
+  m_Layer: 0
+  m_Name: PatternObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1200885738086034388
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3947203008069802240}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2487105314326189310}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &7230813076290218945
 GameObject:
   m_ObjectHideFlags: 0
@@ -681,7 +750,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6927440630532455650}
   m_Layer: 0
-  m_Name: Object
+  m_Name: PushObject
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8302,6 +8371,37 @@ TilemapRenderer:
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
   m_MaskInteraction: 0
+--- !u!1 &9126783228776865580
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9177660537822227398}
+  m_Layer: 0
+  m_Name: TrapObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9177660537822227398
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9126783228776865580}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2487105314326189310}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1970058960886793478
 PrefabInstance:
   m_ObjectHideFlags: 0

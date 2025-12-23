@@ -38,12 +38,12 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     public SkillTargetMode selectionMode = SkillTargetMode.Tile; // 타일 지목
 
     [Header("Training")]
-    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
-    public bool trainingUseMpOverride = false;
-    [Tooltip("MP 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 보통 0 = 1번 루트)")]
-    [Range(-1, 2)] public int routeForMpOverride = 0;
-    [Tooltip("해당 루트에서 실제로 사용할 MP 비용")]
-    public int trainingMpCostRoute0 = 0;
+    [Tooltip("훈련에서 자원 비용을 덮어쓸지 여부")]
+    public bool trainingUseOverride = false;
+    [Tooltip("자원 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 보통 0 = 1번 루트)")]
+    [Range(-1, 2)] public int routeForOverride = 0;
+    [Tooltip("해당 루트에서 실제로 사용할 자원 비용")]
+    public int trainingCostRoute = 0;
 
     [Tooltip("연막 위에서 MP 회복을 활성화할지 여부")]
     public bool trainingEnableMpRegen = true;
@@ -68,6 +68,7 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         targetMode = selectionMode;
         power = 0f; // 피해 없음
         school = DamageSchool.Physical;
+        costResource = SkillCostResource.MP;
     }
 
     int GetRoute(BattleUnit caster)
@@ -92,6 +93,11 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
         if (!bm || !caster || !map) yield break;
+
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost))
+            yield break;
 
         var cells = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell)).ToList();
         if (cells.Count == 0) yield break;
@@ -171,17 +177,17 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         comp.AttachVfx(smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder, caster.team);
     }
 
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit _caster)
     {
-        int cost = mpCost;
-        if (caster == null) return cost;
+        int cost = base.GetEffectiveCost(_caster);
+        if (_caster == null) return cost;
 
-        int route = GetRoute(caster);
-        if (trainingUseMpOverride &&
-            routeForMpOverride >= 0 &&
-            route == routeForMpOverride)
+        int route = GetRoute(_caster);
+        if (trainingUseOverride &&
+            routeForOverride >= 0 &&
+            route == routeForOverride)
         {
-            cost = Mathf.Max(0, trainingMpCostRoute0);
+            cost = Mathf.Max(0, trainingCostRoute);
         }
 
         return cost;
@@ -189,27 +195,13 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
 
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(_caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(_caster);
-        }
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        int route = _caster.GetTrainingRouteIndex(this);
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
         var info = trainingRoutes[route];
-
         return SkillTooltipUtil.AppendTrainingRouteDescription(
             baseDesc,
             info.title,

@@ -157,9 +157,9 @@ public class SkillPanelUI : MonoBehaviour
                     if (actor != null)
                     {
                         // 훈련/상태가 반영된 실제 MP 소모값 사용
-                        int effectiveCost = asset.GetEffectiveMpCost(actor);
-
-                        usable = !actor.IsSkillOnCooldown(asset) && actor.HasMP(effectiveCost);
+                        var res = asset.GetCostResource(actor);
+                        int effectiveCost = asset.GetEffectiveCost(actor);
+                        usable = !actor.IsSkillOnCooldown(asset) && actor.HasResource(res, effectiveCost);
                     }
                 }
 
@@ -261,8 +261,6 @@ public class SkillPanelUI : MonoBehaviour
 
                 if (actor != null)
                     descriptionText.text = _skillasset.GetFullDescriptionRich(actor);
-                else
-                    descriptionText.text = _skillasset.GetFullDescriptionRich();
             }
         }
 

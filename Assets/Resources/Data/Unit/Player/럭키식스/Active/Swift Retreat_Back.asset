@@ -23,6 +23,8 @@ MonoBehaviour:
   school: 0
   attribute: 0
   power: 0
+  costResource: 1
+  cost: 10
   mpCost: 1
   targetMode: 1
   cooldownTurns: 1
@@ -48,8 +50,8 @@ MonoBehaviour:
   forwardDashTrigger: DashForward
   backwardDashTrigger: DashBack
   useDirectionalDashTrigger: 1
-  trainingUseMpOverride: 1
-  routeForMpOverride: 0
-  trainingMpCostRoute0: 5
-  trainingHostilityDeltaRoute1: 0.3
-  trainingFreeActionOnRoute2: 1
+  trainingUseCostOverride: 1
+  routeForCostOverride: 0
+  trainingCostRoute: 5
+  trainingHostilityDeltaRoute: 0.3
+  trainingFreeActionOnRoute: 1

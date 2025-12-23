@@ -167,7 +167,7 @@ public class ParametricDamageSkill : SkillAsset
 
     [Header("Frontline Bonus(전방 보너스)")]
     [SerializeField] private bool useFrontlineBonus = false;   // 전방 보너스 사용 여부
-    //[SerializeField] private int frontlineDepth = 2;            // "앞 N열"
+    [SerializeField] private int frontlineDepth = 2;            // "앞 N열"
     [SerializeField] private float frontlineMultiplier = 1.5f;  // 배수(예: 1.5)
     [SerializeField] private bool useManualFrontier = true;
 
@@ -181,6 +181,12 @@ public class ParametricDamageSkill : SkillAsset
     [SerializeField] private AxialDir playerFrontlineDir = AxialDir.SW; // 플레이어 전방축
     [SerializeField] private AxialDir enemyFrontlineDir = AxialDir.NE; // 적 전방축
 
+    public bool UseFrontlineBonus => useFrontlineBonus;
+    public int FrontlineDepth => frontlineDepth;
+    public float FrontlineMultiplier => frontlineMultiplier;
+    public bool CheckFrontline(BattleUnit unit)
+        => IsInFrontline(unit, frontlineDepth);
+
     // 선택된 훈련 루트를 읽어 현재 실행에 반영
     int GetRoute(BattleUnit _caster)
     {
@@ -193,6 +199,7 @@ public class ParametricDamageSkill : SkillAsset
         school = damageSchool;
         if (powerOverride > 0f) power = powerOverride;
         targetMode = selectionMode;  // 실행 시에도 선택값 반영
+        costResource = SkillCostResource.MP;
     }
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
@@ -247,7 +254,7 @@ public class ParametricDamageSkill : SkillAsset
 
     
     public enum AxialDir { E, NE, NW, W, SW, SE }
-    Vector2Int DirToAx(AxialDir d) => AX_DIRS[(int)d];
+    Vector2Int DirToAx(AxialDir _d) => AX_DIRS[(int)_d];
     // 맵별/팀별/깊이별 캐시
     static readonly Dictionary<(Tilemap, int, int), HashSet<Vector3Int>> _frontlineCache
         = new Dictionary<(Tilemap, int, int), HashSet<Vector3Int>>();
@@ -319,18 +326,18 @@ public class ParametricDamageSkill : SkillAsset
         return result;
     }
 
-    public List<Vector3Int> GetKnockbackCandidates(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public List<Vector3Int> GetKnockbackCandidates(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
         var result = new List<Vector3Int>();
-        if (!bm || !caster || !target) return result;
+        if (!_battlemanager || !_caster || !_target) return result;
 
-        var map = target.CurrentMap;
+        var map = _target.CurrentMap;
         if (!map) return result;
 
-        var start = target.Cell;
+        var start = _target.Cell;
 
         // caster -> target 방향 (넉백은 "caster에서 target으로"의 연장선 방향)
-        Vector3 casterW = map.GetCellCenterWorld(caster.Cell);
+        Vector3 casterW = map.GetCellCenterWorld(_caster.Cell);
         Vector3 targetW = map.GetCellCenterWorld(start);
         Vector2 awayDir = (Vector2)(targetW - casterW);
         if (awayDir.sqrMagnitude < 1e-6f) return result;
@@ -383,7 +390,7 @@ public class ParametricDamageSkill : SkillAsset
                 continue;
 
             // 점유 여부 체크
-            var units = bm.GetUnitsInArea(map, new[] { cell });
+            var units = _battlemanager.GetUnitsInArea(map, new[] { cell });
             bool occupied = false;
             foreach (var u in units)
             {
@@ -410,9 +417,9 @@ public class ParametricDamageSkill : SkillAsset
     }
 
     // 중심 셀 기준으로 범위 유닛들을 찾아 데미지 적용(팀 반대편만)
-    void DealAreaDamage(BattleManager _bm, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
+    void DealAreaDamage(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
     {
-        if (!_bm || !_caster) return;
+        if (!_battlemanager || !_caster) return;
 
         int route = GetRoute(_caster);
 
@@ -434,13 +441,13 @@ public class ParametricDamageSkill : SkillAsset
                             && u.CurrentMap == _map)
                 .ToList();
 
-            _bm.ExecuteSkillDamage(_caster, victims, this, _map, _centerCell);
+            _battlemanager.ExecuteSkillDamage(_caster, victims, this, _map, _centerCell);
             return;
         }
 
         // 기본/다른 훈련 루트: 기존 범위 로직 사용
         var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
-        var areaVictims = _bm.GetUnitsInArea(_map, area)
+        var areaVictims = _battlemanager.GetUnitsInArea(_map, area)
                             .Where(u => u != null && !u.IsDead && u.team != _caster.team)
                             .ToList();
 
@@ -464,7 +471,7 @@ public class ParametricDamageSkill : SkillAsset
         // 실제 타격: hits 만큼 반복
         for (int i = 0; i < hits; i++)
         {
-            _bm.ExecuteSkillDamage(_caster, areaVictims, this, _map, _centerCell);
+            _battlemanager.ExecuteSkillDamage(_caster, areaVictims, this, _map, _centerCell);
         }
         // 모든 히트가 끝난 뒤, 자기 물리 대미지 버프를 1번만 적용
         if (trainingUseSelfAtkBuff &&
@@ -488,17 +495,14 @@ public class ParametricDamageSkill : SkillAsset
         }
     }
 
-    public override IEnumerator ResolveOnUnit(BattleManager _bm, BattleUnit _caster, BattleUnit _target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (!_bm || !_caster) yield break;
+        if (!_battlemanager || !_caster) yield break;
 
         // MP 소비
-        int cost = GetEffectiveMpCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeMP(cost))
-        {
-            Debug.Log($"[ParametricDamageSkill] MP 부족: {displayName} (필요 {cost})");
-            yield break;
-        }
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
         BattleUnit primary = (useProvidedUnitTarget && _target != null && !_target.IsDead)
                                 ? _target
@@ -510,25 +514,22 @@ public class ParametricDamageSkill : SkillAsset
         Debug.Log($"[Training] {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
 
         // 범위 계산은 GetAreaCells 안에서 route를 보고 알아서 처리
-        DealAreaDamage(_bm, _caster, primary.CurrentMap, primary.Cell);
+        DealAreaDamage(_battlemanager, _caster, primary.CurrentMap, primary.Cell);
         yield break;
     }
-    public override IEnumerator ResolveOnTile(BattleManager _bm, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
-        if (!_bm || !_caster || !_map) yield break;
+        if (!_battlemanager || !_caster || !_map) yield break;
 
         // MP 소비
-        int cost = GetEffectiveMpCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeMP(cost))
-        {
-            Debug.Log($"[ParametricDamageSkill] (Tile) MP 부족: {displayName} (필요 {cost})");
-            yield break;
-        }
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
         int route = GetRoute(_caster);
         Debug.Log($"[Training] (Tile) {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
 
-        DealAreaDamage(_bm, _caster, _map, _originCell);
+        DealAreaDamage(_battlemanager, _caster, _map, _originCell);
         yield break;
     }
 
@@ -555,27 +556,13 @@ public class ParametricDamageSkill : SkillAsset
 
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(_caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(_caster);
-        }
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        int route = _caster.GetTrainingRouteIndex(this);
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
         var info = trainingRoutes[route];
-
         return SkillTooltipUtil.AppendTrainingRouteDescription(
             baseDesc,
             info.title,

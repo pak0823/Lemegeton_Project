@@ -682,6 +682,9 @@ public class BattleUnit : MonoBehaviour
     void HandleWaveStarted()
     {
         ResetHostility();   //적의 초기화
+#if UNITY_EDITOR
+        AddRage(9999f);
+#endif
     }
     #endregion
 
@@ -765,6 +768,33 @@ public class BattleUnit : MonoBehaviour
         int maxThrPer = Mathf.FloorToInt(MaxMP * 0.3f);
 
         MP = Mathf.Min(MaxMP, MP + MPInt);
+    }
+
+    public bool HasRage(int amount) => amount <= 0 || Rage >= amount;
+    public bool TryConsumeRage(int amount)
+    {
+        if (amount <= 0) return true;
+        if (Rage < amount) return false;
+        Rage = Mathf.Max(0f, Rage - amount);
+        return true;
+    }
+    public bool HasResource(SkillCostResource res, int amount)
+    {
+        return res switch
+        {
+            SkillCostResource.MP => HasMP(amount),
+            SkillCostResource.Rage => HasRage(amount),
+            _ => true
+        };
+    }
+    public bool TryConsumeResource(SkillCostResource res, int amount)
+    {
+        return res switch
+        {
+            SkillCostResource.MP => TryConsumeMP(amount),
+            SkillCostResource.Rage => TryConsumeRage(amount),
+            _ => true
+        };
     }
 
     public void Retreat()

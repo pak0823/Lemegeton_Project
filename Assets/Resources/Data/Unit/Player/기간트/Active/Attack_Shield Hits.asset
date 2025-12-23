@@ -20,9 +20,13 @@ MonoBehaviour:
   school: 0
   attribute: 0
   power: 1
+  costResource: 0
+  cost: 0
   mpCost: 0
   targetMode: 0
   cooldownTurns: 0
+  animKind: 1
+  animTriggerOverride: 
   useGapCloseJump: 1
   legacyId: 0
   trainingRoutes:
@@ -69,6 +73,19 @@ MonoBehaviour:
   trainingHitAllEnemies: 0
   trainingUseMultiHit: 0
   trainingHitCount: 2
+  trainingUseSelfAtkBuff: 0
+  routeForSelfAtkBuff: -1
+  selfAtkBuffId: 5
+  selfAtkBuffDurationTurns: 1
+  trainingApplyAgiDebuff: 0
+  routeForAgiDebuff: -1
+  targetAgiDebuffId: 4
+  targetAgiDebuffDurationTurns: 1
+  trainingApplyFear: 0
+  routeForFear: -1
+  fearDurationTurns: 1
+  trainingRefundOnKill: 0
+  routeForRefundOnKill: -1
   useFrontlineBonus: 1
   frontlineDepth: 2
   frontlineMultiplier: 1.5

@@ -53,41 +53,42 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }
 #endif
-    void OnEnable() { targetMode = SkillTargetMode.Unit; }
-
-    int GetRoute(BattleUnit caster)
-    {
-        if (!caster) return -1;
-        return caster.GetTrainingRouteIndex(this);
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.MP;
     }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    int GetRoute(BattleUnit _caster)
+    {
+        if (!_caster) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
     {
         // 자기 자신 타겟이라 프리뷰 필요 없음
         yield break;
     }
 
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (!caster) yield break;
-        if (!bm) yield break;
+        if (!_caster) yield break;
+        if (!_battlemanager) yield break;
 
         // 실제 캐스터는 항상 자기 자신
-        target = caster;
+        _target = _caster;
 
         // MP 비용 계산 (훈련 반영)
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
-        {
-            Debug.Log($"[SelfIsolationTimedSkill] MP 부족: {displayName} (필요 {cost})");
-            yield break;
-        }
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
-        var usc = caster.GetComponent<UnitStateController>();
+        var usc = _caster.GetComponent<UnitStateController>();
         if (usc == null)
-            usc = caster.gameObject.AddComponent<UnitStateController>();
+            usc = _caster.gameObject.AddComponent<UnitStateController>();
 
-        int route = GetRoute(caster);
+        int route = GetRoute(_caster);
 
         // 실제 적용할 지속 턴 계산
         int defenseDuration = baseDefenseDurationTurns;
@@ -110,7 +111,7 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
                 if (u == null || u.IsDead || u.IsRetreated) continue;
 
                 // 아군만
-                if (u.team != caster.team) continue;
+                if (u.team != _caster.team) continue;
 
                 var sc = u.GetComponent<StatusController>();
                 if (sc == null) continue;
@@ -134,7 +135,7 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
                 if (u == null || u.IsDead || u.IsRetreated) continue;
 
                 // 아군만
-                if (u.team != caster.team) continue;
+                if (u.team != _caster.team) continue;
 
                 var sc = u.GetComponent<StatusController>();
                 if (sc == null) continue;
@@ -150,45 +151,28 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
         yield break;
     }
 
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
         yield break;
     }
 
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit _caster)
     {
-        int cost = mpCost;
-        if (caster == null) return cost;
+        int baseCost = base.GetEffectiveCost(_caster);
+        if (!_caster) return baseCost;
 
-        int route = caster.GetTrainingRouteIndex(this);
-        if (trainingUseMpOverride &&
-            routeForMpOverride >= 0 &&
-            route == routeForMpOverride)
-        {
-            cost = Mathf.Max(0, trainingMpCostRoute0);
-        }
-        return cost;
+        int route = _caster.GetTrainingRouteIndex(this);
+        if (trainingUseMpOverride && routeForMpOverride >= 0 && route == routeForMpOverride)
+            return Mathf.Max(0, trainingMpCostRoute0);
+
+        return baseCost;
     }
 
-    public override string GetFullDescriptionRich(BattleUnit caster)
+    public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(caster);
-        }
-
-        int route = caster != null ? caster.GetTrainingRouteIndex(this) : -1;
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 

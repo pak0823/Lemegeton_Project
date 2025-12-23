@@ -8,6 +8,11 @@ using static ParametricDamageSkill;
 
 public enum DamageSchool { Physical, Magical, Composite }  //근력, 총명 , 복합
 public enum AttackAttr { None, Pierce, Strike, Slash }
+public enum SkillCostResource
+{
+    MP, //총명
+    Rage    //분노
+}
 public enum TargetPriorityMode
 {
     None,
@@ -52,7 +57,12 @@ public abstract class SkillAsset : ScriptableObject
     public float power = 1f; // 기본 배수(예: 1.0 = 원 공격력)
 
     [Header("Cost")]
-    [Min(0)] public int mpCost = 0;
+    public SkillCostResource costResource = SkillCostResource.MP;
+    [Tooltip("실제 사용되는 기본 비용 (MP/Rage 공통)")]
+    [Min(0)] public int cost = 0;
+
+    [HideInInspector]
+    public int mpCost = 0;
 
     [Header("Targeting")]
     public SkillTargetMode targetMode; // 기존 enum 재사용 (Unit/Tile) 
@@ -123,6 +133,12 @@ public abstract class SkillAsset : ScriptableObject
         float dmg = stat * power;
 
         return dmg;
+    }
+    public virtual int GetBaseCost()
+    {
+        // 신규 cost를 우선, 0이면 기존 mpCost로 fallback
+        if (cost > 0) return cost;
+        return mpCost;
     }
 
     public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> potentialTargets)
@@ -205,32 +221,28 @@ public abstract class SkillAsset : ScriptableObject
         //if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
         //return PickTargetByWeightedHostility(list);
     }
-    public virtual string GetFullDescriptionRich()
+    public virtual string GetFullDescriptionRich(BattleUnit caster)
     {
-        // description 끝에 (MP:00) 추가
-        if (mpCost > 0)
-        {
-            string mpColor = "#00A2FF"; // 밝은 파란색
-            return $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{mpCost}</color>)</color></size>";
-        }
-        else
-        {
-            return description;
-        }
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+
+        if (cost <= 0) return description;
+
+        string label = (res == SkillCostResource.MP) ? "MP" : "Rage";
+        string color = (res == SkillCostResource.MP) ? "#00A2FF" : "#FF4B4B"; // 예시
+        return $"{description}<size=20%><color=#808080>({label}:<color={color}>{cost}</color>)</color></size>";
     }
+
+    public virtual SkillCostResource GetCostResource(BattleUnit caster) => costResource;
+
     public virtual bool ShouldGapCloseToTarget(BattleUnit caster, BattleUnit target)    /// Unit 타겟 사용 시 점프 연출(gap close)을 사용할지 여부
     {
         return useGapCloseJump;
     }
-    public virtual int GetEffectiveMpCost(BattleUnit caster)
+    public virtual int GetEffectiveCost(BattleUnit caster)
     {
-        // 기본값은 그냥 mpCost 그대로
-        return mpCost;
-    }
-    public virtual string GetFullDescriptionRich(BattleUnit caster)
-    {
-        // 기본적으로는 캐스터 정보 필요 없으면 기존 구현 재사용
-        return GetFullDescriptionRich();
+        // 기본값: base cost (MP/Rage 공통)
+        return Mathf.Max(0, GetBaseCost());
     }
     public virtual int GetEffectiveCooldownTurns(BattleUnit caster)
     {

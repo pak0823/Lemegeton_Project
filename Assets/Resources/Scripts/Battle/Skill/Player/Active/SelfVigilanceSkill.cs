@@ -11,12 +11,12 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
 
     [Header("Training")]
     [Header("자원 소모 감소")]
-    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
-    public bool trainingUseMpOverride = false;
-    [Tooltip("MP 비용 덮어쓰기를 적용할 훈련 루트(-1이면 비활성, 0~2)")]
-    [Range(-1, 2)] public int routeForMpOverride = -1;
-    [Tooltip("해당 루트에서 사용할 MP 비용")]
-    [Min(0)] public int trainingMpCostOverride = 0;
+    [Tooltip("훈련에서 Rage 비용을 덮어쓸지 여부")]
+    public bool trainingUseRageOverride = false;
+    [Tooltip("Rage 비용 덮어쓰기를 적용할 훈련 루트(-1이면 비활성, 0~2)")]
+    [Range(-1, 2)] public int routeForRageOverride = -1;
+    [Tooltip("해당 루트에서 사용할 Rage 비용")]
+    [Min(0)] public int trainingRageCostOverride = 0;
 
     [Header("통찰 약화 부여")]
     [Tooltip("특정 루트에서 '자신을 공격한 적'에게 통찰 약화를 줄지 여부")]
@@ -35,7 +35,12 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }
 #endif
-    void OnEnable() { targetMode = SkillTargetMode.Unit; school = DamageSchool.Physical; }
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        school = DamageSchool.Physical;
+        costResource = SkillCostResource.Rage;
+    }
 
     int GetRoute(BattleUnit caster)
     {
@@ -47,18 +52,16 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
     {
         yield break;
     }
-
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit caster)
     {
-        int cost = base.GetEffectiveMpCost(caster);
-        if (!trainingUseMpOverride || !caster) return cost;
+        int baseCost = base.GetEffectiveCost(caster);
+        if (!trainingUseRageOverride || !caster) return baseCost;
 
         int route = GetRoute(caster);
-        if (routeForMpOverride >= 0 && route == routeForMpOverride)
-        {
-            return Mathf.Max(0, trainingMpCostOverride);
-        }
-        return cost;
+        if (routeForRageOverride >= 0 && route == routeForRageOverride)
+            return Mathf.Max(0, trainingRageCostOverride);
+
+        return baseCost;
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
@@ -68,9 +71,10 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
         // 항상 자기 자신에게
         target = caster;
 
-        // MP 소비 (훈련 반영)
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
+        // 자원 소비 (훈련 반영)
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost))
             yield break;
 
         var usc = caster.GetComponent<UnitStateController>();
@@ -113,21 +117,7 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
 
     public override string GetFullDescriptionRich(BattleUnit caster)
     {
-        int cost = GetEffectiveMpCost(caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
-
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(caster);
-        }
+        string baseDesc = base.GetFullDescriptionRich(caster);
 
         int route = caster != null ? caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)

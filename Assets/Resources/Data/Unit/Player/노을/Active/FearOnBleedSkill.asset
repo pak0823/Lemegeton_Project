@@ -20,9 +20,11 @@ MonoBehaviour:
   school: 0
   attribute: 0
   power: 1
+  costResource: 1
+  cost: 30
   mpCost: 5
   targetMode: 0
-  cooldownTurns: 6
+  cooldownTurns: 0
   animKind: 3
   animTriggerOverride: Fear
   useGapCloseJump: 0
@@ -44,9 +46,9 @@ MonoBehaviour:
   routeForWeakness: 1
   weaknessStatusId: 23
   weaknessStacks: 3
-  trainingUseMpOverride: 1
-  routeForMpOverride: 0
-  trainingMpCostRoute0: 25
+  trainingUseCostOverride: 0
+  routeForCostOverride: -1
+  trainingCostRoute: 0
   trainingRemoveUntargetable: 1
   routeForRemoveUntargetable: 2
   untargetableStatesToClear: 64000000

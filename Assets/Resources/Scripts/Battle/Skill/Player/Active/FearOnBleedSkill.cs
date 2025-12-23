@@ -29,14 +29,13 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
     public int weaknessStacks = 3;
 
     [Header("자원 절약 훈련")]
-    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
-    public bool trainingUseMpOverride = false;
-    [Tooltip("MP 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 0 = 1번 루트)")]
+    [Tooltip("훈련에서 자원 비용을 덮어쓸지 여부")]
+    public bool trainingUseCostOverride = false;
+    [Tooltip("자원 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 0 = 1번 루트)")]
     [Range(-1, 2)]
-    public int routeForMpOverride = -1;
-
-    [Tooltip("해당 루트에서 실제로 사용할 MP 비용")]
-    public int trainingMpCostRoute0 = 0;
+    public int routeForCostOverride = -1;
+    [Tooltip("해당 루트에서 실제로 사용할 자원 비용")]
+    public int trainingCostRoute = 0;
 
     [Header("대상 지정 불가 상태 제거 훈련")]
     [Tooltip("이 루트일 때, 타겟의 '대상 지정 불가' 관련 상태를 제거합니다.")]
@@ -52,16 +51,20 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }
 #endif
-    void OnEnable() { targetMode = SkillTargetMode.Unit; }
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.Rage;
+    }
 
-    int GetRoute(BattleUnit caster)
+    int GetRoute(BattleUnit _caster)
     {
-        if (!caster) return -1;
-        return caster.GetTrainingRouteIndex(this);
+        if (!_caster) return -1;
+        return _caster.GetTrainingRouteIndex(this);
     }
 
     // 프리뷰 범위 없음 (전 적군 대상으로 동작)
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
     {
         yield break;
     }
@@ -71,22 +74,19 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
     /// - 적 AI: EnemyTurnRoutine에서 ResolveOnUnit(this, enemy, 랜덤타겟) 호출하지만
     ///   여기서는 target 파라미터를 무시하고 "caster의 모든 생존 적"을 기준으로 처리
     /// </summary>
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (!bm || !caster) yield break;
+        if (!_battlemanager || !_caster) yield break;
 
         // MP 비용 계산 및 차감 (훈련 반영)
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
-        {
-            Debug.Log($"[FearOnBleed] MP 부족: {displayName} (필요 {cost})");
-            yield break;
-        }
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
-        int route = GetRoute(caster);
+        int route = GetRoute(_caster);
 
         // === 1) 생존한 적 유닛 전체 조회 ===
-        var enemies = bm.GetLivingEnemiesOf(caster); // 이미 BattleManager에 구현되어 있음:contentReference[oaicite:1]{index=1}
+        var enemies = _battlemanager.GetLivingEnemiesOf(_caster); // 이미 BattleManager에 구현되어 있음:contentReference[oaicite:1]{index=1}
 
         foreach (var enemy in enemies)
         {
@@ -109,7 +109,7 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
                 int duration = Mathf.Max(1, fearDurationTurns);
                 usc.ApplyForTurns(fearStateId, duration);   // 기존에 쓰는 턴지속 상태 부여 메서드와 동일 패턴:contentReference[oaicite:2]{index=2}
 
-                Debug.Log($"[FearOnBleed] {caster.name} → {enemy.name} 공포 {duration}턴 부여 (출혈 보유).");
+                Debug.Log($"[FearOnBleed] {_caster.name} → {enemy.name} 공포 {duration}턴 부여 (출혈 보유).");
             }
 
             // === 훈련 1: 나약 중첩 3, 1턴 ===
@@ -147,52 +147,31 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
     }
 
     // 타일 대상 스킬이 아니므로 아무 것도 안 함
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
         yield break;
     }
 
-    public override int GetEffectiveMpCost(BattleUnit _caster)
+    public override int GetEffectiveCost(BattleUnit _caster)
     {
-        int cost = mpCost;
-        if (_caster == null)
-            return cost;
+        int baseCost = base.GetEffectiveCost(_caster);
+        if (!_caster) return baseCost;
 
         int route = GetRoute(_caster);
-        if (trainingUseMpOverride &&
-            routeForMpOverride >= 0 &&
-            route == routeForMpOverride)
-        {
-            cost = Mathf.Max(0, trainingMpCostRoute0);
-        }
+        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+            return Mathf.Max(0, trainingCostRoute);
 
-        return cost;
+        return baseCost;
     }
-
-    public override string GetFullDescriptionRich(BattleUnit caster)
+    public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(caster);
-        }
-
-        int route = caster != null ? caster.GetTrainingRouteIndex(this) : -1;
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
         var info = trainingRoutes[route];
-
         return SkillTooltipUtil.AppendTrainingRouteDescription(
             baseDesc,
             info.title,

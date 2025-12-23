@@ -5,11 +5,19 @@ using UnityEngine.Tilemaps;
 
 public class MapObjectSpawner : MonoBehaviour
 {
+    [Header("Trap")]
     public List<GameObject> trapPrefabs;
-    public int trapCount = 3;
+    public int trapMinCount = 0;
+    public int trapMaxCount = 1;
 
+    [Header("Object")]
     public List<GameObject> chestPrefabs;
-    public int chestCount = 2;
+    public int chestMinCount = 0;
+    public int chestMaxCount = 1;
+
+    [Header("Pattern")]
+    public List<GameObject> patternPrefabs;
+    const int patternCount = 1;
 
     private Tilemap tilemap;
 
@@ -26,22 +34,26 @@ public class MapObjectSpawner : MonoBehaviour
     // excludeColliders 배열에 들어있는 콜라이더들의 영역 위엔 오브젝트를 스폰하지 않음
     public void Spawn(Tilemap tilemap, params Collider2D[] excludeColliders)
     {
+        // Random.Range(int, int)는 최소 포함 / 최대 미포함이기 때문에 최대에 +1을함
+        int trapSpawnCount = Random.Range(trapMinCount, trapMaxCount + 1);
+        int chestSpawnCount = Random.Range(chestMinCount, chestMaxCount + 1);
+
         // 컨테이너 찾기
-        Transform container = tilemap.transform.parent.Find("Object");
-        if (container == null)
-        {
-            Debug.LogWarning("MapObjectSpawner: 'Object' 컨테이너를 찾을 수 없습니다. 스포너 자신을 부모로 사용합니다.");
-            container = this.transform;
-        }
+        Transform root = tilemap.transform.parent;
+        Transform fallback = this.transform;
+
+        Transform trapContainer = GetOrFallbackContainer(root, "TrapObject", fallback);
+        Transform chestContainer = GetOrFallbackContainer(root, "ItemBoxObject", fallback);
+        Transform patternContainer = GetOrFallbackContainer(root, "PatternObject", fallback);
 
         var floorCells = new List<Vector3Int>();
         foreach (Vector3Int pos in tilemap.cellBounds.allPositionsWithin)
         {
-            // 1) 바닥 타일인지
+            // 바닥 타일인지
             if (tilemap.GetTile(pos)?.name.Contains("Floor") != true)
                 continue;
 
-            // 2) excludeColliders 에 들어온 모든 콜라이더 영역 제외
+            // excludeColliders 에 들어온 모든 콜라이더 영역 제외
             Vector3 worldPos = tilemap.GetCellCenterWorld(pos);
             if (excludeColliders.Any(col => col != null && col.OverlapPoint(worldPos)))
                 continue;
@@ -49,58 +61,82 @@ public class MapObjectSpawner : MonoBehaviour
             floorCells.Add(pos);
         }
 
-        // 함정 배치
-        for (int i = 0; i < trapCount && floorCells.Count > 0; i++)
+        // 문양 배치 (오직 1개)
+        if (patternPrefabs != null && patternPrefabs.Count > 0 && floorCells.Count > 0)
         {
             int idx = Random.Range(0, floorCells.Count);
             Vector3 worldPos = tilemap.GetCellCenterWorld(floorCells[idx]);
-            // 프리팹 선택
-            var prefab = trapPrefabs[Random.Range(0, trapPrefabs.Count)];
+            var prefab = patternPrefabs[Random.Range(0, patternPrefabs.Count)];
 
-            GameObject obj = Instantiate(
-                prefab,
-                worldPos,
-                Quaternion.identity,
-                container);
+            GameObject obj = Instantiate(prefab, worldPos, Quaternion.identity, patternContainer);
 
-            // pid 관련 처리
             var pid = obj.GetComponent<ExplorationPersistId>();
             if (pid == null) pid = obj.AddComponent<ExplorationPersistId>();
-            // prefabName 매칭을 위해 이름 고정(스냅샷의 prefabName 키로 사용할 것)
+            obj.name = prefab.name;
+
+            floorCells.RemoveAt(idx);
+        }
+
+        // 함정 배치
+        for (int i = 0; i < trapSpawnCount && floorCells.Count > 0; i++)
+        {
+            int idx = Random.Range(0, floorCells.Count);
+            Vector3 worldPos = tilemap.GetCellCenterWorld(floorCells[idx]);
+            var prefab = trapPrefabs[Random.Range(0, trapPrefabs.Count)];
+
+            GameObject obj = Instantiate(prefab, worldPos, Quaternion.identity, trapContainer);
+
+            var pid = obj.GetComponent<ExplorationPersistId>();
+            if (pid == null) pid = obj.AddComponent<ExplorationPersistId>();
             obj.name = prefab.name;
 
             floorCells.RemoveAt(idx);
         }
 
         // 상자 배치
-        for (int i = 0; i < chestCount && floorCells.Count > 0; i++)
+        for (int i = 0; i < chestSpawnCount && floorCells.Count > 0; i++)
         {
             int idx = Random.Range(0, floorCells.Count);
             Vector3 worldPos = tilemap.GetCellCenterWorld(floorCells[idx]);
-
-            // 프리팹 선택
             var prefab = chestPrefabs[Random.Range(0, chestPrefabs.Count)];
-            GameObject obj = Instantiate(
-                prefab,
-                worldPos,
-                Quaternion.identity,
-                container);
 
-            // pid 관련 처리
+            GameObject obj = Instantiate(prefab, worldPos, Quaternion.identity, chestContainer);
+
             var pid = obj.GetComponent<ExplorationPersistId>();
             if (pid == null) pid = obj.AddComponent<ExplorationPersistId>();
-            obj.name = prefab.name; // 스냅샷 prefabName 키와 동일하게
+            obj.name = prefab.name;
 
-            // Flip 처리: x > 0이면 좌우 반전
             if (worldPos.x > 0f)
             {
                 var sr = obj.GetComponent<SpriteRenderer>();
-                if (sr != null)
-                    sr.flipX = true;
-                else
-                    obj.transform.localScale = new Vector3(-1f, 1f, 1f);
+                if (sr != null) sr.flipX = true;
+                else obj.transform.localScale = new Vector3(-1f, 1f, 1f);
             }
+
             floorCells.RemoveAt(idx);
         }
+    }
+
+    Transform GetOrFallbackContainer(Transform tilemapParent, string childName, Transform fallback)
+    {
+        if (tilemapParent == null) return fallback;
+
+        var t = tilemapParent.Find(childName);
+        if (t == null)
+        {
+            Debug.LogWarning($"MapObjectSpawner: '{childName}' 컨테이너를 찾을 수 없습니다. fallback을 사용합니다.");
+            return fallback;
+        }
+        return t;
+    }
+
+    // min > max가 되는 것을 방지
+    void OnValidate()
+    {
+        if (trapMinCount > trapMaxCount)
+            trapMaxCount = trapMinCount;
+
+        if (chestMinCount > chestMaxCount)
+            chestMaxCount = chestMinCount;
     }
 }

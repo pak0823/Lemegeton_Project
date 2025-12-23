@@ -27,70 +27,80 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
         school = DamageSchool.Magical;
         if (powerOverride > 0f) power = powerOverride;
         targetMode = selectionMode;
+        costResource = SkillCostResource.MP;
     }
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddColumn)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
     {
-        foreach (var c in AreaShapes.GetCells(originCell, areaPreset, false))
+        foreach (var c in AreaShapes.GetCells(_originCell, areaPreset, false))
             yield return c;
     }
 
     // 미리보기/지목 타일 맵: 아군 플로어를 반환
-    public Tilemap GetTargetMap(BattleManager bm, BattleUnit caster)
+    public Tilemap GetTargetMap(BattleManager _battlemanager, BattleUnit _caster)
     {
         var prov = Shared.battleMapManager; // 프로젝트에서 쓰는 맵 프로바이더(같은 접근 방식 사용)
         if (prov == null) return null;
         // 플레이어면 PlayerFloor, 적이면 EnemyFloor(= "그 유닛의 아군 맵")
-        return (caster != null && caster.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
+        return (_caster != null && _caster.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
     }
 
-    int CalcHealAmount(BattleUnit caster, BattleUnit target)
+    int CalcHealAmount(BattleUnit _caster, BattleUnit _target)
     {
         // 마법공격력 * 배수. 필요하면 라우터/상태/장비에 따른 보정도 추가 가능
-        float baseStat = Mathf.Max(1, caster.MagicDamage);
+        float baseStat = Mathf.Max(1, _caster.MagicDamage);
         float mult = Mathf.Max(0f, power);
         return Mathf.Max(1, Mathf.FloorToInt(baseStat * mult));
     }
 
-    void HealArea(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int centerCell)
+    void HealArea(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
     {
-        var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
-        var friends = bm.GetUnitsInArea(map, area)
-                        .Where(u => u != null && !u.IsDead && u.team == caster.team)
+        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
+        var friends = _battlemanager.GetUnitsInArea(_map, area)
+                        .Where(u => u != null && !u.IsDead && u.team == _caster.team)
                         .ToList();
 
         foreach (var u in friends)
         {
-            int amount = CalcHealAmount(caster, u);
+            int amount = CalcHealAmount(_caster, u);
             u.Heal(amount);
 
             // 최종 적대감 생성량 계산
-            float hostilityGained = HostilityRules.FromHeal(amount, caster);
+            float hostilityGained = HostilityRules.FromHeal(amount, _caster);
 
             // 캐스터(플레이어)의 적대감 증가
-            caster.AddHostility(hostilityGained);
+            _caster.AddHostility(hostilityGained);
         }
     }
 
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (!bm || !caster) yield break;
+        if (!_battlemanager || !_caster) yield break;
 
-        var center = (useProvidedUnitTarget && target && !target.IsDead) ? target : caster;
-        HealArea(bm, caster, center.CurrentMap, center.Cell);
+        var center = (useProvidedUnitTarget && _target && !_target.IsDead) ? _target : _caster;
+
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        HealArea(_battlemanager, _caster, center.CurrentMap, center.Cell);
         if (consumeSupportAfterCast)
-            caster.GetComponent<UnitStateController>()?.Remove(UnitStateId.Support);
+            _caster.GetComponent<UnitStateController>()?.Remove(UnitStateId.Support);
         yield break;
 
 
     }
 
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
-        if (!bm || !caster || !map) yield break;
+        if (!_battlemanager || !_caster || !_map) yield break;
 
-        HealArea(bm, caster, map, originCell);
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        HealArea(_battlemanager, _caster, _map, _originCell);
         if (consumeSupportAfterCast)
-            caster.GetComponent<UnitStateController>()?.Remove(UnitStateId.Support);
+            _caster.GetComponent<UnitStateController>()?.Remove(UnitStateId.Support);
         yield break;
 
 
@@ -98,27 +108,13 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
 
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(_caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(_caster);
-        }
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        int route = _caster.GetTrainingRouteIndex(this);
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
         var info = trainingRoutes[route];
-
         return SkillTooltipUtil.AppendTrainingRouteDescription(
             baseDesc,
             info.title,

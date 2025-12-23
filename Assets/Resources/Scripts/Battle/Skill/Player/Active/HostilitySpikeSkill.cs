@@ -59,14 +59,15 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
         targetMode = SkillTargetMode.Unit;
         power = 0f;                        // 피해 없음
         school = DamageSchool.Physical;    // 의미 거의 없음, 기본값
+        costResource = SkillCostResource.MP;
     }
 
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit _caster)
     {
-        int cost = base.GetEffectiveMpCost(caster);
-        if (!trainingUseMpOverride || !caster) return cost;
+        int cost = base.GetEffectiveCost(_caster);
+        if (!trainingUseMpOverride || !_caster) return cost;
 
-        int route = GetRoute(caster);
+        int route = GetRoute(_caster);
         if (routeForMpOverride >= 0 && route == routeForMpOverride)
         {
             return Mathf.Max(0, trainingMpCostOverride);
@@ -75,45 +76,45 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
         return cost;
     }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
     {
         // 프리뷰 불필요 → 빈 영역
         yield break;
     }
 
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (!bm || !caster) yield break;
+        if (!_battlemanager || !_caster) yield break;
 
-        // ==== 0) MP 소비 (훈련까지 반영된 실제 비용) ====
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
-            yield break;
+        //자원 소비 (훈련까지 반영된 실제 비용)
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
-        int route = GetRoute(caster);
+        int route = GetRoute(_caster);
 
-        // ==== 1) 같은 팀 유닛들 중 Hostility 최댓값 찾기 ====
+        // 같은 팀 유닛들 중 Hostility 최댓값 찾기
         float maxHost = 0f;
         foreach (var u in Object.FindObjectsOfType<BattleUnit>())
         {
             if (u == null || u.IsDead) continue;
-            if (u.team != caster.team) continue;    // 같은 편 기준
+            if (u.team != _caster.team) continue;    // 같은 편 기준
 
             maxHost = Mathf.Max(maxHost, Mathf.Max(0f, u.Hostility));
         }
 
-        // ==== 2) 증가량 계산: maxHost * referenceMultiplier ====
+        // 증가량 계산: maxHost * referenceMultiplier
         float delta = maxHost * Mathf.Max(0f, referenceMultiplier);
         if (delta > 0f)
-            caster.AddHostility(delta);
+            _caster.AddHostility(delta);
 
-        // ==== 3) 훈련 효과 - 방어 중첩 상태 부여 ====
+        // 훈련 효과 - 방어 중첩 상태 부여
         if (trainingApplyDefenseStacks &&
             routeForDefenseStacks >= 0 &&
             route == routeForDefenseStacks &&
             trainingDefenseStatusId != StatusId.None)
         {
-            var sc = caster.GetComponent<StatusController>();
+            var sc = _caster.GetComponent<StatusController>();
             if (sc != null)
             {
                 sc.ApplyWithTurnContext(
@@ -124,12 +125,12 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
             }
         }
 
-        // 무료턴 여부는 BattleManager에서 routeForFreeAction 기준으로 처리 (아래 2번 참고)
+        // 무료턴 여부는 BattleManager에서 routeForFreeAction 기준으로 처리
 
         yield break;
     }
 
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
         // 타일 지목형 스킬이 아님
         yield break;
@@ -137,31 +138,18 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
 
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(_caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(_caster);
-        }
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        int route = _caster.GetTrainingRouteIndex(this);
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
         var info = trainingRoutes[route];
-
         return SkillTooltipUtil.AppendTrainingRouteDescription(
             baseDesc,
             info.title,
             info.description
         );
     }
+
 }

@@ -51,87 +51,93 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
     [Header("Training")]
     [Header("소모값 감소 적용")]
-    [Tooltip("훈련에서 MP 비용을 덮어쓸지 여부")]
-    public bool trainingUseMpOverride = false;
+    [Tooltip("훈련에서 자원 비용을 덮어쓸지 여부")]
+    public bool trainingUseCostOverride = false;
     [Range(-1, 2)]
-    [Tooltip("이 스킬에서 MP 감소가 적용될 훈련 루트 인덱스 (-1이면 미사용)")]
-    public int routeForMpOverride = 0;
-    [Tooltip("훈련 시 실제 소모 MP")]
-    public int trainingMpCostRoute0 = 5;
+    [Tooltip("이 스킬에서 자원 감소가 적용될 훈련 루트 인덱스 (-1이면 미사용)")]
+    public int routeForCostOverride = 0;
+    [Tooltip("훈련 시 실제 소모 자원")]
+    public int trainingCostRoute = 5;
 
     [Header("적의 감소 적용")]
-
-
     [Tooltip("현재 적대감에서 이 값만큼 즉시 감소 (양수 입력)")]
-    public float trainingHostilityDeltaRoute1 = 0.3f;
+    public float trainingHostilityDeltaRoute = 0.3f;
 
+    [Header("연속 행동 적용")]
     [Tooltip("이 스킬 사용 후 턴을 마치지 않음")]
-    public bool trainingFreeActionOnRoute2 = false;
+    public bool trainingFreeActionOnRoute = false;
 
     void OnEnable()
     {
         targetMode = SkillTargetMode.Tile; // 실수 방지 기본값
         power = 0f;                    // 피해 없음
         school = DamageSchool.Physical;
+        costResource = SkillCostResource.Rage;
     }
     // 커스텀 프리뷰 & 타겟 맵 제공
-    public IEnumerable<Vector3Int> GetPreviewCells(BattleManager bm, BattleUnit caster)
-        => (bm && caster && caster.CurrentMap) ? ComputeLandingCandidates(bm, caster) : System.Array.Empty<Vector3Int>();
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public IEnumerable<Vector3Int> GetPreviewCells(BattleManager _battlemanager, BattleUnit _caster)
+        => (_battlemanager && _caster && _caster.CurrentMap) ? ComputeLandingCandidates(_battlemanager, _caster) : System.Array.Empty<Vector3Int>();
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
     {
         yield break;
     }
-    public Tilemap GetTargetMap(BattleManager bm, BattleUnit caster)
-       => caster ? caster.CurrentMap : null;
+    public Tilemap GetTargetMap(BattleManager _battlemanager, BattleUnit _caster)
+       => _caster ? _caster.CurrentMap : null;
 
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit _)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _none)
     {
-        if (!bm || !caster || !caster.CurrentMap) yield break;
-        var candidates = ComputeLandingCandidates(bm, caster).ToList();
+        if (!_battlemanager || !_caster || !_caster.CurrentMap) yield break;
+
+        // 비용 체크
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        var candidates = ComputeLandingCandidates(_battlemanager, _caster).ToList();
         if (candidates.Count == 0) yield break;
         // 기본은 첫 후보를 사용(원하면 UI에서 먼저 선택하게 해야 함)
-        yield return MoveCasterTo(bm, caster, caster.CurrentMap, candidates[0]);
+        yield return MoveCasterTo(_battlemanager, _caster, _caster.CurrentMap, candidates[0]);
     }
 
     // 클릭된 타일이 후보 중 하나일 때만 이동 실행
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
-        if (!bm || !caster || !map) yield break;
+        if (!_battlemanager || !_caster || !_map) yield break;
 
         // 비용 체크(확정 시 차감)
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
-            yield break;
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
-        var valids = new HashSet<Vector3Int>(ComputeLandingCandidates(bm, caster));
-        if (!valids.Contains(originCell))
+        var valids = new HashSet<Vector3Int>(ComputeLandingCandidates(_battlemanager, _caster));
+        if (!valids.Contains(_originCell))
             yield break; // 미리보기 밖 클릭 무시
 
         // Route 1: Hostility 즉시 감소
-        int route = caster.GetTrainingRouteIndex(this);
-        if (route == 1 && trainingHostilityDeltaRoute1 > 0f)
+        int route = _caster.GetTrainingRouteIndex(this);
+        if (route == 1 && trainingHostilityDeltaRoute > 0f)
         {
-            float factor = Mathf.Clamp01(trainingHostilityDeltaRoute1);   // 보통 0.3
-            float current = caster.Hostility;
+            float factor = Mathf.Clamp01(trainingHostilityDeltaRoute);   // 보통 0.3
+            float current = _caster.Hostility;
             float delta = current * factor;                               // 현재 적의의 30%
 
             if (delta > 0f)
             {
-                caster.AddHostility(-delta);
-                Debug.Log($"[Training-Dir] {caster.name} Hostility -{delta} (factor={factor}) → {caster.Hostility}");
+                _caster.AddHostility(-delta);
+                Debug.Log($"[Training-Dir] {_caster.name} Hostility -{delta} (factor={factor}) → {_caster.Hostility}");
             }
         }
 
-        yield return MoveCasterTo(bm, caster, map, originCell);
+        yield return MoveCasterTo(_battlemanager, _caster, _map, _originCell);
     }
 
     // 핵심 로직: 착지 후보 계산
-    IEnumerable<Vector3Int> ComputeLandingCandidates(BattleManager bm, BattleUnit caster)
+    IEnumerable<Vector3Int> ComputeLandingCandidates(BattleManager _battlemanager, BattleUnit _caster)
     {
-        var map = caster.CurrentMap;
-        var start = caster.Cell;
+        var map = _caster.CurrentMap;
+        var start = _caster.Cell;
 
-        var labels = GetDirectionsFor(caster.team, start, direction, backMode);
+        var labels = GetDirectionsFor(_caster.team, start, direction, backMode);
         var results = new HashSet<Vector3Int>();
 
         foreach (var label in labels)
@@ -146,7 +152,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             for(int i=ray.Count - 1;i >=0;--i)
             {
                 var cell = ray[i];
-                if(IsLandingFree(bm,map,cell))
+                if(IsLandingFree(_battlemanager,map,cell))
                 {
                     landing = cell;
                     break;
@@ -158,13 +164,6 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
                 continue;
 
             results.Add(landing);
-            //var endCandidate = ScanToEdge(map, start, label, maxScanCells);
-            //var landing = FindNearestFreeBackward(bm, map, endCandidate, label, start);
-
-            //if (landing == start || !IsLandingFree(bm, map, landing))
-            //    continue;
-
-            //results.Add(landing);
         }
         return results;
     }
@@ -199,21 +198,21 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
     // ----------------- helpers -----------------
     // 플레이어는 W(-1,0)/SW(-1,1), 적은 E(+1,0)/NE(+1,-1)
-    List<DirLabel> GetDirectionsFor(Team t, Vector3Int start, DirectionMode dirMode, BackMode backMode)
+    List<DirLabel> GetDirectionsFor(Team _team, Vector3Int _start, DirectionMode _dirmode, BackMode _backmode)
     {
         // 팀 기준 전/후 쌍 (라벨)
         DirLabel backA, backB, frontA, frontB;
-        if (t == Team.Player) { backA = DirLabel.W; backB = DirLabel.SW; frontA = DirLabel.E; frontB = DirLabel.NE; }
+        if (_team == Team.Player) { backA = DirLabel.W; backB = DirLabel.SW; frontA = DirLabel.E; frontB = DirLabel.NE; }
         else { backA = DirLabel.E; backB = DirLabel.NE; frontA = DirLabel.W; frontB = DirLabel.SW; }
 
-        if (dirMode == DirectionMode.AbsoluteNegativeX) return new() { DirLabel.W };
-        if (dirMode == DirectionMode.AbsolutePositiveX) return new() { DirLabel.E };
+        if (_dirmode == DirectionMode.AbsoluteNegativeX) return new() { DirLabel.W };
+        if (_dirmode == DirectionMode.AbsolutePositiveX) return new() { DirLabel.E };
 
-        bool useFront = (dirMode == DirectionMode.TeamBasedFront);
+        bool useFront = (_dirmode == DirectionMode.TeamBasedFront);
         var a = useFront ? frontA : backA;
         var b = useFront ? frontB : backB;
 
-        return backMode switch
+        return _backmode switch
         {
             BackMode.W_Only => new() { a },
             BackMode.SW_Only => new() { b },
@@ -222,10 +221,10 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             _ => new() { a, b }
         };
     }
-    Vector3Int GetStepAt(Vector3Int cell, DirLabel label)
+    Vector3Int GetStepAt(Vector3Int _cell, DirLabel _label)
     {
-        bool odd = SkillLibrary.IsOddColumn(cell);
-        switch (label)
+        bool odd = SkillLibrary.IsOddColumn(_cell);
+        switch (_label)
         {
             case DirLabel.W: return new Vector3Int(-1, 0, 0);
             case DirLabel.E: return new Vector3Int(1, 0, 0);
@@ -234,114 +233,72 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         }
         return Vector3Int.zero;
     }
-    DirLabel Opposite(DirLabel l)
+    DirLabel Opposite(DirLabel _dir)
     {
-        switch (l)
+        switch (_dir)
         {
             case DirLabel.W: return DirLabel.E;
             case DirLabel.E: return DirLabel.W;
             case DirLabel.SW: return DirLabel.NE;
             case DirLabel.NE: return DirLabel.SW;
         }
-        return l;
+        return _dir;
     }
 
-    // 라벨 기반 스캔
-    //Vector3Int ScanToEdge(Tilemap map, Vector3Int start, DirLabel label, int maxCells)
-    //{
-    //    var cur = start; int guard = 0;
-    //    while (true)
-    //    {
-    //        if (maxCells > 0 && guard >= maxCells) break;
-    //        guard++;
-
-    //        var step = GetStepAt(cur, label);             // ★ 현재 칸 기준으로 step 재계산
-    //        var next = new Vector3Int(cur.x + step.x, cur.y + step.y, cur.z);
-    //        if (!IsCellWithin(map, next)) break;
-    //        if (!HasTile(map, next)) break;
-
-    //        cur = next;
-    //    }
-    //    return cur;
-    //}
-
-
-    // 라벨 기반 역방향 탐색(착지 가능 지점 찾기)
-    //Vector3Int FindNearestFreeBackward(BattleManager bm, Tilemap map, Vector3Int endCandidate, DirLabel label, Vector3Int start)
-    //{
-    //    var cur = endCandidate;
-    //    var backLabel = Opposite(label);
-
-    //    while (true)
-    //    {
-    //        if (IsLandingFree(bm, map, cur)) return cur;
-
-    //        var backStep = GetStepAt(cur, backLabel);     // ★ 여기서도 동적 역스텝
-    //        var prev = new Vector3Int(cur.x + backStep.x, cur.y + backStep.y, cur.z);
-
-    //        if (!IsCellWithin(map, prev) || !HasTile(map, prev))
-    //            return start;
-    //        if (prev == start)
-    //            return start;
-
-    //        cur = prev;
-    //    }
-    //}
-
-    bool IsLandingFree(BattleManager bm, Tilemap map, Vector3Int cell)
+    bool IsLandingFree(BattleManager _battlemanager, Tilemap _map, Vector3Int _cell)
     {
-        if (!HasTile(map, cell)) return false;
+        if (!HasTile(_map, _cell)) return false;
 
         // 한 셀만 영역으로 만들어 BattleManager의 유닛 조회 유틸 사용
-        var units = bm.GetUnitsInArea(map, new[] { cell });
+        var units = _battlemanager.GetUnitsInArea(_map, new[] { _cell });
         foreach (var u in units)
         {
-            if (u != null && !u.IsDead && u.Cell == cell)
+            if (u != null && !u.IsDead && u.Cell == _cell)
                 return false; // 점유 중
         }
         return true;
     }
-    bool IsBackMove(Team team, Vector3Int start, Vector3Int dest)
+    bool IsBackMove(Team _team, Vector3Int _start, Vector3Int _dest)
     {
         // 프로젝트 기준: 플레이어는 오른쪽( +X )이 전방, 적은 왼쪽( -X )이 전방이라고 가정
-        if (team == Team.Player)
+        if (_team == Team.Player)
         {
             // X 감소(왼쪽) = 뒤로 물러나는 방향
-            return dest.x < start.x;
+            return _dest.x < _start.x;
         }
         else // Team.Enemy
         {
             // X 증가(오른쪽) = 뒤로 물러나는 방향
-            return dest.x > start.x;
+            return _dest.x > _start.x;
         }
     }
 
-    bool IsCellWithin(Tilemap map, Vector3Int cell) => map.cellBounds.Contains(cell);
-    bool HasTile(Tilemap map, Vector3Int cell) => map.GetTile(cell) != null;
+    bool IsCellWithin(Tilemap _map, Vector3Int _cell) => _map.cellBounds.Contains(_cell);
+    bool HasTile(Tilemap _map, Vector3Int _cell) => _map.GetTile(_cell) != null;
 
-    IEnumerator MoveCasterTo(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int landing)
+    IEnumerator MoveCasterTo(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _landing)
     {
-        if (!caster || !map)
+        if (!_caster || !_map)
             yield break;
 
-        var endW = map.GetCellCenterWorld(landing);
-        var startCell = caster.Cell;
+        var endW = _map.GetCellCenterWorld(_landing);
+        var startCell = _caster.Cell;
 
         //이동 시 현재 칸 점유 해제
-        if (bm != null && bm.grid != null)
-            bm.grid.SetOccupied(caster.team, startCell, false);
+        if (_battlemanager != null && _battlemanager.grid != null)
+            _battlemanager.grid.SetOccupied(_caster.team, startCell, false);
 
         if (dashAnimate)
         {
             // 1) Animator 트리거
-            var anim = caster.GetComponentInChildren<Animator>();
+            var anim = _caster.GetComponentInChildren<Animator>();
             if (anim != null)
             {
                 string trigger = null;
 
                 if (useDirectionalDashTrigger)
                 {
-                    bool isBack = IsBackMove(caster.team, startCell, landing);
+                    bool isBack = IsBackMove(_caster.team, startCell, _landing);
                     trigger = isBack ? backwardDashTrigger : forwardDashTrigger;
                 }
                 else
@@ -354,7 +311,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             }
 
             // 2) 위치 보간(대시 모션)
-            var startW = caster.transform.position;
+            var startW = _caster.transform.position;
             float dur = Mathf.Max(0.0001f, dashDuration);
             float t = 0f;
 
@@ -371,56 +328,40 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
                     pos += Vector3.up * h;
                 }
 
-                caster.transform.position = pos;
+                _caster.transform.position = pos;
                 yield return null;
             }
         }
 
-        caster.MoveTo(map, landing); // 최종 스냅(셀 setter 보호)
+        _caster.MoveTo(_map, _landing); // 최종 스냅(셀 setter 보호)
 
         // 이동 끝: 새 칸 점유 설정
-        if (bm != null && bm.grid != null)
-            bm.grid.SetOccupied(caster.team, caster.Cell, true);
+        if (_battlemanager != null && _battlemanager.grid != null)
+            _battlemanager.grid.SetOccupied(_caster.team, _caster.Cell, true);
 
         yield return null;
     }
 
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit _caster)
     {
-        int cost = mpCost;
-        if (caster == null) return cost;
+        int baseCost = base.GetEffectiveCost(_caster);
+        if (!_caster) return baseCost;
 
-        int route = caster.GetTrainingRouteIndex(this);
-        if (route == 0 && trainingUseMpOverride)
-        {
-            cost = Mathf.Max(0, trainingMpCostRoute0);
-        }
+        int route = _caster.GetTrainingRouteIndex(this);
+        if (trainingUseCostOverride && route == 0)
+            return Mathf.Max(0, trainingCostRoute);
 
-        return cost;
+        return baseCost;
     }
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(_caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(_caster);
-        }
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        int route = _caster.GetTrainingRouteIndex(this);
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
         var info = trainingRoutes[route];
-
         return SkillTooltipUtil.AppendTrainingRouteDescription(
             baseDesc,
             info.title,

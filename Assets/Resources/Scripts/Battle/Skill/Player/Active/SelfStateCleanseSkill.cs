@@ -25,7 +25,11 @@ public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }
 #endif
-    void OnEnable() { targetMode = SkillTargetMode.Unit; }
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.MP;
+    }
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
     {
@@ -37,12 +41,9 @@ public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
         if (!caster) yield break;
 
         // 훈련까지 반영된 실제 MP 비용
-        int cost = GetEffectiveMpCost(caster);
-        if (!caster.TryConsumeMP(cost))
-        {
-            Debug.Log($"[SelfStateCleanseSkill] MP 부족: {displayName} (필요 {cost})");
-            yield break;
-        }
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
 
         var usc = caster.GetComponent<UnitStateController>();
         if (usc == null) yield break;
@@ -64,9 +65,9 @@ public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
         yield break;
     }
 
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit caster)
     {
-        int cost = base.GetEffectiveMpCost(caster);
+        int cost = base.GetEffectiveCost(caster);
         if (!trainingUseReducedMp || caster == null) return cost;
 
         int route = caster.GetTrainingRouteIndex(this);
@@ -76,18 +77,19 @@ public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
         }
         return cost;
     }
-    public override string GetFullDescriptionRich(BattleUnit caster)
+    public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(caster);
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        if (cost > 0)
-        {
-            string mpColor = "#00A2FF";
-            return $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-        }
-        else
-        {
-            return description;
-        }
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
     }
 }

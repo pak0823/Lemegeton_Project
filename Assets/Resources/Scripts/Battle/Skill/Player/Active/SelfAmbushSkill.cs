@@ -60,6 +60,7 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
     {
         targetMode = SkillTargetMode.Unit;
         school = DamageSchool.Physical; // 실제 피해 없음이지만, 호환성용 기본값
+        costResource = SkillCostResource.MP;
     }
 
     int GetRoute(BattleUnit caster)
@@ -74,10 +75,10 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
         yield break;
     }
 
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit caster)
     {
-        int baseMp = mpCost;
-        if (caster == null) return baseMp;
+        int baseCost = base.GetEffectiveCost(caster);
+        if (caster == null) return baseCost;
 
         int route = GetRoute(caster);
 
@@ -88,7 +89,7 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
             return trainingMpCost;
         }
 
-        return baseMp;
+        return baseCost;
     }
 
     /// <summary>
@@ -144,9 +145,10 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
         // 자기 자신
         target = caster;
 
-        // MP 소비 (훈련 반영)
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
+        // 자원 소비 (훈련 반영)
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost))
             yield break;
 
         // 상태 컨트롤러 확보
@@ -196,26 +198,11 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
     {
         yield break;
     }
-
-    public override string GetFullDescriptionRich(BattleUnit caster)
+    public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(caster);
-        }
-
-        int route = caster != null ? caster.GetTrainingRouteIndex(this) : -1;
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 

@@ -58,51 +58,51 @@ public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
         // 자기 자신 대상, 데미지는 없지만 기본 물리 스쿨로 맞춰둠
         targetMode = SkillTargetMode.Unit;
         school = DamageSchool.Physical;
+        costResource = SkillCostResource.MP;
     }
 
-    int GetRoute(BattleUnit caster)
+    int GetRoute(BattleUnit _caster)
     {
-        if (!caster) return -1;
-        return caster.GetTrainingRouteIndex(this);
+        if (!_caster) return -1;
+        return _caster.GetTrainingRouteIndex(this);
     }
 
     /// <summary>
     /// 범위 프리뷰: 캐스터 위치 기준 반경 2 원형.
     /// 실제로는 ResolveOnUnit에서 BattleManager 쪽에 영역을 등록한다.
     /// </summary>
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool _ /*unused*/)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _ /*unused*/)
     {
-        foreach (var c in AreaShapes.BeastDomainArea(originCell, radius))
+        foreach (var c in AreaShapes.BeastDomainArea(_originCell, radius))
             yield return c;
     }
 
-    public override int GetEffectiveMpCost(BattleUnit caster)
+    public override int GetEffectiveCost(BattleUnit _caster)
     {
-        // 필요하다면 나중에 훈련 루트별 MP 변형 추가 가능
-        return mpCost;
+        return base.GetEffectiveCost(_caster);
     }
 
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (!bm) yield break;
-        if (!caster) yield break;
+        if (!_battlemanager) yield break;
+        if (!_caster) yield break;
 
-        target = caster;
+        _target = _caster;
 
         // MP 소모
-        int cost = GetEffectiveMpCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
-            yield break;
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
         // 캐스터가 바인드된 타일맵과 셀을 그대로 사용
-        Tilemap map = caster.CurrentMap;
+        Tilemap map = _caster.CurrentMap;
         if (!map)
         {
             Debug.LogWarning("[BeastDomain] 캐스터의 CurrentMap이 없습니다.");
             yield break;
         }
 
-        Vector3Int originCell = caster.Cell;
+        Vector3Int originCell = _caster.Cell;
         if (!map.HasTile(originCell))
         {
             Debug.LogWarning($"[BeastDomain] 중심 셀에 타일이 없습니다: {originCell}");
@@ -110,16 +110,16 @@ public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
         }
 
         // BattleManager에 영역 생성 요청
-        bm.SpawnBeastDomainZone(map, caster, originCell, radius, durationTurns);
+        _battlemanager.SpawnBeastDomainZone(map, _caster, originCell, radius, durationTurns);
 
         // 훈련: 스킬 사용 시 자신에게 저항 부여
-        int route = GetRoute(caster);
+        int route = GetRoute(_caster);
         if (trainingGiveResistanceOnCast &&
             routeForResistanceOnCast >= 0 &&
             route == routeForResistanceOnCast &&
             resistanceStacksOnCast > 0)
         {
-            var sc = caster.GetComponent<StatusController>();
+            var sc = _caster.GetComponent<StatusController>();
             if (sc != null)
             {
                 sc.ApplyWithTurnContext(
@@ -127,42 +127,25 @@ public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
                     Mathf.Max(1, resistanceStacksOnCast),
                     Mathf.Max(1, resistanceDurationTurns)
                 );
-                Debug.Log($"[BeastDomain] 저항 훈련: {caster.name} 자신에게 Resistance {resistanceStacksOnCast}스택, {resistanceDurationTurns}턴 부여");
+                Debug.Log($"[BeastDomain] 저항 훈련: {_caster.name} 자신에게 Resistance {resistanceStacksOnCast}스택, {resistanceDurationTurns}턴 부여");
             }
         }
 
-        Debug.Log($"[BeastDomain] {caster.name}가 야수의 영역을 생성함 (중심:{originCell}, 반경:{radius}, 지속:{durationTurns}턴)");
+        Debug.Log($"[BeastDomain] {_caster.name}가 야수의 영역을 생성함 (중심:{originCell}, 반경:{radius}, 지속:{durationTurns}턴)");
 
         yield break;
     }
 
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
         // 이 스킬은 타일 지정이 아니라 자기 자신 대상이라 여기서는 아무것도 안 함
         yield break;
     }
-
-    public override string GetFullDescriptionRich(BattleUnit caster)
+    public override string GetFullDescriptionRich(BattleUnit _caster)
     {
-        int cost = GetEffectiveMpCost(caster);
-        string mpColor = "#00A2FF";
-        string baseDesc;
+        string baseDesc = base.GetFullDescriptionRich(_caster);
 
-        // 기본 설명 + MP 비용 표기
-        if (!string.IsNullOrEmpty(description))
-        {
-            if (cost > 0)
-                baseDesc = $"{description}<size=20%><color=#808080>(MP:<color={mpColor}>{cost}</color>)</color></size>";
-            else
-                baseDesc = description;
-        }
-        else
-        {
-            baseDesc = base.GetFullDescriptionRich(caster);
-        }
-
-        // 훈련 루트 설명 붙이기 (SelfVigilanceSkill와 동일 패턴)
-        int route = (caster != null) ? caster.GetTrainingRouteIndex(this) : -1;
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
         if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
             return baseDesc;
 
