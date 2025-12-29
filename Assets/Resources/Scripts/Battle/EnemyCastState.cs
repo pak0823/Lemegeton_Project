@@ -75,40 +75,6 @@ public class EnemyCastState : MonoBehaviour
     void OnOwnerDamaged(int amount)
     {
         if (_pending == null) return;
-
-        //if (_pending.suppressMax > 0)
-        //{
-        //    _pending.suppressCur = Mathf.Max(0, _pending.suppressCur - 1);
-        //    if (_pending.suppressCur > 0)
-        //    {
-        //        // 아직 캐스팅 유지 → 색만 갱신
-        //        UpdateCastLabelColor();
-        //        return;
-        //    }
-        //    // 0이 되었을 때만 중단 처리로 진행
-        //}
-
-        //_interrupted = true;
-        //_pending.owner?.SetCasting(false); // 캐스팅 루프 즉시 종료
-
-        //// 프리뷰 제거
-        //if (_skillPreviewToken != 0)
-        //{
-        //    _pending.bm?.ClearSkillPreviewToken(_skillPreviewToken);
-        //    _skillPreviewToken = 0;
-        //}
-        //_pending.bm?.ReleaseSkillPreview();
-
-        //// 라벨 비우기
-        //_pending.bm?.EmitActionLabel(_pending.owner, "");
-
-        //// 다음 턴에 쓸 스킬은 미리 Plan만 해둬도 됨
-        //var ai = _pending.owner.GetComponent<EnemyAI>();
-        //if (ai != null) ai.PlanNextSkill();
-
-        //// 펜딩 정리(다음 턴 시작 시 중복 처리 방지)
-        //_pending = null;
-        //_interrupted = false;
     }
 
     void OnAnyTurnStarted(BattleUnit who)

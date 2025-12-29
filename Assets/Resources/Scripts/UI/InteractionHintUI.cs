@@ -35,7 +35,29 @@ public class InteractionHintUI : MonoBehaviour
     Canvas rootCanvas;
 
     public void ShowSurveyAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowSurvey(); }
+    public void ShowSurveyAt(Transform t, string label)
+    {
+        BindFollow(t);
+        SetOffsetsFrom(t);
+
+        if (surveyLabel) surveyLabel.text = label;
+        if (surveyRoot) surveyRoot.SetActive(true);
+
+        // 필요 시 기존 comm/cancel 상태는 호출하는 쪽에서 제어
+        ShowRoot();
+    }
+
     public void ShowCommunicationAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowCommunication(); }
+    public void ShowCommunicationAt(Transform t, string label)
+    {
+        BindFollow(t);
+        SetOffsetsFrom(t);
+
+        if (commLabel) commLabel.text = label;
+        if (commRoot) commRoot.SetActive(true);
+
+        ShowRoot();
+    }
     public void ShowCancelAt(Transform t) { BindFollow(t);SetOffsetsFrom(t); ShowCancel(); }
     public void ShowBothAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowBoth(); }
 

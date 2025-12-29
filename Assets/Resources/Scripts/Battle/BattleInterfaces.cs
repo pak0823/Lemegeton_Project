@@ -23,6 +23,14 @@ public interface ISkillForStateResolver
     // 캐스터 상태를 보고 실제 사용할 SO를 돌려준다(치환).
     SkillAsset ResolveForCaster(BattleUnit caster);
 }
+public interface IProjectileTileSkill
+{
+    //투사체 프리팹. 스킬이 직접 소유(권장)
+    ProjectileController GetProjectilePrefab(BattleUnit caster);
+
+    //투사체 속도(유닛/초). 필요없으면 0 또는 음수 반환 → 기본값 사용
+    float GetProjectileSpeed(BattleUnit caster);
+}
 
 public interface ITargetMapProvider
 {

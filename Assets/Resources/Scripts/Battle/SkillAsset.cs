@@ -89,6 +89,18 @@ public abstract class SkillAsset : ScriptableObject
     [Tooltip("훈련 UI에 표시할 3개 루트의 제목/설명. 비어 있으면 기본 텍스트로 대체.")]
     public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
 
+
+    public static bool IsUntargetableByEnemy(BattleUnit target)
+    {
+        if (target == null || target.IsDead) return true;
+
+        var usc = target.GetComponent<UnitStateController>();
+        if (usc == null) return false;
+
+        // 잠복(기존) + 연막 은신(신규 버프) 모두 동일하게 "타겟 지정 불가"
+        return usc.Has(UnitStateId.Ambush) || usc.HasBuff(UnitStateBuffId.SmokeHidden);
+    }
+
     // 기본값 0 = 제압 감소 없음
     public virtual int GetSuppressionOnHit(BattleUnit caster) => 0;
 
@@ -150,8 +162,7 @@ public abstract class SkillAsset : ScriptableObject
         float totalHostility = 0f;
         foreach (var unit in potentialTargets)
         {
-            float visMult = SmokeZoneRuntime.GetVisibilityMultiplier(unit);
-            totalHostility += Mathf.Max(0f, unit.Hostility * visMult);
+            totalHostility += Mathf.Max(0f, unit.Hostility);
         }
 
         // 합계가 0 이하면 (모두 적대감이 0), 랜덤으로 한 명 선택
@@ -166,7 +177,7 @@ public abstract class SkillAsset : ScriptableObject
         // 랜덤 값에서 각 유닛의 Hostility를 빼나가다가 0 이하가 되면 해당 유닛 선택
         foreach (var unit in potentialTargets)
         {
-            randomPoint -= unit.Hostility;
+            randomPoint -= Mathf.Max(0f, unit.Hostility);
             if (randomPoint <= 0)
             {
                 return unit;
@@ -193,7 +204,10 @@ public abstract class SkillAsset : ScriptableObject
     public static BattleUnit PickPreferredStatusThenHighestHostility(IEnumerable<BattleUnit> candidates, StatusId preferred)
     {
         if (candidates == null) return null;
-        var list = candidates.Where(u => u && u.team == Team.Player && !u.IsDead).ToList();
+        var list = candidates
+            .Where(u => u && u.team == Team.Player && !u.IsDead)
+            .Where(u => !IsUntargetableByEnemy(u))   // 연막 은신/잠복 타겟 제외
+            .ToList();
         if (list.Count == 0) return null;
 
         var slowed = list.Where(u =>
@@ -207,14 +221,14 @@ public abstract class SkillAsset : ScriptableObject
         // 가시 감쇠 고려한 가중치 랜덤
         float total = 0f;
         foreach (var u in pool)
-            total += Mathf.Max(0f, u.Hostility * SmokeZoneRuntime.GetVisibilityMultiplier(u));
+            total += Mathf.Max(0f, u.Hostility);
 
         if (total <= 0f) return pool[Random.Range(0, pool.Count)];
 
         float r = Random.Range(0, total);
         foreach (var u in pool)
         {
-            r -= Mathf.Max(0f, u.Hostility * SmokeZoneRuntime.GetVisibilityMultiplier(u));
+            r -= Mathf.Max(0f, u.Hostility);
             if (r <= 0f) return u;
         }
         return pool[pool.Count - 1];
@@ -249,4 +263,5 @@ public abstract class SkillAsset : ScriptableObject
         // 기본은 그냥 설정값 그대로
         return cooldownTurns;
     }
+
 }

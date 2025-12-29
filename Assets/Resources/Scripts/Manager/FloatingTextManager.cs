@@ -14,7 +14,7 @@ public class FloatingTextManager : MonoBehaviour
     [SerializeField] private int prewarm = 20;
 
     [Header("Spawn Throttle")]
-    private float spawnInterval = 0.3f; // 동시 요청 시 텍스트 간격(초)
+    [SerializeField] private float spawnInterval = 0.5f; // 동시 요청 시 텍스트 간격(초)
     private Coroutine _drainCo;
 
     private readonly Queue<FloatingText> _pool = new();
@@ -80,7 +80,7 @@ public class FloatingTextManager : MonoBehaviour
         {
             var req = _spawnQueue.Dequeue();
 
-            req.pos += Vector3.up * (0.08f * idx);
+            req.pos += Vector3.up * (0.1f * idx);
             idx++;
 
             var ft = (_pool.Count > 0) ? _pool.Dequeue() : CreateNew();

@@ -78,12 +78,12 @@ SpriteRenderer:
   m_SortingLayerID: 1554359489
   m_SortingLayer: 2
   m_SortingOrder: 0
-  m_Sprite: {fileID: -234882128, guid: 815ba61a8427f324abefdb22dd7185d0, type: 3}
+  m_Sprite: {fileID: 424673833, guid: d5529250b2ae3984f8e20c879e4f9efb, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 0.36, y: 0.58}
+  m_Size: {x: 0.48, y: 0.48}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
@@ -129,17 +129,18 @@ MonoBehaviour:
   AGI: 0
   atbPerSecond: 0
   resistTable: []
-  debugLogStats: 0
+  debugLogStats: 1
   animator: {fileID: 0}
   spriteRenderer: {fileID: 0}
   moveDuration: 0.18
   CurrentMap: {fileID: 0}
+  defaultAnimEndTimeout: 8
   stateStatDB: {fileID: 11400000, guid: fbf58758c81b3ad4a89d6e0276f693a4, type: 2}
   basePhysicalDamage: 1
   baseMagicDamage: 1
-  baseMaxHP: 100
-  baseMaxMP: 100
-  baseMaxRage: 100
+  baseBDY: 1
+  baseMND: 1
+  baseINS: 1
 --- !u!114 &4122717466495211808
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -196,16 +197,16 @@ BoxCollider2D:
   m_IsTrigger: 0
   m_UsedByEffector: 0
   m_UsedByComposite: 0
-  m_Offset: {x: 0, y: 0.05093673}
+  m_Offset: {x: 0, y: -0.15}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0}
-    oldSize: {x: 0.496, y: 0.4811111}
-    newSize: {x: 0.36, y: 0.58}
+    pivot: {x: 0.5, y: 0.5}
+    oldSize: {x: 0.48, y: 0.48}
+    newSize: {x: 0.48, y: 0.48}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
-  m_Size: {x: 0.36, y: 0.10187346}
+  m_Size: {x: 0.12, y: 0.05}
   m_EdgeRadius: 0

@@ -7,7 +7,12 @@ using UnityEngine.Tilemaps;
 [CreateAssetMenu(menuName = "Battle/Skills/Common/Smoke Bomb", fileName = "SmokeBombSkill")]
 public class SmokeBombSkill : SkillAsset, ITargetMapProvider
 {
-    public enum SmokeEffectMode { HostilityVisibility, AgilityBuff }
+    // 기존 HostilityVisibility / AgilityBuff 유지(호환 목적)
+    public enum SmokeEffectMode
+    {
+        SmokeHiddenBuff,        // 신규: 연막 은신(타겟 불가) 버프 부여
+        AgilityBuff             // (옵션) AGI 버프
+    }
 
     [Header("VFX")]
     [Tooltip("연막 타일에 표시할 VFX 프리팹 (파티클/스프라이트 등)")]
@@ -18,55 +23,52 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     public string vfxSortingLayer = "Effects";
     [Tooltip("정렬 순서")]
     public int vfxSortingOrder = 0;
+
     [Header("Area")]
     public ParametricDamageSkill.AreaPreset areaPreset = ParametricDamageSkill.AreaPreset.Single;
 
     [Header("Smoke Settings")]
-    [Tooltip("시전자(caster)의 턴 종료 횟수 기준 지속")]
+    [Tooltip("시전자의 턴 시작 기준 지속")]
     public int durationCasterTurns = 2;
 
     [Header("Effect Mode")]
-    public SmokeEffectMode effectMode = SmokeEffectMode.HostilityVisibility;
-    [Tooltip("연막 타일에 서 있는 동안 적용할 Hostility 배수")]
-    public float visibilityHostilityFactor = 0.7f;
+    [Tooltip("기본값: SmokeHiddenBuff (연막 안에 있는 동안 타겟 불가)")]
+    public SmokeEffectMode effectMode = SmokeEffectMode.SmokeHiddenBuff;
+
+    [Header("Smoke Hidden (New)")]
+    [Tooltip("연막 안에 있는 동안 부여할 버프(적이 타겟으로 지정 불가)")]
+    public UnitStateBuffId smokeHiddenBuffState = UnitStateBuffId.SmokeHidden;
+
+    [Header("Agility Buff (Optional)")]
     [Tooltip("연막 타일에 서 있는 동안 적용할 AGI 배수(예: 1.7)")]
     public float agiMultiplier = 1.7f;
-    [Tooltip("AGI 버프에 사용할 상태 ID (StateStatModifierDB에 정의)")]
-    public UnitStateBuffId agiBuffState = UnitStateBuffId.AgiUp; // 새로 추가할 상태 아이디
-   
+    [Tooltip("AGI 버프에 사용할 버프 ID (StateStatModifierDB에 정의)")]
+    public UnitStateBuffId agiBuffState = UnitStateBuffId.Smoke_AgiUp;
+
     [Header("Targeting")]
-    public SkillTargetMode selectionMode = SkillTargetMode.Tile; // 타일 지목
+    public SkillTargetMode selectionMode = SkillTargetMode.Tile;
 
     [Header("Training")]
-    [Tooltip("훈련에서 자원 비용을 덮어쓸지 여부")]
     public bool trainingUseOverride = false;
-    [Tooltip("자원 감소가 적용될 훈련 루트 인덱스 (-1이면 비활성, 보통 0 = 1번 루트)")]
     [Range(-1, 2)] public int routeForOverride = 0;
-    [Tooltip("해당 루트에서 실제로 사용할 자원 비용")]
     public int trainingCostRoute = 0;
 
-    [Tooltip("연막 위에서 MP 회복을 활성화할지 여부")]
     public bool trainingEnableMpRegen = true;
-    [Tooltip("MP 회복이 적용될 훈련 루트 인덱스 (-1이면 비활성)")]
     [Range(-1, 2)] public int routeForMpRegen = 1;
-    [Tooltip("Route에서 사용할 MP 회복 비율(0~1)")]
     [Range(0f, 1f)] public float trainingMpRegenRatio = 0.3f;
 
-    [Tooltip("훈련에서 존 범위를 덮어쓸지 여부")]
     public bool trainingUseZoneAreaOverride = true;
-    [Tooltip("존 범위 오버라이드가 적용될 훈련 루트 인덱스 (-1이면 비활성)")]
     [Range(-1, 2)] public int routeForZoneAreaOverride = 2;
-    [Tooltip("훈련에서 사용할 존 범위 프리셋")]
-    public ParametricDamageSkill.AreaPreset trainingZoneAreaPreset =
-        ParametricDamageSkill.AreaPreset.Ring;
+    public ParametricDamageSkill.AreaPreset trainingZoneAreaPreset = ParametricDamageSkill.AreaPreset.Ring;
 
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }
 #endif
+
     void OnEnable()
     {
         targetMode = selectionMode;
-        power = 0f; // 피해 없음
+        power = 0f;
         school = DamageSchool.Physical;
         costResource = SkillCostResource.MP;
     }
@@ -85,7 +87,7 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
 
     public Tilemap GetTargetMap(BattleManager bm, BattleUnit caster)
     {
-        var prov = Shared.battleMapManager; // 프로젝트 맵 프로바이더 사용
+        var prov = Shared.battleMapManager;
         if (prov == null) return null;
         return (caster != null && caster.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
     }
@@ -94,18 +96,10 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     {
         if (!bm || !caster || !map) yield break;
 
-        var res = GetCostResource(caster);
-        int cost = GetEffectiveCost(caster);
-        if (cost > 0 && !caster.TryConsumeResource(res, cost))
-            yield break;
-
         var cells = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell)).ToList();
         if (cells.Count == 0) yield break;
 
-        CreateSmokeZoneRuntime(
-             bm, map, cells, originCell, caster, durationCasterTurns, visibilityHostilityFactor,
-            smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder
-        );
+        CreateSmokeZoneRuntime(bm, map, cells, originCell, caster, durationCasterTurns);
 
         yield break;
     }
@@ -119,32 +113,23 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     }
 
     void CreateSmokeZoneRuntime(
-    BattleManager bm,
-    Tilemap map,
-    List<Vector3Int> cells,
-    Vector3Int centerCell,
-    BattleUnit caster,
-    int durationTurns,
-    float factor,
-    GameObject vfxPrefab,
-    float yOffset,
-    string sortingLayer,
-    int sortingOrder)
+        BattleManager bm,
+        Tilemap map,
+        List<Vector3Int> cells,
+        Vector3Int centerCell,
+        BattleUnit caster,
+        int durationTurns)
     {
         var go = new GameObject("SmokeZoneRuntime");
         var comp = go.AddComponent<SmokeZoneRuntime>();
         go.transform.SetParent(bm.transform, false);
 
-        // 모드에 따라 파라미터 전달
-        comp.Initialize(bm,
-        map,
-        cells,
-        caster,
-        durationTurns,
-        effectMode == SmokeEffectMode.HostilityVisibility ? visibilityHostilityFactor : 1f);
+
+        comp.Initialize(bm, map, cells, caster, durationTurns);
 
         int route = GetRoute(caster);
-        // --- MP 회복 활성화 (지정 루트) ---
+
+        // --- MP 회복 옵션 (지정 루트) ---
         if (trainingEnableMpRegen &&
             routeForMpRegen >= 0 &&
             route == routeForMpRegen)
@@ -171,8 +156,9 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
             comp.OverrideAreaCells(ringCells);
         }
 
-        // Hostility / AGI 모드 설정
-        comp.SetEffectMode(effectMode, agiBuffState, agiMultiplier);
+        // 효과 모드 설정 (SmokeHidden / HostilityVisibility / AgilityBuff)
+        comp.SetEffectMode(effectMode, smokeHiddenBuffState, agiBuffState, agiMultiplier);
+
         // VFX 배치
         comp.AttachVfx(smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder, caster.team);
     }

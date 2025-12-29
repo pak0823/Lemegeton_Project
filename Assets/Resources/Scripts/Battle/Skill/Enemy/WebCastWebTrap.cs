@@ -5,13 +5,16 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 
 [CreateAssetMenu(menuName = "Battle/SkillAsset/Enemy/WebCast")]
-public class WebCastWebTrap : EnemySkill
+public class WebCastWebTrap : EnemySkill, IProjectileTileSkill
 {
     [Header("Web Trap")]
     public ProjectileController projectilePrefab;   // 스킬 전용 투사체 지정
     public float projectileSpeed = 3f;
     public WebTrapController trapPrefab; // 프리팹 필요(간단한 스프라이트/빈 오브젝트여도 OK)
     public string previewTagText = "WEB-CAST"; // 상태패널 등 라벨용(선택)
+
+    public ProjectileController GetProjectilePrefab(BattleUnit caster) => projectilePrefab;
+    public float GetProjectileSpeed(BattleUnit caster) => projectileSpeed;
 
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }  // 에디터에서 항상 Unit로 고정
@@ -56,24 +59,6 @@ public class WebCastWebTrap : EnemySkill
     //타일 대상으로도 바로 캐스팅 가능하도록(no-op 아님)
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
-        //if (bm == null || caster == null || map == null) yield break;
-
-        //bm.ShowSkillPreview(map, new[] { originCell });
-
-        //var cast = caster.GetComponent<EnemyCastState>();
-        //if (cast == null) cast = caster.gameObject.AddComponent<EnemyCastState>();
-        //cast.BeginCasting(new EnemyCastState.PendingCast
-        //{
-        //    owner = caster,
-        //    bm = bm,
-        //    map = map,
-        //    cell = originCell,
-        //    trapPrefab = trapPrefab,
-        //    projectilePrefab = projectilePrefab,
-        //    projectileSpeed = projectileSpeed
-        //});
-
-        //yield return caster.AnimateRanged();
         yield return null;
     }
 }

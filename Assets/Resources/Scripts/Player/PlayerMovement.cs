@@ -32,6 +32,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("타일 경로 이동 설정")]
     [SerializeField] private GameObject pathMarkerPrefab;   // 경로 표시용 프리팹
     [SerializeField] private GameObject pushMarkerPrefab; // Push 후보 타일 표시 전용
+    [SerializeField] private GameObject goalMarkerPrefab; // 목표 지점(끝부분) 전용 마커(노란 테두리)
 
     // 현재 선택된 경로(셀 단위)
     private List<Vector3Int> currentPathCells = new List<Vector3Int>();
@@ -49,6 +50,8 @@ public class PlayerMovement : MonoBehaviour
 
     // 상호작용 이동용으로 선택된 상자(있다면)
     private BoxInteract pendingChest = null;
+    private PortalController pendingPortal = null;
+    private TestNpc pendingNpc = null;
 
     // 현재 상호작용 대상(관찰/조사 버튼이 가리키는 대상)
     private Collider2D currentInteractTarget = null;
@@ -232,6 +235,8 @@ public class PlayerMovement : MonoBehaviour
         Collider2D clickedCollider = null;
         DescriptionData clickedDesc = null;
         PushObject clickedPush = null;
+        PortalController clickedPortal = null;
+        TestNpc clickedNpc = null;
 
         var hits = Physics2D.OverlapPointAll(wp);
         foreach (var h in hits)
@@ -268,6 +273,22 @@ public class PlayerMovement : MonoBehaviour
                 if (!clickedCollider)
                     clickedCollider = h;
             }
+
+            // Portal 감지
+            var portal = h.GetComponentInParent<PortalController>();
+            if (portal != null)
+            {
+                if (clickedPortal == null) clickedPortal = portal;
+                if (!clickedCollider) clickedCollider = h;
+            }
+
+            // NPC 감지
+            var npc = h.GetComponentInParent<TestNpc>();
+            if (npc != null)
+            {
+                if (clickedNpc == null) clickedNpc = npc;
+                if (!clickedCollider) clickedCollider = h;
+            }
         }
 
         // 왼쪽 클릭: 경로 프리뷰 or 이동 실행
@@ -286,10 +307,13 @@ public class PlayerMovement : MonoBehaviour
             }
 
             // 오브젝트(상자, NPC, 기타) 클릭
-            if (clickedChest != null || clickedCollider != null)
+            if (clickedChest != null || clickedPortal != null || clickedNpc != null || clickedCollider != null)
             {
                 // 목표가 될 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
-                Transform targetTr = clickedChest ? clickedChest.transform : clickedCollider.transform;
+                Transform targetTr = clickedChest ? clickedChest.transform :
+                                    (clickedPortal != null ? clickedPortal.transform :
+                                    (clickedNpc != null ? clickedNpc.transform :
+                                     clickedCollider.transform));
 
                 // 대상 셀
                 Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
@@ -338,13 +362,33 @@ public class PlayerMovement : MonoBehaviour
                     currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
                     currentDescData = clickedDesc;
                     pendingChest = clickedChest;
+                    pendingPortal = clickedPortal;
+                    pendingNpc = clickedNpc;
 
                     // 제자리에선 경로 프리뷰는 필요 없으니 호출해도 표시가 안 됨(Count < 2라서)
                     ShowPathPreview(currentPathCells);
 
                     // HintUI를 대상 위치에 표시 (조사/관찰/취소 버튼 모두)
-                    Shared.interactionHintUI?.ShowBothAt(targetTr);
-                    Shared.interactionHintUI?.ShowCancel();
+                    Shared.interactionHintUI?.HideAll();
+
+                    if (clickedPortal != null)
+                    {
+                        Shared.interactionHintUI?.ShowSurveyAt(targetTr, clickedPortal.GetHintLabel()); // "이동"
+                                                                                                        // Portal은 관찰 버튼 불필요하면 생략
+                    }
+                    else if (clickedNpc != null)
+                    {
+                        Shared.interactionHintUI?.ShowSurveyAt(targetTr, clickedNpc.GetHintLabel());     // "대화"
+                                                                                                         // 필요하면 관찰 버튼도:
+                        if (clickedDesc != null && !string.IsNullOrWhiteSpace(clickedDesc.description))
+                            Shared.interactionHintUI?.ShowCommunicationAt(targetTr, "관찰");
+                    }
+                    else
+                    {
+                        Shared.interactionHintUI?.ShowBothAt(targetTr); // 기존 상자/기타
+                    }
+
+                    Shared.interactionHintUI?.ShowCancelAt(targetTr);
                     return;
                 }
 
@@ -358,6 +402,8 @@ public class PlayerMovement : MonoBehaviour
                     currentPathCells.Clear();
                     ClearPathPreview();
                     pendingChest = null;
+                    pendingPortal = null;
+                    pendingNpc = null;
                     pathArrivalCallback = null;
                     currentInteractTarget = null;
                     currentDescData = null;
@@ -373,6 +419,8 @@ public class PlayerMovement : MonoBehaviour
                 currentDescData = clickedDesc;
 
                 pendingChest = clickedChest;
+                pendingPortal = clickedPortal;
+                pendingNpc = clickedNpc;
 
                 ShowPathPreview(newPath);
 
@@ -382,9 +430,7 @@ public class PlayerMovement : MonoBehaviour
                 return;
             }
 
-            // 2) 오브젝트가 아닌 "그냥 타일" 클릭인 경우
-            // 원거리 상자 상호작용이 예약된 상황에서는
-            // 타일 더블클릭으로는 이동을 시작하지 않는다.
+            // 오브젝트가 아닌 그냥 타일 클릭인 경우
             if (pendingChest != null)
             {
                 // 왼쪽 클릭은 무시 (버튼으로만 이동 시작)
@@ -449,6 +495,8 @@ public class PlayerMovement : MonoBehaviour
         pathArrivalCallback = null;
         currentInteractTarget = null;
         currentDescData = null;
+        pendingPortal = null;
+        pendingNpc = null;
         Shared.interactionHintUI?.HideAll();
     }
 
@@ -513,7 +561,15 @@ public class PlayerMovement : MonoBehaviour
             Vector3 world = floorTilemap.GetCellCenterWorld(cell);
             world.z = transform.position.z;
 
-            var marker = Instantiate(pathMarkerPrefab, world, Quaternion.identity);
+            bool isGoal = (i == cells.Count - 1);
+
+            GameObject prefabToUse = isGoal && goalMarkerPrefab != null
+                ? goalMarkerPrefab
+                : pathMarkerPrefab;
+
+            if (prefabToUse == null) continue;
+
+            var marker = Instantiate(prefabToUse, world, Quaternion.identity);
             activePathMarkers.Add(marker);
         }
 
@@ -965,6 +1021,38 @@ public class PlayerMovement : MonoBehaviour
         if (isMovingByPath)
             return;
 
+        // Portal/NPC 이동 후 실행 또는 즉시 실행
+        if (pendingPortal != null || pendingNpc != null)
+        {
+            var portal = pendingPortal;
+            var npc = pendingNpc;
+
+            // 이동 없이 즉시 실행(인접/제자리)
+            if (currentPathCells == null || currentPathCells.Count < 2)
+            {
+                if (portal != null) portal.UsePortal();
+                else if (npc != null) npc.Talk();
+
+                ClearPath();
+                pendingPortal = null;
+                pendingNpc = null;
+                return;
+            }
+
+            // 이동 후 실행
+            Action onArrive = () =>
+            {
+                if (portal != null) portal.UsePortal();
+                else if (npc != null) npc.Talk();
+            };
+
+            StartPathMove(currentPathCells, onArrive);
+
+            // 예약 정리(한 번만)
+            pendingPortal = null;
+            pendingNpc = null;
+            return;
+        }
 
         // Push 전용 분기
         if (pendingPushBox != null)

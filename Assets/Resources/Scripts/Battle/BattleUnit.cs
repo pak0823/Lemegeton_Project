@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.UI;
+using static UnityEditor.PlayerSettings;
 
 public enum Team { Player, Enemy }
 public class BattleUnit : MonoBehaviour
@@ -321,7 +322,6 @@ public class BattleUnit : MonoBehaviour
         if (applied > 0f)
         {
             applied *= HostilityGenerationMultiplier;
-            applied *= SmokeZoneRuntime.GetHostilityGenerationMultiplier(this);
         }
 
         // 음수로 내려가면 0 밑으로는 안 떨어지게 클램프
@@ -829,6 +829,18 @@ public class BattleUnit : MonoBehaviour
         HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
         OnDamaged?.Invoke(amount);
 
+        int dmg = Mathf.Max(0, amount);
+        HP = Mathf.Max(HP - dmg, 0);
+        OnDamaged?.Invoke(dmg);
+
+        // FloatingText (Damage)
+        if (dmg > 0)
+        {
+            var pos = transform.position + Vector3.up * 0.15f;
+            // TMP RichText로 빨간색 출력
+            FloatingTextManager.Instance?.Spawn(pos, $"<color=#FF0000>{dmg}</color>");
+        }
+
         if (HP == 0) //죽었을 시
         {
             if (animator && Team.Player == team) animator.SetBool("hurt", false);
@@ -923,9 +935,26 @@ public class BattleUnit : MonoBehaviour
 
         float timeout = Mathf.Max(MinTimeout, timeoutOverride ?? defaultAnimEndTimeout);
 
+        yield return null;
+
         while (!ended && timeout > 0f)
         {
             timeout -= Time.deltaTime;
+
+            // 이벤트가 누락되었더라도, 현재 재생 중인 애니메이션이 끝났다면 종료 처리
+            var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+            // 태그(Tag)를 쓰거나, 단순히 "Attack"이나 "Casting" 등 핵심 동작 중인지 체크
+            // 여기서는 진행도가 1.0(100%)을 넘었고, Loop가 아닌 경우 강제 종료
+            if (stateInfo.normalizedTime >= 1.0f && !stateInfo.loop)
+            {
+                // 트랜지션 중이 아닐 때만 체크 (트랜지션 중에는 이전/다음 상태가 섞임)
+                if (!animator.IsInTransition(0))
+                {
+                    // Debug.Log($"[SafetyBreak] {name} 애니메이션 종료 감지되어 강제 넘김.");
+                    ended = true;
+                }
+            }
             yield return null;
         }
 

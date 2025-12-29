@@ -260,17 +260,19 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     }
     bool IsBackMove(Team _team, Vector3Int _start, Vector3Int _dest)
     {
-        // 프로젝트 기준: 플레이어는 오른쪽( +X )이 전방, 적은 왼쪽( -X )이 전방이라고 가정
-        if (_team == Team.Player)
+        var backLabels = GetDirectionsFor(_team, _start, DirectionMode.TeamBasedBack, backMode);
+
+        foreach (var label in backLabels)
         {
-            // X 감소(왼쪽) = 뒤로 물러나는 방향
-            return _dest.x < _start.x;
+            var step = GetStepAt(_start, label);                 // 홀짝 컬럼 반영
+            var expected = new Vector3Int(_start.x + step.x, _start.y + step.y, _start.z);
+            if (expected == _dest)
+                return true;
         }
-        else // Team.Enemy
-        {
-            // X 증가(오른쪽) = 뒤로 물러나는 방향
-            return _dest.x > _start.x;
-        }
+
+        // 1칸이 아닌 이동(여러 칸) 대비 fallback (기존 로직)
+        if (_team == Team.Player) return _dest.x < _start.x;
+        else return _dest.x > _start.x;
     }
 
     bool IsCellWithin(Tilemap _map, Vector3Int _cell) => _map.cellBounds.Contains(_cell);

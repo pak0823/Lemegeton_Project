@@ -10,7 +10,7 @@ public class SceneTransitionManager : MonoBehaviour
     [Header("페이드용 CanvasGroup")]
     public CanvasGroup fader;
     [Header("페이드 지속시간")]
-    public float fadeDuration = 1f;
+    private float fadeDuration = 2f;
 
     [Header("전투 복귀 컨텍스트")]
     public string pendingReturnScene;         // 돌아갈 탐험 씬 이름
@@ -37,7 +37,7 @@ public class SceneTransitionManager : MonoBehaviour
     public int pendingPlannedMoveVigorCost = 0;
     public bool HasDeferredMoveCost => pendingPlannedMoveVigorCost > 0;
 
-    [SerializeField] private float encounterBannerSeconds = 0.8f;
+    private float encounterBannerSeconds = 1.5f;
 
     public void SaveExplorationSnapshot(ExplorationSnapshot snap)
     {
@@ -232,18 +232,22 @@ public class SceneTransitionManager : MonoBehaviour
         // 전투 진입 전까지 입력 차단(타일 클릭 등)
         Shared.PlayerMovement?.LockMovementIndefinite();
 
+        string testSecne = "TestScene";//임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
+
         var presenter = ExplorationModalPresenter.Instance;
         if (presenter == null)
         {
             // 프레젠터가 없으면 즉시 진입(안전 fallback)
-            FadeToScene(battleScene);
+            //FadeToScene(battleScene);
+            FadeToScene(testSecne);//임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
             return;
         }
 
         string msg = $"{monsterName}과 마주쳤습니다. 전투에 돌입합니다.";
         presenter.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
         {
-            FadeToScene(battleScene);
+            //FadeToScene(battleScene);
+            FadeToScene(testSecne); //임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
         });
     }
 

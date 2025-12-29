@@ -21,13 +21,13 @@ public enum UnitStateId
 public enum UnitStateBuffId
 {
     None = 0,
-    AgiUp = 1,  //민첩 강화
+    Smoke_AgiUp = 1,  //민첩 강화
     Smoke_MagicUp = 2, //총명 강화
     InsightDown = 3, //통찰 약화
-
     Target_AgiDown = 4, // 민첩 디버프
     Self_AtkUp = 5,     // 물리 대미지 버프
 
+    SmokeHidden = 99,   //연막 은신 효과
     AmbushAgiCancel = 100   //잠복 AGI 페널티 상쇄용
 }
 

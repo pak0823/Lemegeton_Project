@@ -131,7 +131,7 @@ public class TurnBarUI : MonoBehaviour
 
         // 보조 판정: atb가 아주 작아졌으면(턴이 막 끝나서 리셋된 상태) active 아이콘 정리
         // (원래보다 느슨한 임계값을 사용해서 실수/소수 오류 방지)
-        const float kEps = 0.2f; // 필요시 0.05 ~ 0.2 사이로 조절
+        const float kEps = 0.25f; // 필요시 0.05 ~ 0.2 사이로 조절
 
         // 턴 종료(= ATB가 0으로 리셋) 프레임에 액티브 표시 정리
         if (hideInBarWhileActive && activeUnit != null && _battleunit == activeUnit && _atb <= kEps)

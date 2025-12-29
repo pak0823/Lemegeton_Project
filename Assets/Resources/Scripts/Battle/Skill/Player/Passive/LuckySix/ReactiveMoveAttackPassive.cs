@@ -60,6 +60,9 @@ public class ReactiveMoveAttackPassive : PassiveAsset
         if (!_reactionScheduled)
         {
             _reactionScheduled = true;
+
+            if (_battle != null) _battle.RegisterReactionLock();
+
             _battle.StartCoroutine(Co_ReactiveAttack());
         }
     }
@@ -71,35 +74,49 @@ public class ReactiveMoveAttackPassive : PassiveAsset
 
         _reactionScheduled = false;
 
-        if (_owner == null || _battle == null) yield break;
-        if (_owner.IsDead || _owner.IsRetreated) yield break;
-
-        // 여전히 이 유닛의 차례라면(턴이 넘어왔으면) 반응하지 않음
-        if (_battle.ActingUnit == _owner) yield break;
+        // 조건을 만족하지 못해 중단될 경우 락 해제 필수
+        if (_owner == null || _battle == null || _owner.IsDead || _owner.IsRetreated || _battle.ActingUnit == _owner)
+        {
+            _battle?.UnregisterReactionLock(); // [해제]
+            yield break;
+        }
 
         // 유효한 적만 남기기
         _candidates.RemoveAll(u => u == null || u.IsDead || u.IsRetreated || u.team == _owner.team);
-        if (_candidates.Count == 0) yield break;
+        if (_candidates.Count == 0)
+        {
+            _battle.UnregisterReactionLock();
+            yield break;
+        }
 
         // 이동한 적이 둘 이상이면 그 중 하나를 무작위로 선택
         var target = _candidates[Random.Range(0, _candidates.Count)];
         _candidates.Clear();
 
-        if (target == null || target.IsDead || target.IsRetreated) yield break;
+        if (target == null || target.IsDead || target.IsRetreated)
+        {
+            _battle.UnregisterReactionLock();
+            yield break;
+        }
 
         var skill = GetReactiveSkill();
-        if (skill == null) yield break;
+        if (skill == null)
+        {
+            _battle.UnregisterReactionLock();
+            yield break;
+        }
 
-        // MP/쿨다운을 존중할지 여부는 기획에 따라 조절 가능
-        if (_owner.IsSkillOnCooldown(skill)) yield break;
-        if (!_owner.HasMP(skill.mpCost)) yield break;
+        SkillAsset skillToUse = skill;
 
         bool doGapClose = useGapClose && skill.ShouldGapCloseToTarget(_owner, target);
 
         _owner.AnnouncePassive(displayName);    // 패시브 발동 라벨 호출
 
         // 행동 토큰/턴에 영향 없는 리액션 공격 실행
-        _battle.StartReactiveAttack(_owner, target, skill, doGapClose);
+        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose);
+
+        // 공격이 다 끝난 뒤에 락 해제
+        _battle.UnregisterReactionLock();
     }
 
     private SkillAsset GetReactiveSkill()

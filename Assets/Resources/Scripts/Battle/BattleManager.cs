@@ -110,6 +110,7 @@ public class BattleManager : MonoBehaviour
     Vector3Int _pendingKnockbackDest;
     //skill extra move
     bool _isPostSkillMoveInProgress = false;
+    private int _reactionLocks = 0; // 실행 중인 리액션 개수
 
     [Header("DBs")]
     [SerializeField] private StateStatModifierDB stateStatDb;
@@ -119,9 +120,6 @@ public class BattleManager : MonoBehaviour
     public TrainingDB trainingDB;   // 인스펙터로 TrainingDB 할당
     public TrainingDB Training => trainingDB;
 
-    [Header("Projectile/VFX")]
-    public GameObject projectilePrefab;     // 투사체
-
     //점프 애니메이션 속도 및 높이 값
     float jumpDuration = 0.08f;     // 시간 기반
     float jumpArc = 0.2f;
@@ -129,6 +127,15 @@ public class BattleManager : MonoBehaviour
     public static void ClearStatic()
     {
         OnAnyUnitTurnStarted = null;
+    }
+    public void RegisterReactionLock()
+    {
+        _reactionLocks++;
+    }
+
+    public void UnregisterReactionLock()
+    {
+        _reactionLocks = Mathf.Max(0, _reactionLocks - 1);
     }
 
     public void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
@@ -834,6 +841,11 @@ public class BattleManager : MonoBehaviour
             }
             yield break;
         }
+        // 리액션 대기
+        while (_reactionLocks > 0)
+        {
+            yield return null;
+        }
 
         // 평소처럼 이동 행동 1회 소비
         OnActionConsumed(act);
@@ -1234,7 +1246,7 @@ public class BattleManager : MonoBehaviour
         if (usc == null) return false;
 
         // 잠복 상태면 적이 타겟팅할 수 없음
-        return usc.Has(UnitStateId.Ambush);
+        return usc.Has(UnitStateId.Ambush) || usc.HasBuff(UnitStateBuffId.SmokeHidden);
     }
     SelfAmbushSkill GetAmbushSkillFor(BattleUnit unit)
     {
@@ -1283,8 +1295,9 @@ public class BattleManager : MonoBehaviour
         yield return new WaitForSeconds(0.5f); // 살짝 텀
 
         // 생존 플레이어 수집
-        var players = FindObjectsOfType<BattleUnit>()
-            .Where(u => u.team == Team.Player && !u.IsDead && !IsAmbushHiddenTarget(u))
+        var players = Object.FindObjectsOfType<BattleUnit>()
+            .Where(u => u != null && u.team == Team.Player && !u.IsDead)
+            .Where(u => !SkillAsset.IsUntargetableByEnemy(u)) // 잠복연막 은신 모두 제외
             .ToList();
 
         // 대상 지정 가능 플레이어가 아무도 없으면 이번 적 턴은 할 대상이 없다고 보고 종료
@@ -1576,7 +1589,7 @@ public class BattleManager : MonoBehaviour
 
     public void SelectSkill(int index)
     {
-        Debug.Log($"[BattleManager] SelectSkill({index}) 호출");
+        //Debug.Log($"[BattleManager] SelectSkill({index}) 호출");
 
         var list = acting?.data?.skills;
         if (list == null || index < 0 || index >= list.Length) return;
@@ -1949,8 +1962,16 @@ public class BattleManager : MonoBehaviour
         }
         else
         {
-            // 기존: 투사체/공격 연출 경로
-            StartCoroutine(Co_ProjectileSkillThenFinishSO(currentSkillSO, map, originCell, acting));
+            // “투사체 스킬”만 투사체 루트로
+            if (currentSkillSO is IProjectileTileSkill)
+            {
+                StartCoroutine(Co_ProjectileSkillThenFinishSO(currentSkillSO, map, originCell, acting));
+            }
+            else
+            {
+                // 투사체가 본질이 아닌 타일 스킬: 애니메이션 후 즉시 Resolve
+                StartCoroutine(Co_AnimateTileSkillThenFinishSO(currentSkillSO, map, originCell, acting));
+            }
         }
     }
 
@@ -2017,6 +2038,12 @@ public class BattleManager : MonoBehaviour
     public Coroutine StartReactiveAttack(BattleUnit caster, BattleUnit target, SkillAsset skill, bool doGapClose)
     {
         if (caster == null || target == null || skill == null) return null;
+
+        Debug.Log(
+    $"[ReactiveAttack] caster='{caster?.name}' target='{target?.name}' " +
+    $"skill='{skill?.name}' type='{skill?.GetType().Name}' " +
+    $"frame={Time.frameCount}");
+
         return StartCoroutine(Co_ReactiveGapCloseThenResolveOnTargetSO(skill, caster, target, doGapClose));
     }
 
@@ -2116,77 +2143,151 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    // BattleManager.cs 내부
+    // 전제: skill is IProjectileTileSkill 인 경우에만 호출
+
     IEnumerator Co_ProjectileSkillThenFinishSO(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
     {
         state = BattleState.Resolving;
 
         bool castEnded = false;
         bool projEnded = false;
-        bool fired = false; // 임팩트(발사) 수신 여부
+        bool fired = false;
 
-        //훈련 포함 최종 MP코스트를 계산
+        bool aborted = false;
+        GameObject liveProjectile = null;
+
+        // 최종 MP 코스트
         int cost = skill.GetEffectiveCost(caster);
 
-        // 캐스터 모션 종료 훅
+        // 1) 투사체 스펙 확보 (스킬 → 캐스터 기본값 순)
+        var projSkill = skill as IProjectileTileSkill;
+        if (projSkill == null)
+        {
+            Debug.LogError($"[ProjectileSkill] '{skill?.name}' is not IProjectileTileSkill but entered projectile coroutine.");
+            FinishActionAfterSkill();
+            yield break;
+        }
+
+        ProjectileController projPrefab = projSkill.GetProjectilePrefab(caster);
+        float projSpeed = projSkill.GetProjectileSpeed(caster);
+        if (projSpeed <= 0f) projSpeed = 3f;
+
+        // (선택) 캐스터 기본 투사체 fallback
+        if (projPrefab == null && caster != null)
+            projPrefab = caster.defaultProjectilePrefab; // 프로젝트에 없다면 제거
+
+        // 투사체 프리팹이 없으면 안전 폴백(즉시 Resolve)
+        if (projPrefab == null)
+        {
+            Debug.LogWarning($"[ProjectileSkill] No projectile prefab for skill='{skill?.name}'. Falling back to immediate ResolveOnTile.");
+
+            if (!caster.TryConsumeMP(cost))
+            {
+                UnlockSkillConfirm();
+                Debug.Log("[Skill] 즉시 Resolve 폴백 시 MP 부족 → 취소");
+            }
+            else
+            {
+                yield return skill.ResolveOnTile(this, map, cell, caster);
+                caster.ApplyCooldown(skill);
+            }
+
+            FinishActionAfterSkill();
+            yield break;
+        }
+
+        // 2) 캐스트 종료 이벤트 연결
         System.Action onCastEnd = null;
-        onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
+        onCastEnd = () =>
+        {
+            caster.OnAttackEnded -= onCastEnd;
+            castEnded = true;
+        };
         caster.OnAttackEnded += onCastEnd;
 
-        // 발사 타이밍 훅: 투사체 생성 + 도착 시 SO 해결
+        // 3) 거리 기반 타임아웃(투사체 비행시간 + 여유, 최소 2초)
+        float expectedFlight = 0f;
+        if (map != null && caster != null)
+        {
+            Vector3 startW0 = caster.transform.position;
+            Vector3 targetW0 = map.GetCellCenterWorld(cell);
+            float dist = Vector3.Distance(startW0, targetW0);
+            expectedFlight = dist / Mathf.Max(0.01f, projSpeed);
+        }
+        float timeout = Mathf.Max(2f, expectedFlight + 0.75f);
+
+        // 4) 임팩트(발사) 이벤트 연결: 발사 시 투사체 생성 → 도착 콜백에서 Resolve
         System.Action onFire = null;
         onFire = () =>
         {
             caster.OnAttackImpact -= onFire;
-            fired = true; // 임팩트 수신
+            fired = true;
 
-            // 발사 순간 최종 차감
+            // 발사 시점에 MP 차감
             if (!caster.TryConsumeMP(cost))
             {
                 UnlockSkillConfirm();
                 Debug.Log("[Skill] 발사 시 MP 부족 → 취소");
-                projEnded = true; // 종료 플래그만 세우고 끝
+                projEnded = true;
                 return;
             }
 
-            if (projectilePrefab != null)
+            if (aborted)
             {
-                var startW = caster.transform.position;
-                var targetW = map.GetCellCenterWorld(cell);
-                var projectilePrefab = Instantiate(this.projectilePrefab, startW, Quaternion.identity);
-                var projectileController = projectilePrefab.GetComponent<ProjectileController>();
-                if (projectileController != null)
-                {
-                    projectileController.Init(startW, targetW,
-                                            () => StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
-                                            {
-                                                caster.ApplyCooldown(skill);
-                                                projEnded = true;
-                                            })),
-                                            speedUnitsPerSec: 3f);
-                }
-                else
-                {
-                    StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, () =>
+                projEnded = true;
+                return;
+            }
+
+            Vector3 startW = caster.transform.position;
+            Vector3 targetW = map.GetCellCenterWorld(cell);
+
+            liveProjectile = Instantiate(projPrefab.gameObject, startW, Quaternion.identity);
+            var projectileController = liveProjectile.GetComponent<ProjectileController>();
+
+            if (projectileController != null)
+            {
+                projectileController.Init(
+                    startW,
+                    targetW,
+                    () =>
                     {
-                        StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () => { projEnded = true; }));
-                    }));
-                }
+                        if (aborted) return;
+
+                        StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+                        {
+                            caster.ApplyCooldown(skill);
+                            projEnded = true;
+                        }));
+                    },
+                    speedUnitsPerSec: projSpeed
+                );
             }
             else
             {
-                StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () => { projEnded = true; }));
+                // ProjectileController가 없는 프리팹이면 fallback move 후 Resolve
+                StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, () =>
+                {
+                    if (aborted) return;
+
+                    StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+                    {
+                        caster.ApplyCooldown(skill);
+                        projEnded = true;
+                    }));
+                }));
             }
         };
         caster.OnAttackImpact += onFire;
 
+        // 5) 애니메이션 실행
         string trigger = caster.GetAnimTriggerForSkill(skill);
-        // 근접/원거리 animKind에 따라 Attack vs Ranged 중 선택할지 결정
         if (skill.animKind == SkillAnimKind.Ranged)
             yield return caster.AnimateRanged(trigger);
         else
             yield return caster.AnimateAttack(null, trigger);
 
-        // 임팩트 이벤트를 못 받았을 때: 여기서 직접 MP 차감 후 즉시 해결
+        // 6) 임팩트 이벤트를 못 받았으면 폴백(즉시 Resolve)
         if (!fired && !projEnded)
         {
             if (!caster.TryConsumeMP(cost))
@@ -2203,10 +2304,98 @@ public class BattleManager : MonoBehaviour
             }
         }
 
-
-        // 두 조건 모두 충족 대기
-        float timeout = 2f;
+        // 7) 캐스트 종료 + 투사체 Resolve 종료까지 대기(타임아웃 포함)
         while (!(castEnded && projEnded) && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
+        // 8) 아직도 안 끝났다면(스턱/비정상) 중단 처리: 콜백 무효화 + 투사체 제거
+        if (!(castEnded && projEnded))
+        {
+            aborted = true;
+
+            if (liveProjectile != null)
+            {
+                Destroy(liveProjectile);
+                liveProjectile = null;
+            }
+
+            projEnded = true;
+        }
+
+        FinishActionAfterSkill();
+    }
+
+
+    //비투사체 타일 스킬용
+    IEnumerator Co_AnimateTileSkillThenFinishSO(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
+    {
+        state = BattleState.Resolving;
+
+        bool castEnded = false;
+        bool resolved = false;
+        bool fired = false;
+
+        int cost = skill.GetEffectiveCost(caster);
+
+        System.Action onCastEnd = null;
+        onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
+        caster.OnAttackEnded += onCastEnd;
+
+        System.Action onImpact = null;
+        onImpact = () =>
+        {
+            caster.OnAttackImpact -= onImpact;
+            fired = true;
+
+            if (!caster.TryConsumeMP(cost))
+            {
+                UnlockSkillConfirm();
+                Debug.Log("[Skill] 임팩트 시 MP 부족 → 취소");
+                resolved = true;
+                return;
+            }
+
+            StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+            {
+                caster.ApplyCooldown(skill);
+                resolved = true;
+            }));
+        };
+        caster.OnAttackImpact += onImpact;
+
+        // 애니메이션 실행 (원거리면 Ranged, 아니면 Attack)
+        string trigger = caster.GetAnimTriggerForSkill(skill);
+        if (skill.animKind == SkillAnimKind.Ranged)
+            yield return caster.AnimateRanged(trigger);
+        else
+            yield return caster.AnimateAttack(null, trigger);
+
+        // 다음 공격 임팩트에서 이전 스킬이 실행되지 않도록 무조건 해제
+        caster.OnAttackImpact -= onImpact;
+
+        // 임팩트 이벤트가 없으면 폴백: 즉시 Resolve
+        if (!fired && !resolved)
+        {
+            if (!caster.TryConsumeMP(cost))
+            {
+                UnlockSkillConfirm();
+                Debug.Log("[Skill] 폴백 시 MP 부족 → 취소");
+                resolved = true;
+            }
+            else
+            {
+                yield return skill.ResolveOnTile(this, map, cell, caster);
+                caster.ApplyCooldown(skill);
+                resolved = true;
+            }
+        }
+
+        // 안전 대기 (resolve 완료 + 캐스트 종료)
+        float timeout = 5f; // 투사체가 없으니 넉넉히
+        while (!(castEnded && resolved) && timeout > 0f)
         {
             timeout -= Time.deltaTime;
             yield return null;
@@ -2714,13 +2903,22 @@ public class BattleManager : MonoBehaviour
     {
         var fromCell = unit.Cell;
         grid.SetOccupied(unit.team, fromCell, false);
+
+        // 이동 애니메이션 + MoveTo 호출 (여기서 OnMoved 이벤트 발생 -> 패시브 발동)
         yield return unit.AnimateMoveTo(map, toCell);
+
         grid.SetOccupied(unit.team, unit.Cell, true);
 
         // 이동 선택 종료
         _isPostSkillMoveInProgress = false;
 
-        // 이 스킬은 '공격'으로 간주되어 행동 토큰 1개를 소비하고 턴을 마무리
+        // 패시브 리액션이 걸려있다면, 끝날 때까지 대기
+        while (_reactionLocks > 0)
+        {
+            yield return null;
+        }
+
+        // 모든 리액션이 끝난 후 행동 소비 및 턴 종료
         OnActionConsumed(BattleAction.Attack);
     }
 
