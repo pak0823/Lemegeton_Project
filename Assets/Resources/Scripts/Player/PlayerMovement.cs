@@ -11,10 +11,12 @@ using TMPro;
 public class PlayerMovement : MonoBehaviour
 {
     [Header("타일맵 설정")]
-    public Tilemap floorTilemap;
+    public List<Tilemap> floorMaps = new List<Tilemap>();
+    public List<Tilemap> obstacleMaps = new List<Tilemap>();
     public Tilemap wallTilemap;
     public float defaultMoveSpeed = 2f;
     public LayerMask impassableLayerMask;
+    public Tilemap floorTilemap => (floorMaps != null && floorMaps.Count > 0) ? floorMaps[0] : null;
 
     private Rigidbody2D rb;
     private List<Vector3> path = new();
@@ -73,6 +75,11 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float pathCostLabelScale = 0.05f;
     private TextMeshPro _pathCostTMP = null;
     private GameObject _pathCostLabelGO = null;
+
+    [Header("높이 이동 설정")]
+    public float tileHeightOffset = 0.1f; // 타일맵 한 층당 Y축 오프셋 (에디터 설정값과 맞춰주세요)
+    public AnimationCurve jumpCurve;      // 점프 곡선 (Inspector에서 산 모양으로 설정)
+    public float jumpHeightMultiplier = 0.5f; // 점프 높이 배율
 
     [SerializeField] private LayerMask encounterLayerMask;
     [SerializeField] private string battleSceneName = "BattleScene"; // 실제 전투씬 이름으로
@@ -143,7 +150,7 @@ public class PlayerMovement : MonoBehaviour
                 var cam = Camera.main;
                 float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
                 var wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-                wp.z = transform.position.z;
+                wp.z = 0;
 
                 var clickedCell = floorTilemap.WorldToCell(wp);
 
@@ -225,10 +232,13 @@ public class PlayerMovement : MonoBehaviour
         Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x,
                                                         Input.mousePosition.y,
                                                         zDist));
-        wp.z = transform.position.z;
+        wp.z = 0;
 
-        Vector3Int clickedCell = floorTilemap.WorldToCell(wp);
+        Vector3Int clickedCell = GetClickedCellWithHeight(wp);
         Vector3Int currentCell = floorTilemap.WorldToCell(rb.position);
+
+        clickedCell.z = 0;
+        currentCell.z = 0;
 
         // 먼저, 클릭 지점에 상호작용 가능한 오브젝트가 있는지 검사
         BoxInteract clickedChest = null;
@@ -447,6 +457,12 @@ public class PlayerMovement : MonoBehaviour
                 return;
             }
 
+            if (!IsWalkableCell(clickedCell))
+            {
+                Debug.Log($"[이동 불가] 좌표: {clickedCell} - 바닥이 없거나 벽/장애물이 있습니다.");
+                return;
+            }
+
             // 새 경로 계산
             var newPath2 = FindPath(currentCell, clickedCell);
 
@@ -527,6 +543,31 @@ public class PlayerMovement : MonoBehaviour
     }
 
     #region Movement
+    public Tilemap GetWalkableMapAt(Vector3Int cell)
+    {
+        if (floorMaps == null) return null;
+        foreach (var map in floorMaps)
+        {
+            if (map.HasTile(cell)) return map;
+        }
+        return null;
+    }
+    // 해당 좌표의 높이(층수)를 반환 (0, 1, 2...)
+    int GetTileHeightIndex(Vector3Int cell)
+    {
+        if (floorMaps == null) return 0;
+
+        // 위층부터 검사 (높은 층이 우선)
+        for (int i = floorMaps.Count - 1; i >= 0; i--)
+        {
+            if (floorMaps[i].HasTile(cell))
+            {
+                return i; // i가 곧 높이(층수)
+            }
+        }
+        return 0; // 바닥이 없으면 0층으로 간주
+    }
+
     // 화면에서 경로 표시 제거
     void ClearPathPreview()
     {
@@ -558,8 +599,14 @@ public class PlayerMovement : MonoBehaviour
         for (int i = 0; i < cells.Count; i++)
         {
             Vector3Int cell = cells[i];
+
+            // 해당 셀이 몇 층인지 확인
+            int layerIndex = GetTileHeightIndex(cell);
+
+            // 기본 좌표에 층수만큼 높이(Offset) 더하기
             Vector3 world = floorTilemap.GetCellCenterWorld(cell);
-            world.z = transform.position.z;
+
+            world.z = 0;
 
             bool isGoal = (i == cells.Count - 1);
 
@@ -573,7 +620,7 @@ public class PlayerMovement : MonoBehaviour
             activePathMarkers.Add(marker);
         }
 
-        // === 목표 지점에 총 필요 활기 표시 ===
+        // 목표 지점에 총 필요 활기 표시
         var vigor = Shared.VigorManager;
         if (vigor != null && floorTilemap != null && cells != null && cells.Count > 0)
         {
@@ -581,8 +628,10 @@ public class PlayerMovement : MonoBehaviour
             int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
 
             Vector3Int goalCell = cells[cells.Count - 1];
+
             Vector3 goalWorld = floorTilemap.GetCellCenterWorld(goalCell);
-            goalWorld.z = transform.position.z;
+            int goalLayerIndex = GetTileHeightIndex(goalCell);
+            goalWorld.z = 0;
 
             if (_pathCostLabelGO == null)
             {
@@ -864,6 +913,128 @@ public class PlayerMovement : MonoBehaviour
         ClearPathPreview();
     }
 
+    // 높이 오프셋을 고려하여 실제로 클릭된 타일 좌표를 찾아내는 함수
+    [SerializeField] private float clickHitRadius = 0.7f;
+
+    Vector3Int GetClickedCellWithHeight(Vector3 mouseWorldPos)
+    {
+        // 1. 모든 맵 수집
+        List<Tilemap> allMaps = new List<Tilemap>();
+        if (obstacleMaps != null) allMaps.AddRange(obstacleMaps);
+        if (floorMaps != null) allMaps.AddRange(floorMaps);
+
+        if (allMaps.Count == 0 && floorTilemap != null)
+            return floorTilemap.WorldToCell(mouseWorldPos);
+
+        // 2. 최적의 후보를 저장할 변수들
+        Vector3Int bestCell = Vector3Int.zero;
+        bool foundAny = false;
+
+        // 우선순위 기록용 (초기값: 가장 낮은 우선순위)
+        int bestSortingOrder = int.MinValue;  // 1순위: 그리기 순서 (높을수록 위)
+        int bestYPriority = int.MaxValue;     // 2순위: Y좌표 (작을수록 앞)
+        float bestDistance = float.MaxValue;  // 3순위: 거리 (가까울수록 좋음)
+
+        // 3. 모든 맵의 모든 가능성 검사
+        foreach (var map in allMaps)
+        {
+            if (map == null) continue;
+
+            // 맵의 Sorting Order 가져오기 (눈에 보이는 순서)
+            int currentSortingOrder = 0;
+            if (map.TryGetComponent<TilemapRenderer>(out var renderer))
+                currentSortingOrder = renderer.sortingOrder;
+
+            // 시각적 높이 계산 (Tile Anchor 보정값 추정)
+            float visualHeight = 0f;
+            int floorIndex = floorMaps.IndexOf(map);
+            if (floorIndex >= 0) visualHeight = floorIndex * tileHeightOffset;
+
+            // 마우스 위치 역보정
+            Vector3 adjustedPos = mouseWorldPos;
+            adjustedPos.y -= visualHeight;
+            Vector3Int centerCell = map.WorldToCell(adjustedPos);
+
+            // 주변 3x3 탐색
+            for (int x = -1; x <= 1; x++)
+            {
+                for (int y = -1; y <= 1; y++)
+                {
+                    Vector3Int checkCell = centerCell + new Vector3Int(x, y, 0);
+
+                    if (map.HasTile(checkCell))
+                    {
+                        Vector3 cellCenterLogic = map.GetCellCenterWorld(checkCell);
+                        Vector3 cellCenterVisual = cellCenterLogic + Vector3.up * visualHeight;
+
+                        float dist = Vector2.Distance(mouseWorldPos, cellCenterVisual);
+
+                        // 클릭 범위 안에 들어왔다면 후보로 등록
+                        if (dist <= clickHitRadius)
+                        {
+                            // === [우선순위 경쟁] ===
+                            bool isBetter = false;
+
+                            if (!foundAny)
+                            {
+                                isBetter = true; // 첫 후보
+                            }
+                            else
+                            {
+                                // 1. Sorting Order가 높으면 무조건 승리 (예: 2층 > 1층 > 물)
+                                if (currentSortingOrder > bestSortingOrder)
+                                {
+                                    isBetter = true;
+                                }
+                                // 2. Sorting Order가 같으면, 화면 앞쪽(Y가 작은) 타일이 승리
+                                else if (currentSortingOrder == bestSortingOrder)
+                                {
+                                    if (checkCell.y < bestYPriority)
+                                    {
+                                        isBetter = true;
+                                    }
+                                    // 3. Y좌표도 같으면(같은 위치 중첩), 거리 가까운 순
+                                    else if (checkCell.y == bestYPriority)
+                                    {
+                                        if (dist < bestDistance)
+                                        {
+                                            isBetter = true;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 최고 기록 갱신
+                            if (isBetter)
+                            {
+                                bestCell = checkCell;
+                                bestCell.z = 0;
+
+                                bestSortingOrder = currentSortingOrder;
+                                bestYPriority = checkCell.y;
+                                bestDistance = dist;
+                                foundAny = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (foundAny)
+        {
+            return bestCell;
+        }
+
+        // 실패 시 기본값
+        if (floorTilemap != null)
+        {
+            Vector3Int baseCell = floorTilemap.WorldToCell(mouseWorldPos);
+            baseCell.z = 0;
+            return baseCell;
+        }
+        return Vector3Int.zero;
+    }
     IEnumerator Co_MoveAlongPath(List<Vector3Int> cells)
     {
         // 안전하게 로컬로 복사(중간에 외부에서 리스트가 바뀌는 경우 방지)
@@ -880,23 +1051,46 @@ public class PlayerMovement : MonoBehaviour
             // 시작 셀은 현재 위치라고 가정, 1번째 인덱스부터 끝까지 순서대로 이동
             for (int i = 1; i < cells.Count; i++)
             {
-                Vector3 start = rb.position;
-                Vector3 end = floorTilemap.GetCellCenterWorld(cells[i]);
-                end.z = transform.position.z;
+                // 높이 계산 및 시작/목표 지점 설정
 
-                // 방향 벡터 및 거리 계산
-                Vector2 to = end - start;
-                float dist = to.magnitude;
-                if (dist < 0.0001f)
-                    continue;
+                // 이전 타일(출발)과 현재 타일(도착)의 층수(Index) 구하기
+                Vector3Int startCell = cells[i - 1];
+                Vector3Int endCell = cells[i];
 
-                Vector2 dir = to / dist;
+                int startLayerIndex = GetTileHeightIndex(startCell);
+                int endLayerIndex = GetTileHeightIndex(endCell);
+
+                Debug.Log($"이동: {startCell} -> {endCell} | 층수: {startLayerIndex}층 -> {endLayerIndex}층 | 점프여부: {endLayerIndex - startLayerIndex != 0}");
+
+                // 기본 월드 좌표 가져오기 (가장 밑바닥 타일맵 기준)
+                // (어차피 X, Y 그리드 간격은 같으므로 floorTilemap 사용)
+                Vector3 startBasePos = floorTilemap.GetCellCenterWorld(startCell);
+                Vector3 endBasePos = floorTilemap.GetCellCenterWorld(endCell);
+
+                // 층수에 따른 Y축 오프셋(0.1) 더하기 (시각적 높이 적용)
+                // 공식: 기본좌표 + (층수 * 층당높이)
+                Vector3 startPos = startBasePos + Vector3.up * (startLayerIndex * tileHeightOffset);
+                Vector3 endPos = endBasePos + Vector3.up * (endLayerIndex * tileHeightOffset);
+
+                // Z축은 플레이어 깊이 유지 (2D 정렬 문제 방지)
+                startPos.z = transform.position.z;
+                endPos.z = transform.position.z;
+
+                // 점프 여부 판단 (층수가 다르면 점프)
+                int heightDiff = endLayerIndex - startLayerIndex;
+                bool isJump = heightDiff != 0;
+
+                // 방향 벡터 및 거리 계산 (2D 평면 거리 기준)
+                float dist = Vector2.Distance(startPos, endPos);
+                if (dist < 0.0001f) continue;
+
+                Vector2 dir = (endPos - startPos).normalized;
                 float speed = Mathf.Max(0.01f, defaultMoveSpeed);
                 float duration = dist / speed;
                 float t = 0f;
 
                 // 스프라이트 방향
-                if (dir.sqrMagnitude > 0.0001f)
+                if (Mathf.Abs(dir.x) > 0.0001f)
                     spriterenderer.flipX = dir.x > 0f;
 
                 if (animator != null)
@@ -919,12 +1113,33 @@ public class PlayerMovement : MonoBehaviour
                     }
 
                     t += Time.deltaTime / duration;
-                    Vector3 pos = Vector3.Lerp(start, end, Mathf.Clamp01(t));
-                    rb.MovePosition(pos);
+                    float percent = Mathf.Clamp01(t);
+
+                    // 점프 곡선 적용 이동
+
+                    // 기본 선형 이동 (높이 차이가 있으면 대각선으로 이동됨)
+                    Vector3 currentPos = Vector3.Lerp(startPos, endPos, percent);
+
+                    // 점프 연출 추가 (Y축에만 값을 더함)
+                    if (isJump && jumpCurve != null)
+                    {
+                        // 커브(0~1~0) 값 가져오기
+                        float curveValue = jumpCurve.Evaluate(percent);
+
+                        // 올라갈 때와 내려갈 때 느낌을 다르게 하고 싶다면 분기 처리 가능
+                        // 예: 내려갈 때는 점프 높이를 80%만 적용
+                        float currentMultiplier = jumpHeightMultiplier;
+                        if (heightDiff < 0) currentMultiplier *= 0.8f;
+
+                        currentPos.y += curveValue * currentMultiplier;
+                    }
+
+                    rb.MovePosition(currentPos);
+
                     yield return null;
                 }
 
-                rb.MovePosition(end);
+                rb.MovePosition(endPos); // 최종 위치 보정
 
                 // 도착 셀 함정 체크
                 TryTriggerTrapAtCell(cells[i]);
@@ -946,6 +1161,9 @@ public class PlayerMovement : MonoBehaviour
                         stm.SetResumePath(remaining);
 
                         var returnPos = floorTilemap.GetCellCenterWorld(cells[i]);
+                        // 복귀 위치도 높이 오프셋 반영 저장
+                        returnPos += Vector3.up * (endLayerIndex * tileHeightOffset);
+
                         stm.SaveReturnPoint(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, returnPos);
 
                         stm.SaveExplorationSnapshot(stm.BuildExplorationSnapshotFromScene());
@@ -1332,23 +1550,43 @@ public class PlayerMovement : MonoBehaviour
         currentDescData = null;
     }
 
-    bool IsWalkableCell(Vector3Int cell)
+    private bool IsWalkableCell(Vector3Int cell)
     {
-        if (!floorTilemap.HasTile(cell)) return false;
-        if (wallTilemap != null && wallTilemap.HasTile(cell)) return false;
-        Vector3 world = floorTilemap.GetCellCenterWorld(cell);
-
-        // 자기 자신을 무시하기 위해 All로 받아서 필터링
-        var hits = Physics2D.OverlapCircleAll(world, 0.05f, impassableLayerMask);
-        foreach (var h in hits)
+        // 장애물 맵에 타일이 하나라도 있다면 무조건 이동 불가
+        if (obstacleMaps != null)
         {
-            if (!h) continue;
-            if (h.attachedRigidbody == rb) continue; // 본인 무시
-            var hitCell = floorTilemap.WorldToCell(h.bounds.center);
-            if (hitCell != cell) continue;
-            return false; // 뭔가 걸리면 통행 불가
+            foreach (var obsMap in obstacleMaps)
+            {
+                if (obsMap.HasTile(cell)) return false; // 즉시 차단
+            }
         }
-        return true;
+        // 벽 체크
+        //if (wallTilemap != null && wallTilemap.HasTile(cell)) return false;
+
+        // 1. 이 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다.
+        Tilemap topMap = null;
+        for (int i = floorMaps.Count - 1; i >= 0; i--)
+        {
+            if (floorMaps[i].HasTile(cell))
+            {
+                topMap = floorMaps[i];
+                break; 
+            }
+        }
+
+        if (topMap == null) return false; // 아무 타일도 없음
+
+        // 2. 그 맵이 장애물인지 확인
+        string mapName = topMap.name.ToLower();
+        if (mapName.Contains("water") || mapName.Contains("obstacle") || mapName.Contains("void"))
+        {
+            return false; // 가장 위의 타일이 물이라면 이동 불가! (선택도 안 됨)
+        }
+
+        // 바닥이 하나라도 있어야 이동 가능
+        if (GetWalkableMapAt(cell) != null) return true;
+
+        return false; // 바닥도 없으면 이동 불가
     }
 
     // 밀기 상자용 인접 판정
@@ -1483,16 +1721,27 @@ public class PlayerMovement : MonoBehaviour
             }
         }
     }
-    public void SetTilemap(Tilemap floor, Tilemap wall)
+    public void SetTilemaps(List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall)
     {
-        floorTilemap = floor;
-        wallTilemap = wall;
-        ClearPath();
-        Debug.Log("[PlayerMovement] SetTilemap 정상 세팅 완료");
+        this.floorMaps = floors;
+        this.obstacleMaps = obstacles; // 전달받은 장애물 리스트 저장
+        this.wallTilemap = wall;
 
-        // PushObject들에게 타일맵 자동 할당
-        foreach (var push in FindObjectsOfType<PushObject>())
-            push.SetTilemaps(floor, wall);
+        // 경로 초기화 등 필요한 로직
+        ClearPath();
+        HaltImmediately();
+
+        Debug.Log($"[PlayerMovement] 맵 설정 완료. 바닥 맵 개수: {floors?.Count ?? 0}");
+
+        // PushObject가 있다면 그들에게도 맵 정보를 갱신해줘야 합니다.
+        // (PushObject가 단일 맵만 지원한다면 첫 번째 맵을 전달)
+        if (floors != null && floors.Count > 0)
+        {
+            foreach (var push in FindObjectsOfType<PushObject>())
+            {
+                push.SetTilemaps(floors[0], wall);
+            }
+        }
     }
     (Vector2 blend, bool flipX) GetPushBlend(Direction dir)
     {

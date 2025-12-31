@@ -29,7 +29,7 @@ public class MapManager : MonoBehaviour
     {
         // SceneTransitionManager가 오버라이드 프리팹을 들고 있으면 그것을 사용
         if (Shared.SceneTransitionManager != null &&
-        Shared.SceneTransitionManager.explorationMapPrefabOverride != null)
+            Shared.SceneTransitionManager.explorationMapPrefabOverride != null)
         {
             backUpMapPrefab = Shared.SceneTransitionManager.explorationMapPrefabOverride;
             Debug.Log("[MapManager] Override prefab 사용(재로딩 유지)");
@@ -43,61 +43,68 @@ public class MapManager : MonoBehaviour
                 Shared.SceneTransitionManager.explorationMapPrefabOverride = backUpMapPrefab;
         }
 
-
-        if (backUpMapPrefab == null)
-        {
-            Debug.LogError($"Stage {currentStage}에 해당하는 일반 맵 프리팹을 찾을 수 없습니다.");
-            return;
-        }
-
-        currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
-        var (floorMap, wallMap) = FindTilemaps(currentMap);
-
-        if (floorMap == null)
-        {
-            Debug.LogError("Floor 타일맵을 찾을 수 없습니다!");
-            return;
-        }
-
-        SetupMapToggle(floorMap, wallMap);
-
-        var snap = Shared.SceneTransitionManager?.explorationSnapshot;
-        if (snap != null && snap.objects != null && snap.objects.Count > 0)
-        {
-            // 스냅샷대로 재생성 + 상태 복원
-            ApplyExplorationSnapshot(snap, floorMap, wallMap);
-        }
-        else
-        {
-            // 스냅샷이 없거나(objects==0) → 정상 랜덤 스폰
-            TrySpawnObjects(floorMap);
-        }
-
-        InstantiatePlayer(floorMap, wallMap);
+        // 프리팹 설정 후 실제로 맵을 생성하도록 호출
+        ResetExplorationMap();
     }
 
     GameObject GetRandomNormalMapPrefab()
     {
-        var stageData = stageDB.normalStages.FirstOrDefault(s => s.stageNumber == currentStage);
-        if (stageData == null || stageData.normalMapPrefabs.Length == 0)
+        if (stageDB == null) return null;
+
+        // 현재 스테이지 번호와 일치하는 데이터 찾기
+        var data = stageDB.normalStages.FirstOrDefault(x => x.stageNumber == currentStage);
+
+        // 데이터가 없거나, 프리팹 배열이 비어있는지 확인
+        // (주의: 배열은 Count가 아니라 Length 입니다)
+        if (data == null || data.normalMapPrefabs == null || data.normalMapPrefabs.Length == 0)
             return null;
 
-        int index = Random.Range(0, stageData.normalMapPrefabs.Length);
-        return stageData.normalMapPrefabs[index];
+        // 랜덤 반환
+        return data.normalMapPrefabs[Random.Range(0, data.normalMapPrefabs.Length)];
     }
 
-    (Tilemap floor, Tilemap wall) FindTilemaps(GameObject map)
+    void InstantiatePlayer(List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall)
     {
-        Tilemap floor = null, wall = null;
-        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
+        if (playerPrefab == null) return;
+
+        // 기존 플레이어 제거 (중복 방지)
+        if (Shared.PlayerMovement != null)
+            Destroy(Shared.PlayerMovement.gameObject);
+
+        // 플레이어 생성
+        GameObject p = Instantiate(playerPrefab);
+        var pm = p.GetComponent<PlayerMovement>();
+
+        if (pm != null)
         {
-            var name = tm.gameObject.name.ToLower();
-            if (name.Contains("floor")) floor = tm;
-            if (name.Contains("wall")) wall = tm;
-            if (floor != null && wall != null) break;
+            // 리스트 형태의 바닥 전달
+            pm.SetTilemaps(floors, obstacles, wall);
+            Shared.PlayerMovement = pm;
         }
-        return (floor, wall);
+
+        // PlayerStart 위치로 이동
+        if (currentMap != null)
+        {
+            var spawn = currentMap.transform.Find("PlayerStart");
+            if (spawn != null)
+            {
+                Vector3 spawnPos = spawn.position;
+                spawnPos.z = 0f;
+                p.transform.position = spawnPos;
+            }
+                
+            else
+                Debug.LogWarning("[MapManager] 맵에 'PlayerStart' 오브젝트가 없습니다.");
+        }
+
+        var camScript = FindAnyObjectByType<CameraFollow2D>();
+        if (camScript != null)
+        {
+            camScript.target = p.transform; // 타겟 갱신
+            camScript.SnapToTarget();       // 부드러운 이동 없이 즉시 시점 이동
+        }
     }
+
 
     void SetupMapToggle(Tilemap floor, Tilemap wall)
     {
@@ -121,30 +128,6 @@ public class MapManager : MonoBehaviour
             .Where(c => c.CompareTag("ExcludeSpawn")).ToArray();
 
         spawner.Spawn(floor, excludeColliders);
-    }
-
-    void InstantiatePlayer(Tilemap floor, Tilemap wall)
-    {
-        var spawnPoint = currentMap.transform.Find("PlayerStart");
-        var position = spawnPoint != null ? spawnPoint.position : Vector3.zero;
-
-        var player = Instantiate(playerPrefab, position, Quaternion.identity);
-        var pm = player.GetComponent<PlayerMovement>();
-
-        if (pm != null)
-        {
-            pm.SetTilemap(floor, wall);
-            Debug.Log("[MapManager] SetTilemap 호출 완료");
-        }
-        else
-        {
-            Debug.LogError("[MapManager] PlayerMovement 컴포넌트를 찾을 수 없습니다.");
-        }
-
-        mapToggle.SetPlayerStartPosition(player.transform);
-
-        // 여기서 카메라 타깃/경계 주입
-        HookCameraToPlayer(player.transform);
     }
 
     void HookCameraToPlayer(Transform player)
@@ -258,28 +241,64 @@ public class MapManager : MonoBehaviour
 
     public void ResetExplorationMap()
     {
-        if (currentMap != null)
-            Destroy(currentMap);
+        // 기존 맵 및 플레이어 정리
+        if (currentMap != null) Destroy(currentMap);
+        if (Shared.PlayerMovement != null) Destroy(Shared.PlayerMovement.gameObject);
 
-        if (Shared.PlayerMovement != null)
+        if (backUpMapPrefab == null)
         {
-            Destroy(Shared.PlayerMovement.gameObject);
-            Shared.PlayerMovement = null;
-        }
-
-        currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
-        var (floorMap, wallMap) = FindTilemaps(currentMap);
-
-        if (floorMap == null)
-        {
-            Debug.LogError("Floor 타일맵을 찾을 수 없습니다!");
+            Debug.LogError("[MapManager] 생성할 맵 프리팹이 없습니다!");
             return;
         }
 
-        SetupMapToggle(floorMap, wallMap);
-        TrySpawnObjects(floorMap);
-        InstantiatePlayer(floorMap, wallMap);
+        // 맵 생성
+        currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
 
-        Debug.Log("[MapManager] 탐험맵 재생성 완료");
+        var (floorMaps, obstacleMaps, wallMap) = FindTilemapsMulti(currentMap);
+
+        if (floorMaps.Count == 0)
+        {
+            Debug.LogError("Floor 타일맵을 찾을 수 없습니다! (WalkableLayers 하위에 있는지 확인 필요)");
+            return;
+        }
+
+        // InstantiatePlayer에 obstacleMaps도 함께 전달합니다.
+        InstantiatePlayer(floorMaps, obstacleMaps, wallMap);
+    }
+    // 바닥 맵과 장애물 맵을 따로 찾아서 반환하도록 변경
+    public (List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall) FindTilemapsMulti(GameObject map)
+    {
+        List<Tilemap> floors = new List<Tilemap>();
+        List<Tilemap> obstacles = new List<Tilemap>(); // 장애물 리스트 추가
+        Tilemap wall = null;
+
+        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
+        {
+            var name = tm.gameObject.name.ToLower();
+
+            // 1. 벽 찾기
+            if (name.Contains("wall"))
+            {
+                wall = tm;
+                continue;
+            }
+
+            // 2. 장애물 찾기 (새로 추가된 로직)
+            // 이름에 water, obstacle 등이 있거나 부모가 Obstacles인 경우
+            if (name.Contains("water") || name.Contains("obstacle") ||
+               (tm.transform.parent != null && tm.transform.parent.name == "Obstacles"))
+            {
+                obstacles.Add(tm);
+                continue;
+            }
+
+            // 3. 바닥 찾기 (나머지는 바닥으로 간주)
+            if (name.Contains("ground") || name.Contains("floor") ||
+               (tm.transform.parent != null && tm.transform.parent.name == "WalkableLayers"))
+            {
+                floors.Add(tm);
+            }
+        }
+        return (floors, obstacles, wall);
     }
 }

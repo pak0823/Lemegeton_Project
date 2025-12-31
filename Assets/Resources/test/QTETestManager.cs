@@ -28,14 +28,14 @@ public class QTETestManager : MonoBehaviour
         }
 
         // 3. 결과에 따른 분기 처리
-        if (qteSuccess)
-        {
-            Debug.Log("QTE 성공!");
-        }
-        else
-        {
-            Debug.Log("QTE 실패...");
-        }
+        //if (qteSuccess)
+        //{
+        //    Debug.Log("QTE 성공!");
+        //}
+        //else
+        //{
+        //    Debug.Log("QTE 실패...");
+        //}
 
         _isTestRunning = false;
     }
