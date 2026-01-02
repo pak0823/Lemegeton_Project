@@ -594,7 +594,7 @@ public class BattleUnit : MonoBehaviour
     public string GetAnimTriggerForSkill(SkillAsset skill)
     {
         if (skill == null)
-            return "BaseAttack";
+            return "Skill_1";
 
         // 1) UnitData에 유닛별 매핑이 있으면 우선 사용
         if (data != null && data.skillAnimBindings != null)
@@ -613,20 +613,16 @@ public class BattleUnit : MonoBehaviour
         // 3) animKind 에 따른 기본값
         switch (skill.animKind)
         {
-            case SkillAnimKind.Ranged:
-                return "Ranged";
             case SkillAnimKind.SelfCast:
                 // 자기 강화용 캐스팅 트리거 (Animator에 따라 이름 다를 수 있음)
                 return "Casting";
             case SkillAnimKind.None:
-                // 애니메이션 없이 처리할 예정이므로, 아무거나 리턴해도 되지만 기본값 유지
-                return "BaseAttack";
             case SkillAnimKind.Special:
-                // 특수 스킬은 Animator 설계에 따라 별도 트리거를 지정해두는 편이 좋음
-                return "BaseAttack";
             case SkillAnimKind.Melee:
+            case SkillAnimKind.Ranged:
+                return "Skill_1";
             default:
-                return "BaseAttack";
+                return "Skill_1";
         }
     }
 
@@ -694,8 +690,8 @@ public class BattleUnit : MonoBehaviour
 
     public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride, float? timeoutOverride)
     {
-        string trigger = string.IsNullOrEmpty(triggerOverride) ? "BaseAttack" : triggerOverride;
-        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "BaseAttack(Override)");
+        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Skill_1" : triggerOverride;
+        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "Skill_1(Override)");
     }
 
     public IEnumerator AnimateRanged(string triggerOverride)
@@ -924,7 +920,7 @@ public class BattleUnit : MonoBehaviour
             yield break;
 
         if (string.IsNullOrEmpty(trigger))
-            trigger = "Attack";
+            trigger = "Skill_1";
 
         bool ended = false;
         Action onEnd = () => ended = true;

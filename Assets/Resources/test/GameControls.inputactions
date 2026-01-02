@@ -1,0 +1,74 @@
+{
+    "version": 1,
+    "name": "GameControls",
+    "maps": [
+        {
+            "name": "QTE",
+            "id": "c79ef4b5-9e8d-45c4-a71c-516a4140ffe6",
+            "actions": [
+                {
+                    "name": "Trigger",
+                    "type": "Button",
+                    "id": "ec4687c1-ebaf-4cb9-9b95-61f4cc77c42f",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "6291c50e-8116-4e3f-b4a3-659b51ef08b2",
+                    "path": "<Keyboard>/space",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Trigger",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "c6a247b6-bc87-4a64-b1ff-ff746790aac6",
+                    "path": "<Mouse>/leftButton",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Trigger",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "Debug",
+            "id": "b5aefa37-5f99-4246-a126-5bc48c5cce11",
+            "actions": [
+                {
+                    "name": "Test",
+                    "type": "Button",
+                    "id": "d2777428-8104-4a23-adaf-77e32c91b3d7",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "c3839519-7882-44ac-a49d-7aaf2ad55f7a",
+                    "path": "<Keyboard>/t",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Test",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

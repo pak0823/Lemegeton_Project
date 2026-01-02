@@ -99,7 +99,7 @@ Animator:
   m_GameObject: {fileID: 4504373230467071322}
   m_Enabled: 1
   m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 5b721cd9680001f4abbd63c0670d7169, type: 2}
+  m_Controller: {fileID: 22100000, guid: 43599be5a35d2224cb31fafa62d0417e, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 0
   m_ApplyRootMotion: 0
@@ -134,6 +134,7 @@ MonoBehaviour:
   spriteRenderer: {fileID: 0}
   moveDuration: 0.18
   CurrentMap: {fileID: 0}
+  defaultAnimEndTimeout: 8
   stateStatDB: {fileID: 11400000, guid: 50e0802620beaca44b0b7e82040dd2ab, type: 2}
   basePhysicalDamage: 1
   baseMagicDamage: 1
@@ -200,7 +201,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.3}
-    oldSize: {x: 0.24, y: 0.33}
+    oldSize: {x: 0.48, y: 0.48}
     newSize: {x: 0.36, y: 0.58}
     adaptiveTilingThreshold: 0.5
     drawMode: 0

@@ -63,7 +63,7 @@ public class MapManager : MonoBehaviour
         return data.normalMapPrefabs[Random.Range(0, data.normalMapPrefabs.Length)];
     }
 
-    void InstantiatePlayer(List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall)
+    void InstantiatePlayer(List<Tilemap> _floors, List<Tilemap> _obstacles, Tilemap wall)
     {
         if (playerPrefab == null) return;
 
@@ -78,7 +78,7 @@ public class MapManager : MonoBehaviour
         if (pm != null)
         {
             // 리스트 형태의 바닥 전달
-            pm.SetTilemaps(floors, obstacles, wall);
+            pm.SetTilemaps(_floors, _obstacles, wall);
             Shared.PlayerMovement = pm;
         }
 
@@ -106,28 +106,35 @@ public class MapManager : MonoBehaviour
     }
 
 
-    void SetupMapToggle(Tilemap floor, Tilemap wall)
+    void SetupMapToggle(Tilemap _floors, Tilemap _wall)
     {
         mapToggle.mainMap = currentMap;
         mapToggle.gridParent = gridParent;
     }
 
-    void TrySpawnObjects(Tilemap floor)
+    void TrySpawnObjects(List<Tilemap> _floors, List<Tilemap> _obstacles, Tilemap _wall)
     {
         var spawner = currentMap.GetComponentInChildren<MapObjectSpawner>();
         var spawnPoint = currentMap.transform.Find("PlayerStart");
 
-        if (spawner == null || spawnPoint == null)
+        if (spawner == null)
         {
-            Debug.LogError("MapObjectSpawner 또는 PlayerStart 없음");
+            // 스포너가 필수는 아닐 수 있으므로 경고 없이 리턴하거나 로그 출력
             return;
         }
 
-        Vector3Int spawnCell = floor.WorldToCell(spawnPoint.position);
-        var excludeColliders = currentMap.GetComponentsInChildren<Collider2D>()
-            .Where(c => c.CompareTag("ExcludeSpawn")).ToArray();
+        // 스폰 제외 영역 설정 (PlayerStart 주변 등)
+        List<Collider2D> excludeList = new List<Collider2D>();
 
-        spawner.Spawn(floor, excludeColliders);
+        // Tag가 "ExcludeSpawn"인 콜라이더들
+        var tagged = currentMap.GetComponentsInChildren<Collider2D>()
+            .Where(c => c.CompareTag("ExcludeSpawn"));
+        excludeList.AddRange(tagged);
+
+        // 플레이어 시작 위치 주변도 제외하고 싶다면 가상의 범위 추가 가능
+        // 지금은 PlayerStart 오브젝트에 콜라이더가 있다면 그것을 사용한다고 가정
+
+        spawner.Spawn(_floors, _obstacles, _wall, excludeList.ToArray());
     }
 
     void HookCameraToPlayer(Transform player)
@@ -262,9 +269,13 @@ public class MapManager : MonoBehaviour
             return;
         }
 
-        // InstantiatePlayer에 obstacleMaps도 함께 전달합니다.
+        // 플레이어 생성
         InstantiatePlayer(floorMaps, obstacleMaps, wallMap);
+
+        // TrySpawnObjects 호출 시 장애물/벽 정보도 함께 전달
+        TrySpawnObjects(floorMaps, obstacleMaps, wallMap);
     }
+
     // 바닥 맵과 장애물 맵을 따로 찾아서 반환하도록 변경
     public (List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall) FindTilemapsMulti(GameObject map)
     {
