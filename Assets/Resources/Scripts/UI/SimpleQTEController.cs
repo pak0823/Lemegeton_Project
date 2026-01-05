@@ -12,10 +12,15 @@ public class SimpleQTEController : BaseQTEController
     [SerializeField] private RectTransform perfectRect; //대성공 범위
     [SerializeField] private RectTransform cursorRect;  //이동하는 커서
     [SerializeField] private Text readyText; // 준비 텍스트
+    [SerializeField] private Text feedbackText;  // 판정 결과 텍스트 (Perfect / Good / Fail)
 
     [Header("Settings")]
     [SerializeField] private float minDuration = 1.0f; // 최소 도달 시간
     [SerializeField] private float maxDuration = 2.0f; // 최대 도달 시간
+
+    // 판정 후 UI가 유지되는 시간
+    [Range(0.1f, 3.0f)]
+    [SerializeField] private float resultKeepTime = 1.0f;
 
     private GameControls _controls; // 자동 생성된 클래스
     private Action<QTEResult> _callback;
@@ -47,6 +52,7 @@ public class SimpleQTEController : BaseQTEController
 
         // 바, 타겟, 커서는 일단 숨김 (Ready 텍스트만 보여주기 위해)
         SetUIElementsActive(false);
+        if (feedbackText != null) feedbackText.gameObject.SetActive(false); // 결과 텍스트 숨김
 
         // 1. 랜덤 세팅 (위치 & 속도)
         RandomizeSettings();
@@ -55,7 +61,7 @@ public class SimpleQTEController : BaseQTEController
         if (readyText != null)
         {
             readyText.gameObject.SetActive(true);
-            readyText.text = "준비!";
+            readyText.text = "Ready!";
             yield return new WaitForSeconds(1.0f); // 1초간 텍스트 보여줌
             readyText.gameObject.SetActive(false);
         }
@@ -120,29 +126,24 @@ public class SimpleQTEController : BaseQTEController
         // 3. 실패 조건 (끝까지 가면)
         if (currentX > _halfBarWidth)
         {
-            EndQTE(QTEResult.Fail);
+            HandleResult(QTEResult.Fail);
         }
     }
 
     private void CheckHit(float cursorX)
     {
-        // 1. Target 범위 계산
         float targetX = targetRect.anchoredPosition.x;
         float targetHalf = targetRect.rect.width * 0.5f;
         float tMin = targetX - targetHalf;
         float tMax = targetX + targetHalf;
 
-        // 타겟 안에 없으면 짤없이 실패
         if (cursorX < tMin || cursorX > tMax)
         {
-            Debug.Log("[QTE] 빗나감 (Fail)");
-            EndQTE(QTEResult.Fail);
+            // 실패 처리 (빗나감)
+            HandleResult(QTEResult.Fail);
             return;
         }
 
-        // 2. Perfect 범위 계산
-        // Perfect가 Target의 자식이라고 가정하고 월드 좌표계 혹은 상대 좌표 계산
-        // 단순하게 구현하기 위해 로컬 좌표를 더함 (Target Pos + Perfect Local Pos)
         float perfectX = targetX + perfectRect.anchoredPosition.x;
         float perfectHalf = perfectRect.rect.width * 0.5f;
         float pMin = perfectX - perfectHalf;
@@ -150,14 +151,56 @@ public class SimpleQTEController : BaseQTEController
 
         if (cursorX >= pMin && cursorX <= pMax)
         {
-            Debug.Log("[QTE] 대성공! (Perfect)");
-            EndQTE(QTEResult.Perfect);
+            HandleResult(QTEResult.Perfect);
         }
         else
         {
-            Debug.Log("[QTE] 일반 성공 (Success)");
-            EndQTE(QTEResult.Success);
+            HandleResult(QTEResult.Success);
         }
+    }
+
+    // [변경] 결과를 처리하고 딜레이 코루틴을 시작하는 함수
+    private void HandleResult(QTEResult result)
+    {
+        _canInput = false; // 입력 차단
+
+        // 결과 텍스트 표시
+        if (feedbackText != null)
+        {
+            feedbackText.gameObject.SetActive(true);
+            switch (result)
+            {
+                case QTEResult.Perfect:
+                    feedbackText.text = "Perfect!!";
+                    feedbackText.color = Color.yellow; // 혹은 원하는 색상
+                    break;
+                case QTEResult.Success:
+                    feedbackText.text = "Good!";
+                    feedbackText.color = Color.green;
+                    break;
+                case QTEResult.Fail:
+                    feedbackText.text = "Fail...";
+                    feedbackText.color = Color.red;
+                    break;
+            }
+        }
+
+        // 지연 종료 시작
+        StartCoroutine(Co_EndSequence(result));
+    }
+
+    // [추가] 딜레이 후 UI를 끄고 매니저에게 결과를 알림
+    private IEnumerator Co_EndSequence(QTEResult result)
+    {
+        // 설정된 시간만큼 대기 (이 시간 동안 바와 텍스트가 유지됨)
+        yield return new WaitForSeconds(resultKeepTime);
+
+        // UI 끄기
+        if (feedbackText != null) feedbackText.gameObject.SetActive(false);
+        gameObject.SetActive(false);
+
+        // 매니저에게 결과 전달 (이 시점에 매니저의 while 루프가 풀림)
+        _callback?.Invoke(result);
     }
 
     private void EndQTE(QTEResult result)
