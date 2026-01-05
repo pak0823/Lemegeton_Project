@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 8282321106037221778}
   - component: {fileID: 3604632207186200263}
   - component: {fileID: 1763922186415620678}
+  - component: {fileID: 2635015958816609302}
   m_Layer: 0
   m_Name: BattleManager
   m_TagString: Untagged
@@ -46,7 +47,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   grid: {fileID: 0}
-  turn: {fileID: 0}
   unitMask:
     serializedVersion: 2
     m_Bits: 256
@@ -60,6 +60,7 @@ MonoBehaviour:
   currentWaveIndex: -1
   debugStageNumber: -1
   enemyRoot: {fileID: 0}
+  waveTransitionDelay: 1.5
   targetMarker: {fileID: 0}
   isSelectingSkill: 0
   currentSkill:
@@ -68,11 +69,10 @@ MonoBehaviour:
     targetMode: 0
   selectedCell: {x: 0, y: 0, z: 0}
   currentSkillSO: {fileID: 0}
-  projectilePrefab: {fileID: 0}
-  jumpDuration: 0.08
-  jumpArc: 0.15
-  logAGIOnTurnStart: 1
-  logAGIOnStatusChange: 0
+  stateStatDb: {fileID: 0}
+  trainingDB: {fileID: 0}
+  turnController: {fileID: 0}
+  beastDomainHighlighter: {fileID: 0}
 --- !u!114 &1763922186415620678
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -89,3 +89,27 @@ MonoBehaviour:
   enemyFloor: {fileID: 0}
   playerOverlay: {fileID: 0}
   enemyOverlay: {fileID: 0}
+--- !u!114 &2635015958816609302
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2163898747554995797}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db08f0ef16a6da34a93c83eaff01ed60, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  cam: {fileID: 0}
+  unitMask:
+    serializedVersion: 2
+    m_Bits: 256
+  battle: {fileID: 3604632207186200263}
+  speedCtrl: {fileID: 0}
+  hudCtrl: {fileID: 0}
+  optionsMenuUI: {fileID: 0}
+  battle_CancelKey: 113
+  battle_CurrentKey: 101
+  battle_HudKey: 9
+  battle_Escape: 282

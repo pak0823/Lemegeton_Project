@@ -6,7 +6,7 @@ using UnityEngine.Tilemaps;
 [CreateAssetMenu(
     menuName = "Battle/Skills/Common/Fear On Bleed",
     fileName = "FearOnBleedSkill")]
-public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
+public class FearOnBleedSkill : SkillAsset
 {
     [Header("기본 공포 효과")]
     [Tooltip("부여할 공포 상태의 지속 턴 수 (기본 1턴)")]
@@ -67,6 +67,15 @@ public class FearOnBleedSkill : SkillAsset, ISelfCastSkill
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
     {
         yield break;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 타겟이 없으면 실행 불가
+        if (targetUnit == null) yield break;
+
+        // 공통 유닛 스킬 흐름 (접근 -> 애니 -> 효과)
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
     }
 
     /// <summary>

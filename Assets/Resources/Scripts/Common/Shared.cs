@@ -12,7 +12,6 @@ public static class Shared
     public static BattleManager BattleManager;
     public static BattleGridManager battleGridManager;
     public static BattleMapManager battleMapManager;
-    public static TurnOrderManager TurnOrderManager;
     public static BattleInput battleInput;
     public static UIArrowNavigator UIArrowNavigator;
     public static GameSpeedController GameSpeedController;

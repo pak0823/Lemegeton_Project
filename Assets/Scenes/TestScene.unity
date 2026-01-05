@@ -316,6 +316,18 @@ PrefabInstance:
       propertyPath: floorTilemap
       value: 
       objectReference: {fileID: 806771331}
+    - target: {fileID: 7445455275965035404, guid: 4d1955ec196cf6340bf5613fac860fb6, type: 3}
+      propertyPath: floorMaps.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7445455275965035404, guid: 4d1955ec196cf6340bf5613fac860fb6, type: 3}
+      propertyPath: floorMaps.Array.data[0]
+      value: 
+      objectReference: {fileID: 806771331}
+    - target: {fileID: 7445455275965035404, guid: 4d1955ec196cf6340bf5613fac860fb6, type: 3}
+      propertyPath: floorMaps.Array.data[1]
+      value: 
+      objectReference: {fileID: 1430958535}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1388,6 +1400,11 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1196603176}
   m_CullTransparentMesh: 1
+--- !u!1839735485 &1430958535 stripped
+Tilemap:
+  m_CorrespondingSourceObject: {fileID: 6833273124538793590, guid: 1b8847ac095b3294cbf9dbc05a41c636, type: 3}
+  m_PrefabInstance: {fileID: 967459942}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1500116108
 GameObject:
   m_ObjectHideFlags: 0

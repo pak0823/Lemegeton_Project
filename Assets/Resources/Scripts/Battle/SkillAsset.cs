@@ -8,6 +8,14 @@ using static ParametricDamageSkill;
 
 public enum DamageSchool { Physical, Magical, Composite }  //근력, 총명 , 복합
 public enum AttackAttr { None, Pierce, Strike, Slash }
+
+public enum SkillTargetAlignment
+{
+    Enemy,  // 적군만 (기본 공격 등)
+    Ally,   // 아군만 (힐, 버프 등)
+    Any,    // 아무나 (잘 없지만 혹시 모르니)
+    Self    // 자신 (이미 ISelfCastSkill이 있지만 명시적 구분용)
+}
 public enum SkillCostResource
 {
     MP, //총명
@@ -67,6 +75,10 @@ public abstract class SkillAsset : ScriptableObject
     [Header("Targeting")]
     public SkillTargetMode targetMode; // 기존 enum 재사용 (Unit/Tile) 
 
+    [Header("Targeting Rules")]
+    [Tooltip("이 스킬을 누구에게 사용할 수 있는가?")]
+    public SkillTargetAlignment targetAlignment = SkillTargetAlignment.Enemy; // 기본값은 적
+
     [Header("Cooldown")]
     [Tooltip("해당 스킬 사용 후 다시 사용할 때까지 필요한 '자신의 턴 수'. 0이면 쿨다운 없음.")]
     public int cooldownTurns = 0;
@@ -89,12 +101,34 @@ public abstract class SkillAsset : ScriptableObject
     [Tooltip("훈련 UI에 표시할 3개 루트의 제목/설명. 비어 있으면 기본 텍스트로 대체.")]
     public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
 
-
-    public static bool IsUntargetableByEnemy(BattleUnit target)
+    // BattleManager는 이 함수만 호출하고, 구체적인 절차(선택, 애니, 효과)는 스킬이 알아서 함.
+    public virtual IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit = null, Tilemap _targetMap = null, Vector3Int _targetCell = default)
     {
-        if (target == null || target.IsDead) return true;
+        // 기본 동작: 타겟 모드에 따라 단순 Resolve 호출
+        // 특수 로직이 필요한 자식 클래스(넉백, 후퇴 등)는 이 함수를 override해서 쓴다.
 
-        var usc = target.GetComponent<UnitStateController>();
+        if (targetMode == SkillTargetMode.Unit)
+        {
+            if (_targetUnit != null)
+            {
+                // 공통 갭클로즈(접근) & 공격 연출 코루틴 호출
+                yield return _battlemanager.PerformStandardUnitSkillFlow(this, _caster, _targetUnit);
+            }
+        }
+        else // Tile Mode
+        {
+            if (_targetMap != null)
+            {
+                yield return _battlemanager.PerformStandardTileSkillFlow(this, _targetMap, _targetCell, _caster);
+            }
+        }
+    }
+
+    public static bool IsUntargetableByEnemy(BattleUnit _target)
+    {
+        if (_target == null || _target.IsDead) return true;
+
+        var usc = _target.GetComponent<UnitStateController>();
         if (usc == null) return false;
 
         // 잠복(기존) + 연막 은신(신규 버프) 모두 동일하게 "타겟 지정 불가"
@@ -102,21 +136,21 @@ public abstract class SkillAsset : ScriptableObject
     }
 
     // 기본값 0 = 제압 감소 없음
-    public virtual int GetSuppressionOnHit(BattleUnit caster) => 0;
+    public virtual int GetSuppressionOnHit(BattleUnit _caster) => 0;
 
     /// <summary>미리보기/피격판정을 위한 범위 셀 반환. origin = 대상 유닛 셀(유닛형) 또는 조준 셀(타일형)</summary>
-    public abstract IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow);
+    public abstract IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow);
 
     /// <summary>유닛 지목형 해결</summary>
-    public abstract IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target);
+    public abstract IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target);
 
     /// <summary>타일 지목형 해결</summary>
-    public abstract IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster);
+    public abstract IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster);
 
     //스킬별 대미지 계산. 필요시 하위 클래스에서 override
-    public virtual float ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
+    public virtual float ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
     {
-        if (caster == null)
+        if (_caster == null)
             return 0f;
 
         // 기본 공격 스탯 선택
@@ -124,20 +158,20 @@ public abstract class SkillAsset : ScriptableObject
         switch (school)
         {
             case DamageSchool.Physical:
-                stat = caster.PhysicalDamage;
+                stat = _caster.PhysicalDamage;
                 break;
 
             case DamageSchool.Magical:
-                stat = caster.MagicDamage;
+                stat = _caster.MagicDamage;
                 break;
 
             case DamageSchool.Composite:
                 // 고정 대미지 STR + MAG
-                stat = caster.PhysicalDamage + caster.MagicDamage;
+                stat = _caster.PhysicalDamage + _caster.MagicDamage;
                 break;
 
             default:
-                stat = caster.PhysicalDamage; // 혹은 0f
+                stat = _caster.PhysicalDamage; // 혹은 0f
                 break;
         }
 
@@ -153,14 +187,14 @@ public abstract class SkillAsset : ScriptableObject
         return mpCost;
     }
 
-    public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> potentialTargets)
+    public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> _potentialTargets)
     {
-        if (potentialTargets == null || potentialTargets.Count == 0) return null;
-        if (potentialTargets.Count == 1) return potentialTargets[0];
+        if (_potentialTargets == null || _potentialTargets.Count == 0) return null;
+        if (_potentialTargets.Count == 1) return _potentialTargets[0];
 
         // 모든 대상의 Hostility 합계 계산
         float totalHostility = 0f;
-        foreach (var unit in potentialTargets)
+        foreach (var unit in _potentialTargets)
         {
             totalHostility += Mathf.Max(0f, unit.Hostility);
         }
@@ -168,14 +202,14 @@ public abstract class SkillAsset : ScriptableObject
         // 합계가 0 이하면 (모두 적대감이 0), 랜덤으로 한 명 선택
         if (totalHostility <= 0)
         {
-            return potentialTargets[Random.Range(0, potentialTargets.Count)];
+            return _potentialTargets[Random.Range(0, _potentialTargets.Count)];
         }
 
         // 0 ~ totalHostility 사이의 랜덤 값 선택
         float randomPoint = Random.Range(0, totalHostility);
 
         // 랜덤 값에서 각 유닛의 Hostility를 빼나가다가 0 이하가 되면 해당 유닛 선택
-        foreach (var unit in potentialTargets)
+        foreach (var unit in _potentialTargets)
         {
             randomPoint -= Mathf.Max(0f, unit.Hostility);
             if (randomPoint <= 0)
@@ -185,7 +219,7 @@ public abstract class SkillAsset : ScriptableObject
         }
 
         // 만약의 경우(부동소수점 오류 등)를 대비해 마지막 유닛을 반환
-        return potentialTargets[potentialTargets.Count - 1];
+        return _potentialTargets[_potentialTargets.Count - 1];
     }
 
     // <summary>컬렉션에서 '적대감(Hostility)'이 가장 높은 플레이어 유닛을 선택. 동률이면 랜덤.</summary>
@@ -201,10 +235,10 @@ public abstract class SkillAsset : ScriptableObject
 
     //    return top[Random.Range(0, top.Count)];
     //}
-    public static BattleUnit PickPreferredStatusThenHighestHostility(IEnumerable<BattleUnit> candidates, StatusId preferred)
+    public static BattleUnit PickPreferredStatusThenHighestHostility(IEnumerable<BattleUnit> _candidates, StatusId _preferred)
     {
-        if (candidates == null) return null;
-        var list = candidates
+        if (_candidates == null) return null;
+        var list = _candidates
             .Where(u => u && u.team == Team.Player && !u.IsDead)
             .Where(u => !IsUntargetableByEnemy(u))   // 연막 은신/잠복 타겟 제외
             .ToList();
@@ -213,7 +247,7 @@ public abstract class SkillAsset : ScriptableObject
         var slowed = list.Where(u =>
         {
             var sc = u.GetComponent<StatusController>();
-            return sc != null && sc.Has(preferred);
+            return sc != null && sc.Has(_preferred);
         }).ToList();
 
         var pool = (slowed.Count > 0) ? slowed : list;
@@ -235,10 +269,10 @@ public abstract class SkillAsset : ScriptableObject
         //if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
         //return PickTargetByWeightedHostility(list);
     }
-    public virtual string GetFullDescriptionRich(BattleUnit caster)
+    public virtual string GetFullDescriptionRich(BattleUnit _caster)
     {
-        var res = GetCostResource(caster);
-        int cost = GetEffectiveCost(caster);
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
 
         if (cost <= 0) return description;
 
@@ -249,16 +283,16 @@ public abstract class SkillAsset : ScriptableObject
 
     public virtual SkillCostResource GetCostResource(BattleUnit caster) => costResource;
 
-    public virtual bool ShouldGapCloseToTarget(BattleUnit caster, BattleUnit target)    /// Unit 타겟 사용 시 점프 연출(gap close)을 사용할지 여부
+    public virtual bool ShouldGapCloseToTarget(BattleUnit _caster, BattleUnit _target)    /// Unit 타겟 사용 시 점프 연출(gap close)을 사용할지 여부
     {
         return useGapCloseJump;
     }
-    public virtual int GetEffectiveCost(BattleUnit caster)
+    public virtual int GetEffectiveCost(BattleUnit _caster)
     {
         // 기본값: base cost (MP/Rage 공통)
         return Mathf.Max(0, GetBaseCost());
     }
-    public virtual int GetEffectiveCooldownTurns(BattleUnit caster)
+    public virtual int GetEffectiveCooldownTurns(BattleUnit _caster)
     {
         // 기본은 그냥 설정값 그대로
         return cooldownTurns;

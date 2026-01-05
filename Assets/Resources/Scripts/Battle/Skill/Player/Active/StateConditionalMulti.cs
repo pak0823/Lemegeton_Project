@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -43,6 +44,24 @@ public class StateConditionalSkillMulti : SkillAsset, ISkillForStateResolver
 
     [Header("기본 스킬(어느 규칙도 매칭되지 않을 때)")]
     public SkillAsset defaultSkill;
+
+    public override IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit, Tilemap _targetMap, Vector3Int _targetCell)
+    {
+        // 현재 상태에 맞는 스킬을 찾아낸다
+        SkillAsset realSkill = ResolveForCaster(_caster);
+
+        // 만약 매칭되는 게 없거나, 자기가 자기 자신을 리턴하면(무한루프 방지) 종료
+        if (realSkill == null || realSkill == this)
+        {
+            Debug.LogWarning($"[StateConditionalMulti] {name}: 실행할 스킬을 찾지 못함.");
+            _battlemanager.CancelCurrentAction();
+            yield break;
+        }
+
+        // 찾은 진짜 스킬에게 실행을 위임한다
+        // 매니저는 이게 라우터였는지 알 필요 없이, 결과적으로 진짜 스킬이 나간다.
+        yield return realSkill.Execute(_battlemanager, _caster, _targetUnit, _targetMap, _targetCell);
+    }
 
     /// <summary>캐스터 상태를 보고 실제 시전할 SkillAsset을 반환</summary>
     public SkillAsset ResolveForCaster(BattleUnit caster)
@@ -107,6 +126,6 @@ public class StateConditionalSkillMulti : SkillAsset, ISkillForStateResolver
 
     // 라우터 자체는 직접 시전되지 않음(치환 전용 no-op)
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow) { yield break; }
-    public override System.Collections.IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target) { yield break; }
-    public override System.Collections.IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster) { yield break; }
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit caster, BattleUnit target) { yield break; }
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap map, Vector3Int originCell, BattleUnit caster) { yield break; }
 }

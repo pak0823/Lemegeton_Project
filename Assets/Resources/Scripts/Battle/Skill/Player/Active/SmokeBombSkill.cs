@@ -92,6 +92,15 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         return (caster != null && caster.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
     }
 
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 타겟 맵이 없으면 실행 불가
+        if (targetMap == null) yield break;
+
+        // 공통 타일 스킬 흐름 (애니메이션 -> ResolveOnTile 호출 -> 쿨다운/턴종료)
+        yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
+    }
+
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
         if (!bm || !caster || !map) yield break;

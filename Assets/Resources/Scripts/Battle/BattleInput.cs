@@ -2,38 +2,47 @@ using Project.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Tilemaps;
+using System;
 
 public class BattleInput : MonoBehaviour
 {
-    #region Inspector References
+    // Inspector
     public Camera cam;
-    public BattleManager battle;
     public LayerMask unitMask;
+    public BattleManager battle;    // (삭제 예정이지만, 좌표 변환 등을 위해 일단 유지)
+
     public GameSpeedController speedCtrl; // GameSpeedController 할당
     public HudController hudCtrl;   //HUD 컨트롤러 할당
-    public OptionsMenuUI optionsMenuUI; //임시 옵션창 관련 스크립트
+    public OptionsMenuUI optionsMenuUI; //옵션창 할당
 
-    bool wasTargetingPrev = false;
-    bool suppressLMBOnce = false;
+    // Events (매니저가 구독)
+
+    public event Action<Tilemap, Vector3Int> OnTileClick;
+    public event Action<Tilemap, Vector3Int> OnTileHover;
+
+    public event Action<BattleUnit> OnUnitClick;
+    public event Action<BattleUnit> OnUnitHover;
+    public event Action OnCancelKeyPress;
+    public event Action OnConfirmKeyPress;
+
+    // 내부 변수
+    private Vector3Int _lastHoverCell = new Vector3Int(int.MaxValue, int.MaxValue, 0);
+    private BattleUnit _lastHoverUnit = null;
+
+    // 키 바인딩
+    readonly (KeyCode key, int idx)[] speedBinds = new (KeyCode, int)[] {
+        (KeyCode.Alpha1, 0), (KeyCode.Alpha2, 1), (KeyCode.Alpha3, 2), (KeyCode.BackQuote, 3)
+    };
+    [SerializeField] private KeyCode battle_CancelKey = KeyCode.Q;
+    [SerializeField] private KeyCode battle_CurrentKey = KeyCode.E;
+    [SerializeField] private KeyCode battle_HudKey = KeyCode.Tab;
+    [SerializeField] private KeyCode battle_Escape = KeyCode.F1;    //도주 키
+
     private int _rebindTries = 0; //재바인딩 시도 카운터(디버그용)
-    #endregion
 
     #region Internal References
     IBattleMapProvider provider;
     #endregion
-
-    // 배속 키 바인딩을 테이블로 정의
-    readonly (KeyCode key, int idx)[] speedBinds = new (KeyCode, int)[] {
-    (KeyCode.Alpha1, 0),   // x1
-    (KeyCode.Alpha2, 1),   // x2
-    (KeyCode.Alpha3, 2),   // x3
-    (KeyCode.BackQuote, 3) // 정지(물결/백틱 키)
-};
-    [Header("InputKey")]
-    [SerializeField] private KeyCode battle_CancelKey = KeyCode.Q; //전투 선택 취소 키
-    [SerializeField] private KeyCode battle_CurrentKey = KeyCode.E;    //전투 선택 확정 키
-    [SerializeField] private KeyCode battle_HudKey = KeyCode.Tab;   //HUD 토글 키
-    [SerializeField] private KeyCode battle_Escape = KeyCode.F1;    //도주 키
 
     #region Unity Callbacks
     void Awake()
@@ -52,15 +61,143 @@ public class BattleInput : MonoBehaviour
 
     void Update()
     {
-        if (HandleHudToggleEarly()) return; //HUD 상태 관리
-        HandleGameSpeedToggle();
+        // 키보드 입력 감지
+        HandleHotkeys();
 
-        if (GamePause.IsPaused || PopupManager.IsModalOpen) return;// 모달/일시정지 중에는 어떤 입력도 처리하지 않음
-        if (!EnsureProviders()) return; // 맵/프로바이더 준비 보장
-        HandleMouseInput();
-        HandleActionShortcuts();
+        // 마우스 위치 계산
+        Vector3 worldPos = cam.ScreenToWorldPoint(Input.mousePosition);
+        worldPos.z = 0;
+
+        // 호버링(Hover) 감지 및 이벤트 발송
+        HandleHover(worldPos);
+
+        // 클릭(Click) 감지
+        HandleClick(worldPos);
+
+
     }
     #endregion
+
+    // 좌표 변환 헬퍼 함수
+    // BattleGridManager -> Tilemap -> WorldToCell 순서로 접근
+    private bool TryGetMapAndCell(Vector3 worldPos, out Tilemap outMap, out Vector3Int outCell)
+    {
+        outMap = null;
+        outCell = default;
+
+        if (battle.grid == null) return false;
+
+        // 1. 플레이어 맵 먼저 체크
+        Tilemap pMap = battle.grid.GetMap(Team.Player);
+        if (pMap != null)
+        {
+            Vector3Int c = pMap.WorldToCell(worldPos);
+            if (pMap.HasTile(c))
+            {
+                outMap = pMap;
+                outCell = c;
+                return true;
+            }
+        }
+
+        // 2. 적 맵 체크 (플레이어 맵에 없으면)
+        Tilemap eMap = battle.grid.GetMap(Team.Enemy);
+        if (eMap != null)
+        {
+            Vector3Int c = eMap.WorldToCell(worldPos);
+            if (eMap.HasTile(c))
+            {
+                outMap = eMap;
+                outCell = c;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void HandleHover(Vector3 worldPos)
+    {
+        // 유닛 호버 체크
+        var hit = Physics2D.OverlapCircle(worldPos, 0.15f, unitMask);
+        BattleUnit unit = hit ? hit.GetComponentInParent<BattleUnit>() : null;
+
+        if (unit != _lastHoverUnit)
+        {
+            _lastHoverUnit = unit;
+            OnUnitHover?.Invoke(unit); // 유닛 호버 이벤트 발사
+        }
+
+        // 맵 정보까지 함께 호버링 체크
+        if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
+        {
+            if (cell != _lastHoverCell) // 맵이 바뀌는 경우는 드무니 셀 변경만 체크해도 충분
+            {
+                _lastHoverCell = cell;
+                OnTileHover?.Invoke(map, cell); // ★ Map 전달
+            }
+        }
+    }
+
+    void HandleClick(Vector3 worldPos)
+    {
+        // 좌클릭 (0번 버튼)
+        if (Input.GetMouseButtonDown(0))
+        {
+            // 1. 유닛 클릭 우선 판정
+            if (_lastHoverUnit != null)
+            {
+                OnUnitClick?.Invoke(_lastHoverUnit);
+                return; // 유닛 클릭했으면 타일 클릭은 무시
+            }
+
+            // 2. 타일 클릭 판정
+            if (battle.grid != null)
+            {
+                if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
+                {
+                    OnTileClick?.Invoke(map, cell); // Map 전달
+                }
+            }
+        }
+
+        // 우클릭 (취소)
+        if (Input.GetMouseButtonDown(1))
+        {
+            OnCancelKeyPress?.Invoke();
+        }
+    }
+
+    void HandleHotkeys()
+    {
+        // 취소 키
+        if (Input.GetKeyDown(battle_CancelKey) || Input.GetKeyDown(KeyCode.Escape))
+        {
+            OnCancelKeyPress?.Invoke();
+        }
+
+        // 확정 키
+        if (Input.GetKeyDown(battle_CurrentKey) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
+        {
+            OnConfirmKeyPress?.Invoke();
+        }
+
+        // 탭 키 (HUD 토글) - 이건 여기서 처리해도 무방
+        if (Input.GetKeyDown(KeyCode.Tab))
+        {
+            hudCtrl?.Toggle();
+        }
+
+        // 숫자 키 (배속)
+        for (int i = 0; i < speedBinds.Length; i++)
+        {
+            if (Input.GetKeyDown(speedBinds[i].key))
+            {
+                speedCtrl.SetSpeedIndex(speedBinds[i].idx);
+            }
+        }
+    }
+
 
     bool EnsureProviders()
     {
@@ -152,174 +289,6 @@ public class BattleInput : MonoBehaviour
         {
             battle?.OnTileClicked(provider.PlayerFloor, playerCell);
             return;
-        }
-    }
-
-    void HandleActionShortcuts()
-    {
-        if (PopupManager.IsModalOpen) return;
-
-        // === 스킬 관련 입력 공통 게이트 ===
-        bool canSelectSkillNow = (battle != null
-            && battle.IsPlayerTurn
-            && battle.isSelectingSkill);      // Attack으로 패널 열린 상태
-        bool canTargetSkill = (battle != null
-            && battle.IsPlayerTurn
-            && battle.IsTargeting
-            && battle.currentSkillSO != null);
-        bool canTargetKnockback = (battle != null
-            && battle.IsPlayerTurn
-            && battle.IsKnockbackTargeting
-            && battle.currentSkillSO != null);
-
-        bool isTargetingNow = canTargetSkill;
-
-        if (!wasTargetingPrev && isTargetingNow)
-        {
-            // 스킬 선택으로 Targeting 들어온 '첫 프레임' → 그 프레임의 좌클릭은 무시
-            suppressLMBOnce = true;
-        }
-        if (!Input.GetMouseButton(0))
-        {
-            // 마우스 버튼이 올라간 뒤에야 다음 좌클릭을 허용
-            if (suppressLMBOnce) suppressLMBOnce = false;
-        }
-        wasTargetingPrev = isTargetingNow;
-
-        // 우클릭/Q로 취소(선택사항)
-        if (Input.GetMouseButtonDown(1) || Input.GetKeyDown(battle_CancelKey))
-        {
-            // 스킬 타겟팅 중(선택됨) → '스킬만 해제', 패널 유지 (1단계 취소)
-            if (canTargetSkill || canTargetKnockback)
-            {
-                battle.CancelCurrentAction(); // 내부에서 스킬만 초기화 & 패널 유지
-                return;
-            }
-            // 타겟팅 아님 + 스킬 패널 열림 → 패널 닫기 (2단계 취소)
-            if (battle != null && battle.isSelectingSkill)
-            {
-                battle.ClearSkillPreview();
-                battle.CloseSkillPanel();
-                return;
-            }
-            // 그 외(이동 중 등) 일반 취소
-            battle?.CancelCurrentAction();
-        }
-
-        if (Input.GetKeyDown(battle_Escape))   // 도망가기(F1)
-        {
-            battle?.CancelCurrentAction(); // 진행 중이던 선택 취소
-            battle?.OnClickEscape();       // 전투 즉시 종료 & 복귀
-        }
-
-        // === E 키로 확정 (Unit 스킬일 때만) ===
-        if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Unit && Input.GetKeyDown(battle_CurrentKey))
-        {
-            battle.ConfirmTarget();
-        }
-        else if (canTargetSkill && battle.currentSkillSO.targetMode == SkillTargetMode.Tile && Input.GetKeyDown(battle_CurrentKey))
-        {
-            var map = battle.CurrentSkillTargetMap ?? (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
-            if (map != null) battle.ConfirmSkillOnTile(map, battle.selectedCell);
-        }
-
-        // === 스킬 타겟팅 중 호버 미리보기 ===
-        if (canTargetSkill)
-        {
-            // 타겟 확정도 UI 위 클릭이면 무시
-            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-                return;
-
-            Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
-            world.z = 0f;
-
-            if (battle.currentSkillSO != null && battle.currentSkillSO.targetMode == SkillTargetMode.Unit)
-            {
-                var skill = battle.currentSkillSO;
-                var acting = battle.ActingUnit;
-                bool wantsAlly = skill is AllyRetreatSwapSkill;
-
-                var hit = Physics2D.Raycast(world, Vector2.zero, 0.01f, unitMask);
-                var unit = hit.collider ? hit.collider.GetComponentInParent<BattleUnit>() : null;
-
-                if (unit != null && acting != null)
-                {
-                    bool isAlly = (unit.team == acting.team);
-                    bool isValidTarget =
-                        (!wantsAlly && !isAlly) ||   // 일반 스킬: 적만
-                        (wantsAlly && isAlly);       // AllyRetreat: 아군만
-
-                    if (isValidTarget)
-                    {
-                        if (!battle.SelectTargetByUnit(unit))
-                        {
-                            battle.PreviewSkillAreaOnUnit(unit);
-                        }
-                    }
-                    else
-                    {
-                        // 유효 타겟이 아니면 기존 선택 유지 / 프리뷰 유지
-                        if (battle.SelectedTarget != null)
-                            battle.PreviewSkillAreaOnUnit(battle.SelectedTarget);
-                        else
-                            battle.ClearSkillPreview();
-                    }
-                }
-                else
-                {
-                    if (battle.SelectedTarget != null)
-                        battle.PreviewSkillAreaOnUnit(battle.SelectedTarget);
-                    else
-                        battle.ClearSkillPreview();
-                }
-            }
-            else
-            {
-                var map = battle.CurrentSkillTargetMap ?? (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
-                if (map != null)
-                {
-                    if (TryCell(map, world, out var cell))
-                    {
-                        // 내부 커서만 동기화 + 프리뷰만
-                        battle.selectedCell = cell;
-                        battle.PreviewSkillAreaOnTile(map, cell); // ← 프리뷰
-                    }
-                }
-            }
-        }
-        if (canTargetSkill && !suppressLMBOnce && Input.GetMouseButtonDown(0)) // 좌클릭 확정(첫 클릭 무시)
-        {
-            Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
-            world.z = 0f;
-
-            if (battle.currentSkillSO != null && battle.currentSkillSO.targetMode == SkillTargetMode.Unit)
-            {
-                // 유닛 레이캐스트로 확정
-                var hit = Physics2D.Raycast(world, Vector2.zero, 0.01f, unitMask);
-                if (hit.collider != null)
-                {
-                    var unit = hit.collider.GetComponentInParent<BattleUnit>();
-                    if (unit != null)
-                    {
-                        battle.ConfirmSkillOnUnit(unit);
-                        return;
-                    }
-                }
-            }
-            else // SkillTargetMode.Tile
-            {
-                var map = battle.CurrentSkillTargetMap ?? (Shared.battleMapManager as IBattleMapProvider)?.EnemyFloor;
-                if (map != null)
-                {
-                    if (TryCell(map, world, out var cell))
-                    {
-                        battle.selectedCell = cell; // 내부 커서 동기화
-                        battle.ConfirmSkillOnTile(map, cell);     // 확정
-                        return;
-                    }
-                    // 타일맵 밖 클릭이면 아무 것도 하지 않음(실행 X)
-                }
-            }
         }
     }
     #endregion

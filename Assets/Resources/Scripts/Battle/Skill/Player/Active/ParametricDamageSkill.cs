@@ -202,6 +202,43 @@ public class ParametricDamageSkill : SkillAsset
         costResource = SkillCostResource.MP;
     }
 
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 1. 훈련 루트 확인: 넉백을 사용하는가?
+        int route = caster.GetTrainingRouteIndex(this);
+        bool useKnockback = trainingUseKnockback && routeForKnockback >= 0 && route == routeForKnockback;
+
+        if (useKnockback && targetUnit != null)
+        {
+            // 2. 넉백 후보 계산
+            var candidates = GetKnockbackCandidates(bm, caster, targetUnit);
+
+            if (candidates != null && candidates.Count > 0)
+            {
+                // 3. 사용자 선택 대기
+                Vector3Int? chosen = null;
+                yield return bm.WaitForCellSelection(targetUnit.CurrentMap, candidates, (res) => chosen = res);
+
+                // 4. 선택됨 -> Pending 등록
+                if (chosen.HasValue)
+                {
+                    bm.SetPendingKnockback(this, targetUnit, chosen.Value);
+                }
+                else
+                {
+                    // 취소 시 스킬 자체를 취소할지, 넉백 없이 공격할지 결정.
+                    // 보통은 취소면 스킬 취소.
+                    bm.CancelCurrentAction();
+                    yield break;
+                }
+            }
+        }
+
+        // 5. 공통 공격 흐름 실행 (넉백 예약된 상태로)
+        // (여기서 ShouldGapCloseToTarget 체크 등은 공통 함수 내부에서 처리됨)
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
+    }
+
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
     {
         // 현재 턴의 시전자(플레이어든 적이든)

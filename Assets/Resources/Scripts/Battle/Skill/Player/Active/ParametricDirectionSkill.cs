@@ -84,6 +84,16 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     public Tilemap GetTargetMap(BattleManager _battlemanager, BattleUnit _caster)
        => _caster ? _caster.CurrentMap : null;
 
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 타겟 맵이 없으면 실행 불가
+        if (targetMap == null) yield break;
+
+        // 공통 타일 스킬 흐름 (애니 -> ResolveOnTile 호출)
+        // ResolveOnTile 안에서 이동 로직이 이미 다 구현되어 있음
+        yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
+    }
+
     public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _none)
     {
         if (!_battlemanager || !_caster || !_caster.CurrentMap) yield break;

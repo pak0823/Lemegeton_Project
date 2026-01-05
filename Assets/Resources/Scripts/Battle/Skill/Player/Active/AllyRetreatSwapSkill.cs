@@ -61,6 +61,51 @@ public class AllyRetreatSwapSkill : SkillAsset
         return _caster.GetTrainingRouteIndex(this); // 기존 TrainingDB/UnitData 구조 재사용
     }
 
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 1. 자기 자신 선택 불가 및 팀 체크
+        if (targetUnit == caster || targetUnit.team != caster.team) yield break;
+
+        // 2. 후퇴 가능한 칸 계산 (자신이 들고 있던 로직 사용)
+        var candidates = GetRetreatCandidates(bm, targetUnit).ToList();
+
+        if (candidates.Count == 0)
+        {
+            // 힌트 메시지 출력 추가
+            Debug.Log($"[AllyRetreat] {targetUnit.name} 뒤에 후퇴할 공간이 없습니다.");
+            bm.EmitActionLabel(caster, "공간 부족!");
+
+            bm.CancelCurrentAction();
+            yield break;
+        }
+
+        // 3. 사용자에게 위치 선택 요청 (BM의 공용 도구 사용)
+        Vector3Int? chosen = null;
+        yield return bm.WaitForCellSelection(targetUnit.CurrentMap, candidates, (res) => chosen = res);
+
+        // 4. 취소됨?
+        if (chosen == null)
+        {
+            bm.CancelCurrentAction();
+            yield break;
+        }
+
+        // 5. 비용 지불 (MP 등)
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeMP(cost))
+        {
+            bm.CancelCurrentAction();
+            yield break;
+        }
+
+        // 6. 실제 스왑 실행 (기존 로직)
+        yield return ResolveSwapWithDest(bm, caster, targetUnit, chosen.Value);
+
+        // 7. 마무리 (쿨다운 및 턴 넘김)
+        caster.ApplyCooldown(this);
+        bm.FinishActionAfterSkill(); // BM에게 "나 끝났어" 보고
+    }
+
     // 이 스킬은 범위 피해가 없으므로 AreaCells는 비워둔다.
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
     {

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -69,7 +70,7 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
         return caster.GetTrainingRouteIndex(this);
     }
 
-    public override System.Collections.Generic.IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
     {
         // 자기 자신 대상 스킬이라 범위 프리뷰는 필요 없음
         yield break;
@@ -135,6 +136,13 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
         };
 
         caster.OnDealtDamage += handler;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 타겟팅 과정 없이, 즉시 자기 자신(caster)을 대상으로 실행 흐름 진입
+        // PerformStandardUnitSkillFlow가 애니메이션 -> ResolveOnUnit 호출을 다 해줌
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
