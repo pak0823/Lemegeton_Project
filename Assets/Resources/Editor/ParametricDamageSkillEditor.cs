@@ -9,13 +9,14 @@ public class ParametricDamageSkillEditor : Editor
     SerializedProperty displayNameProp;
     SerializedProperty descriptionImageProp;
     SerializedProperty descriptionProp;
-    SerializedProperty mpCostProp;
+    SerializedProperty CostProp;
     SerializedProperty cooldownTurnsProp;
     SerializedProperty useGapCloseJumpProp;
     SerializedProperty legacyIdProp;
     SerializedProperty trainingRoutesProp;
     SerializedProperty animKindProp;
-SerializedProperty animTriggerOverrideProp;
+    SerializedProperty animTriggerOverrideProp;
+    SerializedProperty targetAlignmentProp;
 
     // ParametricDamage 고유 + 래핑 필드
     SerializedProperty priorityMode;
@@ -27,6 +28,16 @@ SerializedProperty animTriggerOverrideProp;
     SerializedProperty conditionalMultipliers;
     SerializedProperty selectionMode;
     SerializedProperty diagUseNEAxis;
+    SerializedProperty applyStatusOnHitProp;
+    SerializedProperty changeTileToProp;
+
+    // 상태 소비 프로퍼티
+    SerializedProperty consumeStateOnCast;
+    SerializedProperty statesToConsume;
+
+    // 투사체 관련 필드
+    SerializedProperty projectilePrefab;
+    SerializedProperty projectileSpeed;
 
     // Training 관련
     SerializedProperty trainingUseAreaOverride;
@@ -95,7 +106,7 @@ SerializedProperty animTriggerOverrideProp;
         displayNameProp = serializedObject.FindProperty("displayName");
         descriptionImageProp = serializedObject.FindProperty("descriptionImage");
         descriptionProp = serializedObject.FindProperty("description");
-        mpCostProp = serializedObject.FindProperty("mpCost");
+        CostProp = serializedObject.FindProperty("mpCost");
         cooldownTurnsProp = serializedObject.FindProperty("cooldownTurns");
         useGapCloseJumpProp = serializedObject.FindProperty("useGapCloseJump");
         legacyIdProp = serializedObject.FindProperty("legacyId");
@@ -103,6 +114,7 @@ SerializedProperty animTriggerOverrideProp;
         animKindProp = serializedObject.FindProperty("animKind");
         animTriggerOverrideProp = serializedObject.FindProperty("animTriggerOverride");
         priorityMode = serializedObject.FindProperty("priorityMode");
+        targetAlignmentProp = serializedObject.FindProperty("targetAlignment");
 
         // === ParametricDamageSkill 고유 필드 ===
         priorityMode = serializedObject.FindProperty("priorityMode");
@@ -114,6 +126,16 @@ SerializedProperty animTriggerOverrideProp;
         conditionalMultipliers = serializedObject.FindProperty("conditionalMultipliers");
         selectionMode = serializedObject.FindProperty("selectionMode");
         diagUseNEAxis = serializedObject.FindProperty("diagUseNEAxis");
+        applyStatusOnHitProp = serializedObject.FindProperty("applyStatusOnHit");
+        changeTileToProp = serializedObject.FindProperty("changeTileTo");
+
+        // 상태 소비 프로퍼티 연결
+        consumeStateOnCast = serializedObject.FindProperty("consumeStateOnCast");
+        statesToConsume = serializedObject.FindProperty("statesToConsume");
+
+        // 투사체 프로퍼티 연결
+        projectilePrefab = serializedObject.FindProperty("projectilePrefab");
+        projectileSpeed = serializedObject.FindProperty("projectileSpeed");
 
         // Training
         trainingUseAreaOverride = serializedObject.FindProperty("trainingUseAreaOverride");
@@ -186,10 +208,18 @@ SerializedProperty animTriggerOverrideProp;
         EditorGUILayout.PropertyField(displayNameProp);
         EditorGUILayout.PropertyField(descriptionImageProp);
         EditorGUILayout.PropertyField(descriptionProp);
-        EditorGUILayout.PropertyField(mpCostProp, new GUIContent("MP Cost"));
+        EditorGUILayout.PropertyField(CostProp, new GUIContent("MP Cost"));
         EditorGUILayout.PropertyField(cooldownTurnsProp, new GUIContent("Cooldown Turns"));
         EditorGUILayout.PropertyField(useGapCloseJumpProp, new GUIContent("Use Gap Close Jump"));
         EditorGUILayout.PropertyField(legacyIdProp, new GUIContent("Legacy Id"));
+
+        // Targeting Rules 표시
+        EditorGUILayout.BeginVertical("box");
+        EditorGUILayout.LabelField("Targeting Rules (아군/적군 구분)", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(targetAlignmentProp);
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space();
 
         // === Animation 설정 표시 ===
         EditorGUILayout.Space();
@@ -197,12 +227,28 @@ SerializedProperty animTriggerOverrideProp;
         EditorGUILayout.PropertyField(animKindProp, new GUIContent("Anim Kind"));
         EditorGUILayout.PropertyField(animTriggerOverrideProp, new GUIContent("Anim Trigger Override"));
 
+        // 투사체 설정
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Projectile Settings (Ranged Only)", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(projectilePrefab, new GUIContent("Projectile Prefab"));
+        EditorGUILayout.PropertyField(projectileSpeed, new GUIContent("Projectile Speed"));
+
         EditorGUILayout.Space();
         EditorGUILayout.PropertyField(trainingRoutesProp, true);
 
+        // 상태 소비 섹션
         EditorGUILayout.Space();
+        EditorGUILayout.LabelField("State Consumption", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(consumeStateOnCast, new GUIContent("Consume State?"));
+        if (consumeStateOnCast.boolValue)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(statesToConsume, new GUIContent("State to Remove"));
+            EditorGUI.indentLevel--;
+        }
 
         // === ParametricDamage 고유 설정 ===
+        EditorGUILayout.Space();
         EditorGUILayout.LabelField("Targeting", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(priorityMode);
         EditorGUILayout.PropertyField(preferredStatus);
@@ -395,6 +441,15 @@ SerializedProperty animTriggerOverrideProp;
             EditorGUILayout.PropertyField(enemyFrontlineDir);
             EditorGUI.indentLevel--;
         }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.BeginVertical("box");
+        EditorGUILayout.LabelField("Hit Effects & Tile (확장)", EditorStyles.boldLabel);
+
+        EditorGUILayout.PropertyField(applyStatusOnHitProp, new GUIContent("Hit Status Effects"), true);
+        EditorGUILayout.PropertyField(changeTileToProp, new GUIContent("Change Tile To"));
+
+        EditorGUILayout.EndVertical();
 
         serializedObject.ApplyModifiedProperties();
     }

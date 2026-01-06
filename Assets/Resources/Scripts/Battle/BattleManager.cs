@@ -223,8 +223,15 @@ public class BattleManager : MonoBehaviour
     {
         if (target == null || acting == null || currentSkillSO == null) return false;
 
-        // 이미 죽은 놈은 타겟 불가 (부활 스킬 제외)
-        if (target.IsDead) return false;
+        // 부활(Revive) 스킬인 경우 죽은 유닛도 타겟팅 허용
+        bool isReviveSkill = false;
+        if (currentSkillSO is ParametricSupportSkill supportSkill)
+        {
+            if (supportSkill.mode == SupportSkillMode.Revive)
+                isReviveSkill = true;
+        }
+        // 부활 스킬이 아니면 죽은 유닛은 선택 불가
+        if (!isReviveSkill && target.IsDead) return false;
 
         // 타겟팅 규칙 확인
         switch (currentSkillSO.targetAlignment)
@@ -251,7 +258,15 @@ public class BattleManager : MonoBehaviour
     {
         if (state == BattleState.Resolving) return; // 실행 중엔 무시
 
-        // 스킬 타겟팅 중이라면?
+        // 타일 타겟팅 모드일 때 유닛을 클릭하면, 그 유닛의 위치(Tile)를 클릭한 것으로 처리
+        if (currentSkillSO != null && currentSkillSO.targetMode == SkillTargetMode.Tile)
+        {
+            // 유닛이 있는 맵과 셀 좌표를 넘겨줌
+            ConfirmSkillOnTile(unit.CurrentMap, unit.Cell);
+            return;
+        }
+
+        // 스킬 타겟팅 중이라면
         if (currentSkillSO != null && currentSkillSO.targetMode == SkillTargetMode.Unit)
         {
             if (IsValidSkillTarget(unit))
@@ -688,6 +703,22 @@ public class BattleManager : MonoBehaviour
         var sc = _unit.GetComponent<StatusController>();
         var usc = _unit.GetComponent<UnitStateController>();
 
+        // 수면 상태 체크: 수면 중이면 행동 불가 -> 수면 해제 후 턴 종료
+        if (usc != null && usc.Has(UnitStateId.Sleep))
+        {
+            Debug.Log($"[Sleep] {_unit.name} 수면 상태이므로 턴을 넘깁니다.");
+
+            // 수면 상태 제거 (1턴 지속이므로 턴이 오면 바로 해제)
+            usc.Remove(UnitStateId.Sleep);
+
+            // 행동 없이 턴 종료 처리
+            if (_unit.team == Team.Player)
+                EndPlayerTurn();
+            else
+                EndEnemyTurn(_unit);
+            return;
+        }
+
 
         // 이 턴 시작 시점에 Fear가 있었는지 먼저 체크
         bool hadFear = (usc != null && usc.Has(UnitStateId.Fear));
@@ -1044,9 +1075,82 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    public BattleUnit GetUnitAt(Vector3Int cell)
+    {
+        if (grid == null) return null;
+
+        // 플레이어 맵을 기준으로 월드 좌표 변환 (적 맵과 그리드는 공유하므로 상관없음)
+        var map = grid.GetMap(Team.Player);
+        if (map == null) return null;
+
+        // 타일 중앙의 월드 좌표 구하기
+        Vector3 worldPos = map.GetCellCenterWorld(cell);
+
+        // 해당 위치에 유닛이 있는지 물리적으로 체크 (unitMask 사용)
+        Collider2D hit = Physics2D.OverlapCircle(worldPos, 0.2f, unitMask);
+
+        if (hit != null)
+        {
+            return hit.GetComponentInParent<BattleUnit>();
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 과로(Overwork) 상태를 체크하고 재행동을 처리
+    /// 리턴값: true면 재행동(턴 종료 중단), false면 정상 종료 진행
+    /// </summary>
+    private bool TryProcessOverwork()
+    {
+        if (acting == null) return false;
+
+        var statusCtrl = acting.GetComponent<StatusController>();
+        var usc = acting.GetComponent<UnitStateController>();
+        if (statusCtrl == null) return false;
+
+        // 과로 스택 확인
+        int overworkStacks = statusCtrl.GetStacks(StatusId.Overwork);
+
+        // 스택이 없으면 과로 처리 안 함
+        if (overworkStacks <= 0) return false;
+
+        // 스택 1 감소 (비용 지불)
+        int nextStack = overworkStacks - 1;
+        statusCtrl.SetStacks(StatusId.Overwork, nextStack);
+
+        // 3. 마지막 스택 소모 시 (예: 1 -> 0)
+        // 재행동을 주지 않고, 수면 상태를 부여한 뒤 정상적으로 턴을 종료시킵니다.
+        if (nextStack == 0)
+        {
+            if (usc != null)
+            {
+                Debug.Log($"[BattleManager] {acting.name} 과로 종료 -> 수면 상태 부여 (다음 턴 휴식)");
+                usc.Apply(UnitStateId.Sleep);
+            }
+            // false를 반환해야 EndPlayerTurn이 진행되어 ATB 대기 상태로 넘어갑니다.
+            return false;
+        }
+
+        Debug.Log($"[BattleManager] {acting.name} 과로 발동! (남은 스택: {nextStack}) -> 즉시 턴 획득");
+
+        // 행동력 리필 & 재행동 시작
+        remainingActions = baseActionsPerTurn;
+        usedActions.Clear();
+        state = BattleState.ActionSelect;
+
+        return true; // 턴 종료를 막고 다시 행동 기회 부여
+    }
+
     // 플레이어 턴 종료 처리
     void EndPlayerTurn()
     {
+        // 과로 체크 및 재행동 처리
+        if (TryProcessOverwork())
+        {
+            return;
+        }
+
         ClearAllPreviews();
         ClearTargetSelection();
 
@@ -1536,6 +1640,8 @@ public class BattleManager : MonoBehaviour
             state = BattleState.Idle;
             return;
         }
+
+        if (TryProcessOverwork()) return;
 
         enemyRoutine = null;
 

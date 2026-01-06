@@ -1,0 +1,117 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 492f0b7ae9548a84098a9e4545fd6b7c, type: 3}
+  m_Name: FlaskThrow
+  m_EditorClassIdentifier: 
+  displayName: "\uD50C\uB77C\uC2A4\uD06C \uD22C\uCC99"
+  descriptionImage: {fileID: 0}
+  description: "\uB77C\uC2A4\uD2B8\uBCF4\uB974\uAC00 \uC801 \uD0C0\uC77C\uC744 \uC9C0\uC815\uD558\uC5EC
+    \uBB3C\uB9AC \uD53C\uD574\uB97C \uAC00\uD569\uB2C8\uB2E4."
+  school: 0
+  attribute: 0
+  power: 1
+  costResource: 0
+  cost: 0
+  mpCost: 0
+  targetMode: 1
+  targetAlignment: 0
+  cooldownTurns: 0
+  animKind: 2
+  animTriggerOverride: Skill_1
+  useGapCloseJump: 0
+  legacyId: 0
+  trainingRoutes:
+  - title: 
+    description: 
+  - title: 
+    description: 
+  - title: 
+    description: 
+  rules:
+  - name: Revive Mode
+    requireAll: 070000000100000006000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 7294112da2554d94da3cb4f3a7833805, type: 2}
+    overrideAreaPreset: 1
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  - name: Toxic Mode
+    requireAll: 0600000007000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: bcc7fe3f6fbe9754184f1cf9fa800229, type: 2}
+    overrideAreaPreset: 1
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  - name: Haste Mode
+    requireAll: 0100000006000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 532a973bbd9275e4a85de47103f0e9ec, type: 2}
+    overrideAreaPreset: 1
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  - name: Cleanse Mode
+    requireAll: 0700000001000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 7805116ddbbe7b74ebb09221a834b93d, type: 2}
+    overrideAreaPreset: 1
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  - name: Support Mode
+    requireAll: 01000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: f34ffb223c2e9af4f82dab633c92db23, type: 2}
+    overrideAreaPreset: 1
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  - name: Explosion Mode
+    requireAll: 06000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: c30b2fc01219b434ba99a0c988a1ecb7, type: 2}
+    overrideAreaPreset: 1
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  - name: Disturbance Mode
+    requireAll: 07000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 45bb716c0eb55aa4f979ac5614b3e463, type: 2}
+    overrideAreaPreset: 1
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  defaultSkill: {fileID: 11400000, guid: 9c7be35563b30c14391c1908dbd7693b, type: 2}

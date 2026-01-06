@@ -119,7 +119,7 @@ public class BattleInput : MonoBehaviour
     void HandleHover(Vector3 worldPos)
     {
         // 유닛 호버 체크
-        var hit = Physics2D.OverlapCircle(worldPos, 0.15f, unitMask);
+        var hit = Physics2D.OverlapCircle(worldPos, 0.1f, unitMask);
         BattleUnit unit = hit ? hit.GetComponentInParent<BattleUnit>() : null;
 
         if (unit != _lastHoverUnit)
@@ -271,7 +271,7 @@ public class BattleInput : MonoBehaviour
         world.z = 0f;
 
         // 1) 유닛부터 체크 (단일 대상 클릭 우선)
-        var hit = Physics2D.OverlapCircle(world, 0.15f, unitMask);
+        var hit = Physics2D.OverlapCircle(world, 0.1f, unitMask);
         if (hit?.TryGetComponent(out BattleUnit unit) ?? false)
         {
             battle?.OnUnitClicked(unit);

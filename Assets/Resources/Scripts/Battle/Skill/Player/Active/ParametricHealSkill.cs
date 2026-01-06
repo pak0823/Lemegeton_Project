@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 
 [CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Heal", fileName = "ParametricHealSkill")]
-public class ParametricHealSkill : SkillAsset, ITargetMapProvider
+public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTileSkill
 {
     // 기존 Damage와 동일한 프리셋을 그대로 사용해 재사용성 확보
     public ParametricDamageSkill.AreaPreset areaPreset = ParametricDamageSkill.AreaPreset.Single;
@@ -16,7 +16,16 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
 
     [Header("Heal")]
     public float powerOverride = 1f;            // 힐 배수 덮어쓰기(옵션, 없으면 SkillAsset.power 사용)
-    public bool consumeSupportAfterCast = false; // 시전 후 Support 상태 해제할지
+
+    // 투사체 설정
+    [Header("Projectile Settings")]
+    public ProjectileController projectilePrefab;
+    public float projectileSpeed = 4f;
+
+    // 시전 후 상태 제거 옵션
+    [Header("State Consumption(상태 제거 설정)")]
+    public bool consumeStateOnCast = false;
+    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
 
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }
@@ -29,6 +38,29 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
         targetMode = selectionMode;
         costResource = SkillCostResource.MP;
     }
+    public ProjectileController GetProjectilePrefab(BattleUnit caster)
+    {
+        return projectilePrefab;
+    }
+
+    void ConsumeStates(BattleUnit caster)
+    {
+        if (!consumeStateOnCast || statesToConsume == null) return;
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null) return;
+
+        foreach (var s in statesToConsume)
+        {
+            if (s != UnitStateId.None)
+                usc.Remove(s);
+        }
+    }
+
+    public float GetProjectileSpeed(BattleUnit caster)
+    {
+        return projectileSpeed;
+    }
+
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
     {
         foreach (var c in AreaShapes.GetCells(_originCell, areaPreset, false))
@@ -83,11 +115,9 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
         if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
         HealArea(_battlemanager, _caster, center.CurrentMap, center.Cell);
-        if (consumeSupportAfterCast)
-            _caster.GetComponent<UnitStateController>()?.Remove(UnitStateId.Support);
+        ConsumeStates(_caster);
+
         yield break;
-
-
     }
 
     public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
@@ -99,8 +129,8 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider
         if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
         HealArea(_battlemanager, _caster, _map, _originCell);
-        if (consumeSupportAfterCast)
-            _caster.GetComponent<UnitStateController>()?.Remove(UnitStateId.Support);
+        ConsumeStates(_caster);
+
         yield break;
 
 

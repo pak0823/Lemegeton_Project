@@ -15,13 +15,16 @@ public enum StatusId
     Shooting = 1, // 럭키식스 사격 중첩
     Action = 2, // 기간트 대응 중첩
     Fixing = 3, // 이동 저항 상태(현재는 스택 구현에 있는데 상태로 변경해야함)
+    Overwork = 4, //과로 중첩
 
     Defense = 21, // 방어 중첩
     Resistance = 22,  // 저항 중첩
     Weakness = 23, // 나약 중첩
     Exhaustion = 24, // 탈진 중첩
     Slow = 25 , // 민첩 감소 중첩
-    
+    Suppression = 26, //제압 중첩
+
+
     Bleeding = 50, // 출혈 중첩
     Poisoning = 51, // 중독 중첩
     Ignition = 52 // 발화 중첩
@@ -42,7 +45,9 @@ public static class DebuffTuning
     };
     public const int MaxStacks = 6;
     // 출혈 스택당 체력 비율(1% = 0.01f), 최대 6스택 동일 상한 사용
-    public const float BleedPercentPerStack = 0.01f;
+    public const float BleedPercentPerStack = 0.02f;    // 스택당 최대 체력의 1%
+    public const float PoisonPercentPerStack = 0.03f;   // 스택당 최대 체력의 3%
+    public const float IgnitionPercentPerStack = 0.03f; // 스택당 최대 체력의 3%
 
     public const float GuardPerStackMult = 0.9f; // 방어 중첩 1스택당 0.9배
 }
@@ -119,7 +124,8 @@ public class StatusController : MonoBehaviour
         if (_map.TryGetValue(id, out var e))
         {
             e.stacks = clampedStacks;
-            e.remainingTurns = durationTurns;
+            // 0이 들어오면 기존 턴 유지, 아니면 갱신
+            if (durationTurns > 0) e.remainingTurns = durationTurns;
         }
         else
         {
@@ -139,7 +145,7 @@ public class StatusController : MonoBehaviour
             e.stacks = Mathf.Min(e.stacks + stacks, maxStacks);
 
             // 지속시간은 '새로 부여된 상태' 기준으로 리셋
-            e.remainingTurns = durationTurns;
+            e.remainingTurns = Mathf.Max(e.remainingTurns, durationTurns);
         }
         else
         {
@@ -188,16 +194,66 @@ public class StatusController : MonoBehaviour
     public float ApplyAgilityModifier(float baseAgility)
         => baseAgility * GetAgilityMultiplier();
 
+    // 저항 값을 가져오는 헬퍼 (지금은 기본 1.0 리턴, 나중에 스탯이랑 연결)
+    public float GetResistance(StatusId id)
+    {
+        // 예: if (id == StatusId.Bleeding) return _owner.BleedResistance;
+        return 1.0f;
+    }
+
     /// <summary>이 유닛의 턴 시작 시 지속시간 감소/정리.</summary>
     public void OnTurnStart()
     {
-        // 출혈 틱: 스택 × 1% × MaxHP
+        if (_owner == null || _owner.IsDead) return;
+
+        // 출혈(Bleeding)
+        // 공식: max{ S, MaxHP * 0.02 * S } * R
         int bleedStacks = GetStacks(StatusId.Bleeding);
-        if (bleedStacks > 0 && _owner != null && !_owner.IsDead)
+        if (bleedStacks > 0)
         {
-            float p = DebuffTuning.BleedPercentPerStack * bleedStacks;
-            int dmg = Mathf.Max(1, Mathf.CeilToInt(_owner.MaxHP * p)); // 최소 1
-            _owner.TakeDamage(dmg); // 적대감 비발생 DoT로 둘 거면 별도 플래그가 있으면 활용, 없으면 그대로 사용
+            float resistance = GetResistance(StatusId.Bleeding);
+            float baseDmg = _owner.MaxHP * DebuffTuning.BleedPercentPerStack * bleedStacks;
+
+            // S와 공식 중 큰 값 선택
+            float rawDmg = Mathf.Max(bleedStacks, baseDmg);
+
+            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
+            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
+            // Debug.Log($"[Bleed] Stacks={bleedStacks}, Dmg={finalDmg}");
+        }
+
+        // 중독(Poisoning)
+        // 공식: max{ S, (MaxHP - HP) * 0.03 * S } * R  (잃은 체력 비례)
+        int poisonStacks = GetStacks(StatusId.Poisoning);
+        if (poisonStacks > 0 && !_owner.IsDead)
+        {
+            float resistance = GetResistance(StatusId.Poisoning);
+            float missingHP = _owner.MaxHP - _owner.HP;
+            float baseDmg = missingHP * DebuffTuning.PoisonPercentPerStack * poisonStacks;
+
+            // S와 공식 중 큰 값 선택
+            float rawDmg = Mathf.Max(poisonStacks, baseDmg);
+
+            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
+            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
+            // Debug.Log($"[Poison] Stacks={poisonStacks}, MissingHP={missingHP}, Dmg={finalDmg}");
+        }
+
+        // 발화(Ignition)
+        // 공식: max{ S, HP * 0.03 * S } * R (현재 체력 비례)
+        int ignitionStacks = GetStacks(StatusId.Ignition);
+        if (ignitionStacks > 0 && !_owner.IsDead)
+        {
+            float resistance = GetResistance(StatusId.Ignition);
+            float currentHP = _owner.HP;
+            float baseDmg = currentHP * DebuffTuning.IgnitionPercentPerStack * ignitionStacks;
+
+            // S와 공식 중 큰 값 선택
+            float rawDmg = Mathf.Max(ignitionStacks, baseDmg);
+
+            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
+            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
+            // Debug.Log($"[Ignition] Stacks={ignitionStacks}, CurHP={currentHP}, Dmg={finalDmg}");
         }
 
         bool changed = false;
@@ -208,12 +264,17 @@ public class StatusController : MonoBehaviour
             if (e.remainingTurns > 0)
             {
                 e.remainingTurns--;
+                // 턴 다 됨 -> 삭제 목록 추가
                 if (e.remainingTurns <= 0) toRemove.Add(kv.Key);
                 changed = true;
             }
         }
-        foreach (var id in toRemove) _map.Remove(id);
-        if (changed) OnStatusChanged?.Invoke();
+        foreach (var id in toRemove)
+        {
+            _map.Remove(id);
+            // Debug.Log($"[Status] {_owner.name}'s {id} expired.");
+        }
+        if (changed || toRemove.Count > 0) OnStatusChanged?.Invoke();
     }
 
     public StatusView[] GetStatusViews()

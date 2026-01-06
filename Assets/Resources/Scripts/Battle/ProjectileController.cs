@@ -5,7 +5,7 @@ using UnityEngine;
 public class ProjectileController : MonoBehaviour
 {
     [SerializeField] float travelTime = 0.35f;
-    [SerializeField] float arcHeight = 0.6f;
+    [SerializeField] float arcHeight = 0.3f;
     [SerializeField] GameObject usePrefab;
     [SerializeField] float prefabDuration = 0.25f;
 
@@ -34,11 +34,25 @@ public class ProjectileController : MonoBehaviour
     IEnumerator Co_Fly()
     {
         float t = 0f;
+        Vector3 lastPos = transform.position; // 이전 프레임 위치 저장용
+
         while (t < 1f)
         {
             t += Time.deltaTime / Mathf.Max(0.01f, travelTime);
             var p = Vector3.Lerp(start, target, t);
+
+            // 포물선 적용
             p.y += Mathf.Sin(t * Mathf.PI) * arcHeight;
+
+            // 회전 처리: 이동 방향을 바라보게 함
+            Vector3 dir = p - lastPos;
+            if (dir != Vector3.zero)
+            {
+                float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+                transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+            }
+            lastPos = p; // 위치 갱신
+
             transform.position = p;
             yield return null;
         }

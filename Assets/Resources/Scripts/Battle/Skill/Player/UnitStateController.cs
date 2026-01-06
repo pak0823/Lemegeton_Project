@@ -10,7 +10,11 @@ public enum UnitStateId
     Steam = 2,  // 럭키식스 증기 상태
     Isolation = 3,   //기간트 쇄국 상태
     Guard = 4,   //기간트 경계 상태
-    Ambush = 5,    //잠복
+    Ambush = 5,    //잠복 상태
+    Explosion = 6,    // 화학 폭발 상태
+    Disturbance = 7,  // 현상 교란 상태
+    Sleep = 8,  //수면 상태
+
 
     // 51 - 100: 공통 상태
     Moribundity = 51, //빈사 상태

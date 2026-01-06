@@ -4,8 +4,18 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
+// 상태 이상 부여를 위한 구조체 정의
+[System.Serializable]
+public struct StatusEffectInfo
+{
+    public StatusId status;
+    public int stack;
+    [Tooltip("지속 턴 (StatusController가 지원하는 경우 사용)")]
+    public int duration;
+}
+
 [CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Damage", fileName = "ParametricDamageSkill")]
-public class ParametricDamageSkill : SkillAsset
+public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
 {
     public enum AreaPreset 
     { 
@@ -34,6 +44,14 @@ public class ParametricDamageSkill : SkillAsset
     [Header("Player Targeting")]
     public bool useProvidedUnitTarget = true;   // 플레이어 스킬: 클릭한 대상 사용
 
+    [Header("On Hit Effects (확장 기능)")]
+    [Tooltip("적중 시 대상에게 부여할 상태 목록 (예: 중독, 발화)")]
+    public List<StatusEffectInfo> applyStatusOnHit = new List<StatusEffectInfo>();
+
+    [Header("Tile Modification (확장 기능)")]
+    [Tooltip("스킬 적중 시 해당 타일을 이 타일로 교체 (null이면 변경 안 함)")]
+    public TileBase changeTileTo;
+
     [System.Serializable]
     public struct ConditionalMultiplier
     {
@@ -50,11 +68,24 @@ public class ParametricDamageSkill : SkillAsset
     [Header("Diagonal Options")]
     [SerializeField] private bool diagUseNEAxis = true; //방향 변경
 
+    // 시전 후 상태 제거 옵션
+    [Header("State Consumption(상태 제거 설정)")]
+    public bool consumeStateOnCast = false;
+    [Tooltip("제거할 상태 목록")]
+    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
+
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }  // 선택값 반영
 #endif
 
     public static void ClearFrontlineCache() => _frontlineCache.Clear();
+
+    [Header("Projectile Settings (Ranged Only)")]
+    [Tooltip("투사체 프리팹 (ProjectileController 컴포넌트 필수)")]
+    public ProjectileController projectilePrefab;
+
+    [Tooltip("투사체 속도 (초당 유닛)")]
+    public float projectileSpeed = 10f;
 
     [Header("Training Effects")]
     [Header("범위 변경")]
@@ -202,6 +233,16 @@ public class ParametricDamageSkill : SkillAsset
         costResource = SkillCostResource.MP;
     }
 
+    public ProjectileController GetProjectilePrefab(BattleUnit caster)
+    {
+        return projectilePrefab;
+    }
+
+    public float GetProjectileSpeed(BattleUnit caster)
+    {
+        return projectileSpeed;
+    }
+
     public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
     {
         // 1. 훈련 루트 확인: 넉백을 사용하는가?
@@ -234,9 +275,16 @@ public class ParametricDamageSkill : SkillAsset
             }
         }
 
-        // 5. 공통 공격 흐름 실행 (넉백 예약된 상태로)
-        // (여기서 ShouldGapCloseToTarget 체크 등은 공통 함수 내부에서 처리됨)
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
+        // 타겟 유닛이 있으면 유닛 흐름, 없으면(타일 타겟팅이면) 타일 흐름 실행
+        if (targetUnit != null)
+        {
+            yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
+        }
+        else
+        {
+            // 타일 대상 스킬 흐름 (투사체 or 즉발 등은 BattleManager가 판단)
+            yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
+        }
     }
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
@@ -461,74 +509,43 @@ public class ParametricDamageSkill : SkillAsset
         int route = GetRoute(_caster);
 
         // === 멀티 히트 횟수 계산 ===
-        int hits = 1;
-        if (trainingUseMultiHit)
-        {
-            hits = Mathf.Max(1, trainingHitCount);
-        }
+        int hits = trainingUseMultiHit ? Mathf.Max(1, trainingHitCount) : 1;
 
-        //전체 적군 공격 (이 스킬에서 trainingHitAllEnemiesOnRoute0를 켠 경우)
+        List<BattleUnit> victims;
         if (trainingHitAllEnemies && routeForHitAllEnemies >= 0 && route == routeForHitAllEnemies)
         {
-            var allUnits = Object.FindObjectsOfType<BattleUnit>();
-            var victims = allUnits
-                .Where(u => u != null
-                            && !u.IsDead
-                            && u.team != _caster.team
-                            && u.CurrentMap == _map)
-                .ToList();
-
-            _battlemanager.ExecuteSkillDamage(_caster, victims, this, _map, _centerCell);
-            return;
+            victims = Object.FindObjectsOfType<BattleUnit>()
+                .Where(u => u != null && !u.IsDead && u.team != _caster.team && u.CurrentMap == _map).ToList();
         }
-
-        // 기본/다른 훈련 루트: 기존 범위 로직 사용
-        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
-        var areaVictims = _battlemanager.GetUnitsInArea(_map, area)
-                            .Where(u => u != null && !u.IsDead && u.team != _caster.team)
-                            .ToList();
-
-        // 방어 중첩 훈련 처리 (시전자에게 부여)
-        if (trainingApplyDefenseStacks &&
-            routeForDefenseStacks >= 0 &&
-            route == routeForDefenseStacks &&
-            trainingDefenseStatusId != StatusId.None)
+        else
         {
-            var sc = _caster.GetComponent<StatusController>();
-            if (sc != null)
-            {
-                sc.ApplyWithTurnContext(
-                    trainingDefenseStatusId,
-                    Mathf.Max(1, trainingDefenseStacks),
-                    Mathf.Max(1, trainingDefenseDurationTurns)
-                );
-            }
+            var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
+            victims = _battlemanager.GetUnitsInArea(_map, area)
+                            .Where(u => u != null && !u.IsDead && u.team != _caster.team).ToList();
         }
 
-        // 실제 타격: hits 만큼 반복
+        // 방어 중첩 훈련 (시전자)
+        if (trainingApplyDefenseStacks && routeForDefenseStacks >= 0 && route == routeForDefenseStacks && trainingDefenseStatusId != StatusId.None)
+        {
+            _caster.GetComponent<StatusController>()?.ApplyWithTurnContext(
+                trainingDefenseStatusId, Mathf.Max(1, trainingDefenseStacks), Mathf.Max(1, trainingDefenseDurationTurns)
+            );
+        }
+
+        // 실제 타격 (멀티 히트)
         for (int i = 0; i < hits; i++)
         {
-            _battlemanager.ExecuteSkillDamage(_caster, areaVictims, this, _map, _centerCell);
+            _battlemanager.ExecuteSkillDamage(_caster, victims, this, _map, _centerCell);
         }
-        // 모든 히트가 끝난 뒤, 자기 물리 대미지 버프를 1번만 적용
-        if (trainingUseSelfAtkBuff &&
-            routeForSelfAtkBuff >= 0 &&
-            route == routeForSelfAtkBuff &&
-            selfAtkBuffId != UnitStateBuffId.None)
+
+        foreach (var v in victims)
         {
-            var uscSelf = _caster.GetComponent<UnitStateController>();
-            if (uscSelf != null)
-            {
-                int baseTurns = Mathf.Max(1, selfAtkBuffDurationTurns);
-                int duration = baseTurns + 1;   // 사용 턴은 건너뛰고 다음 턴 1턴 동안 유지
+            ApplyStatusEffects(v);
+        }
 
-                uscSelf.ApplyBuffForTurns(selfAtkBuffId, duration);
-
-                Debug.Log(
-                    $"[ParametricDamage] Self ATK Buff(BuffId, Post-Skill): {_caster.name} " +
-                    $"buff={selfAtkBuffId}, duration={duration} (base={baseTurns})"
-                );
-            }
+        if (trainingUseSelfAtkBuff && routeForSelfAtkBuff >= 0 && route == routeForSelfAtkBuff && selfAtkBuffId != UnitStateBuffId.None)
+        {
+            _caster.GetComponent<UnitStateController>()?.ApplyBuffForTurns(selfAtkBuffId, selfAtkBuffDurationTurns + 1);
         }
     }
 
@@ -552,6 +569,8 @@ public class ParametricDamageSkill : SkillAsset
 
         // 범위 계산은 GetAreaCells 안에서 route를 보고 알아서 처리
         DealAreaDamage(_battlemanager, _caster, primary.CurrentMap, primary.Cell);
+        // 상태 이상 부여
+        ApplyStatusEffects(_target);
         yield break;
     }
     public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
@@ -567,7 +586,52 @@ public class ParametricDamageSkill : SkillAsset
         Debug.Log($"[Training] (Tile) {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
 
         DealAreaDamage(_battlemanager, _caster, _map, _originCell);
+
+        // 시전 후 상태 제거
+        ConsumeStates(_caster);
+
         yield break;
+    }
+
+    protected void ApplyStatusEffects(BattleUnit target)
+    {
+        if (applyStatusOnHit == null || applyStatusOnHit.Count == 0) return;
+        if (target == null) return;
+
+        var statusCtrl = target.GetComponent<StatusController>();
+        if (statusCtrl != null)
+        {
+            foreach (var effect in applyStatusOnHit)
+            {
+                if (effect.status != StatusId.None)
+                {
+                    // Duration이 0보다 크면 턴 컨텍스트 포함 적용, 아니면 단순 스택 설정
+                    if (effect.duration > 0)
+                    {
+                        statusCtrl.ApplyWithTurnContext(effect.status, effect.stack, effect.duration);
+                        Debug.Log($"[Status] {target.name}에게 {effect.status} 부여: {effect.stack}스택 / {effect.duration}턴");
+                    }
+                    else
+                    {
+                        statusCtrl.SetStacks(effect.status, effect.stack);
+                    }
+                }
+            }
+        }
+    }
+
+    // 상태 제거
+    void ConsumeStates(BattleUnit caster)
+    {
+        if (!consumeStateOnCast || statesToConsume == null) return;
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null) return;
+
+        foreach (var s in statesToConsume)
+        {
+            if (s != UnitStateId.None)
+                usc.Remove(s);
+        }
     }
 
     public override int GetSuppressionOnHit(BattleUnit _caster)

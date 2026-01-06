@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 492f0b7ae9548a84098a9e4545fd6b7c, type: 3}
+  m_Name: DisturbanceMulti
+  m_EditorClassIdentifier: 
+  displayName: 
+  descriptionImage: {fileID: 0}
+  description: 
+  school: 0
+  attribute: 0
+  power: 1
+  costResource: 0
+  cost: 0
+  mpCost: 0
+  targetMode: 0
+  targetAlignment: 3
+  cooldownTurns: 0
+  animKind: 3
+  animTriggerOverride: 
+  useGapCloseJump: 0
+  legacyId: 3
+  trainingRoutes:
+  - title: 
+    description: 
+  - title: 
+    description: 
+  - title: 
+    description: 
+  rules:
+  - name: Disturbance State
+    requireAll: 07000000
+    requireAny: 
+    forbidAny: 
+    skill: {fileID: 11400000, guid: 8cf0a3d742dce174fb64d9ae824533e8, type: 2}
+    overrideAreaPreset: 0
+    areaPresetWhenMatched: 0
+    overrideDisplayName: 1
+    displayNameWhenMatched: 
+    overrideIcon: 0
+    iconWhenMatched: {fileID: 0}
+  defaultSkill: {fileID: 11400000, guid: 4c199d40ea4587b4da0800959a905683, type: 2}
