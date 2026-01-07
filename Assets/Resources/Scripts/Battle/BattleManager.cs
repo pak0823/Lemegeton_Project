@@ -1827,12 +1827,15 @@ public class BattleManager : MonoBehaviour
             // 이 스킬(=legacy 그룹)에 대해 선택된 훈련 루트
             int route = acting.GetTrainingRouteIndex(skill);
 
-            // Route 2 + 해당 스킬이 "무료턴 사용" 옵션 켜져 있으면 무료턴으로 처리
-            if (route == 2)
+            // 무료 행동 체크 로직
+            if (skill is SelfStateSkill sss)
             {
-                if (skill is SelfStateSkill sss && sss.trainingFreeActionOnRoute2)
+                if (sss.trainingUseFreeAction && sss.routeForFreeAction >= 0 && route == sss.routeForFreeAction)
                     isFreeAction = true;
-                else if (skill is SelfStateCleanseSkill scs && scs.trainingFreeActionOnRoute2)
+            }
+            else if (skill is SelfStateCleanseSkill scs)
+            {
+                if (scs.trainingUseFreeAction && scs.routeForFreeAction >= 0 && route == scs.routeForFreeAction)
                     isFreeAction = true;
             }
 
@@ -2568,15 +2571,11 @@ public class BattleManager : MonoBehaviour
     // 스킬 범위를 계산해, 같은 맵에 있는 유닛들 중 해당 셀에 위치한 유닛에게 피해 적용
     public void ResolveSkillAtCell(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
-        // 1) 범위 셀들 계산 (axial 변환은 SkillLibrary 내부에서 처리됨)
+        // 범위 셀들 계산 (axial 변환은 SkillLibrary 내부에서 처리됨)
         var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
 
-        // 2) 피격 대상 수집 (같은 맵 + 셀 일치)
+        // 피격 대상 수집 (같은 맵 + 셀 일치)
         var victims = GetUnitsInArea(map, area);
-
-        // 3) 피해 적용 (임시: 적 유닛만 타격, 피해량은 캐스터의 일반 공격력 사용)
-        //ExecuteSkillDamage(caster, victims, def);
-        // 효과음/VFX 등은 여기에서
     }
 
     // === 유닛 점유/워커블 헬퍼 ===
@@ -2887,9 +2886,25 @@ public class BattleManager : MonoBehaviour
 
                 // 중앙화된 적대감 산출
                 float hostilityGained = HostilityRules.FromDamage(damage, caster, v);
+
+                if (source is ParametricDamageSkill pds)
+                {
+                    int route = caster.GetTrainingRouteIndex(pds);
+
+                    // 적의 감소 훈련 체크
+                    if (pds.trainingReduceHostility &&
+                        pds.routeForReduceHostility >= 0 &&
+                        route == pds.routeForReduceHostility)
+                    {
+                        // 0.5배 적용 (0.5만큼 감소된 값만 증가)
+                        hostilityGained *= pds.trainingHostilityMultiplier;
+                        Debug.Log($"[Hostility] {caster.name} 적의 생성 감소 훈련 적용: 원래값 -> {hostilityGained} (x{pds.trainingHostilityMultiplier})");
+                    }
+                }
+
                 caster.AddHostility(hostilityGained);
                 caster.NotifyDealtDamage(v, damage, source);
-                //Debug.Log($"[DMG] {caster.name} -> {v.name}: {damage}, Hostility +{hostilityGained:F1}");
+                Debug.Log($"[DMG] {caster.name} -> {v.name}: {damage}, Hostility +{hostilityGained:F1}");
             }
         }
     }

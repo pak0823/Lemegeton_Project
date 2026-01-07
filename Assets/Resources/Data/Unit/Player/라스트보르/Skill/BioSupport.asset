@@ -21,25 +21,34 @@ MonoBehaviour:
   attribute: 0
   power: 1
   costResource: 0
-  cost: 5
+  cost: 3
   mpCost: 0
   targetMode: 0
   targetAlignment: 3
   cooldownTurns: 1
   animKind: 3
   animTriggerOverride: Skill_2
-  useGapCloseJump: 1
+  useGapCloseJump: 0
   legacyId: 1
   trainingRoutes:
-  - title: 
-    description: 
-  - title: 
-    description: 
-  - title: 
-    description: 
+  - title: "\uC9C0\uC6D0 \uC808\uC57D \uD6C8\uB828"
+    description: "\uAE30\uC220\uC774 \uC18C\uBAA8\uD558\uB294 \uC790\uC6D0\uC744
+      \uAC10\uC18C\uD569\uB2C8\uB2E4."
+  - title: "\uCD1D\uBA85 \uAC15\uD654 \uD6C8\uB828"
+    description: "\uAE30\uC220\uC774 \uBD80\uC5EC\uD558\uB294 \uC0C1\uD0DC\uAC00
+      \uB300\uC0C1\uC758 \uCD1D\uBA85\uC744 \uAC15\uD654\uD569\uB2C8\uB2E4."
+  - title: "\uC5F0\uC18D \uD589\uB3D9 \uD6C8\uB828"
+    description: "\uAE30\uC220\uC744 \uC0AC\uC6A9\uD574\uB3C4 \uCC28\uB840\uB97C
+      \uB9C8\uCE58\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
   stateId: 1
-  trainingUseMpOverride: 0
-  trainingMpCostRoute0: 2
-  trainingApplyMagicBuffOnRoute1: 0
+  trainingUseCostOverride: 1
+  routeForCostOverride: 0
+  trainingCostOverride: 2
+  trainingApplyMagicBuff: 0
+  routeForMagicBuff: -1
   trainingMagicBuffId: 2
-  trainingFreeActionOnRoute2: 0
+  trainingApplyClarityBuff: 1
+  routeForClarityBuff: 1
+  trainingClarityBuffId: 6
+  trainingUseFreeAction: 1
+  routeForFreeAction: 2

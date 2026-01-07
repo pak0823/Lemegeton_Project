@@ -196,6 +196,15 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
     [Tooltip("이 루트가 선택되었을 때, 이 스킬로 적을 처치하면 MP를 돌려받음")]
     public int routeForRefundOnKill = -1;
 
+    // 적의(Hostility) 감소 훈련
+    [Header("적의 감소 훈련")]
+    [Tooltip("훈련 시 공격으로 인한 적의 생성량을 감소시킬지 여부")]
+    public bool trainingReduceHostility = false;
+    [Tooltip("적의 감소를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)] public int routeForReduceHostility = -1;
+    [Tooltip("적용될 적의 생성 배율 (예: 0.5 = 50%만 생성 = 0.5만큼 감소)")]
+    public float trainingHostilityMultiplier = 0.5f;
+
     [Header("Frontline Bonus(전방 보너스)")]
     [SerializeField] private bool useFrontlineBonus = false;   // 전방 보너스 사용 여부
     [SerializeField] private int frontlineDepth = 2;            // "앞 N열"

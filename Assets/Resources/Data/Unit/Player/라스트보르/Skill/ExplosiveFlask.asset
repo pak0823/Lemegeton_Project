@@ -56,9 +56,9 @@ MonoBehaviour:
   statesToConsume: 06000000
   projectilePrefab: {fileID: 3662297851796056336, guid: 691b833b72266f84d9cd2e94f86aff23, type: 3}
   projectileSpeed: 4
-  trainingUseAreaOverride: 0
-  routeForAreaOverride: -1
-  trainingAreaPreset: 0
+  trainingUseAreaOverride: 1
+  routeForAreaOverride: 0
+  trainingAreaPreset: 1
   trainingDiagUseNEAxis: 1
   routeForSuppression: -1
   trainingSuppressionOnHit: 0
@@ -95,6 +95,9 @@ MonoBehaviour:
   fearDurationTurns: 1
   trainingRefundOnKill: 0
   routeForRefundOnKill: -1
+  trainingReduceHostility: 1
+  routeForReduceHostility: 1
+  trainingHostilityMultiplier: 0.5
   useFrontlineBonus: 0
   frontlineDepth: 2
   frontlineMultiplier: 1.5

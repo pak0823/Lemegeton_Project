@@ -640,8 +640,25 @@ public class PlayerMovement : MonoBehaviour
             _pathCostTMP.text = $"-{cost}";
         }
     }
-    // --- 타일 기반 최소 경로 탐색 (BFS) ---
 
+    // 두 타일 사이의 높이 차이가 이동 가능한 수준인지 확인 (3칸 이상 불가)
+    bool IsHeightDiffValid(Vector3Int from, Vector3Int to)
+    {
+        Tilemap fromMap = GetWalkableMapAt(from);
+        Tilemap toMap = GetWalkableMapAt(to);
+
+        // 맵을 못 찾으면 바닥(0)으로 가정
+        float fromH = (fromMap != null) ? fromMap.tileAnchor.y : 0f;
+        float toH = (toMap != null) ? toMap.tileAnchor.y : 0f;
+
+        float diff = Mathf.Abs(toH - fromH);
+
+        // 사용자의 규칙: 3칸(0.36) 이상은 이동 불가
+        // 2칸(0.24)까지는 허용하므로, 0.3(약 2.5칸)을 기준으로 자릅니다.
+        return diff < 0.3f;
+    }
+
+    // --- 타일 기반 최소 경로 탐색 (BFS) ---
     List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal)
     {
         // 시작과 목표가 같으면 1칸짜리 경로 반환
@@ -686,6 +703,9 @@ public class PlayerMovement : MonoBehaviour
 
                 if (!IsWalkableCell(next))
                     continue;
+
+                // 높이 차이가 3칸 이상이면 이동 불가 처리
+                if (!IsHeightDiffValid(current, next)) continue;
 
                 cameFrom[next] = current;
                 queue.Enqueue(next);
@@ -1004,9 +1024,11 @@ public class PlayerMovement : MonoBehaviour
                 float startHeight = (startMap != null) ? startMap.tileAnchor.y : 0f;
                 float endHeight = (endMap != null) ? endMap.tileAnchor.y : 0f;
 
-                // 층 높이(Anchor)가 0.001 이상 차이 날 때만 점프
-                // (같은 1층 타일맵 내에서는 아무리 위아래로 움직여도 Anchor 값은 똑같으므로 점프 안 함)
-                bool isJump = Mathf.Abs(endHeight - startHeight) > 0.001f;
+                // 높이 차이 계산
+                float heightDiff = Mathf.Abs(endHeight - startHeight);
+
+                // 높이 차이가 미세하게라도 있으면 점프 (0.001f 오차 허용)
+                bool isJump = heightDiff > 0.001f;
 
                 // 방향 벡터 및 거리 계산 (2D 평면 거리 기준)
                 float dist = Vector2.Distance(startPos, endPos);
@@ -1018,22 +1040,31 @@ public class PlayerMovement : MonoBehaviour
                 float t = 0f;
 
                 // 스프라이트 방향
-                if (Mathf.Abs(dir.x) > 0.0001f)
-                    spriterenderer.flipX = dir.x > 0f;
+                if (Mathf.Abs(dir.x) > 0.0001f) spriterenderer.flipX = dir.x > 0f;
+                if (animator != null) animator.SetInteger("Move", 1);
 
-                if (animator != null)
-                    animator.SetInteger("Move", 1);
+                // 점프 높이 동적 계산
+                float currentJumpMultiplier = jumpHeightMultiplier;
+
+                if (isJump)
+                {
+                    // 1칸 차이(~0.12) vs 2칸 차이(~0.24) 구분
+                    // 0.18(약 1.5칸)보다 크면 2칸 점프로 간주하여 높이를 키움
+                    if (heightDiff > 0.18f)
+                    {
+                        currentJumpMultiplier *= 1.5f; // 2칸일 때 1.6배 더 높게 점프 (취향껏 조절)
+                    }
+
+                    // 내려가는 점프는 살짝 낮게 (기존 로직 유지)
+                    if (endHeight < startHeight)
+                    {
+                        currentJumpMultiplier *= 0.6f;
+                    }
+                }
 
                 while (t < 1f)
                 {
-                    if (GamePause.IsPaused)
-                    {
-                        if (animator != null) animator.SetInteger("Move", 0);
-                        yield return null;
-                        continue;
-                    }
-
-                    if (Time.time < movementLockUntil)
+                    if (GamePause.IsPaused || Time.time < movementLockUntil)
                     {
                         if (animator != null) animator.SetInteger("Move", 0);
                         yield return null;
@@ -1050,12 +1081,7 @@ public class PlayerMovement : MonoBehaviour
                     if (isJump && jumpCurve != null)
                     {
                         float curveValue = jumpCurve.Evaluate(percent);
-                        float currentMultiplier = jumpHeightMultiplier;
-
-                        // 내려가는 점프면 높이 좀 낮춤
-                        if (endPos.y < startPos.y) currentMultiplier *= 0.8f;
-
-                        currentPos.y += curveValue * currentMultiplier;
+                        currentPos.y += curveValue * currentJumpMultiplier;
                     }
 
                     rb.MovePosition(currentPos);

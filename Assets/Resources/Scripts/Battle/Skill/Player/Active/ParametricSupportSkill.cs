@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -13,6 +14,9 @@ public enum SupportSkillMode
 [CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Support", fileName = "ParametricSupportSkill")]
 public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTileSkill
 {
+    // 기본 범위 설정 (기본값 Single)
+    public ParametricDamageSkill.AreaPreset areaPreset = ParametricDamageSkill.AreaPreset.Single;
+
     [Header("Support Mode")]
     public SupportSkillMode mode = SupportSkillMode.Buff;
 
@@ -53,6 +57,21 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     public bool consumeStateOnCast = false;
     public List<UnitStateId> statesToConsume = new List<UnitStateId>();
 
+    [Header("Training")]
+    [Header("범위 확대 훈련")]
+    public bool trainingUseAreaOverride = false;
+    [Range(-1, 2)] public int routeForAreaOverride = -1;
+    public ParametricDamageSkill.AreaPreset trainingAreaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public bool trainingDiagUseNEAxis = true;
+
+    [Header("적의 감소 훈련")]
+    [Tooltip("훈련 시 적의 생성량을 감소시킬지 여부")]
+    public bool trainingReduceHostility = false;
+    [Tooltip("적의 감소를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)] public int routeForReduceHostility = -1;
+    [Tooltip("적용될 적의 생성 배율 (예: 0.5 = 50%만 생성)")]
+    public float trainingHostilityMultiplier = 0.5f;
+
     public bool SelfCastOnSelect => targetAlignment == SkillTargetAlignment.Self;
 
     public ProjectileController GetProjectilePrefab(BattleUnit caster)
@@ -65,91 +84,19 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
         return projectileSpeed;
     }
 
+    int GetRoute(BattleUnit _caster)
+    {
+        if (_caster == null) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
     public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
     {
         if (target == null) yield break;
 
-        // 시각 효과
-        if (visualEffectPrefab != null)
-        {
-            Instantiate(visualEffectPrefab, target.transform.position, Quaternion.identity);
-        }
-
-        var usc = target.GetComponent<UnitStateController>();
-        var status = target.GetComponent<StatusController>(); // 혹시 스택형 상태 제거가 필요할 경우
-
-        switch (mode)
-        {
-            case SupportSkillMode.Buff:
-                // 상태 부여
-                if (buffState != UnitStateId.None && usc != null)
-                {
-                    usc.ApplyForTurns(buffState, buffDuration);
-                }
-                // 버프(스탯) 부여
-                if (buffId != UnitStateBuffId.None && usc != null)
-                {
-                    usc.ApplyBuffForTurns(buffId, buffDuration);
-                }
-                if (buffStatus != StatusId.None && buffStatusStack > 0)
-                {
-                    var statusCtrl = target.GetComponent<StatusController>();
-                    if (statusCtrl != null)
-                    {
-                        statusCtrl.SetStacks(buffStatus, buffStatusStack);
-                    }
-                }
-                break;
-
-            case SupportSkillMode.Cleanse:
-                if (usc != null)
-                {
-                    if (cleanseAllNegative)
-                    {
-                        // 임시: 특정 해로운 상태들(공포, 혼란 등)을 하드코딩으로 지우거나,
-                        // UnitStateController에 "해로운 상태 목록" 정의가 필요함.
-                        // 일단 예시로 몇 개 지움:
-                        usc.Remove(UnitStateId.Confusion);
-                        usc.Remove(UnitStateId.Fear);
-                        usc.Remove(UnitStateId.Moribundity); // 빈사도 부정적 상태라면
-
-                        // StatusController의 디버프(출혈, 중독, 발화) 제거
-                        if (status != null)
-                        {
-                            status.Clear(StatusId.Bleeding);
-                            status.Clear(StatusId.Poisoning);
-                            status.Clear(StatusId.Ignition);
-                            status.Clear(StatusId.Slow);
-                            status.Clear(StatusId.Weakness);
-                            status.Clear(StatusId.Exhaustion);
-                        }
-                    }
-                    else
-                    {
-                        // 지정된 상태만 제거
-                        foreach (var id in specificCleanseList)
-                        {
-                            usc.Remove(id);
-                        }
-                    }
-                }
-                break;
-
-            case SupportSkillMode.Revive:
-                // 빈사 상태 제거
-                if (usc != null)
-                {
-                    usc.Remove(moribundityStateId);
-                }
-
-                // 체력 회복
-                int healAmount = Mathf.RoundToInt(caster.MagicDamage * healPower);
-                target.Heal(healAmount);
-
-                // 로그 출력
-                bm.EmitActionLabel(target, "Revived");
-                break;
-        }
+        // 범위 처리를 위해 ApplySupportArea 호출 (중심점: 타겟)
+        // (기존에는 단일 대상이었지만, 훈련으로 범위가 커질 수 있으므로 Area로 처리)
+        ApplySupportArea(bm, caster, target.CurrentMap, target.Cell);
 
         // 시전 후 상태 제거
         ConsumeStates(caster);
@@ -160,17 +107,12 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     // 타일 선택 시 로직 (혹시 타일로 힐/버프를 줄 경우)
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int cell, BattleUnit caster)
     {
-        // 범위 스킬이라면 해당 타일 위 유닛을 찾아 ResolveOnUnit 호출
-        BattleUnit target = bm.GetUnitAt(cell); // BattleManager에 이런 헬퍼가 있다고 가정
-        if (target != null && target.team == caster.team)
-        {
-            yield return ResolveOnUnit(bm, caster, target);
-        }
-        else
-        {
-            // (타일 대상이지만 유닛 없을 때도 상태 제거는 해야 함)
-            ConsumeStates(caster);
-        }
+        // 범위 처리를 위해 ApplySupportArea 호출 (중심점: 타일)
+        ApplySupportArea(bm, caster, map, cell);
+
+        // 시전 후 상태 제거
+        ConsumeStates(caster);
+
         yield break;
     }
 
@@ -190,5 +132,125 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
             if (s != UnitStateId.None)
                 usc.Remove(s);
         }
+    }
+
+    // 단일 대상에게 효과 적용 (기존 로직 분리)
+    void ApplyEffectToTarget(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        // 시각 효과
+        if (visualEffectPrefab != null)
+        {
+            Instantiate(visualEffectPrefab, target.transform.position, Quaternion.identity);
+        }
+
+        var usc = target.GetComponent<UnitStateController>();
+        var status = target.GetComponent<StatusController>();
+
+        switch (mode)
+        {
+            case SupportSkillMode.Buff:
+                if (buffState != UnitStateId.None && usc != null)
+                    usc.ApplyForTurns(buffState, buffDuration);
+                if (buffId != UnitStateBuffId.None && usc != null)
+                    usc.ApplyBuffForTurns(buffId, buffDuration);
+                if (buffStatus != StatusId.None && buffStatusStack > 0 && status != null)
+                    status.SetStacks(buffStatus, buffStatusStack);
+                break;
+
+            case SupportSkillMode.Cleanse:
+                if (usc != null)
+                {
+                    if (cleanseAllNegative)
+                    {
+                        usc.Remove(UnitStateId.Confusion);
+                        usc.Remove(UnitStateId.Fear);
+                        usc.Remove(UnitStateId.Moribundity);
+                        if (status != null)
+                        {
+                            status.Clear(StatusId.Bleeding);
+                            status.Clear(StatusId.Poisoning);
+                            status.Clear(StatusId.Ignition);
+                            status.Clear(StatusId.Slow);
+                            status.Clear(StatusId.Weakness);
+                            status.Clear(StatusId.Exhaustion);
+                        }
+                    }
+                    else
+                    {
+                        foreach (var id in specificCleanseList)
+                            usc.Remove(id);
+                    }
+                }
+                break;
+
+            case SupportSkillMode.Revive:
+                if (usc != null) usc.Remove(moribundityStateId);
+                int healAmount = Mathf.RoundToInt(caster.MagicDamage * healPower);
+                target.Heal(healAmount);
+                bm.EmitActionLabel(target, "Revived");
+                break;
+        }
+    }
+
+    // 범위 내 대상들에게 효과 적용 및 적의 처리
+    void ApplySupportArea(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int centerCell)
+    {
+        var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
+        // 범위 내 모든 유닛 가져오기 (BattleManager는 기본적으로 모든 유닛을 반환)
+        var allUnitsInArea = bm.GetUnitsInArea(map, area).ToList();
+
+        // 아군만 필터링
+        var targets = allUnitsInArea.Where(u => u != null && u.team == caster.team);
+
+        // 모드에 따른 생사 필터링
+        if (mode == SupportSkillMode.Revive)
+            targets = targets.Where(u => u.IsDead); // 부활은 죽은 아군만
+        else
+            targets = targets.Where(u => !u.IsDead); // 버프/정화는 산 아군만
+
+        int route = GetRoute(caster);
+
+        foreach (var target in targets)
+        {
+            // 실제 효과 적용
+            ApplyEffectToTarget(bm, caster, target);
+
+            // --- 적의(Hostility) 생성 로직 ---
+            float hostilityGained = 0f;
+
+            // 부활(Revive)인 경우 회복량 기반 적의 생성
+            if (mode == SupportSkillMode.Revive)
+            {
+                int healAmount = Mathf.RoundToInt(caster.MagicDamage * healPower);
+                hostilityGained = HostilityRules.FromHeal(healAmount, caster);
+            }
+            // (Buff나 Cleanse는 기본적으로 적의를 생성하지 않지만, 필요하면 여기서 추가)
+
+            // [훈련] 적의 감소 적용
+            if (hostilityGained > 0f && trainingReduceHostility && routeForReduceHostility >= 0 && route == routeForReduceHostility)
+            {
+                hostilityGained *= trainingHostilityMultiplier;
+                Debug.Log($"[Training] Support Hostility Reduced: {hostilityGained} (x{trainingHostilityMultiplier})");
+            }
+
+            if (hostilityGained > 0f)
+                caster.AddHostility(hostilityGained);
+        }
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
     }
 }

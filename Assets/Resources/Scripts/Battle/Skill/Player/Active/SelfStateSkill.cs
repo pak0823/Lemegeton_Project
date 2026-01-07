@@ -14,17 +14,31 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
     [Header("State")]
     public UnitStateId stateId = UnitStateId.Support;
 
-    [Header("Training Overrides")]
-    [Tooltip("MP 비용을 이 값으로 덮어씀 (trainingUseMpOverride가 true일 때만)")]
-    public bool trainingUseMpOverride = false;
-    public int trainingMpCostRoute0 = 2;   // 예: 훈련 시 2MP로 사용
+    [Header("Training")]
+    [Header("자원 절약 훈련")]
+    [Tooltip("소모 비용 덮어쓰기 활성화")]
+    public bool trainingUseCostOverride = false;
+    [Range(-1, 2)] public int routeForCostOverride = -1; // 유연한 루트 지정
+    public int trainingCostOverride = -1;
 
-    [Tooltip("특정 상태를 켰을 때 마법 공격력 버프를 추가로 부여할지 여부")]
-    public bool trainingApplyMagicBuffOnRoute1 = false;
+    [Header("추가 버프 부여 설정")]
+    [Tooltip("추가 버프 부여 활성화")]
+    public bool trainingApplyMagicBuff = false;
+    [Range(-1, 2)] public int routeForMagicBuff = -1; // 유연한 루트 지정
     public UnitStateBuffId trainingMagicBuffId = UnitStateBuffId.Smoke_MagicUp;
 
-    [Tooltip("이 스킬을 사용해도 턴을 소비하지 않음(무료 행동)")]
-    public bool trainingFreeActionOnRoute2 = false;
+    [Header("총명 강화 훈련")]
+    [Tooltip("총명 강화 버프 부여 활성화")]
+    public bool trainingApplyClarityBuff = false;
+    [Tooltip("이 훈련을 활성화할 루트 인덱스")]
+    [Range(-1, 2)] public int routeForClarityBuff = -1;
+    [Tooltip("적용할 버프 ID (DB에서 배율 설정)")]
+    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+
+    [Header("연속 행동 훈련")]
+    [Tooltip("무료 행동(턴 미소모) 활성화")]
+    public bool trainingUseFreeAction = false;
+    [Range(-1, 2)] public int routeForFreeAction = -1; // 유연한 루트 지정
 
     public bool SelfCastOnSelect => true;
 
@@ -70,11 +84,19 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
         // ==== 훈련 루트별 추가 효과 ====
         int route = _caster.GetTrainingRouteIndex(this);
 
-        // Route 1: 마법 공격력 버프 부여 (StateStatModifierDB의 Buff 통해 MAG ×1.3)
-        if (route == 1 && trainingApplyMagicBuffOnRoute1 && trainingMagicBuffId != UnitStateBuffId.None)
+        // Buff 부여
+        if (trainingApplyMagicBuff && routeForMagicBuff >= 0 && route == routeForMagicBuff && trainingMagicBuffId != UnitStateBuffId.None)
         {
             usc.ApplyBuff(trainingMagicBuffId);
-            Debug.Log($"[SelfStateSkill] Route1 MAG Buff 적용: {_caster.name}, Buff={trainingMagicBuffId}");
+            Debug.Log($"[SelfStateSkill] Training Buff applied: {_caster.name}, Buff={trainingMagicBuffId}");
+        }
+
+        // 총명 강화
+        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        {
+            // UnitStateBuffId를 통해 버프 부여
+            usc.ApplyBuff(trainingClarityBuffId);
+            Debug.Log($"[SelfStateSkill] Clarity Enhanced: {_caster.name}, Buff={trainingClarityBuffId}");
         }
 
         yield break;
@@ -91,10 +113,10 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
         if (_caster == null) return baseCost;
 
         int route = _caster.GetTrainingRouteIndex(this);
-        // Route 0 일 때 MP 비용 덮어쓰기
-        if (route == 0 && trainingUseMpOverride)
+
+        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
         {
-            return Mathf.Max(0, trainingMpCostRoute0);
+            return Mathf.Max(0, trainingCostOverride);
         }
 
         return baseCost;

@@ -180,10 +180,6 @@ MonoBehaviour:
   pushMarkerPrefab: {fileID: 3331784556236702830, guid: 938afb23c886dce4da63049a9bdb15ad, type: 3}
   goalMarkerPrefab: {fileID: 3331784556236702830, guid: dab7ff645dd812c42b1f26cbedd9a2f2, type: 3}
   pathCostLabelScale: 0.05
-  tileHeightOffset: 0.12
-  tileBaseOffset: 0
-  tileThickness: 0.25
-  heightRatioCorrection: 1.1
   jumpCurve:
     serializedVersion: 2
     m_Curve:
@@ -217,13 +213,12 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  jumpHeightMultiplier: 0.5
+  jumpHeightMultiplier: 0.3
   encounterLayerMask:
     serializedVersion: 2
     m_Bits: 16
   battleSceneName: BattleScene
   showDebugGizmos: 1
-  clickHitRadius: 0.45
 --- !u!114 &-3005220735742606062
 MonoBehaviour:
   m_ObjectHideFlags: 0

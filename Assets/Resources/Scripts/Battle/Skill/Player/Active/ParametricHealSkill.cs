@@ -27,6 +27,21 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
     public bool consumeStateOnCast = false;
     public List<UnitStateId> statesToConsume = new List<UnitStateId>();
 
+    [Header("Training")]
+    [Header("범위 확대 훈련")]
+    public bool trainingUseAreaOverride = false;
+    [Range(-1, 2)] public int routeForAreaOverride = -1;
+    public ParametricDamageSkill.AreaPreset trainingAreaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public bool trainingDiagUseNEAxis = true;
+
+    [Header("적의 감소 훈련")]
+    [Tooltip("훈련 시 적의 생성량을 감소시킬지 여부")]
+    public bool trainingReduceHostility = false;
+    [Tooltip("적의 감소를 활성화시키는 훈련 루트 인덱스 (-1이면 비활성)")]
+    [Range(-1, 2)] public int routeForReduceHostility = -1;
+    [Tooltip("적용될 적의 생성 배율 (예: 0.5 = 50%만 생성)")]
+    public float trainingHostilityMultiplier = 0.5f;
+
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }
 #endif
@@ -55,6 +70,11 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
                 usc.Remove(s);
         }
     }
+    int GetRoute(BattleUnit _caster)
+    {
+        if (_caster == null) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
 
     public float GetProjectileSpeed(BattleUnit caster)
     {
@@ -63,7 +83,24 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
 
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
     {
-        foreach (var c in AreaShapes.GetCells(_originCell, areaPreset, false))
+        // 현재 턴의 시전자(플레이어든 적이든)
+        var bm = Shared.BattleManager;
+        BattleUnit caster = bm != null ? bm.ActingUnit : null;
+
+        int route = GetRoute(caster);
+        bool useOverride = trainingUseAreaOverride
+                   && routeForAreaOverride >= 0
+                   && route == routeForAreaOverride;
+
+        // 기본/훈련 프리셋 선택
+        var preset = useOverride ? trainingAreaPreset : areaPreset;
+        // HealSkill에는 diagUseNEAxis 필드가 없었으므로 기본값 false 혹은 training 변수 사용
+        // 여기서는 trainingDiagUseNEAxis 혹은 기본 로직(false/true)을 따라야 함.
+        // ParametricHealSkill에 diagUseNEAxis 필드가 없다면 false로 가정하거나 추가해야 함.
+        // *편의상 override일 때만 trainingDiagUseNEAxis를 쓰고, 아닐 땐 false(기본) 처리
+        bool useDiag = useOverride ? trainingDiagUseNEAxis : false;
+
+        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
             yield return c;
     }
 
@@ -91,6 +128,8 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
                         .Where(u => u != null && !u.IsDead && u.team == _caster.team)
                         .ToList();
 
+        int route = GetRoute(_caster);
+
         foreach (var u in friends)
         {
             int amount = CalcHealAmount(_caster, u);
@@ -98,6 +137,13 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
 
             // 최종 적대감 생성량 계산
             float hostilityGained = HostilityRules.FromHeal(amount, _caster);
+
+            // 적의 감소 적용
+            if (trainingReduceHostility && routeForReduceHostility >= 0 && route == routeForReduceHostility)
+            {
+                hostilityGained *= trainingHostilityMultiplier;
+                Debug.Log($"[Training] Heal Hostility Reduced: {hostilityGained} (x{trainingHostilityMultiplier})");
+            }
 
             // 캐스터(플레이어)의 적대감 증가
             _caster.AddHostility(hostilityGained);

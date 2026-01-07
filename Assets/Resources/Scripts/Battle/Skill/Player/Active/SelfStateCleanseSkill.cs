@@ -15,10 +15,15 @@ public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
     public bool removeAll = true;
     public List<UnitStateId> stateIds = new(); // removeAll=false일 때만 사용
 
-    [Header("Training Overrides (Route 0 MP Cost)")]
-    public bool trainingUseReducedMp;
-    public bool trainingFreeActionOnRoute2; // Route 2 무료턴 여부
-    public int trainingReducedMp = 2;   // 예: 기본 3MP → 훈련 시 2MP
+    [Header("Training")]
+    [Header("자원 절약 훈련")]
+    public bool trainingUseReducedCost;
+    [Range(-1, 2)] public int routeForReducedCost = -1; // 루트 지정
+    public int trainingReducedCost = 2;
+
+    [Header("연속 행동 훈련")]
+    public bool trainingUseFreeAction;
+    [Range(-1, 2)] public int routeForFreeAction = -1; // 루트 지정
 
     public bool SelfCastOnSelect => true;
 
@@ -75,12 +80,14 @@ public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
     public override int GetEffectiveCost(BattleUnit caster)
     {
         int cost = base.GetEffectiveCost(caster);
-        if (!trainingUseReducedMp || caster == null) return cost;
+        if (!trainingUseReducedCost || caster == null) return cost;
 
         int route = caster.GetTrainingRouteIndex(this);
-        if (route == 0)
+
+        // MP 감소
+        if (routeForReducedCost >= 0 && route == routeForReducedCost)
         {
-            cost = Mathf.Max(0, trainingReducedMp);
+            cost = Mathf.Max(0, trainingReducedCost);
         }
         return cost;
     }

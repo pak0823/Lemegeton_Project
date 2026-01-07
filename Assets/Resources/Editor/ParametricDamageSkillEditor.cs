@@ -89,6 +89,10 @@ public class ParametricDamageSkillEditor : Editor
     SerializedProperty trainingRefundOnKill;
     SerializedProperty routeForRefundOnKill;
 
+    SerializedProperty trainingReduceHostility;
+    SerializedProperty routeForReduceHostility;
+    SerializedProperty trainingHostilityMultiplier;
+
     SerializedProperty useFrontlineBonus;
     SerializedProperty frontlineDepth;
     SerializedProperty frontlineMultiplier;
@@ -186,6 +190,10 @@ public class ParametricDamageSkillEditor : Editor
 
         trainingRefundOnKill = serializedObject.FindProperty("trainingRefundOnKill");
         routeForRefundOnKill = serializedObject.FindProperty("routeForRefundOnKill");
+
+        trainingReduceHostility = serializedObject.FindProperty("trainingReduceHostility");
+        routeForReduceHostility = serializedObject.FindProperty("routeForReduceHostility");
+        trainingHostilityMultiplier = serializedObject.FindProperty("trainingHostilityMultiplier");
 
         useFrontlineBonus = serializedObject.FindProperty("useFrontlineBonus");
         frontlineDepth = serializedObject.FindProperty("frontlineDepth");
@@ -419,6 +427,19 @@ public class ParametricDamageSkillEditor : Editor
         {
             EditorGUI.indentLevel++;
             EditorGUILayout.PropertyField(routeForRefundOnKill);
+            EditorGUI.indentLevel--;
+        }
+        EditorGUILayout.EndVertical();
+
+        // === 적의 감소 ===
+        EditorGUILayout.BeginVertical("box");
+        EditorGUILayout.LabelField("적의(Hostility) 훈련", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingReduceHostility, new GUIContent("적의 생성 감소 사용"));
+        if (trainingReduceHostility.boolValue)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(routeForReduceHostility, new GUIContent("활성 루트"));
+            EditorGUILayout.PropertyField(trainingHostilityMultiplier, new GUIContent("적의 생성 배율(0.5=반감)"));
             EditorGUI.indentLevel--;
         }
         EditorGUILayout.EndVertical();
