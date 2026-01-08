@@ -14,6 +14,7 @@ public enum UnitStateId
     Explosion = 6,    // 화학 폭발 상태
     Disturbance = 7,  // 현상 교란 상태
     Sleep = 8,  //수면 상태
+    Hidden = 9, //은신 상태
 
 
     // 51 - 100: 공통 상태

@@ -1109,11 +1109,13 @@ public class BattleManager : MonoBehaviour
         var usc = acting.GetComponent<UnitStateController>();
         if (statusCtrl == null) return false;
 
+
         // 과로 스택 확인
         int overworkStacks = statusCtrl.GetStacks(StatusId.Overwork);
 
         // 스택이 없으면 과로 처리 안 함
         if (overworkStacks <= 0) return false;
+            
 
         // 스택 1 감소 (비용 지불)
         int nextStack = overworkStacks - 1;
@@ -1123,12 +1125,42 @@ public class BattleManager : MonoBehaviour
         // 재행동을 주지 않고, 수면 상태를 부여한 뒤 정상적으로 턴을 종료시킵니다.
         if (nextStack == 0)
         {
+            // 수면 면제 훈련 체크
+            bool skipSleep = false;
+
+            // 유닛이 가진 스킬 중 '과로'를 부여하는 ParametricSupportSkill이 있는지,
+            // 그리고 그 스킬의 '수면 면제 훈련'이 켜져 있는지 확인
+            if (acting.data != null && acting.data.skills != null)
+            {
+                foreach (var s in acting.data.skills)
+                {
+                    if (s is ParametricSupportSkill pss && pss.buffStatus == StatusId.Overwork)
+                    {
+                        int route = acting.GetTrainingRouteIndex(pss);
+                        if (pss.trainingNoSleepOnOverworkEnd &&
+                            pss.routeForNoSleepOnOverworkEnd >= 0 &&
+                            route == pss.routeForNoSleepOnOverworkEnd)
+                        {
+                            skipSleep = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
             if (usc != null)
             {
-                Debug.Log($"[BattleManager] {acting.name} 과로 종료 -> 수면 상태 부여 (다음 턴 휴식)");
-                usc.Apply(UnitStateId.Sleep);
+                if (!skipSleep)
+                {
+                    Debug.Log($"[BattleManager] {acting.name} 과로 종료 -> 수면 상태 부여 (다음 턴 휴식)");
+                    usc.Apply(UnitStateId.Sleep);
+                }
+                else
+                {
+                    Debug.Log($"[BattleManager] {acting.name} 과로 종료 -> 훈련 효과로 수면 면제!");
+                }
             }
-            // false를 반환해야 EndPlayerTurn이 진행되어 ATB 대기 상태로 넘어갑니다.
+            // false를 반환해야 EndPlayerTurn이 진행되어 ATB 대기 상태로 넘어감
             return false;
         }
 
@@ -2886,6 +2918,7 @@ public class BattleManager : MonoBehaviour
 
                 // 중앙화된 적대감 산출
                 float hostilityGained = HostilityRules.FromDamage(damage, caster, v);
+                float finalChange = hostilityGained; // 기본은 획득량만큼 추가
 
                 if (source is ParametricDamageSkill pds)
                 {
@@ -2893,12 +2926,20 @@ public class BattleManager : MonoBehaviour
 
                     // 적의 감소 훈련 체크
                     if (pds.trainingReduceHostility &&
-                        pds.routeForReduceHostility >= 0 &&
-                        route == pds.routeForReduceHostility)
+                         pds.routeForReduceHostility >= 0 &&
+                         route == pds.routeForReduceHostility)
                     {
-                        // 0.5배 적용 (0.5만큼 감소된 값만 증가)
-                        hostilityGained *= pds.trainingHostilityMultiplier;
-                        Debug.Log($"[Hostility] {caster.name} 적의 생성 감소 훈련 적용: 원래값 -> {hostilityGained} (x{pds.trainingHostilityMultiplier})");
+                        // 목표 공식: (현재 적의 + 이번에 얻을 적의) * 배율
+                        // 예: 현재 100, 획득 20, 배율 0.5 -> (120) * 0.5 = 60
+                        // 결과적으로 적의가 100 -> 60으로 줄어듦 (은신 효과)
+                        float currentHostility = caster.Hostility;
+                        float targetTotalHostility = (currentHostility + hostilityGained) * pds.trainingHostilityMultiplier;
+
+                        // AddHostility는 '변화량'을 인자로 받으므로, (목표치 - 현재치)를 계산
+                        // 변화량 = 60 - 100 = -40
+                        finalChange = targetTotalHostility - currentHostility;
+
+                        Debug.Log($"[Hostility] {caster.name} 적의 재설정(Aggro Dump): ({currentHostility} + {hostilityGained}) * {pds.trainingHostilityMultiplier} = {targetTotalHostility} (Delta: {finalChange:F1})");
                     }
                 }
 

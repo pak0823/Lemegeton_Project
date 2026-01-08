@@ -16,6 +16,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
 {
     // 기본 범위 설정 (기본값 Single)
     public ParametricDamageSkill.AreaPreset areaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public bool diagUseNEAxis = true;
 
     [Header("Support Mode")]
     public SupportSkillMode mode = SupportSkillMode.Buff;
@@ -25,12 +26,12 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     public UnitStateId buffState = UnitStateId.None;
     [Tooltip("부여할 버프 (UnitStateBuffId)")]
     public UnitStateBuffId buffId = UnitStateBuffId.None;
-    public int buffDuration = 3;
-
     [Tooltip("부여할 상태 중첩")]
     public StatusId buffStatus = StatusId.None;
+    [Tooltip("부여할 턴 수")]
+    public int buffDuration = 3;
     [Tooltip("부여할 스택 수")]
-    public int buffStatusStack = 0;
+    public int buffStatusStack = 1;
 
     [Header("Cleanse Settings")]
     [Tooltip("모든 해로운 상태를 제거할지 여부")]
@@ -72,6 +73,31 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     [Tooltip("적용될 적의 생성 배율 (예: 0.5 = 50%만 생성)")]
     public float trainingHostilityMultiplier = 0.5f;
 
+    [Header("자원 절약 훈련")]
+    [Tooltip("소모 비용 덮어쓰기 활성화")]
+    public bool trainingUseCostOverride = false;
+    [Range(-1, 2)] public int routeForCostOverride = -1; // 유연한 루트 지정
+    public int trainingCostOverride = -1;
+
+    [Header("총명 강화 훈련")]
+    [Tooltip("총명(Magic Damage) 강화 버프 부여 활성화")]
+    public bool trainingApplyClarityBuff = false;
+    [Range(-1, 2)] public int routeForClarityBuff = -1;
+    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+    [Min(1)] public int trainingClarityDuration = 1;
+
+    [Header("수면 면제 훈련")]
+    [Tooltip("과로 상태 종료 시 수면 상태 부여를 면제할지 여부")]
+    public bool trainingNoSleepOnOverworkEnd = false;
+    [Range(-1, 2)] public int routeForNoSleepOnOverworkEnd = -1;
+
+    [Header("스택 증가 훈련")]
+    [Tooltip("과로 스택 부여량을 변경할지 여부")]
+    public bool trainingBonusOverworkStack = false;
+    [Range(-1, 2)] public int routeForBonusOverworkStack = -1;
+    [Tooltip("훈련 적용 시 부여할 스택 수 (기본 3)")]
+    public int trainingOverworkStackValue = 3;
+
     public bool SelfCastOnSelect => targetAlignment == SkillTargetAlignment.Self;
 
     public ProjectileController GetProjectilePrefab(BattleUnit caster)
@@ -94,8 +120,13 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     {
         if (target == null) yield break;
 
-        // 범위 처리를 위해 ApplySupportArea 호출 (중심점: 타겟)
-        // (기존에는 단일 대상이었지만, 훈련으로 범위가 커질 수 있으므로 Area로 처리)
+        // 자원 소모 체크 및 차감
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        // 비용이 있는데 지불 못하면 스킬 취소
+        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
+
+
         ApplySupportArea(bm, caster, target.CurrentMap, target.Cell);
 
         // 시전 후 상태 제거
@@ -107,6 +138,11 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     // 타일 선택 시 로직 (혹시 타일로 힐/버프를 줄 경우)
     public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int cell, BattleUnit caster)
     {
+        // 자원 소모 체크 및 차감
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
+
         // 범위 처리를 위해 ApplySupportArea 호출 (중심점: 타일)
         ApplySupportArea(bm, caster, map, cell);
 
@@ -116,9 +152,24 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
         yield break;
     }
 
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
     {
-        yield break;
+        // 현재 시전자 정보 가져오기 (훈련 적용을 위해)
+        var bm = Shared.BattleManager;
+        BattleUnit caster = bm != null ? bm.ActingUnit : null;
+
+        int route = GetRoute(caster);
+        bool useOverride = trainingUseAreaOverride
+                   && routeForAreaOverride >= 0
+                   && route == routeForAreaOverride;
+
+        // 기본/훈련 프리셋 선택
+        var preset = useOverride ? trainingAreaPreset : areaPreset;
+        bool useDiag = useOverride ? trainingDiagUseNEAxis : diagUseNEAxis;
+
+        // AreaShapes 유틸을 이용해 실제 셀 좌표 반환
+        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
+            yield return c;
     }
 
     void ConsumeStates(BattleUnit caster)
@@ -153,8 +204,20 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
                     usc.ApplyForTurns(buffState, buffDuration);
                 if (buffId != UnitStateBuffId.None && usc != null)
                     usc.ApplyBuffForTurns(buffId, buffDuration);
+
+                int finalStack = buffStatusStack;
+                int route = GetRoute(caster);
+
+                // 이 스킬이 과로(Overwork)를 부여하고, 스택 증가 훈련이 활성화된 경우
+                if (buffStatus == StatusId.Overwork && trainingBonusOverworkStack &&
+                    routeForBonusOverworkStack >= 0 && route == routeForBonusOverworkStack)
+                {
+                    finalStack = trainingOverworkStackValue;
+                    Debug.Log($"[Training] Overwork Stack Bonus: {buffStatusStack} -> {finalStack}");
+                }
+
                 if (buffStatus != StatusId.None && buffStatusStack > 0 && status != null)
-                    status.SetStacks(buffStatus, buffStatusStack);
+                    status.SetStacks(buffStatus, buffStatusStack, buffDuration);
                 break;
 
             case SupportSkillMode.Cleanse:
@@ -167,12 +230,10 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
                         usc.Remove(UnitStateId.Moribundity);
                         if (status != null)
                         {
+                            //도트 중첩 효과만 사라지게 적용
                             status.Clear(StatusId.Bleeding);
                             status.Clear(StatusId.Poisoning);
                             status.Clear(StatusId.Ignition);
-                            status.Clear(StatusId.Slow);
-                            status.Clear(StatusId.Weakness);
-                            status.Clear(StatusId.Exhaustion);
                         }
                     }
                     else
@@ -226,7 +287,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
             }
             // (Buff나 Cleanse는 기본적으로 적의를 생성하지 않지만, 필요하면 여기서 추가)
 
-            // [훈련] 적의 감소 적용
+            // 적의 감소 적용
             if (hostilityGained > 0f && trainingReduceHostility && routeForReduceHostility >= 0 && route == routeForReduceHostility)
             {
                 hostilityGained *= trainingHostilityMultiplier;
@@ -236,6 +297,35 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
             if (hostilityGained > 0f)
                 caster.AddHostility(hostilityGained);
         }
+
+        // 총명(Clarity) 강화 버프 적용
+        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        {
+            var usc = caster.GetComponent<UnitStateController>();
+            if (usc != null)
+            {
+                // 현재 턴 소모 보정을 위해 +1
+                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1);
+                Debug.Log($"[ParametricSupport] Clarity Enhanced: {caster.name}, Duration={trainingClarityDuration}");
+            }
+        }
+    }
+
+    public override int GetEffectiveCost(BattleUnit caster)
+    {
+        int finalCost = base.GetEffectiveCost(caster);
+
+        if (caster == null) return finalCost;
+
+        int route = caster.GetTrainingRouteIndex(this);
+
+        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+        {
+            finalCost -= trainingCostOverride;
+            finalCost = Mathf.Max(0, finalCost);
+        }
+
+        return finalCost;
     }
 
     public override string GetFullDescriptionRich(BattleUnit _caster)

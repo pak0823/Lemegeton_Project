@@ -93,6 +93,11 @@ public class ParametricDamageSkillEditor : Editor
     SerializedProperty routeForReduceHostility;
     SerializedProperty trainingHostilityMultiplier;
 
+    SerializedProperty trainingApplyClarityBuff;
+    SerializedProperty routeForClarityBuff;
+    SerializedProperty trainingClarityBuffId;
+    SerializedProperty trainingClarityDuration;
+
     SerializedProperty useFrontlineBonus;
     SerializedProperty frontlineDepth;
     SerializedProperty frontlineMultiplier;
@@ -194,6 +199,11 @@ public class ParametricDamageSkillEditor : Editor
         trainingReduceHostility = serializedObject.FindProperty("trainingReduceHostility");
         routeForReduceHostility = serializedObject.FindProperty("routeForReduceHostility");
         trainingHostilityMultiplier = serializedObject.FindProperty("trainingHostilityMultiplier");
+
+        trainingApplyClarityBuff = serializedObject.FindProperty("trainingApplyClarityBuff");
+        routeForClarityBuff = serializedObject.FindProperty("routeForClarityBuff");
+        trainingClarityBuffId = serializedObject.FindProperty("trainingClarityBuffId");
+        trainingClarityDuration = serializedObject.FindProperty("trainingClarityDuration");
 
         useFrontlineBonus = serializedObject.FindProperty("useFrontlineBonus");
         frontlineDepth = serializedObject.FindProperty("frontlineDepth");
@@ -440,6 +450,19 @@ public class ParametricDamageSkillEditor : Editor
             EditorGUI.indentLevel++;
             EditorGUILayout.PropertyField(routeForReduceHostility, new GUIContent("활성 루트"));
             EditorGUILayout.PropertyField(trainingHostilityMultiplier, new GUIContent("적의 생성 배율(0.5=반감)"));
+            EditorGUI.indentLevel--;
+        }
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.BeginVertical("box");
+        EditorGUILayout.LabelField("총명 강화 훈련", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingApplyClarityBuff, new GUIContent("총명(Magic) 강화"));
+        if (trainingApplyClarityBuff.boolValue)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(routeForClarityBuff, new GUIContent("활성 루트"));
+            EditorGUILayout.PropertyField(trainingClarityBuffId, new GUIContent("버프 ID"));
+            EditorGUILayout.PropertyField(trainingClarityDuration, new GUIContent("지속 턴(1)"));
             EditorGUI.indentLevel--;
         }
         EditorGUILayout.EndVertical();

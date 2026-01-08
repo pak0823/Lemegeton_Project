@@ -23,11 +23,11 @@ public class MapToggleManager : MonoBehaviour
 
     }
 
-    (List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall) FindTilemapsMulti(GameObject map)
+    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
     {
         List<Tilemap> floors = new List<Tilemap>();
         List<Tilemap> obstacles = new List<Tilemap>(); // 장애물 리스트
-        Tilemap wall = null;
+        List<Tilemap> walls = new List<Tilemap>();
 
         foreach (var tm in map.GetComponentsInChildren<Tilemap>())
         {
@@ -36,7 +36,7 @@ public class MapToggleManager : MonoBehaviour
             // 벽 찾기
             if (name.Contains("wall"))
             {
-                wall = tm;
+                walls.Add(tm);
                 continue;
             }
 
@@ -55,7 +55,7 @@ public class MapToggleManager : MonoBehaviour
                 floors.Add(tm);
             }
         }
-        return (floors, obstacles, wall);
+        return (floors, obstacles, walls);
     }
     public void EnterQuizMap()
     {
@@ -108,8 +108,8 @@ public class MapToggleManager : MonoBehaviour
 
     void SetupQuizMap(GameObject quizMap)
     {
-        // [수정 2] 장애물 리스트도 함께 받아옴
-        var (floorMaps, obstacleMaps, wallMap) = FindTilemapsMulti(quizMap);
+        // 장애물 리스트도 함께 받아옴
+        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(quizMap);
 
         if (floorMaps.Count == 0)
         {
@@ -119,14 +119,14 @@ public class MapToggleManager : MonoBehaviour
 
         if (Shared.PlayerMovement != null)
         {
-            // [수정 3] SetTilemaps에 obstacleMaps도 전달 (컴파일 에러 해결)
-            Shared.PlayerMovement.SetTilemaps(floorMaps, obstacleMaps, wallMap);
+            // SetTilemaps에 obstacleMaps도 전달
+            Shared.PlayerMovement.SetTilemaps(floorMaps, obstacleMaps, wallMaps);
             Shared.PlayerMovement.ClearPath();
         }
 
         // 퍼즐 매니저는 보통 바닥 위주로 동작하므로 기존 유지 (필요시 수정)
         // (단, PuzzleManager가 obstacles를 요구하도록 변경되지 않았다는 가정하에)
-        Shared.PuzzleManager?.SetMaps(floorMaps[0], wallMap);
+        Shared.PuzzleManager?.SetMaps(floorMaps[0], wallMaps);
 
         MovePlayerToSpawnPoint(quizMap);
     }

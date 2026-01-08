@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public class PuzzleManager : MonoBehaviour
 {
     public Tilemap FloorTilemap { get; private set; }
-    public Tilemap WallTilemap { get; private set; }
+    public List<Tilemap> WallTilemap { get; private set; }
     public GameObject portalPrefab;
     public Button resetBtn;
 
@@ -24,7 +24,7 @@ public class PuzzleManager : MonoBehaviour
         resetBtn?.gameObject.SetActive(false);
     }
 
-    public void SetMaps(Tilemap floor, Tilemap wall)
+    public void SetMaps(Tilemap floor, List<Tilemap> wall)
     {
         FloorTilemap = floor;
         WallTilemap = wall;

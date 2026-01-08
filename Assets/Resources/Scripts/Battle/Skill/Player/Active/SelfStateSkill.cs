@@ -27,13 +27,13 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
     [Range(-1, 2)] public int routeForMagicBuff = -1; // 유연한 루트 지정
     public UnitStateBuffId trainingMagicBuffId = UnitStateBuffId.Smoke_MagicUp;
 
-    [Header("총명 강화 훈련")]
-    [Tooltip("총명 강화 버프 부여 활성화")]
-    public bool trainingApplyClarityBuff = false;
-    [Tooltip("이 훈련을 활성화할 루트 인덱스")]
-    [Range(-1, 2)] public int routeForClarityBuff = -1;
-    [Tooltip("적용할 버프 ID (DB에서 배율 설정)")]
-    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+    // 은신(Hidden) 훈련 추가
+    [Header("사고 예방 훈련")]
+    [Tooltip("은신 상태(Hidden) 부여 활성화 - 타겟팅 불가")]
+    public bool trainingApplyStealth = false;
+    [Range(-1, 2)] public int routeForStealth = -1;
+    public UnitStateId trainingHiddenStateId = UnitStateId.Hidden;
+    [Min(1)] public int trainingStealthDuration = 1; // 1턴 유지
 
     [Header("연속 행동 훈련")]
     [Tooltip("무료 행동(턴 미소모) 활성화")]
@@ -91,12 +91,12 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
             Debug.Log($"[SelfStateSkill] Training Buff applied: {_caster.name}, Buff={trainingMagicBuffId}");
         }
 
-        // 총명 강화
-        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        // 은신 부여
+        if (trainingApplyStealth && routeForStealth >= 0 && route == routeForStealth && trainingHiddenStateId != UnitStateId.None)
         {
-            // UnitStateBuffId를 통해 버프 부여
-            usc.ApplyBuff(trainingClarityBuffId);
-            Debug.Log($"[SelfStateSkill] Clarity Enhanced: {_caster.name}, Buff={trainingClarityBuffId}");
+            // 은신 버프 부여 (지속시간 적용)
+            usc.ApplyForTurns(trainingHiddenStateId, trainingStealthDuration);
+            Debug.Log($"[SelfStateSkill] Stealth Applied: {_caster.name}, Duration={trainingStealthDuration}");
         }
 
         yield break;

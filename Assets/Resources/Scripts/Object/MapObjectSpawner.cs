@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -28,16 +27,16 @@ public class MapObjectSpawner : MonoBehaviour
     }
 
     // 맵 생성 직후 MapManager가 호출
-    public void Spawn(List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall, params Collider2D[] excludeColliders)
+    public void Spawn(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall, params Collider2D[] _excludeColliders)
     {
-        if (floors == null || floors.Count == 0) return;
+        if (_floors == null || _floors.Count == 0) return;
 
-        // 1. [핵심] 좌표별 '가장 높은 층'의 타일맵 찾기
+        // 좌표별 가장 높은 층의 타일맵 찾기
         // Dictionary를 사용해 (x,y) 좌표 하나당 최상단 타일맵 하나만 남깁니다.
         // floors 리스트는 보통 [Ground1, Ground2, Ground3] 순서이므로, 나중에 나오는 게 위쪽 층입니다.
         Dictionary<Vector3Int, Tilemap> highestFloorMap = new Dictionary<Vector3Int, Tilemap>();
 
-        foreach (var map in floors)
+        foreach (var map in _floors)
         {
             if (map == null) continue;
             foreach (Vector3Int pos in map.cellBounds.allPositionsWithin)
@@ -58,15 +57,28 @@ public class MapObjectSpawner : MonoBehaviour
             Vector3Int pos = kvp.Key;
             Tilemap map = kvp.Value; // 해당 좌표의 최상단 타일맵
 
-            // (A) 벽이 있는 곳 제외 [요청사항 2]
-            if (wall != null && wall.HasTile(pos)) continue;
+            // 벽이 있는 곳 제외
+           
+            if (_wall != null)
+            {
+                bool hasWall = false;
 
-            // (B) 장애물(물, 구멍 등)이 있는 곳 제외 [요청사항 3]
+                foreach (var wall in _wall)
+                {
+                    if (wall.HasTile(pos))
+                    {
+                        hasWall = true;
+                        break;
+                    }
+                }
+            }
+
+            // 장애물(물, 구멍 등)이 있는 곳 제외
             // 바닥(Ground 0)이 있어도 그 위에 물(Water 0)이 칠해져 있다면 생성 불가
-            if (obstacles != null)
+            if (_obstacles != null)
             {
                 bool isObstacle = false;
-                foreach (var obsMap in obstacles)
+                foreach (var obsMap in _obstacles)
                 {
                     if (obsMap != null && obsMap.HasTile(pos))
                     {
@@ -77,7 +89,7 @@ public class MapObjectSpawner : MonoBehaviour
                 if (isObstacle) continue;
             }
 
-            // (C) 스폰 제외 영역(플레이어 시작점 등) 체크
+            // 스폰 제외 영역(플레이어 시작점 등) 체크
             // GetCellCenterWorld는 Tile Anchor 설정이 반영된 시각적 위치를 반환하므로 [요청사항 1] 해결
             Vector3 worldPos = map.GetCellCenterWorld(pos);
 
@@ -86,9 +98,9 @@ public class MapObjectSpawner : MonoBehaviour
             worldPos.z = 0;
 
             bool isExcluded = false;
-            if (excludeColliders != null)
+            if (_excludeColliders != null)
             {
-                foreach (var col in excludeColliders)
+                foreach (var col in _excludeColliders)
                 {
                     if (col != null && col.OverlapPoint(worldPos))
                     {
@@ -111,7 +123,7 @@ public class MapObjectSpawner : MonoBehaviour
         }
 
         // 3. 컨테이너 준비
-        Transform root = floors[0].transform.parent; // WalkableLayers
+        Transform root = _floors[0].transform.parent; // WalkableLayers
         if (root == null) root = this.transform;
 
         Transform fallback = this.transform;
@@ -127,7 +139,7 @@ public class MapObjectSpawner : MonoBehaviour
         if (patternPrefabs != null && patternPrefabs.Count > 0 && candidates.Count > 0)
         {
             int idx = Random.Range(0, candidates.Count);
-            SpawnObj(patternPrefabs, candidates[idx], patternContainer);
+            SpawnObj(patternPrefabs, candidates[idx], patternContainer, _wall);
             candidates.RemoveAt(idx);
         }
 
@@ -135,7 +147,7 @@ public class MapObjectSpawner : MonoBehaviour
         for (int i = 0; i < trapSpawnCount && candidates.Count > 0; i++)
         {
             int idx = Random.Range(0, candidates.Count);
-            SpawnObj(trapPrefabs, candidates[idx], trapContainer);
+            SpawnObj(trapPrefabs, candidates[idx], trapContainer, _wall);
             candidates.RemoveAt(idx);
         }
 
@@ -143,7 +155,7 @@ public class MapObjectSpawner : MonoBehaviour
         for (int i = 0; i < chestSpawnCount && candidates.Count > 0; i++)
         {
             int idx = Random.Range(0, candidates.Count);
-            GameObject obj = SpawnObj(chestPrefabs, candidates[idx], chestContainer);
+            GameObject obj = SpawnObj(chestPrefabs, candidates[idx], chestContainer, _wall);
 
             if (obj != null && candidates[idx].worldPos.x > 0f)
             {
@@ -155,7 +167,7 @@ public class MapObjectSpawner : MonoBehaviour
             candidates.RemoveAt(idx);
         }
     }
-    GameObject SpawnObj(List<GameObject> prefabs, SpawnCandidate data, Transform parent)
+    GameObject SpawnObj(List<GameObject> prefabs, SpawnCandidate data, Transform parent, List<Tilemap> walls)
     {
         if (prefabs == null || prefabs.Count == 0) return null;
 
@@ -173,8 +185,8 @@ public class MapObjectSpawner : MonoBehaviour
         var push = obj.GetComponent<PushObject>();
         if (push != null)
         {
-            // PushObject는 자신이 속한 타일맵 정보를 알아야 하므로 전달
-            push.SetTilemaps(data.map, null);
+            // 단일 맵을 리스트로 포장해서 전달
+            push.SetTilemaps(new List<Tilemap> { data.map }, walls);
         }
 
         return obj;

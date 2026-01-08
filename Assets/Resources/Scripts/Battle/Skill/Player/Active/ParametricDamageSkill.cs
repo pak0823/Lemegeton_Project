@@ -205,7 +205,15 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
     [Tooltip("적용될 적의 생성 배율 (예: 0.5 = 50%만 생성 = 0.5만큼 감소)")]
     public float trainingHostilityMultiplier = 0.5f;
 
-    [Header("Frontline Bonus(전방 보너스)")]
+    // 총명(Clarity) 강화 훈련
+    [Header("Training: Clarity Buff")]
+    [Tooltip("총명(Magic Damage) 강화 버프 부여 활성화")]
+    public bool trainingApplyClarityBuff = false;
+    [Range(-1, 2)] public int routeForClarityBuff = -1;
+    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+    [Min(1)] public int trainingClarityDuration = 1;
+
+    [Header("Frontline Bonus")]
     [SerializeField] private bool useFrontlineBonus = false;   // 전방 보너스 사용 여부
     [SerializeField] private int frontlineDepth = 2;            // "앞 N열"
     [SerializeField] private float frontlineMultiplier = 1.5f;  // 배수(예: 1.5)
@@ -555,6 +563,18 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         if (trainingUseSelfAtkBuff && routeForSelfAtkBuff >= 0 && route == routeForSelfAtkBuff && selfAtkBuffId != UnitStateBuffId.None)
         {
             _caster.GetComponent<UnitStateController>()?.ApplyBuffForTurns(selfAtkBuffId, selfAtkBuffDurationTurns + 1);
+        }
+
+        // 총명 강화 버프 적용
+        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        {
+            var usc = _caster.GetComponent<UnitStateController>();
+            if (usc != null)
+            {
+                // 지정된 턴 수만큼 버프 부여
+                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1); // +1은 현재 턴 소모 보정
+                Debug.Log($"[ParametricDamage] Clarity Enhanced: {_caster.name}, Duration={trainingClarityDuration}");
+            }
         }
     }
 

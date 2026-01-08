@@ -12,8 +12,8 @@ public class PlayerMovement : MonoBehaviour
 {
     [Header("타일맵 설정")]
     public List<Tilemap> floorMaps = new List<Tilemap>();
+    public List<Tilemap> wallMaps = new List<Tilemap>();
     public List<Tilemap> obstacleMaps = new List<Tilemap>();
-    public Tilemap wallTilemap;
     public float defaultMoveSpeed = 2f;
     public LayerMask impassableLayerMask;
     public Tilemap floorTilemap => (floorMaps != null && floorMaps.Count > 0) ? floorMaps[0] : null;
@@ -216,7 +216,7 @@ public class PlayerMovement : MonoBehaviour
     // --- 타일 클릭 입력 처리 ---
     void HandleTileClickInput()
     {
-        // 1. 카메라/마우스 좌표 계산
+        // 카메라/마우스 좌표 계산
         var cam = Camera.main;
         if (cam == null) return;
 
@@ -224,14 +224,14 @@ public class PlayerMovement : MonoBehaviour
         Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
         wp.z = 0;
 
-        // 2. 타일 판정 및 디버그 갱신
+        // 타일 판정 및 디버그 갱신
         Vector3Int clickedCell = GetClickedCellWithHeight(wp);
-        Vector3Int currentCell = floorTilemap.WorldToCell(rb.position);
+        Vector3Int currentCell = GetCellFromWorldPos(rb.position);
 
         clickedCell.z = 0;
         currentCell.z = 0;
 
-        // 3. UI 및 이동 중 차단
+        // UI 및 이동 중 차단
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
             return;
 
@@ -988,6 +988,59 @@ public class PlayerMovement : MonoBehaviour
 
         return Vector3Int.zero;
     }
+
+    // 플레이어(또는 특정 월드 좌표)가 밟고 있는 타일의 정확한 셀 좌표 구하기
+    public Vector3Int GetCellFromWorldPos(Vector3 worldPos)
+    {
+        // 해당 위치에 있는 모든 콜라이더 검사
+        Collider2D[] cols = Physics2D.OverlapPointAll(worldPos);
+
+        Tilemap bestMap = null;
+        int maxOrder = int.MinValue;
+
+        foreach (var col in cols)
+        {
+            Tilemap map = col.GetComponent<Tilemap>();
+            if (map != null)
+            {
+                // 장애물/벽 제외하고 바닥만 체크 (필요시 wall 포함 여부 결정)
+                if (obstacleMaps.Contains(map)) continue;
+
+                var renderer = map.GetComponent<TilemapRenderer>();
+                int order = renderer != null ? renderer.sortingOrder : 0;
+
+                // 가장 위에 그려진(Sorting Order가 높은) 맵 선택
+                if (order > maxOrder)
+                {
+                    maxOrder = order;
+                    bestMap = map;
+                }
+            }
+        }
+
+        if (bestMap != null)
+        {
+            // 밟고 있는 맵의 Anchor만큼 좌표를 내려서 계산
+            Vector3 correctedPos = worldPos;
+            correctedPos.y -= bestMap.tileAnchor.y;
+            correctedPos -= bestMap.transform.position;
+
+            Vector3Int cell = bestMap.WorldToCell(correctedPos);
+            cell.z = 0;
+            return cell;
+        }
+
+        // 바닥을 못 찾았을 경우 Fallback
+        if (floorTilemap != null)
+        {
+            // 혹시 모르니 기본 바닥 앵커라도 빼줌
+            Vector3 correctedPos = worldPos;
+            correctedPos.y -= floorTilemap.tileAnchor.y;
+            return floorTilemap.WorldToCell(correctedPos);
+        }
+
+        return Vector3Int.zero;
+    }
     IEnumerator Co_MoveAlongPath(List<Vector3Int> cells)
     {
         // 안전하게 로컬로 복사(중간에 외부에서 리스트가 바뀌는 경우 방지)
@@ -1364,11 +1417,13 @@ public class PlayerMovement : MonoBehaviour
         ShowPushTargets(pushValidTargetCells);
     }
 
-    //연속적으로 목적지까지 밀기
+    // 연속적으로 목적지까지 밀기
     List<Vector3Int> BuildPushLineTargets(PushObject box, Vector3Int startBoxCell, Direction dirKey)
     {
         var results = new List<Vector3Int>();
-        if (box == null || box.floorTilemap == null) return results;
+
+        // [체크] box나 MainFloorMap이 없으면 계산 불가
+        if (box == null || box.MainFloorMap == null) return results;
         if (dirKey == Direction.None) return results;
 
         // 다른 PushObject 점유 셀(가상 충돌 체크)
@@ -1376,7 +1431,12 @@ public class PlayerMovement : MonoBehaviour
         foreach (var po in FindObjectsOfType<PushObject>())
         {
             if (po == null || po == box) continue;
-            occupied.Add(box.floorTilemap.WorldToCell(po.transform.position));
+
+            // [수정] box.floorTilemap은 리스트이므로 WorldToCell을 바로 쓸 수 없음 -> MainFloorMap 사용
+            if (box.MainFloorMap != null)
+            {
+                occupied.Add(box.MainFloorMap.WorldToCell(po.transform.position));
+            }
         }
 
         var cur = startBoxCell;
@@ -1387,13 +1447,26 @@ public class PlayerMovement : MonoBehaviour
             var offset = GetOffsetForDirection(dirKey, odd);
             var next = cur + offset;
 
-            // 바닥/벽 체크
-            bool hasFloor = box.floorTilemap.HasTile(next);
-            bool hasWall = (box.wallTilemap != null && box.wallTilemap.HasTile(next));
+            // 리스트 호환 메서드 사용
+            bool hasFloor = box.HasFloorAt(next);
+
+            bool hasWall = false;
+            if (wallMaps != null)
+            {
+                foreach (var wall in wallMaps)
+                {
+                    if (wall.HasTile(next))
+                    {
+                        hasWall = true;
+                        break;
+                    }
+                }
+            }
+
             if (!hasFloor || hasWall) break;
 
-            // 장애물 레이어(박스 스스로 쓰는 obstacleLayer 사용)
-            var world = box.floorTilemap.GetCellCenterWorld(next);
+            // 장애물 레이어 (기준 맵 사용)
+            var world = box.MainFloorMap.GetCellCenterWorld(next);
             var obstacle = Physics2D.OverlapCircle(world, 0.1f, box.obstacleLayer);
             if (obstacle != null) break;
 
@@ -1512,8 +1585,14 @@ public class PlayerMovement : MonoBehaviour
                 if (obsMap.HasTile(cell)) return false; // 즉시 차단
             }
         }
-        // 벽 체크
-        if (wallTilemap != null && wallTilemap.HasTile(cell)) return false;
+        // 벽 체크: 리스트 전체 순회
+        if (wallMaps != null)
+        {
+            foreach (var wall in wallMaps)
+            {
+                if (wall.HasTile(cell)) return false; // 벽 하나라도 있으면 이동 불가
+            }
+        }
 
         // 1. 이 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다.
         Tilemap topMap = null;
@@ -1673,25 +1752,25 @@ public class PlayerMovement : MonoBehaviour
             }
         }
     }
-    public void SetTilemaps(List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall)
+    public void SetTilemaps(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall)
     {
-        this.floorMaps = floors;
-        this.obstacleMaps = obstacles; // 전달받은 장애물 리스트 저장
-        this.wallTilemap = wall;
+        this.floorMaps = _floors;
+        this.obstacleMaps = _obstacles; // 전달받은 장애물 리스트 저장
+        this.wallMaps = _wall;
 
         // 경로 초기화 등 필요한 로직
         ClearPath();
         HaltImmediately();
 
-        Debug.Log($"[PlayerMovement] 맵 설정 완료. 바닥 맵 개수: {floors?.Count ?? 0}");
+        Debug.Log($"[PlayerMovement] 맵 설정 완료. 바닥 맵 개수: {_floors?.Count ?? 0}");
 
-        // PushObject가 있다면 그들에게도 맵 정보를 갱신해줘야 합니다.
-        // (PushObject가 단일 맵만 지원한다면 첫 번째 맵을 전달)
-        if (floors != null && floors.Count > 0)
+        if (_floors != null && _floors.Count > 0)
         {
             foreach (var push in FindObjectsOfType<PushObject>())
             {
-                push.SetTilemaps(floors[0], wall);
+                // [수정] PushObject.SetTilemaps가 이제 List<Tilemap>을 받으므로
+                // _wall 리스트를 그대로 전달하면 됩니다.
+                push.SetTilemaps(_floors, _wall);
             }
         }
     }

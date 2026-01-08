@@ -1,14 +1,17 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEngine.UIElements;
 
 public class PushObject : MonoBehaviour //,IExplorationPersistable
 {
     private ExplorationPersistId pid;
-    public Tilemap floorTilemap;
-    public Tilemap wallTilemap;
+    public List<Tilemap> floorTilemap;
+    public List<Tilemap> wallMaps;
     public LayerMask obstacleLayer;
+
+    // 편의를 위해 기준이 되는 0번째 바닥 맵 반환 (좌표 변환용)
+    public Tilemap MainFloorMap => (floorTilemap != null && floorTilemap.Count > 0) ? floorTilemap[0] : null;
 
     [Header("초기화 위치 정보")]
     private Vector3 initialPosition;
@@ -57,15 +60,31 @@ public class PushObject : MonoBehaviour //,IExplorationPersistable
     {
         if (!isPushable) return false;
 
-        Vector3Int currentCell = floorTilemap.WorldToCell(transform.position);
+        // [수정] MainFloorMap 사용
+        Vector3Int currentCell = MainFloorMap.WorldToCell(transform.position);
         bool odd = Mathf.Abs(currentCell.y) % 2 == 1;
         Vector3Int offset = GetOffsetForDirection(dir, odd);
         Vector3Int targetCell = currentCell + offset;
 
-        bool hasFloor = floorTilemap.HasTile(targetCell);
-        bool hasWall = wallTilemap != null && wallTilemap.HasTile(targetCell);
+        // [수정] 바닥 리스트 전체 체크
+        bool hasFloor = HasFloorAt(targetCell);
 
-        Vector3 worldPos = floorTilemap.GetCellCenterWorld(targetCell);
+        // [수정] 벽 리스트 전체 체크
+        bool hasWall = false;
+        if (wallMaps != null)
+        {
+            foreach (var wall in wallMaps)
+            {
+                if (wall.HasTile(targetCell))
+                {
+                    hasWall = true;
+                    break;
+                }
+            }
+        }
+
+        // MainFloorMap 사용
+        Vector3 worldPos = MainFloorMap.GetCellCenterWorld(targetCell);
         Collider2D obstacle = Physics2D.OverlapCircle(worldPos, 0.1f, obstacleLayer);
 
         var hits = Physics2D.OverlapCircleAll(worldPos, 0.1f);
@@ -76,16 +95,31 @@ public class PushObject : MonoBehaviour //,IExplorationPersistable
         return hasFloor && !hasWall && obstacle == null && !hasOtherPushObject;
     }
 
+    // 외부(PlayerMovement 등)에서 바닥 체크를 쉽게 하기 위한 헬퍼
+    public bool HasFloorAt(Vector3Int cell)
+    {
+        if (floorTilemap == null) return false;
+        foreach (var map in floorTilemap)
+        {
+            if (map != null && map.HasTile(cell)) return true;
+        }
+        return false;
+    }
+
     public bool TryPush(Direction dir, out Vector3Int fromCell, out Vector3Int toCell)
     {
-        fromCell = floorTilemap.WorldToCell(transform.position);
+        fromCell = Vector3Int.zero;
+        toCell = Vector3Int.zero;
+
+        if (MainFloorMap == null) return false;
+
+        fromCell = MainFloorMap.WorldToCell(transform.position);
         bool odd = Mathf.Abs(fromCell.y) % 2 == 1;
         Vector3Int offset = GetOffsetForDirection(dir, odd);
         toCell = fromCell + offset;
 
         if (!CanBePushed(dir))
             return false;
-            
 
         return true;
     }
@@ -103,10 +137,10 @@ public class PushObject : MonoBehaviour //,IExplorationPersistable
             _ => Vector3Int.zero,
         };
     }
-    public void SetTilemaps(Tilemap floor, Tilemap wall)
+    public void SetTilemaps(List<Tilemap> floor, List<Tilemap> walls)
     {
         floorTilemap = floor;
-        wallTilemap = wall;
+        wallMaps = walls;
     }
 
     // IExplorationPersistable

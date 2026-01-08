@@ -42,16 +42,26 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
     [Tooltip("적용될 적의 생성 배율 (예: 0.5 = 50%만 생성)")]
     public float trainingHostilityMultiplier = 0.5f;
 
+    [Header("자원 절약 훈련")]
+    [Tooltip("소모 비용 덮어쓰기 활성화")]
+    public bool trainingUseCostOverride = false;
+    [Range(-1, 2)] public int routeForCostOverride = -1; // 유연한 루트 지정
+    public int trainingCostOverride = -1;
+
+    [Header("총명 강화 훈련")]
+    [Tooltip("총명(Magic Damage) 강화 버프 부여 활성화")]
+    public bool trainingApplyClarityBuff = false;
+    [Range(-1, 2)] public int routeForClarityBuff = -1;
+    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+    [Min(1)] public int trainingClarityDuration = 1;
+
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }
 #endif
     void OnEnable()
     {
-        // 힐은 Magical로 분류하고 싶으면 school만 바꿔두면 UI/로그 등에서 일관됨
-        school = DamageSchool.Magical;
         if (powerOverride > 0f) power = powerOverride;
         targetMode = selectionMode;
-        costResource = SkillCostResource.MP;
     }
     public ProjectileController GetProjectilePrefab(BattleUnit caster)
     {
@@ -148,6 +158,18 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
             // 캐스터(플레이어)의 적대감 증가
             _caster.AddHostility(hostilityGained);
         }
+
+        // 총명(Clarity) 강화 버프 적용
+        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        {
+            var usc = _caster.GetComponent<UnitStateController>();
+            if (usc != null)
+            {
+                // 현재 턴 소모 보정을 위해 +1
+                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1);
+                Debug.Log($"[ParametricHeal] Clarity Enhanced: {_caster.name}, Duration={trainingClarityDuration}");
+            }
+        }
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
@@ -180,6 +202,23 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
         yield break;
 
 
+    }
+
+    public override int GetEffectiveCost(BattleUnit caster)
+    {
+        int finalCost = base.GetEffectiveCost(caster);
+
+        if (caster == null) return finalCost;
+
+        int route = caster.GetTrainingRouteIndex(this);
+
+        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+        {
+            finalCost -= trainingCostOverride;
+            finalCost = Mathf.Max(0, finalCost);
+        }
+
+        return finalCost;
     }
 
     public override string GetFullDescriptionRich(BattleUnit _caster)

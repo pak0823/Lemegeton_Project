@@ -63,7 +63,7 @@ public class MapManager : MonoBehaviour
         return data.normalMapPrefabs[Random.Range(0, data.normalMapPrefabs.Length)];
     }
 
-    void InstantiatePlayer(List<Tilemap> _floors, List<Tilemap> _obstacles, Tilemap wall)
+    void InstantiatePlayer(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
     {
         if (playerPrefab == null) return;
 
@@ -78,7 +78,7 @@ public class MapManager : MonoBehaviour
         if (pm != null)
         {
             // 리스트 형태의 바닥 전달
-            pm.SetTilemaps(_floors, _obstacles, wall);
+            pm.SetTilemaps(_floors, _obstacles, _walls);
             Shared.PlayerMovement = pm;
         }
 
@@ -112,7 +112,7 @@ public class MapManager : MonoBehaviour
         mapToggle.gridParent = gridParent;
     }
 
-    void TrySpawnObjects(List<Tilemap> _floors, List<Tilemap> _obstacles, Tilemap _wall)
+    void TrySpawnObjects(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
     {
         var spawner = currentMap.GetComponentInChildren<MapObjectSpawner>();
         var spawnPoint = currentMap.transform.Find("PlayerStart");
@@ -134,7 +134,7 @@ public class MapManager : MonoBehaviour
         // 플레이어 시작 위치 주변도 제외하고 싶다면 가상의 범위 추가 가능
         // 지금은 PlayerStart 오브젝트에 콜라이더가 있다면 그것을 사용한다고 가정
 
-        spawner.Spawn(_floors, _obstacles, _wall, excludeList.ToArray());
+        spawner.Spawn(_floors, _obstacles, _walls, excludeList.ToArray());
     }
 
     void HookCameraToPlayer(Transform player)
@@ -159,7 +159,7 @@ public class MapManager : MonoBehaviour
         if (bounds) cam.worldBounds = bounds;
     }
 
-    void ApplyExplorationSnapshot(ExplorationSnapshot snap, Tilemap floorMap, Tilemap wallMap)
+    void ApplyExplorationSnapshot(ExplorationSnapshot snap, Tilemap floorMap, List<Tilemap> wallMap)
     {
         // 현재 맵에 이미 존재하는 Persistable들을 ID 맵으로 준비 (PushObject 등)
         var existing = new Dictionary<string, IExplorationPersistable>();
@@ -180,7 +180,7 @@ public class MapManager : MonoBehaviour
             {
                 // PushObject면 타일맵 주입 후 위치 복원
                 if (existIp is PushObject existPush)
-                    existPush.SetTilemaps(floorMap, wallMap);
+                    existPush.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
                 existIp.LoadState(s);
                 continue;
             }
@@ -210,7 +210,7 @@ public class MapManager : MonoBehaviour
                 obj.name = prefab.name;
 
                 if (obj.TryGetComponent<PushObject>(out var push))
-                    push.SetTilemaps(floorMap, wallMap);
+                    push.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
 
                 if (obj.TryGetComponent<MonoBehaviour>(out var mb) && mb is IExplorationPersistable ip2)
                     ip2.LoadState(s);
@@ -261,7 +261,7 @@ public class MapManager : MonoBehaviour
         // 맵 생성
         currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
 
-        var (floorMaps, obstacleMaps, wallMap) = FindTilemapsMulti(currentMap);
+        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(currentMap);
 
         if (floorMaps.Count == 0)
         {
@@ -270,18 +270,18 @@ public class MapManager : MonoBehaviour
         }
 
         // 플레이어 생성
-        InstantiatePlayer(floorMaps, obstacleMaps, wallMap);
+        InstantiatePlayer(floorMaps, obstacleMaps, wallMaps);
 
         // TrySpawnObjects 호출 시 장애물/벽 정보도 함께 전달
-        TrySpawnObjects(floorMaps, obstacleMaps, wallMap);
+        TrySpawnObjects(floorMaps, obstacleMaps, wallMaps);
     }
 
     // 바닥 맵과 장애물 맵을 따로 찾아서 반환하도록 변경
-    public (List<Tilemap> floors, List<Tilemap> obstacles, Tilemap wall) FindTilemapsMulti(GameObject map)
+    public (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> wall) FindTilemapsMulti(GameObject map)
     {
         List<Tilemap> floors = new List<Tilemap>();
         List<Tilemap> obstacles = new List<Tilemap>(); // 장애물 리스트 추가
-        Tilemap wall = null;
+        List<Tilemap> wall = new List<Tilemap>();
 
         foreach (var tm in map.GetComponentsInChildren<Tilemap>())
         {
@@ -290,7 +290,7 @@ public class MapManager : MonoBehaviour
             // 1. 벽 찾기
             if (name.Contains("wall"))
             {
-                wall = tm;
+                wall.Add(tm);
                 continue;
             }
 
