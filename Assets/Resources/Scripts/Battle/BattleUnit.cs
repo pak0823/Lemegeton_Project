@@ -74,6 +74,10 @@ public class BattleUnit : MonoBehaviour
     public event System.Action<BattleUnit, BattleUnit, int, SkillAsset> OnDealtDamage;  // 유닛이 피해를 "성공적으로 입혔을 때" 알림 (패시브 트리거용)
     public event Action<BattleUnit, Tilemap, Vector3Int, Vector3Int> OnMoved;   //유닛의 이동 확인
     public static event Action<BattleUnit> OnAnyMoved;
+
+    // 스킬 사용 알림 이벤트
+    public event Action<SkillAsset> OnSkillUsed;
+    public void NotifySkillUsed(SkillAsset skill) => OnSkillUsed?.Invoke(skill);
     #endregion
 
     #region ----- State-based Stat System -----

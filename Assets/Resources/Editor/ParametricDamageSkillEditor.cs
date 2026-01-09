@@ -29,7 +29,13 @@ public class ParametricDamageSkillEditor : Editor
     SerializedProperty selectionMode;
     SerializedProperty diagUseNEAxis;
     SerializedProperty applyStatusOnHitProp;
+
+    // 타일 변경 관련 필드 (신규 추가)
     SerializedProperty changeTileToProp;
+    SerializedProperty tileChangeDurationProp;
+    SerializedProperty zoneStatusIdProp;
+    SerializedProperty zoneStatusStackProp;
+    SerializedProperty zoneStatusDurationProp;
 
     // 상태 소비 프로퍼티
     SerializedProperty consumeStateOnCast;
@@ -136,7 +142,13 @@ public class ParametricDamageSkillEditor : Editor
         selectionMode = serializedObject.FindProperty("selectionMode");
         diagUseNEAxis = serializedObject.FindProperty("diagUseNEAxis");
         applyStatusOnHitProp = serializedObject.FindProperty("applyStatusOnHit");
+
+        // 타일 변경 관련 프로퍼티 연결
         changeTileToProp = serializedObject.FindProperty("changeTileTo");
+        tileChangeDurationProp = serializedObject.FindProperty("tileChangeDuration");
+        zoneStatusIdProp = serializedObject.FindProperty("zoneStatusId");
+        zoneStatusStackProp = serializedObject.FindProperty("zoneStatusStack");
+        zoneStatusDurationProp = serializedObject.FindProperty("zoneStatusDuration");
 
         // 상태 소비 프로퍼티 연결
         consumeStateOnCast = serializedObject.FindProperty("consumeStateOnCast");
@@ -491,7 +503,21 @@ public class ParametricDamageSkillEditor : Editor
         EditorGUILayout.LabelField("Hit Effects & Tile (확장)", EditorStyles.boldLabel);
 
         EditorGUILayout.PropertyField(applyStatusOnHitProp, new GUIContent("Hit Status Effects"), true);
+
         EditorGUILayout.PropertyField(changeTileToProp, new GUIContent("Change Tile To"));
+        if (changeTileToProp.objectReferenceValue != null)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(tileChangeDurationProp, new GUIContent("Tile Duration (Turns)"));
+            EditorGUILayout.PropertyField(zoneStatusIdProp, new GUIContent("Zone Status (On Turn End)"));
+            // 상태가 None이 아닐 때만 스택/지속시간 표시
+            if (zoneStatusIdProp.enumValueIndex != 0)
+            {
+                EditorGUILayout.PropertyField(zoneStatusStackProp, new GUIContent("Status Stack"));
+                EditorGUILayout.PropertyField(zoneStatusDurationProp, new GUIContent("Status Duration"));
+            }
+            EditorGUI.indentLevel--;
+        }
 
         EditorGUILayout.EndVertical();
 

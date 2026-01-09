@@ -277,39 +277,35 @@ public class MapManager : MonoBehaviour
     }
 
     // 바닥 맵과 장애물 맵을 따로 찾아서 반환하도록 변경
-    public (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> wall) FindTilemapsMulti(GameObject map)
+    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
     {
-        List<Tilemap> floors = new List<Tilemap>();
-        List<Tilemap> obstacles = new List<Tilemap>(); // 장애물 리스트 추가
-        List<Tilemap> wall = new List<Tilemap>();
+        List<Tilemap> floors = new List<Tilemap>(); //이동 가능 타일 리스트
+        List<Tilemap> obstacles = new List<Tilemap>(); // 장애물 리스트
+        List<Tilemap> walls = new List<Tilemap>();  //벽 타일 리스트
 
         foreach (var tm in map.GetComponentsInChildren<Tilemap>())
         {
-            var name = tm.gameObject.name.ToLower();
-
-            // 1. 벽 찾기
-            if (name.Contains("wall"))
+            // 벽 (Wall)
+            if (tm.CompareTag("Wall"))
             {
-                wall.Add(tm);
-                continue;
+                walls.Add(tm);
             }
-
-            // 2. 장애물 찾기 (새로 추가된 로직)
-            // 이름에 water, obstacle 등이 있거나 부모가 Obstacles인 경우
-            if (name.Contains("water") || name.Contains("obstacle") ||
-               (tm.transform.parent != null && tm.transform.parent.name == "Obstacles"))
+            // 장애물 (Obstacle)
+            else if (tm.CompareTag("Obstacle"))
             {
                 obstacles.Add(tm);
-                continue;
             }
-
-            // 3. 바닥 찾기 (나머지는 바닥으로 간주)
-            if (name.Contains("ground") || name.Contains("floor") ||
-               (tm.transform.parent != null && tm.transform.parent.name == "WalkableLayers"))
+            // 바닥 (Floor)
+            else if (tm.CompareTag("Ground"))
             {
                 floors.Add(tm);
             }
+            // 태그가 없는 경우(Untagged)에 대한 처리
+            else
+            {
+                Debug.LogWarning($"[MapManager] Tag가 설정되지 않은 타일맵 발견: {tm.name}");
+            }
         }
-        return (floors, obstacles, wall);
+        return (floors, obstacles, walls);
     }
 }

@@ -1,4 +1,3 @@
-// Assets/Scripts/Combat/StatusController.cs
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -15,7 +14,8 @@ public enum StatusId
     Shooting = 1, // 럭키식스 사격 중첩
     Action = 2, // 기간트 대응 중첩
     Fixing = 3, // 이동 저항 상태(현재는 스택 구현에 있는데 상태로 변경해야함)
-    Overwork = 4, //과로 중첩
+    Overwork = 4, //라스트보르 과로 중첩
+    Research = 5, //라스트보르 연구 중첩
 
     Defense = 21, // 방어 중첩
     Resistance = 22,  // 저항 중첩
@@ -71,6 +71,18 @@ public class StatusController : MonoBehaviour
 {
     readonly Dictionary<StatusId, StatusEntry> _map = new Dictionary<StatusId, StatusEntry>();
     public event Action OnStatusChanged;
+
+    // 상태별 저항력을 저장할 딕셔너리
+    private Dictionary<StatusId, float> _resistances = new Dictionary<StatusId, float>();
+
+    // 저항력 설정 함수 (패시브에서 호출)
+    public void SetResistance(StatusId id, float value)
+    {
+        if (_resistances.ContainsKey(id))
+            _resistances[id] = value;
+        else
+            _resistances.Add(id, value);
+    }
 
     BattleUnit _owner;
 
@@ -194,10 +206,13 @@ public class StatusController : MonoBehaviour
     public float ApplyAgilityModifier(float baseAgility)
         => baseAgility * GetAgilityMultiplier();
 
-    // 저항 값을 가져오는 헬퍼 (지금은 기본 1.0 리턴, 나중에 스탯이랑 연결)
+    // 저항 값을 가져오는 헬퍼
     public float GetResistance(StatusId id)
     {
-        // 예: if (id == StatusId.Bleeding) return _owner.BleedResistance;
+        // 딕셔너리에 설정된 값이 있으면 반환, 없으면 기본값 1.0f
+        if (_resistances.TryGetValue(id, out float val))
+            return val;
+
         return 1.0f;
     }
 

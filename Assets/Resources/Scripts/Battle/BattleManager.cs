@@ -95,6 +95,9 @@ public class BattleManager : MonoBehaviour
     public event System.Action<BattleUnit> OnUnitTurnLabel;// 유닛 턴 시작 라벨용
     public event System.Action<BattleUnit, string> OnUnitActionLabel; //유닛 스킬 표시용
 
+    //Event 호출
+    public event System.Action<BattleUnit> OnOverworkTriggered; // 과로(재행동) 발동 알림 이벤트
+
     // ParametricDamage 전용
     //Knockback
     ParametricDamageSkill _pendingKnockbackSkill;
@@ -147,6 +150,7 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    // 야수의 영역 지대 관리용 클래스
     [System.Serializable]
     public class BeastDomainZone
     {
@@ -160,6 +164,23 @@ public class BattleManager : MonoBehaviour
         public int highlightToken;
     }
     List<BeastDomainZone> _beastZones = new List<BeastDomainZone>();
+
+    // 중독 지대 관리용 클래스
+    [System.Serializable]
+    public class StatusTileZone
+    {
+        public BattleUnit owner;        // 생성자
+        public Tilemap map;             // 타일맵
+        public Vector3Int cell;         // 위치
+        public int remainingTurns;      // 지대 유지 턴 수
+        public TileBase originalTile;   // 복구할 원래 타일
+
+        // 이 지대가 부여할 상태 정보
+        public StatusId effectStatusId; // 부여할 상태 (예: Poisoning, Ignition)
+        public int effectStack;         // 부여할 스택 (예: 1)
+        public int effectDuration;      // 부여된 상태의 지속 턴 (예: 3)
+    }
+    List<StatusTileZone> _statusTileZones = new List<StatusTileZone>();
     #region Unity Callbacks
     void Awake()
     {
@@ -744,8 +765,9 @@ public class BattleManager : MonoBehaviour
             return; // 여기서 턴 로직 종료 (이동/공격 선택 화면 안 뜸)
         }
 
-
+        // 턴 시작 시 영역 시간 감소
         TickBeastDomainOnTurnStart(_unit);
+        TickStatusTileZonesOnTurnStart(_unit);
 
         // 캐스팅 성공 턴 소비 처리
         if (_unit.team == Team.Enemy)
@@ -1042,6 +1064,28 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+    // 턴 종료 시 위에 있는 유닛에게 효과 부여
+    void CheckStatusTileZoneEffect(BattleUnit unit)
+    {
+        if (unit == null || unit.IsDead) return;
+
+        // 현재 유닛 위치에 지대가 있는지 확인
+        foreach (var zone in _statusTileZones)
+        {
+            if (zone.map == unit.CurrentMap && zone.cell == unit.Cell)
+            {
+                var sc = unit.GetComponent<StatusController>();
+                if (sc != null)
+                {
+                    // 지대에 설정된 효과(StatusId)를 그대로 부여
+                    sc.ApplyWithTurnContext(zone.effectStatusId, zone.effectStack, zone.effectDuration);
+                    Debug.Log($"[StatusZone] {unit.name} 지대({zone.effectStatusId}) 위 턴 종료 -> 상태 부여");
+                }
+                break; // 한 타일에 지대가 겹치지 않는다는 가정 (겹치면 리스트 구조 변경 필요)
+            }
+        }
+    }
+
     public IEnumerable<BattleUnit> GetLivingAlliesOf(BattleUnit unit)   //살아 있는 아군 유닛 확인
     {
         if (unit == null) yield break;
@@ -1171,6 +1215,8 @@ public class BattleManager : MonoBehaviour
         usedActions.Clear();
         state = BattleState.ActionSelect;
 
+        OnOverworkTriggered?.Invoke(acting);
+
         return true; // 턴 종료를 막고 다시 행동 기회 부여
     }
 
@@ -1178,10 +1224,10 @@ public class BattleManager : MonoBehaviour
     void EndPlayerTurn()
     {
         // 과로 체크 및 재행동 처리
-        if (TryProcessOverwork())
-        {
-            return;
-        }
+        if (TryProcessOverwork()) return;
+
+        // 영역 체크
+        CheckStatusTileZoneEffect(acting);
 
         ClearAllPreviews();
         ClearTargetSelection();
@@ -1676,6 +1722,9 @@ public class BattleManager : MonoBehaviour
         if (TryProcessOverwork()) return;
 
         enemyRoutine = null;
+
+        //영역 체크
+        CheckStatusTileZoneEffect(enemy);
 
         // 캐스팅 중이면 다음 스킬 선점/라벨 갱신 금지
         var ecs = enemy.GetComponent<EnemyCastState>();
@@ -3103,6 +3152,63 @@ public class BattleManager : MonoBehaviour
             $"[BeastDomain] {owner.name} 야수의 영역 생성 - " +
             $"center:{centerCell}, r:{radius}, turns:{durationTurns}, token:{token}");
     }
+
+    // 범용 상태 지대 생성 함수
+    public void CreateStatusTileZone(
+        BattleUnit owner,
+        Tilemap map,
+        Vector3Int cell,
+        int zoneDuration,
+        TileBase newTileBase,
+        StatusId statusId,
+        int stack = 1,
+        int statusDuration = 3)
+    {
+        if (!map.HasTile(cell)) return;
+
+        // 이미 해당 위치에 지대가 있다면 갱신 (종류가 달라도 덮어쓰기 or 같은 종류면 턴 연장)
+        var existing = _statusTileZones.FirstOrDefault(z => z.map == map && z.cell == cell);
+
+        if (existing != null)
+        {
+            // 기존 지대 갱신 (주인, 지속시간, 그리고 효과 타입도 덮어씌움)
+            existing.owner = owner;
+            existing.remainingTurns = zoneDuration;
+            existing.effectStatusId = statusId; // 독 -> 화염으로 바뀔 수도 있으니
+            existing.effectStack = stack;
+            existing.effectDuration = statusDuration;
+
+            // 타일 이미지가 다르다면 교체
+            if (newTileBase != null) map.SetTile(cell, newTileBase);
+
+            Debug.Log($"[StatusZone] ({cell}) 갱신: {statusId}, {zoneDuration}턴");
+            return;
+        }
+
+        // 새 지대 생성
+        TileBase oldTile = map.GetTile(cell);
+
+        // 시각적 타일 변경
+        if (newTileBase != null)
+            map.SetTile(cell, newTileBase);
+
+        var newZone = new StatusTileZone
+        {
+            owner = owner,
+            map = map,
+            cell = cell,
+            remainingTurns = zoneDuration,
+            originalTile = oldTile,
+
+            // 효과 설정
+            effectStatusId = statusId,
+            effectStack = stack,
+            effectDuration = statusDuration
+        };
+
+        _statusTileZones.Add(newZone);
+        Debug.Log($"[StatusZone] ({cell}) 생성: {statusId}, {zoneDuration}턴 (Tile Changed)");
+    }
     void TickBeastDomainOnTurnStart(BattleUnit unitWhoseTurnStarted)
     {
         if (unitWhoseTurnStarted == null) return;
@@ -3128,6 +3234,32 @@ public class BattleManager : MonoBehaviour
                     beastDomainHighlighter.ClearGroup(z.highlightToken);
 
                 _beastZones.RemoveAt(i);
+            }
+        }
+    }
+
+    // 턴 시작 시 지대 시간 감소 및 복구
+    void TickStatusTileZonesOnTurnStart(BattleUnit unit)
+    {
+        if (unit == null) return;
+
+        for (int i = _statusTileZones.Count - 1; i >= 0; i--)
+        {
+            var z = _statusTileZones[i];
+
+            // 생성자의 턴이 돌아올 때마다 시간 감소
+            if (z.owner == unit)
+            {
+                z.remainingTurns--;
+                if (z.remainingTurns <= 0)
+                {
+                    // 타일 복구
+                    if (z.map != null)
+                        z.map.SetTile(z.cell, z.originalTile);
+
+                    _statusTileZones.RemoveAt(i);
+                    Debug.Log($"[StatusZone] ({z.cell}) 해제 및 타일 복구");
+                }
             }
         }
     }

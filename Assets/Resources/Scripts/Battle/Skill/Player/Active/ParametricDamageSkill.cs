@@ -51,6 +51,14 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
     [Header("Tile Modification (확장 기능)")]
     [Tooltip("스킬 적중 시 해당 타일을 이 타일로 교체 (null이면 변경 안 함)")]
     public TileBase changeTileTo;
+    [Tooltip("타일 변경 지속 턴 (기본 2)")]
+    public int tileChangeDuration = 2;
+    [Tooltip("지대 위에 있는 유닛에게 부여할 상태 (예: Poisoning)")]
+    public StatusId zoneStatusId = StatusId.None;
+    [Tooltip("지대 부여 상태 스택")]
+    public int zoneStatusStack = 1;
+    [Tooltip("지대 부여 상태 지속 시간")]
+    public int zoneStatusDuration = 3;
 
     [System.Serializable]
     public struct ConditionalMultiplier
@@ -525,6 +533,9 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
 
         int route = GetRoute(_caster);
 
+        // 범위 계산
+        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
+
         // === 멀티 히트 횟수 계산 ===
         int hits = trainingUseMultiHit ? Mathf.Max(1, trainingHitCount) : 1;
 
@@ -536,9 +547,27 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         }
         else
         {
-            var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
             victims = _battlemanager.GetUnitsInArea(_map, area)
                             .Where(u => u != null && !u.IsDead && u.team != _caster.team).ToList();
+        }
+
+        // 타일 변경 및 지대(Zone) 생성 로직
+        if (changeTileTo != null && _map != null)
+        {
+            // 공격 범위(area) 전체를 순회하며 지대 생성
+            foreach (var cell in area)
+            {
+                _battlemanager.CreateStatusTileZone(
+                    _caster,
+                    _map,
+                    cell,
+                    tileChangeDuration, // 지속 턴
+                    changeTileTo,       // 변경할 타일 이미지
+                    zoneStatusId,       // 부여할 상태
+                    zoneStatusStack,    // 스택
+                    zoneStatusDuration  // 상태 지속
+                );
+            }
         }
 
         // 방어 중첩 훈련 (시전자)

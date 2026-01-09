@@ -217,7 +217,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
                 }
 
                 if (buffStatus != StatusId.None && buffStatusStack > 0 && status != null)
-                    status.SetStacks(buffStatus, buffStatusStack, buffDuration);
+                    status.SetStacks(buffStatus, finalStack, buffDuration);
                 break;
 
             case SupportSkillMode.Cleanse:

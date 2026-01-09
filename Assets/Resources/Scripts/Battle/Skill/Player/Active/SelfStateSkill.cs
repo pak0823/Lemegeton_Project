@@ -99,6 +99,9 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
             Debug.Log($"[SelfStateSkill] Stealth Applied: {_caster.name}, Duration={trainingStealthDuration}");
         }
 
+        // 스킬 사용 완료 알림 (패시브가 이를 감지하여 스택 처리)
+        _caster.NotifySkillUsed(this);
+
         yield break;
     }
 
@@ -109,17 +112,32 @@ public class SelfStateSkill : SkillAsset, ISelfCastSkill
 
     public override int GetEffectiveCost(BattleUnit _caster)
     {
-        int baseCost = base.GetEffectiveCost(_caster);
-        if (_caster == null) return baseCost;
-
-        int route = _caster.GetTrainingRouteIndex(this);
-
-        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+        // 기본 훈련에 의한 비용 오버라이드 계산
+        int finalCost = base.GetEffectiveCost(_caster);
+        if (_caster != null)
         {
-            return Mathf.Max(0, trainingCostOverride);
+            int route = _caster.GetTrainingRouteIndex(this);
+            if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+            {
+                finalCost = Mathf.Max(0, trainingCostOverride);
+            }
         }
 
-        return baseCost;
+        // 연구(Research) 중첩 3이면 비용 0 처리
+        if (_caster != null)
+        {
+            var status = _caster.GetComponent<StatusController>();
+            if (status != null)
+            {
+                // 연구 중첩이 3 이상이면 비용 무료
+                if (status.GetStacks(StatusId.Research) >= 3)
+                {
+                    return 0;
+                }
+            }
+        }
+
+        return finalCost;
     }
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {

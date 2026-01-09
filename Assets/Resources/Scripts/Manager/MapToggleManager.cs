@@ -31,28 +31,25 @@ public class MapToggleManager : MonoBehaviour
 
         foreach (var tm in map.GetComponentsInChildren<Tilemap>())
         {
-            var name = tm.gameObject.name.ToLower();
-
-            // 벽 찾기
-            if (name.Contains("wall"))
+            // 벽 (Wall)
+            if (tm.CompareTag("Wall"))
             {
                 walls.Add(tm);
-                continue;
             }
-
-            // 장애물 찾기 (Water, Obstacle 등)
-            if (name.Contains("water") || name.Contains("obstacle") ||
-               (tm.transform.parent != null && tm.transform.parent.name == "Obstacles"))
+            // 장애물 (Obstacle)
+            else if (tm.CompareTag("Obstacle"))
             {
                 obstacles.Add(tm);
-                continue;
             }
-
-            // 바닥 찾기
-            if (name.Contains("ground") || name.Contains("floor") ||
-               (tm.transform.parent != null && tm.transform.parent.name == "WalkableLayers"))
+            // 바닥 (Floor)
+            else if (tm.CompareTag("Floor"))
             {
                 floors.Add(tm);
+            }
+            // 태그가 없는 경우(Untagged)에 대한 처리
+            else
+            {
+                Debug.LogWarning($"[MapManager] Tag가 설정되지 않은 타일맵 발견: {tm.name}");
             }
         }
         return (floors, obstacles, walls);
