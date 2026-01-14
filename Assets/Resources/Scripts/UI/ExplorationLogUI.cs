@@ -18,7 +18,7 @@ public class ExplorationLogUI : MonoBehaviour
 
     [Header("Style")]
     [SerializeField] Color newestColor = Color.white; // 가장 최근 로그 색
-    [SerializeField] Color olderColor = Color.black; // 이전 로그 색
+    [SerializeField] Color olderColor = new Color(147f / 255f, 147f / 255f, 147f / 255f, 1f); // 이전 로그 색
 
     [Header("Typing")]
     [SerializeField] bool enableTypewriter = true;  // 타자기 효과

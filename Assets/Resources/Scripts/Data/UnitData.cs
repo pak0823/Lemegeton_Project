@@ -35,6 +35,7 @@ public class UnitData : ScriptableObject
 
     [Header("UI")]
     public Sprite UnitIcon; // ATB 아이콘용 스프라이트
+    public Sprite UnitStandImage; // 진형 배치용 스프라이트
 
     [System.Serializable]
     public struct SkillAnimBinding

@@ -96,7 +96,7 @@ public class VigorManager : MonoBehaviour
     private void RefreshUI()
     {
         if (vigorText != null)
-            vigorText.text = $"È°±â: {currentVigor}/{maxVigor}";
+            vigorText.text = $"{currentVigor}";
     }
     public void SetCurrentVigor(int value, bool refresh = true)
     {
