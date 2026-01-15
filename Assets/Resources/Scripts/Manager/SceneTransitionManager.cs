@@ -246,8 +246,8 @@ public class SceneTransitionManager : MonoBehaviour
         string msg = $"{monsterName}과 마주쳤습니다. 전투에 돌입합니다.";
         presenter.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
         {
-            //FadeToScene(battleScene);
-            FadeToScene(testSecne); //임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
+            FadeToScene(battleScene);
+            //FadeToScene(testSecne); //임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
         });
     }
 

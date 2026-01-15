@@ -403,7 +403,7 @@ public class BattleUnit : MonoBehaviour
     #endregion
 
     #region Data Initialization
-    void ApplyData()
+    public void ApplyData()
     {
         if (data != null)
         {

@@ -833,15 +833,29 @@ public class PlayerMovement : MonoBehaviour
     {
         monster = null;
         var world = floorTilemap.GetCellCenterWorld(cell);
-        var hits = Physics2D.OverlapCircleAll(world, 0.05f, encounterLayerMask);
+        var hits = Physics2D.OverlapCircleAll(world, 0.4f, encounterLayerMask);
+
+        // 탐지된 개수 확인
+        if (hits.Length == 0)
+        {
+            Debug.Log($"[Encounter] 해당 타일({cell}) 중심에서 반경 0.4f 내에 'Water' 레이어 감지 안 됨. 위치: {world}");
+            return false;
+        }
+
         foreach (var h in hits)
         {
             if (!h) continue;
             var m = h.GetComponentInParent<EncounterMonster>();
-            if (m != null && m.IsActive)
+            if (m != null)
             {
-                monster = m;
-                return true;
+                if (!m.IsActive) Debug.Log($"[Encounter] 몬스터 감지됨({m.name}) 그러나 IsActive가 false임.");
+                else
+                {
+                    Debug.Log($"[Encounter] 몬스터 감지 성공! 전투 진입 시도.");
+                    monster = m;
+                    return true;
+                }
+                   
             }
         }
         return false;

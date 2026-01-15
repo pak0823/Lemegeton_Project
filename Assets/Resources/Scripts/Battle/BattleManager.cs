@@ -206,6 +206,9 @@ public class BattleManager : MonoBehaviour
             if (provider != null) provider.OnMapsReady += Init;
         }
 
+        // 플레이어 유닛 스폰
+        SpawnPlayerUnits();
+
         if (!initialized)
         {
             if (waveSet != null && waveSet.waves != null && waveSet.waves.Count > 0)
@@ -274,7 +277,7 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    // 1. 유닛 클릭 처리
+    // 유닛 클릭 처리
     void HandleUnitClick(BattleUnit unit)
     {
         if (state == BattleState.Resolving) return; // 실행 중엔 무시
@@ -305,7 +308,7 @@ public class BattleManager : MonoBehaviour
         OnUnitClicked(unit);
     }
 
-    // 2. 타일 클릭 처리
+    // 타일 클릭 처리
     void HandleTileClick(Tilemap map, Vector3Int cell)
     {
         // 넉백 타겟팅 중
@@ -438,6 +441,69 @@ public class BattleManager : MonoBehaviour
             LoadWave(0);
         }
     }
+
+    // 진형 정보대로 유닛 소환
+    void SpawnPlayerUnits()
+    {
+        // 데이터 매니저 확인
+        if (PlayerDataManager.Instance == null)
+        {
+            Debug.LogWarning("PlayerDataManager가 없습니다! 테스트용 임시 유닛을 생성하거나 확인하세요.");
+            return;
+        }
+
+        // 맵 매니저 확인
+        var mapManager = Shared.battleMapManager;
+        if (mapManager == null) return;
+
+        UnitData[] formation = PlayerDataManager.Instance.formation;
+
+        // 기준점: 보통 (0,0,0)을 맵의 중앙이나 특정 PlayerStart 오브젝트 위치로 잡음
+        // 여기서는 간단히 (0,0)을 기준으로 하되, 필요시 오프셋 더하기
+        Vector3Int centerOffset = Vector3Int.zero;
+
+        for (int i = 0; i < formation.Length; i++)
+        {
+            UnitData data = formation[i];
+
+            // 데이터가 있는(배치된) 슬롯만 처리
+            if (data != null)
+            {
+                // 좌표 계산
+                Vector3Int cellPos = mapManager.GetFormationSpawnPoint(i) + centerOffset;
+
+                // 프리팹 생성
+                GameObject go = Instantiate(data.battlePrefab);
+
+                // 위치 설정 (타일맵 좌표 -> 월드 좌표)
+                Vector3 worldPos = mapManager.PlayerFloor.GetCellCenterWorld(cellPos);
+                go.transform.position = worldPos;
+
+                // BattleUnit 데이터 주입
+                BattleUnit unit = go.GetComponent<BattleUnit>();
+                if (unit != null)
+                {
+                    unit.data = data; // UnitData 연결
+                    unit.team = Team.Player; // 아군 설정
+
+                    // (중요) 외형 변경: UnitData에 있는 이미지가 있다면 스프라이트 교체
+                    // 만약 프리팹이 Spine이나 애니메이션을 쓴다면 다른 방식 필요
+                    var sr = go.GetComponentInChildren<SpriteRenderer>();
+                    if (sr != null && data.UnitIcon != null)
+                    {
+                        sr.sprite = data.UnitIcon; // 임시로 아이콘 사용 (나중엔 전용 모델로)
+                    }
+
+                    // 데이터 주입 후, 스탯을 실질적으로 적용하는 함수 강제 호출
+                    unit.ApplyData();
+                }
+
+                // E. 매니저에 등록 (턴 관리용 리스트 등이 있다면 추가)
+                // allUnits.Add(unit); 
+            }
+        }
+    }
+
     // BattleMapManager(IBattleMapProvider)가 실제로 Floor들을 채운 '이후' 1회만 BattleInput에 통지
     IEnumerator Co_RebindBattleInputWhenMapsReady()
     {
