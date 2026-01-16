@@ -736,7 +736,6 @@ MonoBehaviour:
   turnBar: {fileID: 0}
   skillPanel: {fileID: 0}
   actionPanel: {fileID: 0}
-  timerUI: {fileID: 0}
   explorationReset: {fileID: 0}
   titleMenu: {fileID: 187271769}
   optionsMenu: {fileID: 0}
@@ -753,16 +752,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a62388b27cc90694b9651297c608867b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  continueButton: {fileID: 118918435}
-  startButton: {fileID: 708498995}
-  optionButton: {fileID: 1776339320}
-  exitButton: {fileID: 2046402775}
+  menuItems:
+  - id: Contiune_Btn
+    button: {fileID: 118918435}
+    requiresSaveData: 1
+  - id: Start_Btn
+    button: {fileID: 708498995}
+    requiresSaveData: 0
+  - id: Option_Btn
+    button: {fileID: 1776339320}
+    requiresSaveData: 0
+  - id: Exit_Btn
+    button: {fileID: 2046402775}
+    requiresSaveData: 0
   arrow: {fileID: 1695853770}
   arrowOffset: {x: -150, y: 0}
-  simulateHasSaveData: 0
-  enableKeyboardControl: 1
-  disabledAlpha: 0.4
   focusTextColor: {r: 1, g: 0.5, b: 0, a: 1}
+  simulateHasSaveData: 0
+  disabledAlpha: 0.4
   optionPanel: {fileID: 2037276173}
 --- !u!1 &584563615
 GameObject:
@@ -1104,9 +1111,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: TestCode, Assembly-CSharp
-        m_MethodName: StartGame
+      - m_Target: {fileID: 187271769}
+        m_TargetAssemblyTypeName: Project.UI.TitleMenuUI, Assembly-CSharp
+        m_MethodName: OnBtnStartGame
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -2277,9 +2284,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
-        m_TargetAssemblyTypeName: TestCode, Assembly-CSharp
-        m_MethodName: QuitGame
+      - m_Target: {fileID: 187271769}
+        m_TargetAssemblyTypeName: Project.UI.TitleMenuUI, Assembly-CSharp
+        m_MethodName: OnBtnQuitGame
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

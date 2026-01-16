@@ -7,300 +7,277 @@ namespace Project.UI
 {
     public class TitleMenuUI : MonoBehaviour, ISceneUiModule
     {
-        [Header("Wiring")]
-        [SerializeField] private Button continueButton; //계속하기
-        [SerializeField] private Button startButton;    //처음부터
-        [SerializeField] private Button optionButton;   //옵션
-        [SerializeField] private Button exitButton;     //종료
+        [System.Serializable]
+        public class MenuItem
+        {
+            public string id;               // 식별자 (디버그용)
+            public Button button;           // UI 버튼
+            public bool requiresSaveData;   // 세이브 데이터가 있어야 활성화되는지
+            // 필요하다면 여기에 UnityEvent onClick 등을 추가해 인스펙터에서 연결 가능
+        }
 
-        [Header("Keyboard Navigation")]
-        [SerializeField] private RectTransform arrow;          // 화살표 이미지(선택 표시용)
-        [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f); // 버튼 기준 좌측 오프셋
-        [Tooltip("데이터 시스템 도입 전까지 임시로 저장 유무를 가정하는 스위치")]
-        [SerializeField] private bool simulateHasSaveData = false;
-        [Tooltip("Up/W, Down/S, Enter(Return/Space) 입력 활성화")]
-        [SerializeField] private bool enableKeyboardControl = true;
+        [Header("Configuration")]
+        [SerializeField] private List<MenuItem> menuItems = new List<MenuItem>(); // 버튼 리스트로 통합 관리
 
-        [Header("Visual")]
-        [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f; // 저장 없음일 때 '계속하기' 투명도
-        [SerializeField] private Color focusTextColor = new Color(255f/255f, 155f/255f, 0f);    // 포커스 시 텍스트 색 (주황)
+        [Header("Navigation & Visuals")]
+        [SerializeField] private RectTransform arrow;
+        [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f);
+        [SerializeField] private Color focusTextColor = new Color(1f, 0.6f, 0f); // 주황색
 
-        private readonly Dictionary<Text, Color> _origTextColors = new Dictionary<Text, Color>();
+        [Header("Settings")]
+        [SerializeField] private bool simulateHasSaveData = false; // 임시 데이터 플래그
+        [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f;
+
+        // 상태 관리
+        private int _currentIndex = -1;
+        private bool _isInputActive = false;
+
+        // 중복 실행 방지용 플래그 추가
+        private bool _isBusy = false;
+
+        // 텍스트 색상 캐싱
+        private Dictionary<Text, Color> _originalTextColors = new Dictionary<Text, Color>();
+
+        // 외부 의존성 (옵션 패널 등) -> 인터페이스나 매니저를 통하는 것이 좋으나, 편의상 유지하되 의존성 최소화
         public OptionsMenuUI optionPanel;
 
-        private Button[] _order;   // 선택 순서: [계속하기, 처음부터, 설정, 종료하기]
-        private int _index;         // 현재 선택 인덱스
-        private bool _shown;        // 메뉴 표시 상태(라이프사이클)
+        private void Awake()
+        {
+            InitializeButtons();
+        }
 
+        private void InitializeButtons()
+        {
+            foreach (var item in menuItems)
+            {
+                if (item.button == null) continue;
 
+                // 1. 텍스트 색상 캐싱
+                var texts = item.button.GetComponentsInChildren<Text>(true);
+                foreach (var t in texts)
+                {
+                    if (!_originalTextColors.ContainsKey(t))
+                        _originalTextColors.Add(t, t.color);
+                }
 
+                // 2. 마우스 이벤트 연결 (EventTrigger 대신 가벼운 방식 권장하지만, 기존 로직 존중하여 유지)
+                // 람다 캡처 주의: foreach 변수를 직접 쓰지 말고 로컬 변수에 할당
+                var targetBtn = item.button;
+                var itemIndex = menuItems.IndexOf(item);
+
+                var trigger = targetBtn.gameObject.GetComponent<EventTrigger>() ?? targetBtn.gameObject.AddComponent<EventTrigger>();
+                var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+                entry.callback.AddListener((data) => OnPointerEnterButton(itemIndex));
+                trigger.triggers.Add(entry);
+
+                // 3. 클릭 리스너 (인스펙터에서 연결했다면 생략 가능하지만, 코드 제어를 원한다면 여기서)
+                // 예: if (item.id == "Start") item.button.onClick.AddListener(OnBtnStartGame);
+                // 현재 구조는 인스펙터 onClick 사용을 가정합니다.
+            }
+        }
+
+        // --- ISceneUiModule Implementation ---
         public void OnUiShown()
         {
-            // 필요 시 포커스/애니메이션/사운드 트리거 등을 여기에
-            _shown = true;
-            EnsureOrder();
-            var hasSave = HasAnySaveData();
-            RebuildLabelCache();
-            UpdateContinueAvailability(hasSave);             // 초기 포커스: 저장 데이터 있으면 '계속하기(0)', 없으면 '처음부터(1)'
-            _index = (hasSave && continueButton && continueButton.interactable) ? 0 : 1;
-            RefreshArrow();
+            _isInputActive = true;
+            _isBusy = false;
+
+            RefreshSaveDataState(); // 세이브 데이터 유무에 따른 버튼 상태 갱신
+
+            // 초기 포커스 설정 (가능한 첫 번째 버튼)
+            int startIndex = GetNextValidIndex(-1, 1);
+            SelectButton(startIndex);
+
+            if (arrow) arrow.gameObject.SetActive(true);
         }
-        public void OnUiHidden() 
+
+        public void OnUiHidden()
         {
-            // 메뉴 닫힐 때 정리
-            _shown = false;
+            _isInputActive = false;
             if (arrow) arrow.gameObject.SetActive(false);
-            // 전부 원래 색 복구
-            foreach (var kv in _origTextColors)
-                if (kv.Key) kv.Key.color = kv.Value;
+            ResetVisuals();
         }
+        // -------------------------------------
+
+        private void Update()
+        {
+            // 옵션 창이 열려있거나 입력 비활성 상태면 무시
+            if (!_isInputActive || _isBusy || (optionPanel != null && optionPanel.IsShow)) return;
+
+            HandleKeyboardInput();
+        }
+
+        private void HandleKeyboardInput()
+        {
+            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                Navigate(-1);
+            }
+            else if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
+            {
+                Navigate(1);
+            }
+            else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+            {
+                PressCurrentButton();
+            }
+        }
+
+        private void Navigate(int direction)
+        {
+            int nextIndex = GetNextValidIndex(_currentIndex, direction);
+
+            // 변경사항이 있을 때만 갱신
+            if (nextIndex != -1 && nextIndex != _currentIndex)
+            {
+                SelectButton(nextIndex);
+            }
+        }
+
+        // 방향(direction)으로 탐색하여 클릭 가능한 다음 버튼 인덱스 반환
+        private int GetNextValidIndex(int startIdx, int direction)
+        {
+            if (menuItems.Count == 0) return -1;
+
+            int current = startIdx;
+            // 리스트 크기만큼만 반복해서 무한루프 방지
+            for (int i = 0; i < menuItems.Count; i++)
+            {
+                current += direction;
+
+                // 범위 체크 (Wrap 방지: 끝에 도달하면 멈춤)
+                // Wrap을 원하면: current = (current + menuItems.Count) % menuItems.Count;
+                if (current < 0 || current >= menuItems.Count)
+                    return startIdx; // 더 이상 갈 곳이 없으면 제자리
+
+                if (IsButtonInteractable(current))
+                {
+                    return current;
+                }
+            }
+            return startIdx;
+        }
+
+        private bool IsButtonInteractable(int index)
+        {
+            if (index < 0 || index >= menuItems.Count) return false;
+            var item = menuItems[index];
+            return item.button != null && item.button.gameObject.activeInHierarchy && item.button.interactable;
+        }
+
+        private void SelectButton(int index)
+        {
+            if (index < 0 || index >= menuItems.Count) return;
+
+            // 이전 선택 해제 효과 (필요시)
+            // ResetVisuals(); // 전체 리셋보다는 최적화 가능하지만, 안전하게 전체 리셋 사용
+
+            _currentIndex = index;
+            UpdateVisuals();
+        }
+
+        private void PressCurrentButton()
+        {
+            if (_isBusy) return;
+
+            if (_currentIndex >= 0 && _currentIndex < menuItems.Count)
+            {
+                var btn = menuItems[_currentIndex].button;
+                if (btn.interactable) btn.onClick.Invoke();
+            }
+        }
+
+        private void OnPointerEnterButton(int index)
+        {
+            if (!_isInputActive || _isBusy || (optionPanel && optionPanel.IsShow)) return;
+            if (IsButtonInteractable(index))
+            {
+                SelectButton(index);
+            }
+        }
+
+        // 세이브 데이터 상태에 따라 버튼 활성/비활성 처리
+        private void RefreshSaveDataState()
+        {
+            bool hasSave = HasAnySaveData();
+
+            foreach (var item in menuItems)
+            {
+                if (item.requiresSaveData)
+                {
+                    // 로직상 인터랙터블 설정
+                    item.button.interactable = hasSave;
+
+                    // 시각적 처리 (CanvasGroup)
+                    var cg = item.button.GetComponent<CanvasGroup>();
+                    if (!cg) cg = item.button.gameObject.AddComponent<CanvasGroup>();
+
+                    cg.alpha = hasSave ? 1f : disabledAlpha;
+                    cg.blocksRaycasts = hasSave; // 마우스 클릭 방지
+                }
+            }
+        }
+
+        private void UpdateVisuals()
+        {
+            // 1. 화살표 이동
+            if (arrow && _currentIndex >= 0 && _currentIndex < menuItems.Count)
+            {
+                var targetRect = menuItems[_currentIndex].button.transform as RectTransform;
+                arrow.SetParent(targetRect.parent, true); // worldPositionStays=true
+                // 앵커와 피벗을 타겟과 맞추거나, 단순 위치 이동
+                arrow.position = targetRect.position + (Vector3)arrowOffset;
+                // 필요시 SetAsLastSibling 등으로 렌더링 순서 조정
+            }
+
+            // 2. 텍스트 색상 변경
+            foreach (var kv in _originalTextColors)
+            {
+                // 선택된 버튼의 텍스트인지 확인
+                bool isSelected = IsTextChildOfSelectedButton(kv.Key);
+                kv.Key.color = isSelected ? focusTextColor : kv.Value;
+            }
+        }
+
+        private bool IsTextChildOfSelectedButton(Text t)
+        {
+            if (_currentIndex < 0 || _currentIndex >= menuItems.Count) return false;
+            return t.transform.IsChildOf(menuItems[_currentIndex].button.transform);
+        }
+
+        private void ResetVisuals()
+        {
+            foreach (var kv in _originalTextColors)
+            {
+                if (kv.Key) kv.Key.color = kv.Value;
+            }
+        }
+
+        private bool HasAnySaveData()
+        {
+            // 추후 실제 데이터 매니저 연결
+            return simulateHasSaveData;
+        }
+
+        // --- 버튼 이벤트 연결용 (인스펙터에서 사용) ---
         public void OnBtnStartGame()
         {
-            // 모든 데이터/상태 초기화
-            Project.GameResetter.ResetAll(deleteSaves: true);
-            //  └ 새 게임이지만 세이브는 지우고 싶지 않다면 false로
+            if (_isBusy) return; // 이미 실행 중이면 무시
+            _isBusy = true;      // 실행 시작 잠금
 
+            GameResetter.ResetAll(deleteSaves: true);
             Shared.SceneTransitionManager.FadeToScene("ExplorationScene");
-            Debug.Log("인게임 씬으로 이동");
         }
 
         public void OnBtnQuitGame()
         {
+            if (_isBusy) return; // 이미 실행 중이면 무시
+            _isBusy = true;      // 실행 시작 잠금
+
             Application.Quit();
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #endif
         }
-
-        private void Awake()
-        {
-            if (startButton) startButton.onClick.AddListener(OnBtnStartGame);
-            if (exitButton) exitButton.onClick.AddListener(OnBtnQuitGame);
-            EnsureOrder();
-
-            // 각 버튼의 원래 텍스트 색 캐시
-            CacheLabelColors(continueButton);
-            CacheLabelColors(startButton);
-            CacheLabelColors(optionButton);
-            CacheLabelColors(exitButton);
-
-            // 마우스 Hover → 화살표 이동
-            WireHover(continueButton, 0);
-            WireHover(startButton, 1);
-            WireHover(optionButton, 2);
-            WireHover(exitButton, 3);
-        }
-
-        void CacheLabelColors(Button btn)
-        {
-            if (!btn) return;
-            var texts = btn.GetComponentsInChildren<Text>(true);
-            foreach (var t in texts)
-                if (t && !_origTextColors.ContainsKey(t))
-                    _origTextColors[t] = t.color;
-        }
-        void RebuildLabelCache()
-        {
-            _origTextColors.Clear();
-            CacheLabelColors(continueButton);
-            CacheLabelColors(startButton);
-            CacheLabelColors(optionButton);
-            CacheLabelColors(exitButton);
-        }
-        Color GetOrig(Text t) => (t && _origTextColors.TryGetValue(t, out var c)) ? c : Color.white;
-
-        private void Update()
-        {
-            if (!_shown || !enableKeyboardControl || optionPanel.IsShow) return;
-            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
-            {
-                Move(-1);
-            }
-            else if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
-            {
-                Move(+1);
-            }
-            // Enter/Return/Space : 현재 선택 버튼 실행
-            if (Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Return))
-            {
-                Activate();
-            }
-        }
-
-        private void WireHover(Button btn, int idx)
-        {
-            if (!btn) return;
-            var et = btn.gameObject.GetComponent<EventTrigger>();
-            if (!et) et = btn.gameObject.AddComponent<EventTrigger>();
-
-            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            entry.callback.AddListener(_ => OnHoverIndex(idx));
-            et.triggers.Add(entry);
-        }
-
-        private void Move(int delta)
-        {
-            EnsureOrder();
-            if (_order.Length == 0) return;
-
-            int last = _order.Length - 1;
-            int next = _index + delta;
-
-            // 래핑 금지: 경계 넘으면 이동하지 않음
-            if (next < 0 || next > last)
-            {
-                RefreshArrow();
-                return;
-            }
-
-            // 저장 없으면 '계속하기' 스킵 (경계 밖으로 벗어나지 않게 한 번만 보정)
-            if (!HasAnySaveData() && _order[next] == continueButton)
-            {
-                int alt = next + delta; // 같은 방향으로 한 칸 더
-                if (alt < 0 || alt > last) // 더 갈 곳이 없으면 이동 취소
-                {
-                    RefreshArrow();
-                    return;
-                }
-                next = alt;
-                // alt도 우연히 계속하기일 가능성은 현재 배열 순서상 없음(연속 배치가 아니므로)
-            }
-
-            // 유효성(비활성/숨김) 체크도 겸사겸사
-            var target = _order[next];
-            if (!target || !target.gameObject.activeInHierarchy || !target.interactable)
-            {
-                RefreshArrow();
-                return; // 갈 곳이 유효하지 않으면 이동 취소
-            }
-
-            // 최종 반영
-            _index = next;
-            RefreshArrow();
-        }
-
-        // 화살표를 특정 인덱스로 이동(버튼 유효성 체크 포함)
-        private void OnHoverIndex(int idx)
-        {
-            if (!_shown || (optionPanel && optionPanel.IsShow)) return;
-            EnsureOrder();
-            if (idx < 0 || idx >= _order.Length) return;
-
-            var target = _order[idx];
-            // 비활성/비상호작용 항목은 무시(계속하기 잠금 등)
-            if (!target || !target.gameObject.activeInHierarchy || !target.interactable) return;
-
-            _index = idx;
-            RefreshArrow();
-        }
-        private void Activate()
-        {
-            EnsureOrder();
-            if (_order.Length == 0) return;
-            var target = _order[_index];
-            if (!target || !target.gameObject.activeInHierarchy || !target.interactable) return;
-            target.onClick?.Invoke();
-        }
-
-        private void RefreshArrow()
-        {
-            EnsureOrder();
-            if (!arrow || _order.Length == 0) return;
-            var target = _order[_index];
-            if (!target) { arrow.gameObject.SetActive(false); return; }
-
-            // 화살표를 선택된 버튼 좌측으로 위치
-            var tr = target.transform as RectTransform;
-            var arrowRt = arrow;
-            if (!tr || !arrowRt) return;
-
-            if (!arrowRt.gameObject.activeSelf) arrowRt.gameObject.SetActive(true);
-            // 같은 Canvas 기준 좌표로 맞추기
-            arrowRt.SetParent(tr.parent, worldPositionStays:false);
-            arrowRt.anchorMin = tr.anchorMin;
-            arrowRt.anchorMax = tr.anchorMax;
-            arrowRt.anchoredPosition = tr.anchoredPosition + arrowOffset;
-            arrowRt.SetAsLastSibling(); // z 오더 보정
-
-            // 선택 텍스트 색 갱신
-            ApplyFocusVisuals();
-        }
-
-        void ApplyFocusVisuals()
-        {
-            // 전부 원래 색으로 복구(현재 존재하는 자식 텍스트들 대상으로)
-            if (_order != null)
-            {
-                foreach (var btn in _order)
-                {
-                    if (!btn) continue;
-                    foreach (var t in btn.GetComponentsInChildren<Text>(true))
-                    {
-                        if (!t) continue;
-                        t.color = GetOrig(t); // 캐시에 없으면 white가 될 텐데,
-                    }
-                }
-            }
-
-            // 선택된 버튼만 포커스 색 적용
-            if (_order == null || _order.Length == 0) return;
-            var sel = _order[_index];
-            if (!sel) return;
-            foreach (var t in sel.GetComponentsInChildren<Text>(true))
-                if (t) t.color = focusTextColor;
-        }
-
-        private void UpdateContinueAvailability(bool hasSave)
-        {
-            if (!continueButton) return;
-            // 1) 논리 비활성
-            continueButton.interactable = hasSave;
-
-            // 2) 시각 디밋(반투명): CanvasGroup을 버튼 루트에 붙여 전체 텍스트/아이콘 포함 적용
-            var cg = continueButton.GetComponent<CanvasGroup>();
-            if (!cg) cg = continueButton.gameObject.AddComponent<CanvasGroup>();
-            cg.alpha = hasSave ? 1f : disabledAlpha;
-            // 상호작용은 Button.interactable에 맡기되, 오입력 방지를 원하면 blocksRaycasts도 동기화
-            cg.blocksRaycasts = hasSave;
-            cg.interactable = hasSave;
-
-            // 현재 선택이 '계속하기'인데 비활성화되었다면 선택을 유효 항목으로 옮김
-            if (!hasSave && _order != null && _order.Length > 0 && _order[_index] == continueButton)
-            {
-                // 래핑 금지 모드에 맞춰 안전하게 옮김
-                int last = _order.Length - 1;
-                // 아래로 먼저 시도
-                int down = Mathf.Clamp(_index + 1, 0, last);
-                if (_order[down] == continueButton) down = Mathf.Clamp(down + 1, 0, last);
-                // 위로 대안
-                int up = Mathf.Clamp(_index - 1, 0, last);
-                                if (_order[up] == continueButton) up = Mathf.Clamp(up - 1, 0, last);
-                
-                                // 가능한 쪽으로 이동, 둘 다 불가하면 제자리
-                                if (down != _index && _order[down] != continueButton) _index = down;
-                                else if (up != _index && _order[up] != continueButton) _index = up;
-                                // 화살표 갱신
-                RefreshArrow();
-            }
-        }
-
-        private void EnsureOrder()
-        {
-            if (_order != null && _order.Length == 4) return;
-            _order = new[]
-            {
-                continueButton,  // 0: 계속하기
-                startButton,     // 1: 처음부터
-                optionButton,    // 2: 설정
-                exitButton       // 3: 종료하기
-            };
-        }
-
-        // 데이터 시스템 도입 전 임시 판정 로직
-        private bool HasAnySaveData()
-        {
-            return simulateHasSaveData;
-        }
-
     }
 }

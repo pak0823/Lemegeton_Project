@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems; // 클릭 이벤트용
 
-public class FormationSlotUI : MonoBehaviour, IPointerClickHandler
+public class FormationSlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
 {
     [Header("Settings")]
     public int slotIndex; // 0 ~ 18 (각 슬롯마다 다르게 설정해야 함)
@@ -10,22 +10,19 @@ public class FormationSlotUI : MonoBehaviour, IPointerClickHandler
     public Image unitImage; // 캐릭터 이미지 (자식 오브젝트)
 
     private UnitData currentUnit;
+    private CanvasGroup canvasGroup;
 
     void Awake()
     {
         if (unitImage == null)
         {
-            // 첫 번째 자식을 가져옴
-            if (transform.childCount > 0)
-            {
+            // 이미지 찾는 로직 유지
+            if (unitImage == null && transform.childCount > 0)
                 unitImage = transform.GetChild(0).GetComponent<Image>();
-            }
 
-            // 그래도 없으면 에러 로그 (이건 네가 실수한 거니까)
-            if (unitImage == null)
-            {
-                Debug.LogError($"{name} 슬롯에 'UnitIconImage' 자식이 없거나 Image 컴포넌트가 없다! 확인해라.");
-            }
+            // CanvasGroup 없으면 추가 (드래그 중 반투명 효과용)
+            canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
         }
     }
 
@@ -33,9 +30,20 @@ public class FormationSlotUI : MonoBehaviour, IPointerClickHandler
     {
         // 시작할 때 저장된 정보 불러오기
         RefreshUI();
+
+        // 매니저의 데이터 변경 이벤트 구독
+        if (PlayerDataManager.Instance != null)
+            PlayerDataManager.Instance.OnFormationChanged += RefreshUI;
     }
 
-    // UI 갱신 (이미지 교체)
+    void OnDestroy()
+    {
+        // 이벤트 구독 해제
+        if (PlayerDataManager.Instance != null)
+            PlayerDataManager.Instance.OnFormationChanged -= RefreshUI;
+    }
+
+    // UI 갱신
     public void RefreshUI()
     {
         if (PlayerDataManager.Instance == null) return;
@@ -58,35 +66,85 @@ public class FormationSlotUI : MonoBehaviour, IPointerClickHandler
     // 슬롯 클릭 시 실행
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (eventData.button != PointerEventData.InputButton.Left)
+        // 드래그 중이었다면 클릭 이벤트 무시
+        if (eventData.dragging) return;
+        if (eventData.button != PointerEventData.InputButton.Left) return;
+
+        // 배치 모드(상단 토글 선택 상태)라면 배치 수행
+        if (CampUIManager.Instance != null && CampUIManager.Instance.selectedUnit != null)
         {
-            return; // 좌클릭이 아니면 함수 종료 (우클릭 등 무시)
+            UnitData targetUnit = CampUIManager.Instance.selectedUnit;
+            PlayerDataManager.Instance.SetFormation(slotIndex, targetUnit);
         }
 
-        // 매니저에서 현재 선택된 유닛 가져오기
-        if (CampUIManager.Instance == null) return;
+        // 배치 모드가 아니고 유닛이 있으면? -> (선택적으로) 클릭해서 정보 보여주기나 해제 로직 등 추가 가능
 
-        UnitData targetUnit = CampUIManager.Instance.selectedUnit;
 
-        // 선택된 유닛이 없으면 아무것도 안 함 (혹은 배치 해제 로직)
-        if (targetUnit == null)
+        //// 데이터 매니저에 "이 자리에 이 유닛 배치해" 명령
+        //// (SetFormation 내부에서 중복 배치 처리까지 되어 있음)
+        //PlayerDataManager.Instance.SetFormation(slotIndex, targetUnit);
+
+        //// UI 갱신 (모든 슬롯을 갱신해야 중복된 유닛이 사라지는 게 보임)
+        //// 비효율적이지만 지금은 가장 확실한 방법: 모든 슬롯을 찾아서 Refresh 때리기
+        //var allSlots = transform.parent.GetComponentsInChildren<FormationSlotUI>();
+        //foreach (var slot in allSlots)
+        //{
+        //    slot.RefreshUI();
+        //}
+
+        //Debug.Log($"{slotIndex}번 슬롯에 {targetUnit.DisplayName} 배치 완료!");
+    }
+
+    // --- 드래그 & 드롭 구현 ---
+
+    // 드래그 시작
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        // 빈 슬롯은 드래그 못 함
+        if (currentUnit == null) return;
+
+        // 매니저에게 고스트 이미지 띄우라고 요청
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.StartDrag(unitImage.sprite);
+
+        // 내 이미지는 살짝 투명하게
+        canvasGroup.alpha = 0.6f;
+        // 레이캐스트를 꺼서 드롭 이벤트가 내 아래(혹은 다른 슬롯)로 통과되게 함 (필수 아님, 상황따라)
+        canvasGroup.blocksRaycasts = false;
+    }
+
+    // 드래그 중 (매 프레임)
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (currentUnit == null) return;
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.UpdateDragPosition(eventData.position);
+    }
+
+    // 드래그 끝 (마우스 뗐을 때)
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.EndDrag();
+
+        canvasGroup.alpha = 1f;
+        canvasGroup.blocksRaycasts = true; // 다시 켜줘야 클릭 됨
+    }
+
+    // 드롭 받음 (내가 도착지점일 때)
+    public void OnDrop(PointerEventData eventData)
+    {
+        // 드래그해온 물체(pointerDrag)가 FormationSlotUI인지 확인
+        FormationSlotUI sourceSlot = eventData.pointerDrag.GetComponent<FormationSlotUI>();
+
+        if (sourceSlot != null && sourceSlot.currentUnit != null)
         {
-            Debug.Log("선택된 유닛이 없습니다.");
-            return;
+            // "저쪽 슬롯(source)에 있던 유닛을 내 자리(this.slotIndex)로 옮겨라"
+            // SetFormation 내부 로직이 이미 스왑을 지원하므로 이거 한 방이면 됨.
+            PlayerDataManager.Instance.SetFormation(this.slotIndex, sourceSlot.currentUnit);
+
+            // 데이터 매니저가 OnFormationChanged 이벤트를 쏘면,
+            // 나랑 저쪽 슬롯 둘 다 RefreshUI가 자동으로 실행됨.
         }
-
-        // 데이터 매니저에 "이 자리에 이 유닛 배치해" 명령
-        // (SetFormation 내부에서 중복 배치 처리까지 되어 있음)
-        PlayerDataManager.Instance.SetFormation(slotIndex, targetUnit);
-
-        // UI 갱신 (모든 슬롯을 갱신해야 중복된 유닛이 사라지는 게 보임)
-        // 비효율적이지만 지금은 가장 확실한 방법: 모든 슬롯을 찾아서 Refresh 때리기
-        var allSlots = transform.parent.GetComponentsInChildren<FormationSlotUI>();
-        foreach (var slot in allSlots)
-        {
-            slot.RefreshUI();
-        }
-
-        Debug.Log($"{slotIndex}번 슬롯에 {targetUnit.DisplayName} 배치 완료!");
     }
 }

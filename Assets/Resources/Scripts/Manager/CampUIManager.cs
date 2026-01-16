@@ -1,7 +1,16 @@
-using Project.UI; // ModalWindowBase가 여기 있다고 가정
+using Project.UI;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+
+
+// 헤더 종류 정의
+public enum CampHeaderType
+{
+    None,       // 아무것도 안 띄움 (Option 등)
+    Character,  // 캐릭터 선택창 (Status, Skill 등)
+    Item        // 아이템 선택창 (Inventory 등)
+}
 
 [System.Serializable]
 public struct CampTab
@@ -9,6 +18,7 @@ public struct CampTab
     public string tabName;       // 에디터 식별용 이름
     public Toggle tabToggle;     // 상단 탭 토글 버튼
     public GameObject contentPage; // 연결된 페이지 오브젝트 (Page_Status 등)
+    public CampHeaderType headerType;   // 이 탭을 눌렀을 때 상단에 뭘 띄울지 결정
 }
 
 public class CampUIManager : ModalWindowBase
@@ -16,12 +26,17 @@ public class CampUIManager : ModalWindowBase
     public static CampUIManager Instance;
 
     [Header("UI Control")]
-    //[SerializeField] private Button closeButton;
     [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
     [SerializeField] private bool pauseTimerWhileOpen = true;
 
     [Header("Tabs Configuration")]
     public List<CampTab> tabs = new List<CampTab>(); // 여기에 탭과 페이지를 등록
+
+    [Header("Selectors Roots")]
+    // 캐릭터 선택창 오브젝트
+    [SerializeField] private GameObject charSelectorRoot;
+    // 아이템 선택창 오브젝트 (추후 제작)
+    [SerializeField] private GameObject itemSelectorRoot;
 
     [Header("Character Selection")]
     public UnitData selectedUnit;
@@ -32,6 +47,12 @@ public class CampUIManager : ModalWindowBase
     // 화살표 버튼 연결
     public Button arrowLeftButton;  // Btn_Next (왼쪽 이동)
     public Button arrowRightButton; // Btn_Prev (오른쪽 이동)
+
+    [Header("Drag & Drop Visuals")]
+    [SerializeField] private Image dragGhostImage; // 마우스 따라다닐 투명 이미지
+
+    [Header("UI Pages References")]
+    public CampStatusPage statusPage;
 
     // 현재 선택된 캐릭터 인덱스 (0 ~ N)
     private int currentCharIndex = 0;
@@ -45,14 +66,18 @@ public class CampUIManager : ModalWindowBase
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
-        // 닫기 버튼 연결
-        //if (closeButton) closeButton.onClick.AddListener(() => Toggle());
-
         // 탭 토글 이벤트 연결
         InitializeTabs();
 
         // 캐릭터 선택 UI 초기화
         InitializeCharacterSelector();
+
+        // 고스트 이미지는 평소에 꺼둠 + 레이캐스트 차단
+        if (dragGhostImage)
+        {
+            dragGhostImage.gameObject.SetActive(false);
+            dragGhostImage.raycastTarget = false; // 이게 꺼져 있어야 Drop 이벤트가 아래 슬롯에 전달됨
+        }
     }
     private void Start()
     {
@@ -68,6 +93,30 @@ public class CampUIManager : ModalWindowBase
         {
             Toggle();
         }
+    }
+
+    // --- 드래그 지원 함수들 (FormationSlotUI에서 호출) ---
+
+    public void StartDrag(Sprite sprite)
+    {
+        if (dragGhostImage == null) return;
+
+        dragGhostImage.sprite = sprite;
+        dragGhostImage.gameObject.SetActive(true);
+        // 맨 위로 올려서 다른 UI에 안 가려지게 함
+        dragGhostImage.transform.SetAsLastSibling();
+    }
+
+    public void UpdateDragPosition(Vector2 position)
+    {
+        if (dragGhostImage == null) return;
+        dragGhostImage.transform.position = position;
+    }
+
+    public void EndDrag()
+    {
+        if (dragGhostImage == null) return;
+        dragGhostImage.gameObject.SetActive(false);
     }
 
     // 캐릭터 선택 로직
@@ -133,23 +182,19 @@ public class CampUIManager : ModalWindowBase
     // 탭 선택 시 실행되는 로직
     private void OnTabSelected(CampTab activeTab)
     {
-        // 모든 페이지를 일단 끄고
+        // 페이지 교체
         foreach (var tab in tabs)
         {
             if (tab.contentPage != null)
             {
-                // 선택된 탭과 같으면 켜고, 다르면 끈다
                 bool isActive = (tab.contentPage == activeTab.contentPage);
-                tab.contentPage.SetActive(isActive);
+                if (tab.contentPage.activeSelf != isActive)
+                    tab.contentPage.SetActive(isActive);
             }
         }
 
-        // 선택된 탭의 페이지만 켠다
-        if (activeTab.contentPage != null)
-        {
-            activeTab.contentPage.SetActive(true);
-            Debug.Log($"[CampUI] 탭 전환: {activeTab.tabName}");
-        }
+        // 헤더 교체
+        UpdateHeader(activeTab.headerType);
     }
 
     public override void Show()
@@ -211,13 +256,38 @@ public class CampUIManager : ModalWindowBase
         }
     }
 
+    // 헤더 교체 함수
+    private void UpdateHeader(CampHeaderType type)
+    {
+        // 일단 다 끈다
+        if (charSelectorRoot) charSelectorRoot.SetActive(false);
+        if (itemSelectorRoot) itemSelectorRoot.SetActive(false);
+
+        // 필요한 놈만 켠다
+        switch (type)
+        {
+            case CampHeaderType.Character:
+                if (charSelectorRoot) charSelectorRoot.SetActive(true);
+                break;
+            case CampHeaderType.Item:
+                if (itemSelectorRoot) itemSelectorRoot.SetActive(true);
+                break;
+            case CampHeaderType.None:
+                // 아무것도 안 켜면 됨
+                break;
+        }
+    }
+
     // 캐릭터 선택 로직 
     public void OnSelectCharacter(UnitData unit)
     {
         selectedUnit = unit;
         Debug.Log($"배치 모드: {unit.DisplayName} 선택됨");
 
-        // 여기에 나중에 선택된 캐릭터의 스탯을 Page_Status에 뿌려주는 로직 등을 추가하면 됨
-        // ex) UpdateStatusPage(unit);
+        // 상태창 정보 갱신
+        if (statusPage != null && statusPage.gameObject.activeInHierarchy)
+        {
+            statusPage.RefreshUI();
+        }
     }
 }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System;
 
 public class PlayerDataManager : MonoBehaviour
 {
@@ -12,6 +13,9 @@ public class PlayerDataManager : MonoBehaviour
     [Header("전투 진형 (0~18번 인덱스)")]
     // Key: 타일 인덱스(0~18), Value: 배치된 유닛 데이터
     public UnitData[] formation = new UnitData[19];
+
+    // 진형이 변경될 때마다 호출될 이벤트
+    public event Action OnFormationChanged;
 
     void Awake()
     {
@@ -48,7 +52,7 @@ public class PlayerDataManager : MonoBehaviour
         {
             if (oldIndex == targetIndex) return; // 제자리 클릭이면 무시
 
-            // 서로 자리를 바꾼다.
+            // 스왑 로직
             formation[targetIndex] = incomingUnit; // 목표 자리에 내 유닛
             formation[oldIndex] = unitAtTarget;    // 내 원래 자리에 쫓겨난 유닛
 
@@ -61,6 +65,9 @@ public class PlayerDataManager : MonoBehaviour
 
             Debug.Log($"[진형 배치] {targetIndex}번에 {incomingUnit.DisplayName} 신규 배치됨.");
         }
+
+        // 변경 사항이 생겼으니 구독자들에게 알림
+        OnFormationChanged?.Invoke();
     }
 
     // 해당 인덱스에 누가 있는지 확인
