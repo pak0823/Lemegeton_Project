@@ -31,7 +31,9 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 6928059865011694095}
+  - {fileID: 968974801013218845}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &3604632207186200263
@@ -53,14 +55,7 @@ MonoBehaviour:
   baseActionsPerTurn: 1
   moveHighlighter: {fileID: 0}
   skillHighlighter: {fileID: 0}
-  waveSet: {fileID: 0}
-  stageDB: {fileID: 11400000, guid: 6fd2b071ba2ba6f47b2c09afbee70079, type: 2}
-  autoAssignWaveSet: 1
-  debugContext: 0
-  currentWaveIndex: -1
-  debugStageNumber: -1
-  enemyRoot: {fileID: 0}
-  waveTransitionDelay: 1.5
+  waveManager: {fileID: 0}
   targetMarker: {fileID: 0}
   isSelectingSkill: 0
   currentSkill:
@@ -72,6 +67,7 @@ MonoBehaviour:
   stateStatDb: {fileID: 0}
   trainingDB: {fileID: 0}
   turnController: {fileID: 0}
+  skillProcessor: {fileID: 0}
   beastDomainHighlighter: {fileID: 0}
 --- !u!114 &1763922186415620678
 MonoBehaviour:
@@ -113,3 +109,99 @@ MonoBehaviour:
   battle_CurrentKey: 101
   battle_HudKey: 9
   battle_Escape: 282
+--- !u!1 &3675172386846327331
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6928059865011694095}
+  - component: {fileID: 8194145320978599332}
+  m_Layer: 0
+  m_Name: WaveManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6928059865011694095
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3675172386846327331}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8282321106037221778}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8194145320978599332
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3675172386846327331}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c146f517c85b5514b94c236b99da1d21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  waveSet: {fileID: 0}
+  stageDB: {fileID: 0}
+  autoAssignWaveSet: 1
+  enemyRoot: {fileID: 0}
+  waveTransitionDelay: 1.5
+  debugContext: 0
+  debugStageNumber: -1
+--- !u!1 &7886195449263583289
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 968974801013218845}
+  - component: {fileID: 8994064406621607056}
+  m_Layer: 0
+  m_Name: SkillProcessor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &968974801013218845
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7886195449263583289}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8282321106037221778}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8994064406621607056
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7886195449263583289}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a0ec3eb33e5f024da62abdf860d9d8a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  battleManager: {fileID: 3604632207186200263}

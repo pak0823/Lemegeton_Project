@@ -389,6 +389,10 @@ public class BattleUnit : MonoBehaviour
             unitStateController.OnStatesChanged -= RecomputeATBFromRefs;
             unitStateController.OnBuffsChanged -= RecomputeATBFromRefs;
         }
+        if (Shared.BattleManager != null)
+        {
+            Shared.BattleManager.OnWaveStarted -= HandleWaveStarted;
+        }
     }
 
     void Start()

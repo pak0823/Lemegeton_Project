@@ -1638,7 +1638,7 @@ public class PlayerMovement : MonoBehaviour
             }
         }
 
-        // 1. 이 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다.
+        // 이 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다.
         Tilemap topMap = null;
         for (int i = floorMaps.Count - 1; i >= 0; i--)
         {
@@ -1651,12 +1651,37 @@ public class PlayerMovement : MonoBehaviour
 
         if (topMap == null) return false; // 아무 타일도 없음
 
-        // 2. 그 맵이 장애물인지 확인
+        // 그 맵이 장애물인지 확인
         string mapName = topMap.name.ToLower();
         if (mapName.Contains("water") || mapName.Contains("obstacle") || mapName.Contains("void"))
         {
-            return false; // 가장 위의 타일이 물이라면 이동 불가! (선택도 안 됨)
+            return false; // 가장 위의 타일이 물이라면 이동 불가 (선택도 안 됨)
         }
+
+        // 해당 타일 위치에 오브젝트(박스 등)가 있는지 물리 검사
+        Vector3 worldPos = GetWorldPosForLogic(cell);
+        // 반경 0.3f 정도로 겹치는 콜라이더 검사 (타일 중앙 기준)
+        Collider2D[] colliders = Physics2D.OverlapCircleAll(worldPos, 0.3f);
+        foreach (var col in colliders)
+        {
+            // BoxInteract(상자)가 있고, 아직 안 열린(닫힌) 상태라면 이동 불가
+            var box = col.GetComponentInParent<BoxInteract>();
+            if (box != null)
+            {
+                return false;
+            }
+
+            // PushObject(밀기 상자)가 있으면 이동 불가
+            var push = col.GetComponentInParent<PushObject>();
+            if (push != null)
+            {
+                return false;
+            }
+
+            // NPC나 기타 장애물 태그가 있다면 여기서 추가 체크
+            // if (col.CompareTag("NPC")) return false;
+        }
+
 
         // 바닥이 하나라도 있어야 이동 가능
         if (GetWalkableMapAt(cell) != null) return true;

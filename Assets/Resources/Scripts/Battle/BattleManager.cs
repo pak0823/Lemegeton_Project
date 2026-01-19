@@ -17,7 +17,6 @@ public class BattleManager : MonoBehaviour
     BattleState state = BattleState.Idle;
     BattleUnit acting;
     List<Vector3Int> moveOptions = new();
-    bool _isResolvingSelfCast = false;    // Self-cast 재진입 가드
 
     // === 추가턴 설계 ===
     [SerializeField] int baseActionsPerTurn = 1; // 기본 행동 토큰(기본 1)
@@ -37,25 +36,21 @@ public class BattleManager : MonoBehaviour
     public BattleUnit SelectedTarget => selectedTarget;
     Coroutine enemyRoutine; // 코루틴 핸들
 
-    [Header("Waves")]
-    [SerializeField] WaveSet waveSet;   // 수동 연결 시 우선
-    [SerializeField] StageDatabase stageDB;              // 인스펙터에 연결 or Resources 로드
-    [SerializeField] bool autoAssignWaveSet = true;      // 자동할당 토글
-    [SerializeField] BattleContext debugContext = BattleContext.TrapEncounter; // 에디터 테스트용
-    [SerializeField] int currentWaveIndex = -1;
-    [SerializeField] int debugStageNumber = -1;          // 에디터 테스트용
-    [SerializeField] private Transform enemyRoot;
-    public int CurrentWave => currentWaveIndex + 1; //현재 웨이브
-    public int TotalWaves => waveSet ? waveSet.waves.Count : 0; //총 웨이브
-    private GameObject _spawnedEnemyLayout;
-    bool isWaveTransitioning = false;
+    [Header("Modules")]
+    [SerializeField] private BattleWaveManager waveManager;
+    [SerializeField] public BattleSkillProcessor skillProcessor;
+    public ATBTurnController turnController;
+
+
+    // [프로퍼티 연결]
+    public int CurrentWave => waveManager.CurrentWave;
+    public int TotalWaves => waveManager.TotalWaves;
+
+
     public event System.Action<int, int, string> OnWaveChanged; // (cur,total,label)
     public event System.Action OnWaveStarted;   // 웨이브 시작 알림
     public event System.Action<int, int> OnWaveTransition; // 다음 웨이브 전환 안내 (next,total)
     public event System.Action<BattleUnit, string> OnUnitPassiveLabel;
-    [SerializeField] float waveTransitionDelay = 1.5f;    // 전환 안내 표시 시간(초, 실시간)
-
-
     private bool _battleEndedOnce = false; // 중복 승리 처리 방지
 
 
@@ -98,11 +93,6 @@ public class BattleManager : MonoBehaviour
     //Event 호출
     public event System.Action<BattleUnit> OnOverworkTriggered; // 과로(재행동) 발동 알림 이벤트
 
-    // ParametricDamage 전용
-    //Knockback
-    ParametricDamageSkill _pendingKnockbackSkill;
-    BattleUnit _pendingKnockbackTarget;
-    Vector3Int _pendingKnockbackDest;
     //skill extra move
     bool _isPostSkillMoveInProgress = false;
     private int _reactionLocks = 0; // 실행 중인 리액션 개수
@@ -115,12 +105,12 @@ public class BattleManager : MonoBehaviour
     public TrainingDB trainingDB;   // 인스펙터로 TrainingDB 할당
     public TrainingDB Training => trainingDB;
 
-    [Header("Modules")]
-    public ATBTurnController turnController; // 인스펙터에서 연결하거나 Find
 
-    //점프 애니메이션 속도 및 높이 값
-    float jumpDuration = 0.08f;     // 시간 기반
-    float jumpArc = 0.2f;
+    ////점프 애니메이션 속도 및 높이 값
+    //float jumpDuration = 0.08f;     // 시간 기반
+    //float jumpArc = 0.2f;
+
+    #endregion
 
     public static void ClearStatic()
     {
@@ -139,7 +129,7 @@ public class BattleManager : MonoBehaviour
     public void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
     public void EmitPassiveLabel(BattleUnit u, string label) => OnUnitPassiveLabel?.Invoke(u, label);
     public void EmitTurnLabel(BattleUnit u) => OnUnitTurnLabel?.Invoke(u);
-    #endregion
+
 
     UnitStatusPanelUI StatusPanel
     {
@@ -192,9 +182,24 @@ public class BattleManager : MonoBehaviour
         if (!turnController) turnController = FindObjectOfType<ATBTurnController>();
         turnController.OnTurnReady += HandleTurnReady;
 
-        if (autoAssignWaveSet && waveSet == null)
+        // 웨이브 매니저 초기화 및 이벤트 연결
+        if (waveManager == null) waveManager = GetComponentInChildren<BattleWaveManager>();
+        waveManager.OnWaveLoaded += HandleWaveLoaded; // 중요
+        waveManager.OnWaveInfoUpdated += (cur, tot, lbl) => OnWaveChanged?.Invoke(cur, tot, lbl); // UI 중계
+        waveManager.OnWaveTransitionStarted += (next, tot) => OnWaveTransition?.Invoke(next, tot); // UI 중계
+        waveManager.OnAllWavesCleared += HandleVictory; // 승리 처리
+
+        waveManager.Initialize(); // AutoResolve 등 수행
+
+        if (skillProcessor == null) skillProcessor = GetComponentInChildren<BattleSkillProcessor>();
+
+        if (skillProcessor != null)
         {
-            AutoResolveWaveSet();
+            skillProcessor.Initialize(this);
+        }
+        else
+        {
+            Debug.LogError("[BattleManager] BattleSkillProcessor가 없습니다! 인스펙터나 자식 오브젝트를 확인하세요.");
         }
     }
 
@@ -211,14 +216,8 @@ public class BattleManager : MonoBehaviour
 
         if (!initialized)
         {
-            if (waveSet != null && waveSet.waves != null && waveSet.waves.Count > 0)
-            {
-                Init();
-            }
-            else if (provider != null && provider.PlayerFloor != null && provider.EnemyFloor != null)
-            {
-                Init();
-            }
+            // 직접 LoadWave(0) 하지 말고, 웨이브 매니저에게 시킴
+            waveManager.StartFirstWave();
         }
 
         StartCoroutine(Co_RebindBattleInputWhenMapsReady());
@@ -432,14 +431,7 @@ public class BattleManager : MonoBehaviour
     void Init() //초기 세팅
     {
 
-        if (!waveSet || waveSet.waves == null || waveSet.waves.Count == 0)  //웨이브 없을 시 일반 초기화
-        {
-            RebindAllUnitsAndInitATB();
-        }
-        else //웨이브 모드일 땐 여기서 바로 0번 웨이브 로드
-        {
-            LoadWave(0);
-        }
+        RebindAllUnitsAndInitATB();
     }
 
     // 진형 정보대로 유닛 소환
@@ -590,186 +582,26 @@ public class BattleManager : MonoBehaviour
         grid.SetOccupied(u.team, cell, false);             // 점유 해제
     }
 
-    // 프리팹 인스턴스 → 유닛 재바인드/ATB 초기화 → UI 이벤트
-    private void LoadWave(int index)
+    void HandleWaveLoaded(BattleMapManager localProvider, Tilemap enemyFloor, Tilemap enemyOverlay)
     {
-        if (waveSet == null || waveSet.waves == null || index < 0 || index >= waveSet.waves.Count)
-        {
-            Debug.LogWarning($"[Battle] LoadWave({index}) out of range. Treat as final victory.");
-            Shared.SceneTransitionManager.ReturnToSavedPoint();
-            return;
-        }
-
-        CleanupEnemiesAndLayouts();
-        EmitActionLabel(null, "");
-        currentWaveIndex = index;
-
-        var w = waveSet.waves[index];
-        if (w.enemyLayoutPrefab)
-        {
-            _spawnedEnemyLayout = Instantiate(
-            w.enemyLayoutPrefab,
-            enemyRoot ? enemyRoot : transform
-                        );
-        }
-
-        var localProvider = _spawnedEnemyLayout.GetComponentInChildren<BattleMapManager>(true);
-        Tilemap waveEnemyFloor = null;
-        Tilemap waveEnemyOverlay = null;
-        if (localProvider != null)
-        {
-            waveEnemyFloor = localProvider.EnemyFloor;
-        }
-        if (waveEnemyFloor == null)
-        {
-            // 폴백: 이름/태그 규칙 등으로 탐색 (프로젝트 규칙에 맞게 보강)
-            waveEnemyFloor = _spawnedEnemyLayout
-                .GetComponentsInChildren<Tilemap>(true)
-                .FirstOrDefault(t => t.name.IndexOf("Enemy", System.StringComparison.OrdinalIgnoreCase) >= 0);
-        }
-        if (waveEnemyOverlay == null)
-        {
-            waveEnemyOverlay = _spawnedEnemyLayout
-                .GetComponentsInChildren<Tilemap>(true)
-                .FirstOrDefault(t => t.name.IndexOf("Overlay_Skill", System.StringComparison.OrdinalIgnoreCase) >= 0);
-        }
-        if (waveEnemyFloor != null)
+        // 1. 맵 정보 갱신 (BM이 하던 일)
+        if (enemyFloor != null)
         {
             var mapMgr = Shared.battleMapManager as BattleMapManager ?? FindObjectOfType<BattleMapManager>(true);
-            mapMgr.UseEnemyFloor(waveEnemyFloor, waveEnemyOverlay);
-            provider = mapMgr; // 이 BattleManager가 쓰는 provider도 최신으로
+            mapMgr.UseEnemyFloor(enemyFloor, enemyOverlay);
+            provider = mapMgr;
 
-            Shared.battleInput?.RebindProviders(); // 입력쪽 provider 갱신(이미 존재하는 루틴)
+            Shared.battleInput?.RebindProviders();
             Shared.battleGridManager?.RebindProvider();
         }
 
-        // 방금 스폰된 적 + 기존 플레이어 유닛까지 모두 다시 바인드/초기화
+        // 2. 유닛 리바인딩 & ATB 초기화 (BM의 핵심 로직 재사용)
         RebindAllUnitsAndInitATB();
 
-        Debug.Log("[Battle] waveEnemyFloor: " + (waveEnemyFloor ? waveEnemyFloor.name : "NULL"));   //EnemyFloor가 비어있을 시 출력됨.
-
-        OnWaveStarted?.Invoke();   //웨이브 시작 이벤트 발행
-
-        // UI 알림
-        OnWaveChanged?.Invoke(CurrentWave, TotalWaves, w.label);
-        Debug.Log($"[Battle] Wave {CurrentWave}/{TotalWaves} 시작 - {w.label}");
-
-        // 웨이브 로드가 끝난 시점에 ATB/턴 상태를 완전 초기화(0에서 출발)
+        // 3. 웨이브 시작 알림
+        OnWaveStarted?.Invoke();
         ResetATBAndTurnOrder();
-
     }
-
-    // 이전 웨이브 잔재(적 유닛/레이아웃/점유) 정리
-    private void CleanupEnemiesAndLayouts()
-    {
-        // 1) 기존에 스폰한 적 레이아웃 프리팹 제거
-        if (_spawnedEnemyLayout)
-        {
-            // 자식에 BattleUnit이 있을 수 있으므로 먼저 죽이거나 점유 해제
-            var enemyUnits = _spawnedEnemyLayout.GetComponentsInChildren<BattleUnit>(true);
-            foreach (var u in enemyUnits)
-            {
-                if (u == null) continue;         // 이미 파괴됨
-                if (u.IsDead) continue;          // 죽는 중/죽은 유닛 → Co_DieThenDestroy가 처리
-                TryReleaseGridOccupy(u);
-                if (u.gameObject != null) Destroy(u.gameObject);
-            }
-            Destroy(_spawnedEnemyLayout);
-            _spawnedEnemyLayout = null;
-        }
-
-        // 2) 혹시 남아있는 적 유닛(레이아웃 밖 스폰분)도 정리
-        var leftovers = FindObjectsOfType<BattleUnit>()
-                    .Where(u => u.team == Team.Enemy).ToList();
-        foreach (var u in leftovers)
-        {
-            TryReleaseGridOccupy(u);
-            Destroy(u.gameObject);
-        }
-    }
-
-    void AdvanceToNextWave()
-    {
-        if (isWaveTransitioning) return; // 중복 방지
-        isWaveTransitioning = true;
-        StartCoroutine(Co_NextWave());
-    }
-    IEnumerator Co_NextWave()
-    {
-        // 다음 웨이브 인덱스/표시용 번호 계산
-        int nextIndex = currentWaveIndex + 1;
-
-        // 유효한 다음 웨이브가 있으면 TurnBar 등에 전환 알림 → 잠깐 대기
-        if (waveSet != null && waveSet.waves != null && nextIndex >= 0 && nextIndex < TotalWaves)
-        {
-            OnWaveTransition?.Invoke(nextIndex + 1, TotalWaves); // UI에 “다음 웨이브 진행” 표시
-            yield return new WaitForSecondsRealtime(Mathf.Max(0f, waveTransitionDelay));
-        }
-        else
-        {
-            // 기존 폴백 대기(필요 시)
-            yield return null;
-        }
-
-        if (waveSet == null || waveSet.waves == null || nextIndex < 0 || nextIndex >= TotalWaves)
-        {
-            isWaveTransitioning = false;
-            if (_battleEndedOnce) yield break;          // 이미 종료 처리됐으면 무시
-            _battleEndedOnce = true;                    // 가드
-            Debug.Log("[Battle] 승리! (모든 웨이브 완료)");
-            Shared.SceneTransitionManager.ReturnToSavedPoint();
-            yield break;
-        }
-        LoadWave(nextIndex);
-        isWaveTransitioning = false;
-    }
-
-    void AutoResolveWaveSet()
-    {
-        // 1) StageDB 확보 (인스펙터 없으면 Resources: Resources/DB/StageDatabase.asset)
-        if (stageDB == null) stageDB = Resources.Load<StageDatabase>("DB/StageDatabase");
-
-        // 2) 스테이지/맥락 결정: 런타임 컨텍스트 → (폴백) 디버그 값
-        int stageNo = StageRuntimeContext.Instance != null && StageRuntimeContext.Instance.CurrentStageNumber >= 0
-            ? StageRuntimeContext.Instance.CurrentStageNumber
-            : debugStageNumber;
-
-        var ctx = StageRuntimeContext.Instance != null
-            ? StageRuntimeContext.Instance.CurrentBattleContext
-            : debugContext;
-
-        if (stageDB == null || stageNo < 0)
-        {
-            Debug.LogWarning("[Battle] StageDB or StageNo missing. Use scene-placed units.");
-            return;
-        }
-
-        // 3) StageNormalMapData 찾기
-        StageNormalMapData found = null;
-        foreach (var s in stageDB.normalStages)
-        { // Database에 배열이 이미 존재합니다 :contentReference[oaicite:3]{index=3}
-            if (s != null && s.stageNumber == stageNo) { found = s; break; }
-        }
-
-        if (found == null)
-        {
-            Debug.LogWarning($"[Battle] StageNormalMapData not found for stage {stageNo}");
-            return;
-        }
-
-        // 4) 맥락에 맞는 WaveSet 선택
-        waveSet = (ctx == BattleContext.TrapEncounter) ? found.trapEncounterWave : found.postPuzzleWave;
-
-        if (waveSet != null)
-        {
-            Debug.Log($"[Battle] WaveSet auto-assigned: Stage {stageNo}, {ctx} → {waveSet.name}");
-        }
-        else
-        {
-            Debug.LogWarning($"[Battle] WaveSet not assigned in StageNormalMapData (stage {stageNo}, {ctx}). Fallback to scene-placed units.");
-        }
-    }
-
 
     #region Turn Management
     void StartTurn(BattleUnit _unit)
@@ -1473,7 +1305,7 @@ public class BattleManager : MonoBehaviour
         var skill = currentSkillSO;
         bool doGapClose = skill.ShouldGapCloseToTarget(acting, selectedTarget);
 
-        StartCoroutine(Co_GapCloseThenResolveOnTargetSO(skill, acting, selectedTarget, doGapClose));
+        StartCoroutine(skillProcessor.PerformStandardUnitSkillFlow(skill, acting, selectedTarget));
     }
 
     void ClearTargetSelection()
@@ -1536,6 +1368,14 @@ public class BattleManager : MonoBehaviour
     #endregion
 
     #region Battle End
+    void HandleVictory()
+    {
+        Debug.Log("[Battle] 승리! (모든 웨이브 완료)");
+        if (Shared.PuzzleManager.IsPuzzleComplete)
+            Shared.SceneTransitionManager.FadeToScene("EndScene");
+        else
+            Shared.SceneTransitionManager.ReturnToSavedPoint();
+    }
     void CheckBattleEnd()
     {
         var units = FindObjectsOfType<BattleUnit>();
@@ -1544,22 +1384,11 @@ public class BattleManager : MonoBehaviour
 
         if (!anyEnemy)
         {
-            // 다음 웨이브가 있으면 진행, 없으면 최종 승리
-            if (isWaveTransitioning) return;
-            if (waveSet && CurrentWave < TotalWaves)
-            {
-                AdvanceToNextWave();
-                return;
-            }
+            if (waveManager.IsWaveTransitioning) return;
 
-            if (_battleEndedOnce) return;              // 중복 가드
-            _battleEndedOnce = true;                   // 가드
-            Debug.Log("[Battle] 승리! (최종 웨이브 완료)");
-
-            if (Shared.PuzzleManager.IsPuzzleComplete)
-                Shared.SceneTransitionManager.FadeToScene("EndScene");
-            else
-                Shared.SceneTransitionManager.ReturnToSavedPoint();
+            // 아직 웨이브 남았으면 진행, 없으면 승리 이벤트 발생
+            waveManager.TryAdvanceToNextWave();
+            return;
         }
         else if (!anyPlayer)
         {
@@ -1960,13 +1789,11 @@ public class BattleManager : MonoBehaviour
 
         if (skill is ISelfCastSkill self && self.SelfCastOnSelect)
         {
-            if (_isResolvingSelfCast)
+            if (skillProcessor.IsResolvingSelfCast)
             {
-                Debug.LogWarning($"[SelfCast] 이미 처리 중인 self-cast 스킬입니다. 중복 SelectSkill 무시: {skill.name}");
+                Debug.LogWarning($"[SelfCast] 이미 처리 중인 self-cast 스킬입니다...");
                 return;
             }
-
-            _isResolvingSelfCast = true;
 
             // 실제 MP 소비는 SelfStateSkill.ResolveOnUnit 내부에서 처리
             bool isFreeAction = false;
@@ -2009,7 +1836,7 @@ public class BattleManager : MonoBehaviour
             }
 
             // 코루틴으로 처리해서, 끝난 뒤 무료/일반 행동을 분기
-            StartCoroutine(Co_ResolveSelfCastThenFinish(skill, acting, isFreeAction));
+            StartCoroutine(skillProcessor.PerformSelfCastFlow(skill, acting, isFreeAction));
             return;
         }
 
@@ -2256,93 +2083,15 @@ public class BattleManager : MonoBehaviour
 
         onResult(selected);
     }
-    // 2) 표준 유닛 스킬 흐름 (접근 -> 애니 -> 효과 -> 종료)
-    // 기존 Co_GapCloseThenResolveOnTargetSO를 public으로 변경 및 정리
+
+    // 표준 흐름 실행 위임
     public IEnumerator PerformStandardUnitSkillFlow(SkillAsset skill, BattleUnit caster, BattleUnit target)
     {
-        bool doGapClose = skill.ShouldGapCloseToTarget(caster, target);
-        yield return Co_GapCloseThenResolveOnTargetSO(skill, caster, target, doGapClose);
+        yield return skillProcessor.PerformStandardUnitSkillFlow(skill, caster, target);
     }
-
-    // 3) 표준 타일 스킬 흐름
     public IEnumerator PerformStandardTileSkillFlow(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
     {
-        if (skill is IInstantTileSkill)
-        {
-            // 즉발형 (MP 체크 등은 내부 Co_ResolveTileThenFlag 등에서 처리)
-            yield return Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
-            {
-                caster.ApplyCooldown(skill);
-                FinishActionAfterSkill();
-            });
-        }
-        else if (skill is IProjectileTileSkill)
-        {
-            yield return Co_ProjectileSkillThenFinishSO(skill, map, cell, caster);
-        }
-        else
-        {
-            yield return Co_AnimateTileSkillThenFinishSO(skill, map, cell, caster);
-        }
-    }
-
-    IEnumerator Co_GapCloseThenResolveOnTargetSO(
-        SkillAsset skill,
-        BattleUnit caster,
-        BattleUnit target,
-        bool doGapClose)
-    {
-        if (skill == null || caster == null || target == null)
-            yield break;
-
-        var originalW = caster.transform.position;
-
-        // 필요하면 대상 앞으로 점프(gap close)
-        if (doGapClose && TryGetFrontCellOfTarget(caster, target, out var frontCell))
-        {
-            var mapForJump = target.CurrentMap ?? provider.EnemyFloor;
-            Vector3 frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
-            yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
-        }
-
-        bool resolved = false;
-
-        void OnImpact()
-        {
-            caster.OnAttackImpact -= OnImpact;
-            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => { resolved = true; }));
-        }
-
-        caster.OnAttackImpact += OnImpact;
-
-        // 스킬/유닛 기반 트리거 결정 후 애니메이션 재생
-        string trigger = caster.GetAnimTriggerForSkill(skill);
-        yield return caster.AnimateAttack(target, trigger);
-
-        // 혹시 애니에서 임팩트 이벤트가 안 들어온 경우 대비
-        float timeout = 0.35f;
-        while (!resolved && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
-        caster.OnAttackImpact -= OnImpact;
-
-        if (!resolved)
-        {
-            // 애니메이션 이벤트 누락 대비 폴백
-            yield return skill.ResolveOnUnit(this, caster, target);
-        }
-
-        caster.ApplyCooldown(skill);
-        FinishActionAfterSkill();
-
-        // 원위치 복귀
-        caster.transform.position = originalW;
-
-        // 더 안전하게는 셀 중심으로 스냅(셀은 이동한 적이 없으므로 Cell 기준이 정답)
-        if (caster.CurrentMap != null)
-            caster.transform.position = caster.CurrentMap.GetCellCenterWorld(caster.Cell);
+        yield return skillProcessor.PerformStandardTileSkillFlow(skill, map, cell, caster);
     }
 
     // 턴/행동 토큰/스킬 패널에 영향을 주지 않는 "무료 반응 공격"으로 동작
@@ -2350,369 +2099,8 @@ public class BattleManager : MonoBehaviour
     {
         if (caster == null || target == null || skill == null) return null;
 
-        Debug.Log(
-    $"[ReactiveAttack] caster='{caster?.name}' target='{target?.name}' " +
-    $"skill='{skill?.name}' type='{skill?.GetType().Name}' " +
-    $"frame={Time.frameCount}");
-
-        return StartCoroutine(Co_ReactiveGapCloseThenResolveOnTargetSO(skill, caster, target, doGapClose));
-    }
-
-    IEnumerator Co_ReactiveGapCloseThenResolveOnTargetSO(
-        SkillAsset skill,
-        BattleUnit caster,
-        BattleUnit target,
-        bool doGapClose)
-    {
-        if (skill == null || caster == null || target == null)
-            yield break;
-
-        var originalW = caster.transform.position;
-
-        // 필요하면 대상 앞으로 점프
-        if (doGapClose && TryGetFrontCellOfTarget(caster, target, out var frontCell))
-        {
-            var mapForJump = target.CurrentMap ?? provider.EnemyFloor;
-            var frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
-            yield return caster.AnimateJumpToWorld(frontW, jumpDuration, null, jumpArc);
-        }
-
-        bool resolved = false;
-
-        void OnImpact()
-        {
-            caster.OnAttackImpact -= OnImpact;
-            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => { resolved = true; }));
-        }
-
-        caster.OnAttackImpact += OnImpact;
-
-        // 공격 모션 (애니메이션 이벤트가 있으면 그 타이밍에 Resolve)
-        string trigger = caster.GetAnimTriggerForSkill(skill);
-        yield return caster.AnimateAttack(target, trigger);
-
-        caster.OnAttackImpact -= OnImpact;
-
-        // 폴백: 임팩트 이벤트를 못 받았으면 애니 끝난 시점에 바로 처리
-        if (!resolved)
-        {
-            yield return skill.ResolveOnUnit(this, caster, target);
-        }
-
-        // 원위치 복귀 (gap close 했을 때만 의미 있음)
-        caster.transform.position = originalW;
-
-        // 여기서는 FinishActionAfterSkill() 호출 안 함
-    }
-
-    IEnumerator Co_ResolveSelfCastThenFinish(SkillAsset skill, BattleUnit caster, bool freeAction)
-    {
-        if (skill == null || caster == null)
-        {
-            _isResolvingSelfCast = false;
-            yield break;
-        }
-
-        try
-        {
-            // 애니메이션 재생
-            string trigger = caster.GetAnimTriggerForSkill(skill); // SelfCast면 기본 "Casting"
-            yield return caster.AnimateAttack(null, trigger);
-
-            // 효과 적용
-            yield return skill.ResolveOnUnit(this, caster, caster);
-
-            // 여기서는 쿨다운만 공통 처리
-            caster.ApplyCooldown(skill);
-
-            if (!freeAction)
-            {
-                // 기본: 행동 1회 소비
-                FinishActionAfterSkill();
-            }
-            else
-            {
-                // ==== 무료 행동 ====
-                ClearSkillPreview();
-                CloseSkillPanel();
-
-                currentSkill = default;
-                currentSkillSO = null;
-                currentSkillTargetMap = null;
-                customPreviewCells = null;
-                customPreviewMap = null;
-                UpdateTargetingHint();
-                UnlockSkillConfirm();
-
-                if (IsPlayerTurn)
-                    state = BattleState.ActionSelect;
-            }
-        }
-        finally
-        {
-            _isResolvingSelfCast = false;
-        }
-    }
-
-    // BattleManager.cs 내부
-    // 전제: skill is IProjectileTileSkill 인 경우에만 호출
-
-    IEnumerator Co_ProjectileSkillThenFinishSO(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
-    {
-        state = BattleState.Resolving;
-
-        bool castEnded = false;
-        bool projEnded = false;
-        bool fired = false;
-
-        bool aborted = false;
-        GameObject liveProjectile = null;
-
-        // 최종 MP 코스트
-        int cost = skill.GetEffectiveCost(caster);
-
-        // 1) 투사체 스펙 확보 (스킬 → 캐스터 기본값 순)
-        var projSkill = skill as IProjectileTileSkill;
-        if (projSkill == null)
-        {
-            Debug.LogError($"[ProjectileSkill] '{skill?.name}' is not IProjectileTileSkill but entered projectile coroutine.");
-            FinishActionAfterSkill();
-            yield break;
-        }
-
-        ProjectileController projPrefab = projSkill.GetProjectilePrefab(caster);
-        float projSpeed = projSkill.GetProjectileSpeed(caster);
-        if (projSpeed <= 0f) projSpeed = 3f;
-
-        // (선택) 캐스터 기본 투사체 fallback
-        if (projPrefab == null && caster != null)
-            projPrefab = caster.defaultProjectilePrefab; // 프로젝트에 없다면 제거
-
-        // 투사체 프리팹이 없으면 안전 폴백(즉시 Resolve)
-        if (projPrefab == null)
-        {
-            Debug.LogWarning($"[ProjectileSkill] No projectile prefab for skill='{skill?.name}'. Falling back to immediate ResolveOnTile.");
-
-            if (!caster.TryConsumeMP(cost))
-            {
-                UnlockSkillConfirm();
-                Debug.Log("[Skill] 즉시 Resolve 폴백 시 MP 부족 → 취소");
-            }
-            else
-            {
-                yield return skill.ResolveOnTile(this, map, cell, caster);
-                caster.ApplyCooldown(skill);
-            }
-
-            FinishActionAfterSkill();
-            yield break;
-        }
-
-        // 2) 캐스트 종료 이벤트 연결
-        System.Action onCastEnd = null;
-        onCastEnd = () =>
-        {
-            caster.OnAttackEnded -= onCastEnd;
-            castEnded = true;
-        };
-        caster.OnAttackEnded += onCastEnd;
-
-        // 3) 거리 기반 타임아웃(투사체 비행시간 + 여유, 최소 2초)
-        float expectedFlight = 0f;
-        if (map != null && caster != null)
-        {
-            Vector3 startW0 = caster.transform.position;
-            Vector3 targetW0 = map.GetCellCenterWorld(cell);
-            float dist = Vector3.Distance(startW0, targetW0);
-            expectedFlight = dist / Mathf.Max(0.01f, projSpeed);
-        }
-        float timeout = Mathf.Max(2f, expectedFlight + 0.75f);
-
-        // 4) 임팩트(발사) 이벤트 연결: 발사 시 투사체 생성 → 도착 콜백에서 Resolve
-        System.Action onFire = null;
-        onFire = () =>
-        {
-            caster.OnAttackImpact -= onFire;
-            fired = true;
-
-            // 발사 시점에 MP 차감
-            if (!caster.TryConsumeMP(cost))
-            {
-                UnlockSkillConfirm();
-                Debug.Log("[Skill] 발사 시 MP 부족 → 취소");
-                projEnded = true;
-                return;
-            }
-
-            if (aborted)
-            {
-                projEnded = true;
-                return;
-            }
-
-            Vector3 startW = caster.transform.position;
-            Vector3 targetW = map.GetCellCenterWorld(cell);
-
-            liveProjectile = Instantiate(projPrefab.gameObject, startW, Quaternion.identity);
-            var projectileController = liveProjectile.GetComponent<ProjectileController>();
-
-            if (projectileController != null)
-            {
-                projectileController.Init(
-                    startW,
-                    targetW,
-                    () =>
-                    {
-                        if (aborted) return;
-
-                        StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
-                        {
-                            caster.ApplyCooldown(skill);
-                            projEnded = true;
-                        }));
-                    },
-                    speedUnitsPerSec: projSpeed
-                );
-            }
-            else
-            {
-                // ProjectileController가 없는 프리팹이면 fallback move 후 Resolve
-                StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, () =>
-                {
-                    if (aborted) return;
-
-                    StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
-                    {
-                        caster.ApplyCooldown(skill);
-                        projEnded = true;
-                    }));
-                }));
-            }
-        };
-        caster.OnAttackImpact += onFire;
-
-        // 5) 애니메이션 실행
-        string trigger = caster.GetAnimTriggerForSkill(skill);
-        if (skill.animKind == SkillAnimKind.Ranged)
-            yield return caster.AnimateRanged(trigger);
-        else
-            yield return caster.AnimateAttack(null, trigger);
-
-        // 6) 임팩트 이벤트를 못 받았으면 폴백(즉시 Resolve)
-        if (!fired && !projEnded)
-        {
-            if (!caster.TryConsumeMP(cost))
-            {
-                UnlockSkillConfirm();
-                Debug.Log("[Skill] 임팩트 미수신 폴백 시 MP 부족 → 취소");
-                projEnded = true;
-            }
-            else
-            {
-                yield return skill.ResolveOnTile(this, map, cell, caster);
-                caster.ApplyCooldown(skill);
-                projEnded = true;
-            }
-        }
-
-        // 7) 캐스트 종료 + 투사체 Resolve 종료까지 대기(타임아웃 포함)
-        while (!(castEnded && projEnded) && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
-
-        // 8) 아직도 안 끝났다면(스턱/비정상) 중단 처리: 콜백 무효화 + 투사체 제거
-        if (!(castEnded && projEnded))
-        {
-            aborted = true;
-
-            if (liveProjectile != null)
-            {
-                Destroy(liveProjectile);
-                liveProjectile = null;
-            }
-
-            projEnded = true;
-        }
-
-        FinishActionAfterSkill();
-    }
-
-
-    //비투사체 타일 스킬용
-    IEnumerator Co_AnimateTileSkillThenFinishSO(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
-    {
-        state = BattleState.Resolving;
-
-        bool castEnded = false;
-        bool resolved = false;
-        bool fired = false;
-
-        int cost = skill.GetEffectiveCost(caster);
-
-        System.Action onCastEnd = null;
-        onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
-        caster.OnAttackEnded += onCastEnd;
-
-        System.Action onImpact = null;
-        onImpact = () =>
-        {
-            caster.OnAttackImpact -= onImpact;
-            fired = true;
-
-            if (!caster.TryConsumeMP(cost))
-            {
-                UnlockSkillConfirm();
-                Debug.Log("[Skill] 임팩트 시 MP 부족 → 취소");
-                resolved = true;
-                return;
-            }
-
-            StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
-            {
-                caster.ApplyCooldown(skill);
-                resolved = true;
-            }));
-        };
-        caster.OnAttackImpact += onImpact;
-
-        // 애니메이션 실행 (원거리면 Ranged, 아니면 Attack)
-        string trigger = caster.GetAnimTriggerForSkill(skill);
-        if (skill.animKind == SkillAnimKind.Ranged)
-            yield return caster.AnimateRanged(trigger);
-        else
-            yield return caster.AnimateAttack(null, trigger);
-
-        // 다음 공격 임팩트에서 이전 스킬이 실행되지 않도록 무조건 해제
-        caster.OnAttackImpact -= onImpact;
-
-        // 임팩트 이벤트가 없으면 폴백: 즉시 Resolve
-        if (!fired && !resolved)
-        {
-            if (!caster.TryConsumeMP(cost))
-            {
-                UnlockSkillConfirm();
-                Debug.Log("[Skill] 폴백 시 MP 부족 → 취소");
-                resolved = true;
-            }
-            else
-            {
-                yield return skill.ResolveOnTile(this, map, cell, caster);
-                caster.ApplyCooldown(skill);
-                resolved = true;
-            }
-        }
-
-        // 안전 대기 (resolve 완료 + 캐스트 종료)
-        float timeout = 5f; // 투사체가 없으니 넉넉히
-        while (!(castEnded && resolved) && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
-
-        FinishActionAfterSkill();
+        // 프로세서에게 위임
+        return StartCoroutine(skillProcessor.Co_ReactiveAttackFlow(skill, caster, target, doGapClose));
     }
 
     // 스킬 범위를 계산해, 같은 맵에 있는 유닛들 중 해당 셀에 위치한 유닛에게 피해 적용
@@ -2756,320 +2144,19 @@ public class BattleManager : MonoBehaviour
 
     public int GetFinalSkillDamage(BattleUnit caster, BattleUnit target, SkillAsset source, float baseDamage)
     {
-        // 기본 방어측 상태 보정이 아예 없을 때를 대비한 최소 처리
-        float finalBase = Mathf.Max(0f, baseDamage);
-
-        if (target == null || source == null)
-            return Mathf.Max(0, Mathf.FloorToInt(finalBase));
-
-        // 전방 보너스
-        if (source is ParametricDamageSkill pds && pds.UseFrontlineBonus && pds.CheckFrontline(target))
-        {
-            finalBase *= pds.FrontlineMultiplier;
-        }
-
-        var stateDb = target.stateStatDB;
-        var usc = target.GetComponent<UnitStateController>();
-        var sc = target.GetComponent<StatusController>();
-
-        // 대상(UnitState) 기반 기본 배율
-        float mul = 1f;
-        if (stateDb != null)
-            mul *= stateDb.GetDamageTakenMultiplier(usc, source.school);
-
-        // 스택형 상태(탈진/방어/나약/저항) 보정은 기존 그대로 유지
-        if (sc != null)
-        {
-            if (source.school == DamageSchool.Physical)
-            {
-                int exhaustStacks = sc.GetStacks(StatusId.Exhaustion); // 탈진
-                int guardStacks = sc.GetStacks(StatusId.Defense);    // 방어
-
-                mul *= Mathf.Pow(1.20f, exhaustStacks);
-                mul *= Mathf.Pow(0.80f, guardStacks);
-            }
-            else if (source.school == DamageSchool.Magical)
-            {
-                int weaknessStacks = sc.GetStacks(StatusId.Weakness);   // 나약
-                int resistStacks = sc.GetStacks(StatusId.Resistance); // 저항
-
-                mul *= Mathf.Pow(1.20f, weaknessStacks);
-                mul *= Mathf.Pow(0.80f, resistStacks);
-            }
-            // DamageSchool.Composite 인 경우에는 stateStatDB 쪽 설정으로만 처리
-            // (필요하면 여기서 탈진/나약을 함께 곱해도 됨)
-        }
-
-        //Rage 보정: (1 + 0.01 × 자신의 현재 Rage)
-        float rageMult = 1f;
-        if (caster != null && caster.Rage > 0f)
-        {
-            rageMult += 0.01f * caster.Rage;
-        }
-
-        float raw = finalBase * rageMult * mul;
-        return Mathf.Max(0, Mathf.FloorToInt(raw));
+        // 계산은 전문가에게
+        return skillProcessor.GetFinalSkillDamage(caster, target, source, baseDamage);
     }
 
     public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
     {
-        if (caster == null || source == null) return;
-
-        bool killRefundDone = false;   // 이번 스킬 사용 중 자원 환급은 1번만
-
-        foreach (var v in victims)
-        {
-            if (v == null) continue;
-            if (IsEnemyOf(caster, v))
-            {
-                var ctx = new SkillRuntime
-                {
-                    map = map,
-                    originCell = originCell,
-                    casterCell = caster.Cell,
-                    targetCell = v.Cell
-                };
-
-                // 기본 대미지 계산
-                float baseDamage = source.ComputeDamage(caster, v, ctx);
-
-                // 최종 적용 대미지
-                int damage = GetFinalSkillDamage(caster, v, source, baseDamage);
-
-                // === 경계 상태 처리 추가 ===
-                var usc = v.GetComponent<UnitStateController>();
-                bool hasVigilance = usc != null && usc.Has(UnitStateId.Guard);
-
-                if (hasVigilance && source.school == DamageSchool.Physical)
-                {
-                    // 이 유닛이 실제로 들고 있는 SelfVigilanceSkill 찾기
-                    SelfVigilanceSkill vigilanceSkill = null;
-                    var data = v.data;
-                    if (data != null && data.skills != null)
-                    {
-                        for (int i = 0; i < data.skills.Length; i++)
-                        {
-                            vigilanceSkill = data.skills[i] as SelfVigilanceSkill;
-                            if (vigilanceSkill != null)
-                                break;
-                        }
-                    }
-
-                    // 찾은 경계 스킬 기준으로 훈련 루트 조회
-                    int routeForVigilance = -1;
-                    if (vigilanceSkill != null)
-                        routeForVigilance = v.GetTrainingRouteIndex(vigilanceSkill);
-
-                    // 자신을 공격한 적의 통찰 약화 (훈련 옵션 켜져 있고, 루트 일치 시)
-                    if (vigilanceSkill != null &&
-                        vigilanceSkill.trainingUseInsightDebuff &&
-                        vigilanceSkill.routeForInsightDebuff >= 0 &&
-                        routeForVigilance == vigilanceSkill.routeForInsightDebuff)
-                    {
-                        var atkUSC = caster.GetComponent<UnitStateController>();
-                        var atkUnit = caster;
-                        if (atkUSC != null && atkUnit != null)
-                        {
-                            float beforeINS = atkUnit.INS;
-                            float beforeCrit = atkUnit.CritChance;
-
-                            atkUSC.ApplyBuff(UnitStateBuffId.InsightDown);
-
-                            float afterINS = atkUnit.INS;
-                            float afterCrit = atkUnit.CritChance;
-
-                            Debug.Log(
-                                $"[Vigilance] 통찰 약화: {atkUnit.name} " +
-                                $"INS {beforeINS} -> {afterINS}, " +
-                                $"Crit {beforeCrit:P1} -> {afterCrit:P1}"
-                            );
-                        }
-                    }
-
-                    // 이번 물리 피해는 0으로 만들고, 경계를 즉시 제거
-                    Debug.Log(
-                        $"[Vigilance] {v.name} 이(가) 물리 공격을 경계로 무효화: {damage} -> 0 (skill={source.name}, school={source.school})"
-                    );
-
-                    damage = 0;
-                    usc.Remove(UnitStateId.Guard);
-                }
-
-                // 공통 디버그: 실제로 어떤 피해가 적용되었는지
-                Debug.Log(
-                    $"[Damage] {caster.name} -> {v.name} / skill={source.name}, school={source.school}, finalDamage={damage}"
-                );
-
-                float hpBefore = v.HP;
-                v.PlayHit();
-                v.TakeDamage(damage);
-                bool diedNow = (hpBefore > 0f && v.IsDead);
-
-                // 훈련 강화 처리 (ParametricDamageSkill 전용)
-                if (source is ParametricDamageSkill dmgSkill && caster != null)
-                {
-                    int route = caster.GetTrainingRouteIndex(dmgSkill);
-
-                    // 제압 추가: 캐스팅 중인 적에게 suppressCur 추가 감소
-                    if (dmgSkill.trainingSuppressionOnHit > 0 && dmgSkill.routeForSuppression >= 0 && route == dmgSkill.routeForSuppression)
-                    {
-                        var cast = v.GetComponent<EnemyCastState>();
-                        if (cast != null)
-                        {
-                            cast.TryReduceSuppression(dmgSkill.trainingSuppressionOnHit);
-                        }
-                    }
-
-                    // 출혈 부여
-                    if (dmgSkill.trainingApplyBleed && dmgSkill.routeForBleed >= 0 && route == dmgSkill.routeForBleed)
-                    {
-                        var sc = v.GetComponent<StatusController>();
-                        if (sc != null)
-                        {
-                            sc.ApplyWithTurnContext(
-                                StatusId.Bleeding,
-                                Mathf.Max(1, dmgSkill.trainingBleedStacks),
-                                Mathf.Max(1, dmgSkill.trainingBleedDurationTurns)
-                            );
-                            Debug.Log( $"[Bleed] {v.name} ← {dmgSkill.name} " + $"stacks+={dmgSkill.trainingBleedStacks}, duration={dmgSkill.trainingBleedDurationTurns}");
-                        }
-                    }
-                    // 공격받은 대상의 민첩 약화 (UnitStateBuffId 기반 디버프)
-                    if (route == dmgSkill.routeForAgiDebuff &&
-                        dmgSkill.trainingApplyAgiDebuff &&
-                        dmgSkill.targetAgiDebuffId != UnitStateBuffId.None)
-                    {
-                        var uscTarget = v.GetComponent<UnitStateController>();
-                        if (uscTarget != null)
-                        {
-                            int duration = Mathf.Max(1, dmgSkill.targetAgiDebuffDurationTurns);
-
-                            uscTarget.ApplyBuffForTurns(dmgSkill.targetAgiDebuffId, duration);
-
-                            Debug.Log(
-                                $"[ParametricDamage] AGI Debuff Buff: {v.name} buff={dmgSkill.targetAgiDebuffId}, duration={duration}"
-                            );
-                        }
-                    }
-                    // 공포 상태 부여
-                    if (dmgSkill.trainingApplyFear &&
-                        dmgSkill.routeForFear >= 0 &&
-                        route == dmgSkill.routeForFear &&
-                        !v.IsDead)
-                    {
-                        var uscFear = v.GetComponent<UnitStateController>();
-                        if (uscFear != null)
-                        {
-                            int fearTurns = Mathf.Max(1, dmgSkill.fearDurationTurns);
-                            uscFear.ApplyForTurns(UnitStateId.Fear, fearTurns);
-
-                            Debug.Log(
-                                $"[ParametricDamage] Fear: {v.name} 공포 상태 부여 {fearTurns}턴 (route={route})"
-                            );
-                        }
-                    }
-
-                    // 이 히트로 대상이 사망했다면 소비한 자원(MP)을 환급
-                    if (diedNow &&
-                        !killRefundDone &&
-                        route == dmgSkill.routeForRefundOnKill &&
-                        dmgSkill.trainingRefundOnKill)
-                    {
-                        int cost = dmgSkill.GetEffectiveCost(caster);
-                        if (cost > 0)
-                        {
-                            caster.GainMP(cost);
-                            Debug.Log(
-                                $"[ParametricDamage] Kill Refund: {caster.name} MP +{cost} (route={route})"
-                            );
-                        }
-
-                        killRefundDone = true;
-                    }
-
-                    // 넉백 처리
-                    if (_pendingKnockbackSkill == dmgSkill &&
-                        _pendingKnockbackTarget == v &&
-                        !v.IsDead &&
-                        v.CurrentMap == map)
-                    {
-                        var dest = _pendingKnockbackDest;
-                        bool canMove = map.HasTile(dest);
-
-                        // 이동 저항 상태가 있으면, 강제 이동 자체를 막는다
-                        var sc = v.GetComponent<StatusController>();
-                        bool hasMoveResist = sc != null && sc.Has(StatusId.Fixing); // 또는 sc.HasMoveResist()
-
-                        if (canMove && !hasMoveResist)
-                        {
-                            var units = GetUnitsInArea(map, new[] { dest });
-                            foreach (var u in units)
-                            {
-                                if (u != null && !u.IsDead && u.Cell == dest)
-                                {
-                                    canMove = false;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (canMove && !hasMoveResist)
-                        {
-                            // 그리드 점유 갱신
-                            if (grid != null)
-                                grid.SetOccupied(v.team, v.Cell, false);
-
-                            v.MoveTo(map, dest);
-
-                            if (grid != null)
-                                grid.SetOccupied(v.team, v.Cell, true);
-                        }
-
-                        // 한 번 사용 후 클리어 (이동은 막혀도 pending은 소비)
-                        _pendingKnockbackSkill = null;
-                        _pendingKnockbackTarget = null;
-                    }
-                }
-
-                // 중앙화된 적대감 산출
-                float hostilityGained = HostilityRules.FromDamage(damage, caster, v);
-                float finalChange = hostilityGained; // 기본은 획득량만큼 추가
-
-                if (source is ParametricDamageSkill pds)
-                {
-                    int route = caster.GetTrainingRouteIndex(pds);
-
-                    // 적의 감소 훈련 체크
-                    if (pds.trainingReduceHostility &&
-                         pds.routeForReduceHostility >= 0 &&
-                         route == pds.routeForReduceHostility)
-                    {
-                        // 목표 공식: (현재 적의 + 이번에 얻을 적의) * 배율
-                        // 예: 현재 100, 획득 20, 배율 0.5 -> (120) * 0.5 = 60
-                        // 결과적으로 적의가 100 -> 60으로 줄어듦 (은신 효과)
-                        float currentHostility = caster.Hostility;
-                        float targetTotalHostility = (currentHostility + hostilityGained) * pds.trainingHostilityMultiplier;
-
-                        // AddHostility는 '변화량'을 인자로 받으므로, (목표치 - 현재치)를 계산
-                        // 변화량 = 60 - 100 = -40
-                        finalChange = targetTotalHostility - currentHostility;
-
-                        Debug.Log($"[Hostility] {caster.name} 적의 재설정(Aggro Dump): ({currentHostility} + {hostilityGained}) * {pds.trainingHostilityMultiplier} = {targetTotalHostility} (Delta: {finalChange:F1})");
-                    }
-                }
-
-                caster.AddHostility(hostilityGained);
-                caster.NotifyDealtDamage(v, damage, source);
-                Debug.Log($"[DMG] {caster.name} -> {v.name}: {damage}, Hostility +{hostilityGained:F1}");
-            }
-        }
+        // 실행도 전문가에게
+        skillProcessor.ExecuteSkillDamage(caster, victims, source, map, originCell);
     }
 
     public void SetPendingKnockback(ParametricDamageSkill skill, BattleUnit target, Vector3Int dest)
     {
-        _pendingKnockbackSkill = skill;
-        _pendingKnockbackTarget = target;
-        _pendingKnockbackDest = dest;
+        skillProcessor.SetPendingKnockback(skill, target, dest);
     }
 
     List<Vector3Int> _knockbackCandidates;
@@ -3492,7 +2579,7 @@ public class BattleManager : MonoBehaviour
         return a != null && b != null && a.team != b.team;
     }
 
-    void UnlockSkillConfirm()
+    public void UnlockSkillConfirm()
     {
         _skillConfirmLocked = false;
     }
@@ -3587,117 +2674,6 @@ public class BattleManager : MonoBehaviour
     public void ClearSkillPreviewToken(int token)
         => skillHighlighter?.ClearGroup(token);
 
-
-    bool TryGetFrontCellOfTarget(BattleUnit caster, BattleUnit target, out Vector3Int frontCell)
-    {
-        frontCell = target != null ? target.Cell : default;
-        if (target == null || caster == null) return false;
-
-        var targetMap = target.CurrentMap;
-        var casterMap = caster.CurrentMap ?? targetMap;
-
-        // --- 1) 좌우 우선 규칙 ---
-        var baseCell = target.Cell;
-        int dx = caster.Cell.x - target.Cell.x;
-
-        if (dx < 0)
-        {
-            // 캐스터가 타깃의 '왼쪽'에 있음 → 서쪽 이웃 고정
-            frontCell = new Vector3Int(baseCell.x - 1, baseCell.y, baseCell.z);
-            return true;
-        }
-        else if (dx > 0)
-        {
-            // 캐스터가 타깃의 '오른쪽'에 있음 → 동쪽 이웃 고정
-            frontCell = new Vector3Int(baseCell.x + 1, baseCell.y, baseCell.z);
-            return true;
-        }
-
-        // --- 2) 같은 컬럼(수직 정렬)일 때만 기존 각도 기반 선택 폴백 ---
-        // 타겟→시전자 월드 방향
-        Vector3 targetW = targetMap.GetCellCenterWorld(target.Cell);
-        Vector3 casterW = casterMap.GetCellCenterWorld(caster.Cell);
-        Vector2 aimDir = (Vector2)(casterW - targetW);
-        if (aimDir.sqrMagnitude < 1e-6f) return false;
-        aimDir.Normalize();
-
-        bool oddCol = SkillLibrary.IsOddColumn(baseCell);
-
-        // odd-q 이웃 집합(프로젝트에서 쓰는 체계 그대로)
-        Vector3Int[] neighOffsetsEven = {
-        new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
-        new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
-        new Vector3Int(-1,-1, 0), new Vector3Int( 0,-1,0)
-    };
-        Vector3Int[] neighOffsetsOdd = {
-        new Vector3Int(+1, 0, 0), new Vector3Int(+1,+1,0),
-        new Vector3Int( 0,+1, 0), new Vector3Int(-1, 0,0),
-        new Vector3Int( 0,-1, 0), new Vector3Int(+1,-1,0)
-    };
-        var candidates = oddCol ? neighOffsetsOdd : neighOffsetsEven;
-
-        float bestDot = float.NegativeInfinity;
-        float bestDist2 = float.PositiveInfinity;
-        const float EPS = 1e-5f;
-        Vector3Int best = baseCell;
-
-        foreach (var off in candidates)
-        {
-            var neigh = new Vector3Int(baseCell.x + off.x, baseCell.y + off.y, baseCell.z);
-            var neighW = targetMap.GetCellCenterWorld(neigh);
-
-            Vector2 dir = (Vector2)(neighW - targetW);
-            if (dir.sqrMagnitude < 1e-6f) continue;
-            dir.Normalize();
-
-            float d = Vector2.Dot(aimDir, dir);
-            float dist2 = ((Vector2)(neighW - casterW)).sqrMagnitude;
-
-            if (d > bestDot + EPS || (Mathf.Abs(d - bestDot) <= EPS && dist2 < bestDist2))
-            {
-                bestDot = d;
-                bestDist2 = dist2;
-                best = neigh;
-            }
-        }
-
-        frontCell = best;
-        return true;
-    }
-    Vector3 GetCellRightEdgeWorld(Tilemap map, Vector3Int cell, float margin = 0.02f)   // 점프가 실행되는 좌표의 오른쪽 끝으로 이동
-    {
-        if (map == null) return Vector3.zero;
-
-        // 기준점: 셀 중심
-        var center = map.GetCellCenterWorld(cell);
-
-        // 그리드/셀 크기
-        var grid = map.layoutGrid != null ? map.layoutGrid : map.GetComponentInParent<Grid>();
-        var cellSize = (grid != null) ? grid.cellSize : Vector3.one;
-
-        // "오른쪽" 방향(그리드 회전 고려)으로 반 셀 + 여유 마진만큼 이동
-        // margin은 경계선 살짝 안쪽으로 밀어넣어 스프라이트가 튀어나오지 않게 함
-        Vector3 rightDir = (grid != null) ? grid.transform.right : Vector3.right;
-        return center + rightDir * (cellSize.x * 0.5f - margin);
-    }
-
-    // 유틸 래퍼 추가
-    IEnumerator Co_ResolveUnitThenFlag(SkillAsset skill, BattleUnit caster, BattleUnit target, System.Action done)
-    {
-        yield return skill.ResolveOnUnit(this, caster, target);
-        done?.Invoke();
-    }
-    IEnumerator Co_ResolveTileThenFlag(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster, System.Action done)
-    {
-        yield return skill.ResolveOnTile(this, map, cell, caster);
-        done?.Invoke();
-    }
-    IEnumerator FallbackProjectile(Vector3 start, Vector3 end, float time, System.Action done)
-    {
-        float t = 0f;
-        while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); yield return null; }
-        done?.Invoke();
-    }
     // “n초 후 자동으로 지운다” 버전
     public void EmitPassiveLabelAutoClear(BattleUnit u, string label, float seconds = 1.0f)
     {
@@ -3708,5 +2684,24 @@ public class BattleManager : MonoBehaviour
     {
         yield return new WaitForSeconds(t);
         OnUnitPassiveLabel?.Invoke(null, ""); // 빈 라벨 = 클리어 신호
+    }
+
+    // 스킬 프로세서 등에서 '무료 행동' 처리 후 상태를 리셋할 때 호출
+    public void ResetSkillSelectionState()
+    {
+        ClearSkillPreview();
+        CloseSkillPanel();
+
+        currentSkill = default;
+        currentSkillSO = null;
+        currentSkillTargetMap = null;
+        customPreviewCells = null;
+        customPreviewMap = null;
+
+        UpdateTargetingHint();
+        UnlockSkillConfirm(); // 락 해제
+
+        if (IsPlayerTurn)
+            state = BattleState.ActionSelect;
     }
 }
