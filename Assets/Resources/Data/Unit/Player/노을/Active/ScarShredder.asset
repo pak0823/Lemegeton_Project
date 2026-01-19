@@ -24,6 +24,7 @@ MonoBehaviour:
   cost: 0
   mpCost: 10
   targetMode: 0
+  targetAlignment: 0
   cooldownTurns: 0
   animKind: 1
   animTriggerOverride: Skill_3
@@ -33,21 +34,34 @@ MonoBehaviour:
   - title: "\uC790\uC6D0 \uD68C\uC218 \uD6C8\uB828"
     description: "\uB300\uC0C1\uC758 \uC0DD\uBA85\uC774 0\uC774 \uB418\uBA74 \uC18C\uBE44\uD55C
       \uC790\uC6D0\uC744 \uB3CC\uB824\uBC1B\uC2B5\uB2C8\uB2E4."
+    trainingCost: 0
   - title: "\uCD9C\uD608 \uD53C\uD574 \uD6C8\uB828"
     description: "\uB300\uC0C1\uC5D0\uAC8C 3\uD134 \uB3D9\uC548 \uCD9C\uD608 \uC911\uCCA9\uC744
       1 \uBD80\uC5EC\uD569\uB2C8\uB2E4."
+    trainingCost: 500
   - title: "\uACF5\uD3EC \uC8FC\uC785 \uD6C8\uB828"
     description: "\uB300\uC0C1\uC5D0\uAC8C 1\uD134 \uB3D9\uC548 \uACF5\uD3EC \uC0C1\uD0DC\uB97C
       \uBD80\uC5EC\uD569\uB2C8\uB2E4."
+    trainingCost: 1500
   priorityMode: 0
   preferredStatus: 0
   areaPreset: 0
   useProvidedUnitTarget: 1
+  applyStatusOnHit: []
+  changeTileTo: {fileID: 0}
+  tileChangeDuration: 2
+  zoneStatusId: 0
+  zoneStatusStack: 1
+  zoneStatusDuration: 3
   powerOverride: 1.4
   damageSchool: 0
   conditionalMultipliers: []
   selectionMode: 0
   diagUseNEAxis: 1
+  consumeStateOnCast: 0
+  statesToConsume: 
+  projectilePrefab: {fileID: 0}
+  projectileSpeed: 10
   trainingUseAreaOverride: 0
   routeForAreaOverride: -1
   trainingAreaPreset: 0
@@ -87,6 +101,13 @@ MonoBehaviour:
   fearDurationTurns: 1
   trainingRefundOnKill: 1
   routeForRefundOnKill: 0
+  trainingReduceHostility: 0
+  routeForReduceHostility: -1
+  trainingHostilityMultiplier: 0.5
+  trainingApplyClarityBuff: 0
+  routeForClarityBuff: -1
+  trainingClarityBuffId: 6
+  trainingClarityDuration: 1
   useFrontlineBonus: 0
   frontlineDepth: 2
   frontlineMultiplier: 1.5

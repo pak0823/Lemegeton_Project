@@ -32,15 +32,25 @@ MonoBehaviour:
   - title: "\uC790\uC6D0 \uC808\uC57D \uD6C8\uB828"
     description: "\uAE30\uC220\uC774 \uC18C\uBAA8\uD558\uB294 \uC790\uC6D0\uC744
       \uAC10\uC18C\uD569\uB2C8\uB2E4."
+    trainingCost: 0
   - title: "\uCD1D\uBA85 \uAC15\uD654 \uD6C8\uB828"
     description: "\uAE30\uC220\uC774 \uBD80\uC5EC\uD558\uB294 \uC0C1\uD0DC\uAC00
       \uB300\uC0C1\uC758 \uCD1D\uBA85\uC744 \uAC15\uD654(1.30)\uD569\uB2C8\uB2E4."
+    trainingCost: 500
   - title: "\uC5F0\uC18D \uD589\uB3D9 \uD6C8\uB828"
     description: "\uAE30\uC220\uC744 \uC0AC\uC6A9\uD574\uB3C4 \uCC28\uB840\uB97C
       \uB9C8\uCE58\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
+    trainingCost: 1500
   stateId: 2
-  trainingUseMpOverride: 1
-  trainingMpCostRoute0: 2
-  trainingApplyMagicBuffOnRoute1: 1
+  trainingUseCostOverride: 0
+  routeForCostOverride: -1
+  trainingCostOverride: -1
+  trainingApplyMagicBuff: 0
+  routeForMagicBuff: -1
   trainingMagicBuffId: 2
-  trainingFreeActionOnRoute2: 1
+  trainingApplyStealth: 0
+  routeForStealth: -1
+  trainingHiddenStateId: 9
+  trainingStealthDuration: 1
+  trainingUseFreeAction: 0
+  routeForFreeAction: -1

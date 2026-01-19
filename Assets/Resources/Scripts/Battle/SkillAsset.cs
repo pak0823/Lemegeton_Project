@@ -50,6 +50,7 @@ public struct TrainingRouteInfo
 {
     public string title;
     [TextArea] public string description;
+    public int trainingCost;  //해금 비용
 }
 
 public abstract class SkillAsset : ScriptableObject

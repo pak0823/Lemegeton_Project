@@ -12,6 +12,7 @@ public class TrainingDB : ScriptableObject
         public UnitData unit;       // 어떤 유닛의
         public SkillAsset skill;    // 어떤 스킬에
         public int routeIndex;   // -1=미선택, 0~2 = 루트
+        public List<int> unlockedRoutes = new List<int>();  //해금된 인덱스를 저장하는 리스트
     }
 
     [SerializeField] private List<Entry> entries = new();
@@ -111,6 +112,38 @@ public class TrainingDB : ScriptableObject
                 return e.routeIndex;
         }
         return -1;
+    }
+
+    // 해당 훈련이 해금되었는지 확인
+    public bool IsUnlocked(UnitData unit, SkillAsset skill, int routeIndex)
+    {
+        var e = FindEntry(unit, skill);
+
+        // 엔트리가 아예 없으면? -> 비용이 0인 기본 훈련만 해금된 것으로 간주할지, 아닐지 결정
+        // 여기서는 안전하게 "DB에 없으면 잠김" 처리하되, CampSkillSlot에서 기본 처리를 보조함.
+        if (e == null) return false;
+
+        return e.unlockedRoutes.Contains(routeIndex);
+    }
+
+    // 훈련 해금
+    public void UnlockRoute(UnitData unit, SkillAsset skill, int routeIndex)
+    {
+        var key = GetTrainingKey(unit, skill);
+        var e = FindEntry(unit, skill);
+
+        if (e == null)
+        {
+            // 없으면 새로 만들고 해금 목록에 추가
+            e = new Entry { unit = unit, skill = key, routeIndex = -1 };
+            entries.Add(e);
+        }
+
+        if (!e.unlockedRoutes.Contains(routeIndex))
+        {
+            e.unlockedRoutes.Add(routeIndex);
+            // 저장 로직(JSON 등)이 있다면 여기서 호출
+        }
     }
 
     // 유닛 전체 초기화(리셋 버튼에서 사용)

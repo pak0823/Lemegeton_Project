@@ -22,6 +22,7 @@ MonoBehaviour:
   cost: 0
   mpCost: 0
   targetMode: 0
+  targetAlignment: 0
   cooldownTurns: 0
   animKind: 1
   animTriggerOverride: Skill_1
@@ -31,13 +32,16 @@ MonoBehaviour:
   - title: "\uB300\uC0C1 \uD655\uB300 \uD6C8\uB828"
     description: "\uB300\uC0C1\uACFC \uAC19\uC740 \uC5F4\uC5D0\uB3C4 \uAE30\uC220\uC774
       \uC801\uC911\uD569\uB2C8\uB2E4."
+    trainingCost: 0
   - title: "\uB300\uC0C1 \uC81C\uC555 \uD6C8\uB828"
     description: "\uB300\uC0C1\uC5D0\uAC8C 1\uD134 \uB3D9\uC548 \uC81C\uC555 \uC911\uCCA9\uC744
       1 \uBD80\uC5EC\uD569\uB2C8\uB2E4."
+    trainingCost: 500
   - title: "\uCD94\uAC00 \uC774\uB3D9 \uD6C8\uB828"
     description: "\uAE30\uC220 \uC0AC\uC6A9 \uD6C4 \uC8FC\uBCC0 1\uCE78\uAE4C\uC9C0
       \uC774\uB3D9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC774\uB3D9 \uD6C4 \uCC28\uB840\uB97C
       \uB9C8\uCE69\uB2C8\uB2E4."
+    trainingCost: 1500
   rules:
   - name: Steam
     requireAll: 02000000

@@ -53,6 +53,10 @@ public class CampUIManager : ModalWindowBase
 
     [Header("UI Pages References")]
     public CampStatusPage statusPage;
+    public CampSkillPage skillPage;
+
+    [Header("Databases")]
+    public TrainingDB trainingDB;
 
     // 현재 선택된 캐릭터 인덱스 (0 ~ N)
     private int currentCharIndex = 0;
@@ -263,7 +267,6 @@ public class CampUIManager : ModalWindowBase
         if (charSelectorRoot) charSelectorRoot.SetActive(false);
         if (itemSelectorRoot) itemSelectorRoot.SetActive(false);
 
-        // 필요한 놈만 켠다
         switch (type)
         {
             case CampHeaderType.Character:
@@ -288,6 +291,11 @@ public class CampUIManager : ModalWindowBase
         if (statusPage != null && statusPage.gameObject.activeInHierarchy)
         {
             statusPage.RefreshUI();
+        }
+        // 스킬창 정보 갱신
+        if (skillPage != null && skillPage.gameObject.activeInHierarchy)
+        {
+            skillPage.RefreshUI();
         }
     }
 }
