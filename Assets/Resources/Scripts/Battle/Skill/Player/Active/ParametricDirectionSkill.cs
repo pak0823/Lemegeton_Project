@@ -89,9 +89,38 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         // 타겟 맵이 없으면 실행 불가
         if (targetMap == null) yield break;
 
-        // 공통 타일 스킬 흐름 (애니 -> ResolveOnTile 호출)
-        // ResolveOnTile 안에서 이동 로직이 이미 다 구현되어 있음
-        yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
+        // 자원 소비 (Execute에서 한 번만 수행)
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+
+        if (cost > 0)
+        {
+            // 자원 부족 시 실행 취소 및 락 해제
+            if (!caster.TryConsumeResource(res, cost))
+            {
+                bm.UnlockSkillConfirm();
+                yield break;
+            }
+        }
+
+        // 2. 이동 로직 실행 (ResolveOnTile 내부의 자원 소모는 제거됨)
+        yield return ResolveOnTile(bm, targetMap, targetCell, caster);
+
+        // 3. 쿨다운 적용
+        caster.ApplyCooldown(this);
+
+        // 4. 연속 행동(FreeAction) 훈련 확인
+        int route = caster.GetTrainingRouteIndex(this);
+        bool isFreeAction = trainingFreeActionOnRoute && route >= 0; // 루트 체크 필요하면 추가
+
+        if (isFreeAction)
+        {
+            bm.ResetSkillSelectionState(); // 턴 종료 안 함
+        }
+        else
+        {
+            bm.FinishActionAfterSkill(); // 턴 종료
+        }
     }
 
     public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _none)
@@ -114,16 +143,11 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     {
         if (!_battlemanager || !_caster || !_map) yield break;
 
-        // 비용 체크(확정 시 차감)
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
         var valids = new HashSet<Vector3Int>(ComputeLandingCandidates(_battlemanager, _caster));
         if (!valids.Contains(_originCell))
             yield break; // 미리보기 밖 클릭 무시
 
-        // Route 1: Hostility 즉시 감소
+        // Hostility 즉시 감소
         int route = _caster.GetTrainingRouteIndex(this);
         if (route == 1 && trainingHostilityDeltaRoute > 0f)
         {
@@ -296,14 +320,16 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         var endW = _map.GetCellCenterWorld(_landing);
         var startCell = _caster.Cell;
 
-        //이동 시 현재 칸 점유 해제
+        // 이동 시 현재 칸 점유 해제
         if (_battlemanager != null && _battlemanager.grid != null)
             _battlemanager.grid.SetOccupied(_caster.team, startCell, false);
 
         if (dashAnimate)
         {
-            // 1) Animator 트리거
-            var anim = _caster.GetComponentInChildren<Animator>();
+            // 애니메이터 탐색 강화 (Root -> Children 순서)
+            var anim = _caster.GetComponent<Animator>();
+            if (anim == null) anim = _caster.GetComponentInChildren<Animator>();
+
             if (anim != null)
             {
                 string trigger = null;
@@ -311,7 +337,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
                 if (useDirectionalDashTrigger)
                 {
                     bool isBack = IsBackMove(_caster.team, startCell, _landing);
-                    trigger = isBack ? backwardDashTrigger : forwardDashTrigger;
+                    trigger = isBack ? "Skill_3" : forwardDashTrigger;
                 }
                 else
                 {
@@ -319,7 +345,15 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
                 }
 
                 if (!string.IsNullOrEmpty(trigger))
+                {
+                    // 트리거 강제 설정 및 로그 확인
                     anim.SetTrigger(trigger);
+                    Debug.Log($"[Dash] {_caster.name} Play Trigger: {trigger}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[Dash] {_caster.name}에게 Animator 컴포넌트가 없습니다.");
             }
 
             // 2) 위치 보간(대시 모션)
@@ -331,6 +365,9 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             {
                 t += Time.deltaTime;
                 float u = Mathf.Clamp01(t / dur);
+
+                // [옵션] 가속/감속을 원하면 Easing 추가 (예: SmoothStep)
+                // u = Mathf.SmoothStep(0f, 1f, u); 
 
                 Vector3 pos = Vector3.Lerp(startW, endW, u);
 

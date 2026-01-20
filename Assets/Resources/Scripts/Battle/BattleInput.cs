@@ -73,8 +73,6 @@ public class BattleInput : MonoBehaviour
 
         // 클릭(Click) 감지
         HandleClick(worldPos);
-
-
     }
     #endregion
 
@@ -252,45 +250,45 @@ public class BattleInput : MonoBehaviour
         }
     }
 
-    void HandleMouseInput()
-    {
-        if (PopupManager.IsModalOpen) return;
+    //void HandleMouseInput()
+    //{
+    //    if (PopupManager.IsModalOpen) return;
         
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
+    //    if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+    //        return;
 
-        if (!Input.GetMouseButtonDown(0)) return;
+    //    if (!Input.GetMouseButtonDown(0)) return;
 
-        hudCtrl?.Show();    //HUD가 꺼진 상태에서 마우스 클릭이 확인될 시 켜짐
+    //    hudCtrl?.Show();    //HUD가 꺼진 상태에서 마우스 클릭이 확인될 시 켜짐
 
-        // 스킬 타겟팅(플레이어 턴 + Targeting + 스킬 선택됨) 중이면 레거시 우회
-        bool canTargetSkill = (battle.IsPlayerTurn && battle.IsTargeting && battle.currentSkillSO != null);
-        if (canTargetSkill) return;
+    //    // 스킬 타겟팅(플레이어 턴 + Targeting + 스킬 선택됨) 중이면 레거시 우회
+    //    bool canTargetSkill = (battle.IsPlayerTurn && battle.IsTargeting && battle.currentSkillSO != null);
+    //    if (canTargetSkill) return;
 
-        Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
-        world.z = 0f;
+    //    Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
+    //    world.z = 0f;
 
-        // 1) 유닛부터 체크 (단일 대상 클릭 우선)
-        var hit = Physics2D.OverlapCircle(world, 0.1f, unitMask);
-        if (hit?.TryGetComponent(out BattleUnit unit) ?? false)
-        {
-            battle?.OnUnitClicked(unit);
-            return;
-        }
+    //    // 1) 유닛부터 체크 (단일 대상 클릭 우선)
+    //    var hit = Physics2D.OverlapCircle(world, 0.1f, unitMask);
+    //    if (hit?.TryGetComponent(out BattleUnit unit) ?? false)
+    //    {
+    //        battle?.OnUnitClicked(unit);
+    //        return;
+    //    }
 
-        // 2) 타일 클릭 → 우선순위: 적맵(타게팅) → 아군맵(이동)
-        if (TryCell(provider.EnemyFloor, world, out var enemyCell))
-        {
-            battle?.OnTileClicked(provider.EnemyFloor, enemyCell);
-            return;
-        }
+    //    // 2) 타일 클릭 → 우선순위: 적맵(타게팅) → 아군맵(이동)
+    //    if (TryCell(provider.EnemyFloor, world, out var enemyCell))
+    //    {
+    //        battle?.OnTileClicked(provider.EnemyFloor, enemyCell);
+    //        return;
+    //    }
 
-        if (TryCell(provider.PlayerFloor, world, out var playerCell))
-        {
-            battle?.OnTileClicked(provider.PlayerFloor, playerCell);
-            return;
-        }
-    }
+    //    if (TryCell(provider.PlayerFloor, world, out var playerCell))
+    //    {
+    //        battle?.OnTileClicked(provider.PlayerFloor, playerCell);
+    //        return;
+    //    }
+    //}
     #endregion
 
     bool HandleHudToggleEarly()

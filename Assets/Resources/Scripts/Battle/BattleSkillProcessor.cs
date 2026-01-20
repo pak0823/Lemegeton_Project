@@ -426,12 +426,15 @@ public class BattleSkillProcessor : MonoBehaviour
 
             if (!resolved) // 이벤트 못 받았으면 강제 실행
             {
-                if (!caster.TryConsumeResource(skill.costResource, cost))
+                if (caster.TryConsumeResource(skill.costResource, cost))
                 {
                     yield return skill.ResolveOnTile(battleManager, map, cell, caster);
                     caster.ApplyCooldown(skill);
                 }
-                else battleManager.UnlockSkillConfirm();
+                else
+                {
+                    battleManager.UnlockSkillConfirm();
+                }
             }
 
             battleManager.FinishActionAfterSkill();
