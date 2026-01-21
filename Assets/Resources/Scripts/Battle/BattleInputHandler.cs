@@ -42,6 +42,7 @@ public class BattleInputHandler : MonoBehaviour
             battleInput.OnUnitHover += OnUnitHover;
             battleInput.OnTileHover += OnTileHover;
             battleInput.OnCancelKeyPress += OnCancelAction;
+            battleInput.OnEscapeKeyPress += OnEscapeAction;
         }
     }
 
@@ -54,6 +55,7 @@ public class BattleInputHandler : MonoBehaviour
             battleInput.OnUnitHover -= OnUnitHover;
             battleInput.OnTileHover -= OnTileHover;
             battleInput.OnCancelKeyPress -= OnCancelAction;
+            battleInput.OnEscapeKeyPress -= OnEscapeAction;
         }
     }
 
@@ -154,6 +156,11 @@ public class BattleInputHandler : MonoBehaviour
             if (isMapValid) PreviewSkillAreaOnTile(map, cell);
             else skillHighlighter?.ClearTransient(); // ClearTransient -> Clear로 안전하게 변경
         }
+    }
+    private void OnEscapeAction()
+    {
+        // BattleManager에 이미 구현된 도주 로직 호출
+        battleManager.OnClickEscape();
     }
 
     public void OnCancelAction()

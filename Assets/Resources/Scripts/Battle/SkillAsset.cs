@@ -6,37 +6,6 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using static ParametricDamageSkill;
 
-public enum DamageSchool { Physical, Magical, Composite }  //근력, 총명 , 복합
-public enum AttackAttr { None, Pierce, Strike, Slash }
-
-public enum SkillTargetAlignment
-{
-    Enemy,  // 적군만 (기본 공격 등)
-    Ally,   // 아군만 (힐, 버프 등)
-    Any,    // 아무나 (잘 없지만 혹시 모르니)
-    Self    // 자신 (이미 ISelfCastSkill이 있지만 명시적 구분용)
-}
-public enum SkillCostResource
-{
-    MP, //총명
-    Rage    //분노
-}
-public enum TargetPriorityMode
-{
-    None,
-    RandomSurvivor,
-    HighestHostility,
-    PreferredStatusThenHighestHostility,  // 예: Slow 우선 → 그 안에서 적대감 최고
-}
-public enum SkillAnimKind
-{
-    None,       // 애니메이션 없이 바로 효과 (희귀)
-    Melee,      // 근접 공격
-    Ranged,     // 원거리 발사/투사체
-    SelfCast,   // 자기 강화/버프 캐스팅 모션
-    Special     // 아주 특수한 스킬 (코드에서 개별 처리)
-}
-
 public struct SkillRuntime
 {
     public Tilemap map;

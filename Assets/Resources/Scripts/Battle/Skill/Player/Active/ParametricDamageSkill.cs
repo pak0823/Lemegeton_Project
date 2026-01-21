@@ -17,15 +17,6 @@ public struct StatusEffectInfo
 [CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Damage", fileName = "ParametricDamageSkill")]
 public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
 {
-    public enum AreaPreset 
-    { 
-        Single, //단일 대상
-        Ring, //원형(중앙 포함 7칸)
-        LineDiagU3, //세로(3칸)
-        LineHorizontal, //(가로 3칸)
-        LineDiagU7 //(1시 7시 방향 대각선 7칸)
-    }
-
     // 6개 축 방향(표준 축좌표 단위벡터)
     static readonly Vector2Int[] AX_DIRS = new[]{
     new Vector2Int( 1,  0), // E
@@ -500,7 +491,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
                 continue;
 
             // 점유 여부 체크
-            var units = _battlemanager.GetUnitsInArea(map, new[] { cell });
+            var units = _battlemanager.gridManager.GetUnitsInArea(map, new[] { cell });
             bool occupied = false;
             foreach (var u in units)
             {
@@ -547,7 +538,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         }
         else
         {
-            victims = _battlemanager.GetUnitsInArea(_map, area)
+            victims = _battlemanager.gridManager.GetUnitsInArea(_map, area)
                             .Where(u => u != null && !u.IsDead && u.team != _caster.team).ToList();
         }
 
@@ -557,7 +548,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
             // 공격 범위(area) 전체를 순회하며 지대 생성
             foreach (var cell in area)
             {
-                _battlemanager.CreateStatusTileZone(
+                _battlemanager.fieldManager.CreateStatusTileZone(
                     _caster,
                     _map,
                     cell,

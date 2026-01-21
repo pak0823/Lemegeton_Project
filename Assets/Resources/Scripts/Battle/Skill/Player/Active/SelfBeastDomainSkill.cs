@@ -117,7 +117,7 @@ public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
         }
 
         // BattleManager에 영역 생성 요청
-        _battlemanager.SpawnBeastDomainZone(map, _caster, originCell, radius, durationTurns);
+        _battlemanager.fieldManager.SpawnBeastDomainZone(map, _caster, originCell, radius, durationTurns);
 
         // 훈련: 스킬 사용 시 자신에게 저항 부여
         int route = GetRoute(_caster);

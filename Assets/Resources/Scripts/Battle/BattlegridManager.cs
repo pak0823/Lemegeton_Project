@@ -1,11 +1,14 @@
-//헥사 이웃/BFS, 차지/점유
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
 public class BattleGridManager : MonoBehaviour
 {
+    [Header("Settings")]
+    public LayerMask unitMask;
+
     IBattleMapProvider provider;
     HashSet<Vector3Int> playerOcc = new();
     HashSet<Vector3Int> enemyOcc = new();
@@ -125,6 +128,45 @@ public class BattleGridManager : MonoBehaviour
     {
         var set = (t == Team.Player) ? playerOcc : enemyOcc;
         return set.Contains(cell);
+    }
+    // 맵을 기반으로 팀 점유 여부 자동 판단
+    public bool IsOccupied(Tilemap map, Vector3Int cell)
+    {
+        if (provider == null) return false;
+        if (map == provider.PlayerFloor) return IsOccupied(Team.Player, cell);
+        if (map == provider.EnemyFloor) return IsOccupied(Team.Enemy, cell);
+        return false;
+    }
+    // 이동 가능 여부 (타일 존재 O + 점유 X)
+    public bool IsWalkable(Tilemap map, Vector3Int cell)
+    {
+        if (map == null || !map.HasTile(cell)) return false;
+        return !IsOccupied(map, cell);
+    }
+
+    // 특정 셀의 유닛 찾기 (Physics 기반)
+    public BattleUnit GetUnitAt(Vector3Int cell)
+    {
+        var map = GetMap(Team.Player); // 좌표 계산용 기준 맵
+        if (map == null) return null;
+
+        Vector3 worldPos = map.GetCellCenterWorld(cell);
+        Collider2D hit = Physics2D.OverlapCircle(worldPos, 0.2f, unitMask);
+
+        if (hit != null) return hit.GetComponentInParent<BattleUnit>();
+        return null;
+    }
+    public IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
+    {
+        if (map == null || cells == null) yield break;
+
+        var valid = new HashSet<Vector3Int>(cells.Where(c => map.HasTile(c)));
+        // 모든 유닛을 순회하며 검사 (UnitManager가 생기면 거기서 가져오는 걸로 대체 추천)
+        foreach (var u in FindObjectsOfType<BattleUnit>())
+        {
+            if (u == null || u.CurrentMap != map) continue;
+            if (valid.Contains(u.Cell)) yield return u;
+        }
     }
 }
 

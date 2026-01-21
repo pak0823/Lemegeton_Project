@@ -25,7 +25,7 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     public int vfxSortingOrder = 0;
 
     [Header("Area")]
-    public ParametricDamageSkill.AreaPreset areaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public AreaPreset areaPreset = AreaPreset.Single;
 
     [Header("Smoke Settings")]
     [Tooltip("시전자의 턴 시작 기준 지속")]
@@ -59,7 +59,7 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
 
     public bool trainingUseZoneAreaOverride = true;
     [Range(-1, 2)] public int routeForZoneAreaOverride = 2;
-    public ParametricDamageSkill.AreaPreset trainingZoneAreaPreset = ParametricDamageSkill.AreaPreset.Ring;
+    public AreaPreset trainingZoneAreaPreset = AreaPreset.Ring;
 
 #if UNITY_EDITOR
     void OnValidate() { targetMode = selectionMode; }

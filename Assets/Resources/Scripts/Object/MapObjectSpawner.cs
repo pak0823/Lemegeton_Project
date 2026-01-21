@@ -58,11 +58,10 @@ public class MapObjectSpawner : MonoBehaviour
             Tilemap map = kvp.Value; // 해당 좌표의 최상단 타일맵
 
             // 벽이 있는 곳 제외
-           
+
             if (_wall != null)
             {
                 bool hasWall = false;
-
                 foreach (var wall in _wall)
                 {
                     if (wall.HasTile(pos))
@@ -71,6 +70,7 @@ public class MapObjectSpawner : MonoBehaviour
                         break;
                     }
                 }
+                if (hasWall) continue;
             }
 
             // 장애물(물, 구멍 등)이 있는 곳 제외

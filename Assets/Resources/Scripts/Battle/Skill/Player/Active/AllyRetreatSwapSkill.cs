@@ -216,7 +216,7 @@ public class AllyRetreatSwapSkill : SkillAsset
     bool IsCellFree(BattleManager _battlemanager, Tilemap _map, Vector3Int _cell)
     {
         if (!_map.HasTile(_cell)) return false;
-        var units = _battlemanager.GetUnitsInArea(_map, new[] { _cell });  // BattleManager 유틸 재사용 :contentReference[oaicite:1]{index=1}
+        var units = _battlemanager.gridManager.GetUnitsInArea(_map, new[] { _cell });  // BattleManager 유틸 재사용 :contentReference[oaicite:1]{index=1}
         foreach (var u in units)
         {
             if (u != null && !u.IsDead && u.Cell == _cell)
@@ -242,10 +242,10 @@ public class AllyRetreatSwapSkill : SkillAsset
         var casterStartCell = _caster.Cell;
 
         // 그리드 점유 해제
-        if (_battlemanager.grid != null)
+        if (_battlemanager.gridManager != null)
         {
-            _battlemanager.grid.SetOccupied(_caster.team, casterStartCell, false);
-            _battlemanager.grid.SetOccupied(_teamunit.team, allyStartCell, false);
+            _battlemanager.gridManager.SetOccupied(_caster.team, casterStartCell, false);
+            _battlemanager.gridManager.SetOccupied(_teamunit.team, allyStartCell, false);
         }
 
         // 우선 아군 후퇴  그 다음 캐스터 이동
@@ -308,10 +308,10 @@ public class AllyRetreatSwapSkill : SkillAsset
         }
 
         // 그리드 점유 재설정
-        if (_battlemanager.grid != null)
+        if (_battlemanager.gridManager != null)
         {
-            _battlemanager.grid.SetOccupied(_teamunit.team, _teamunit.Cell, true);
-            _battlemanager.grid.SetOccupied(_caster.team, _caster.Cell, true);
+            _battlemanager.gridManager.SetOccupied(_teamunit.team, _teamunit.Cell, true);
+            _battlemanager.gridManager.SetOccupied(_caster.team, _caster.Cell, true);
         }
     }
 

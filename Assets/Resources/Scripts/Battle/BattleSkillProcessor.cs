@@ -219,16 +219,16 @@ public class BattleSkillProcessor : MonoBehaviour
             if (sc != null && sc.Has(StatusId.Fixing)) canMove = false;
 
             // 점유 체크 (BM 그리드 사용)
-            if (canMove && battleManager.grid != null && (battleManager.grid.IsOccupied(Team.Player, dest) || battleManager.grid.IsOccupied(Team.Enemy, dest)))
+            if (canMove && battleManager.gridManager != null && (battleManager.gridManager.IsOccupied(Team.Player, dest) || battleManager.gridManager.IsOccupied(Team.Enemy, dest)))
             {
                 canMove = false;
             }
 
             if (canMove)
             {
-                if (battleManager.grid != null) battleManager.grid.SetOccupied(v.team, v.Cell, false);
+                if (battleManager.gridManager != null) battleManager.gridManager.SetOccupied(v.team, v.Cell, false);
                 v.MoveTo(map, dest);
-                if (battleManager.grid != null) battleManager.grid.SetOccupied(v.team, v.Cell, true);
+                if (battleManager.gridManager != null) battleManager.gridManager.SetOccupied(v.team, v.Cell, true);
             }
 
             // 사용된 Pending 초기화
@@ -239,7 +239,11 @@ public class BattleSkillProcessor : MonoBehaviour
     public void ResolveSkillAtCell(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
         var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
-        var victims = battleManager.GetUnitsInArea(map, area);
+        if (battleManager.gridManager != null)
+        {
+            var victims = battleManager.gridManager.GetUnitsInArea(map, area);
+        }
+            
         // 여기서 ExecuteSkillDamage 호출하고 싶지만, 
         // SkillDefinition 구조체에는 SkillAsset 정보가 없어서 대미지 처리가 애매함.
         // 기존 코드에서도 ResolveSkillAtCell은 Enemy AI 등에서 제한적으로 쓰였음.

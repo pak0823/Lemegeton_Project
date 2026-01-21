@@ -4,87 +4,92 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public enum BattleState { Idle, ActionSelect, Moving, Targeting, Resolving, TargetingKnockback, EndTurn }
-public enum BattleAction { Move, Attack, Rest, Calm }
-
 public class BattleManager : MonoBehaviour
 {
     #region Variables
-    public BattleGridManager grid;
-    UnitStatusPanelUI _statusPanel;
-    public LayerMask unitMask;
 
-    [SerializeField] int baseActionsPerTurn = 1;
+    // Core Modules (하위 시스템 연결)
+    [Header("Core Modules")]
+    [SerializeField] public BattleInputHandler inputHandler;       // 입력 및 시각적 피드백 담당
+    [SerializeField] public BattleSkillProcessor skillProcessor;   // 스킬 효과 및 데미지 계산 담당
+    [SerializeField] public BattleFieldManager fieldManager;       // 장판 및 환경 효과 담당
+    [SerializeField] public BattleGridManager gridManager;         // 그리드 조회 및 유닛 위치 관리
+    [SerializeField] private BattleWaveManager waveManager;        // 웨이브 스폰 및 스테이지 관리
+    [SerializeField] public BattleTurnManager turnManager;
 
-    IBattleMapProvider provider;
+    [Header("Controllers")]
+    public ATBTurnController turnController;                       // 턴 순서(ATB) 관리자
 
-    bool initialized = false;
-    public bool IsPlayerTurn => acting != null && acting.team == Team.Player;
+    // Battle State (전투 핵심 상태)
+    public BattleState state { get; private set; } = BattleState.Idle; // 현재 전투 상태 (FSM)
+    private bool initialized = false;                                  // 초기화 여부 플래그
+    private bool _battleEndedOnce = false;                             // 전투 종료 처리 중복 방지
+
+    // Action & Turn Rules (행동력 및 턴 규칙)
+    public BattleUnit ActingUnit => turnManager.ActingUnit;
+    public bool IsPlayerTurn => turnManager.IsPlayerTurn;
+
+    // Skill & Input Context (스킬 시전 및 입력 관련 상태)
+    // 스킬 선택 상태
+    public bool isSelectingSkill = false;                // 스킬 패널이 열려있는지 여부
+    public SkillDefinition currentSkill;                 // (Legacy) 선택된 스킬 구조체
+    public SkillAsset currentSkillSO;                    // 현재 선택된 스킬 에셋 (메인)
+
+    // 실행 제어 플래그
+    bool _skillConfirmLocked = false;                    // 스킬 확정 대기 락
+    bool _isPostSkillMoveInProgress = false;             // 스킬 후 이동(Hit & Run) 진행 중 여부
+    private int _reactionLocks = 0;                      // 리액션(반격 등)으로 인한 턴 진행 일시 정지 카운트
+
+    // 이동/타겟팅 데이터
+    private List<Vector3Int> moveOptions = new();        // 현재 이동 가능한 타일 목록 캐싱
+
+    // Databases (데이터 참조)
+    [Header("Databases")]
+    [SerializeField] private StateStatModifierDB stateStatDb; // 상태이상 스탯 보정 DB
+    public TrainingDB trainingDB;                             // 훈련/특성 DB
+
+    // Internal References (내부 참조 및 유틸)
+    private IBattleMapProvider provider;                 // 맵 정보 제공자 (GridManager로 대체 중이나 초기화 의존성으로 유지)
+    private UnitStatusPanelUI _statusPanel;              // UI 패널 참조 (Lazy Load)
+
+    // Events (외부 알림)
+    // Wave Events
+    public event System.Action<int, int, string> OnWaveChanged;  // 웨이브 정보 갱신 (현재, 총, 라벨)
+    public event System.Action OnWaveStarted;                    // 웨이브 시작 시점
+    public event System.Action<int, int> OnWaveTransition;       // 웨이브 전환 연출 시작
+
+    // Unit/Turn Events
+    public static event System.Action<BattleUnit> OnAnyUnitTurnStarted; // (Static) 유닛 턴 시작 전역 알림
+    public event System.Action<BattleUnit> OnUnitEndTurn;               // 유닛 턴 종료
+    public event System.Action<BattleUnit> OnOverworkTriggered;         // 과로(Overwork) 발동 알림
+
+    // UI Label Events
+    public event System.Action<string> OnHint;                          // 상단 힌트 텍스트 갱신
+    public event System.Action<BattleUnit> OnUnitTurnLabel;             // 턴 시작 라벨 표시
+    public event System.Action<BattleUnit, string> OnUnitActionLabel;   // 액션(스킬명) 라벨 표시
+    public event System.Action<BattleUnit, string> OnUnitPassiveLabel;  // 패시브 발동 라벨 표시
+
+    // Skill Panel Events
+    public event System.Action<bool> OnSkillPanelToggled;               // 스킬 패널 열림/닫힘
+    public event System.Action<SkillAsset[]> OnSkillPanelPopulateSO;    // 스킬 패널 내용 갱신 요청
+
+    // ATB Events
+    public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
+    public event OnATBChangedDelegate OnATBChanged;      // ATB 게이지 변경 알림
+    public event System.Action OnATBReset;               // ATB 초기화 알림
+
+    // Public Properties (외부 접근자)
+    // 상태 확인
     public bool IsTargeting => state == BattleState.Targeting;
     public bool IsKnockbackTargeting => state == BattleState.TargetingKnockback;
-    Coroutine enemyRoutine;
 
-    [Header("Modules")]
-    [SerializeField] private BattleWaveManager waveManager;
-    [SerializeField] public BattleSkillProcessor skillProcessor;
-    [SerializeField] public BattleInputHandler inputHandler;
-    public ATBTurnController turnController;
+    // 데이터 접근
+    public SkillAsset CurrentSkillSO => currentSkillSO; // 필드와 프로퍼티 연결
+    public TrainingDB Training => trainingDB;
 
-    // [프로퍼티 연결]
+    // 웨이브 정보 연결
     public int CurrentWave => waveManager.CurrentWave;
     public int TotalWaves => waveManager.TotalWaves;
-
-    public event System.Action<int, int, string> OnWaveChanged;
-    public event System.Action OnWaveStarted;
-    public event System.Action<int, int> OnWaveTransition;
-    public event System.Action<BattleUnit, string> OnUnitPassiveLabel;
-    private bool _battleEndedOnce = false;
-
-    #region State & Variables
-    public BattleState state { get; private set; } = BattleState.Idle;
-
-    // [수정] 프로퍼티가 필드를 바라보도록 연결 (중요!)
-    public SkillAsset CurrentSkillSO => currentSkillSO;
-
-    private BattleUnit acting;
-    private List<Vector3Int> moveOptions = new();
-    private int remainingActions = 0;
-    private HashSet<BattleAction> usedActions = new();
-
-    // UI 및 이벤트
-    public event System.Action<string> OnHint;
-    public event System.Action<bool> OnSkillPanelToggled;
-    public event System.Action<BattleUnit> OnUnitEndTurn;
-    public event System.Action<BattleUnit> OnUnitTurnLabel;
-    public event System.Action<BattleUnit, string> OnUnitActionLabel;
-    #endregion
-
-    public BattleUnit ActingUnit => acting;
-    bool _skillConfirmLocked = false;
-
-    public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
-    public event OnATBChangedDelegate OnATBChanged;
-    readonly System.Random rng = new System.Random();
-    public static event System.Action<BattleUnit> OnAnyUnitTurnStarted;
-
-    public event System.Action OnATBReset;
-
-    public bool isSelectingSkill = false;
-    public SkillDefinition currentSkill;
-    public SkillAsset currentSkillSO;
-    public event System.Action<SkillAsset[]> OnSkillPanelPopulateSO;
-
-    public event System.Action<BattleUnit> OnOverworkTriggered;
-
-    bool _isPostSkillMoveInProgress = false;
-    private int _reactionLocks = 0;
-
-    [Header("DBs")]
-    [SerializeField] private StateStatModifierDB stateStatDb;
-
-    [Header("Training")]
-    public TrainingDB trainingDB;
-    public TrainingDB Training => trainingDB;
 
     #endregion
 
@@ -101,10 +106,13 @@ public class BattleManager : MonoBehaviour
     {
         _reactionLocks = Mathf.Max(0, _reactionLocks - 1);
     }
+    public void SetState(BattleState newState) => state = newState;
+    public static void EmitGlobalTurnStart(BattleUnit u) => OnAnyUnitTurnStarted?.Invoke(u);
 
     public void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
     public void EmitPassiveLabel(BattleUnit u, string label) => OnUnitPassiveLabel?.Invoke(u, label);
     public void EmitTurnLabel(BattleUnit u) => OnUnitTurnLabel?.Invoke(u);
+    public void SetHint(string msg) => OnHint?.Invoke(msg);
 
 
     UnitStatusPanelUI StatusPanel
@@ -115,32 +123,6 @@ public class BattleManager : MonoBehaviour
             return _statusPanel;
         }
     }
-
-    [System.Serializable]
-    public class BeastDomainZone
-    {
-        public BattleUnit owner;
-        public Tilemap map;
-        public Vector3Int center;
-        public int radius;
-        public int remainingTurns;
-        public int highlightToken;
-    }
-    List<BeastDomainZone> _beastZones = new List<BeastDomainZone>();
-
-    [System.Serializable]
-    public class StatusTileZone
-    {
-        public BattleUnit owner;
-        public Tilemap map;
-        public Vector3Int cell;
-        public int remainingTurns;
-        public TileBase originalTile;
-        public StatusId effectStatusId;
-        public int effectStack;
-        public int effectDuration;
-    }
-    List<StatusTileZone> _statusTileZones = new List<StatusTileZone>();
 
     #region Unity Callbacks
     void Awake()
@@ -174,6 +156,19 @@ public class BattleManager : MonoBehaviour
 
         if (inputHandler == null) inputHandler = GetComponentInChildren<BattleInputHandler>();
         if (inputHandler != null) inputHandler.Initialize(this);
+
+        // FieldManager 초기화
+        if (fieldManager == null) fieldManager = GetComponentInChildren<BattleFieldManager>();
+        if (fieldManager != null) fieldManager.Initialize(this);
+
+        if (gridManager == null) gridManager = GetComponentInChildren<BattleGridManager>();
+
+        if (turnManager != null)
+        {
+            turnManager.Initialize(this);
+            turnManager.OnUnitEndTurn += (u) => OnUnitEndTurn?.Invoke(u);
+            turnManager.OnOverworkTriggered += (u) => OnOverworkTriggered?.Invoke(u);
+        }
     }
 
     void Start()
@@ -192,6 +187,11 @@ public class BattleManager : MonoBehaviour
         }
 
         StartCoroutine(Co_RebindBattleInputWhenMapsReady());
+    }
+
+    private void OnDestroy()
+    {
+        ClearStatic();
     }
 
     // 특정 스킬(skill)을 기준으로 타겟(target)이 유효한지 검사하는 헬퍼 함수
@@ -228,7 +228,7 @@ public class BattleManager : MonoBehaviour
     public bool IsValidSkillTarget(BattleUnit target)
     {
         // 현재 선택된 스킬(currentSkillSO)을 기준으로 검사
-        return IsTargetValidForSkill(target, currentSkillSO, acting);
+        return IsTargetValidForSkill(target, currentSkillSO, ActingUnit);
     }
 
     public List<BattleUnit> GetValidTargetsForCycle(SkillAsset skill, BattleUnit caster)
@@ -251,15 +251,15 @@ public class BattleManager : MonoBehaviour
     {
         if (state != BattleState.Moving) return;
 
-        if (acting.CurrentMap == map && moveOptions.Contains(cell))
+        if (ActingUnit.CurrentMap == map && moveOptions.Contains(cell))
         {
             state = BattleState.Resolving;
             inputHandler.ClearAllPreviews();
 
             if (_isPostSkillMoveInProgress)
-                StartCoroutine(Co_MoveAfterSkillThenConsume(acting, map, cell));
+                StartCoroutine(Co_MoveAfterSkillThenConsume(ActingUnit, map, cell));
             else
-                StartCoroutine(Co_MoveThenConsume(acting, map, cell, BattleAction.Move));
+                StartCoroutine(Co_MoveThenConsume(ActingUnit, map, cell, BattleAction.Move));
 
             moveOptions.Clear();
         }
@@ -346,7 +346,7 @@ public class BattleManager : MonoBehaviour
             var cell = map.WorldToCell(unit.transform.position);
 
             unit.Bind(map, cell);
-            grid.SetOccupied(unit.team, unit.Cell, true);
+            gridManager.SetOccupied(unit.team, unit.Cell, true);
             unit.InitializeATB(minAGI, maxAGI);
             unit.InitPassives(this);
 
@@ -367,29 +367,19 @@ public class BattleManager : MonoBehaviour
 
     void HandleTurnReady(BattleUnit unit)
     {
-        acting = unit;
-        StartTurn(unit);
+        turnManager.StartTurn(unit);
     }
 
     void ResetATBAndTurnOrder()
     {
         turnController.ResetAllATB();
-        acting = null;
+        turnManager.ForceClearActingUnit();
         state = BattleState.Idle;
         OnATBReset?.Invoke();
         EmitActionLabel(null, "");
     }
 
     #endregion
-
-    private void TryReleaseGridOccupy(BattleUnit u)
-    {
-        if (u == null || grid == null) return;
-        var map = grid.GetMap(u.team);
-        if (map == null) return;
-        Vector3Int cell = u.Cell;
-        grid.SetOccupied(u.team, cell, false);
-    }
 
     void HandleWaveLoaded(BattleMapManager localProvider, Tilemap enemyFloor, Tilemap enemyOverlay)
     {
@@ -409,143 +399,23 @@ public class BattleManager : MonoBehaviour
     }
 
     #region Turn Management
-    void StartTurn(BattleUnit _unit)
-    {
-        if (_unit == null) return;
-        acting = _unit;
-        remainingActions = baseActionsPerTurn;
-        usedActions.Clear();
-        ClearAllPreviews();
-        ClearTargetSelection();
-        OnAnyUnitTurnStarted?.Invoke(_unit);
-        EmitActionLabel(null, "");
-        OnHint?.Invoke(string.Empty);
-        EmitTurnLabel(_unit);
 
-        Debug.Log($"[Battle] StartTurn -> {acting.name}");
-
-        var sc = _unit.GetComponent<StatusController>();
-        var usc = _unit.GetComponent<UnitStateController>();
-
-        if (usc != null && usc.Has(UnitStateId.Sleep))
-        {
-            Debug.Log($"[Sleep] {_unit.name} 수면 상태이므로 턴을 넘깁니다.");
-            usc.Remove(UnitStateId.Sleep);
-
-            if (_unit.team == Team.Player)
-                EndPlayerTurn();
-            else
-                EndEnemyTurn(_unit);
-            return;
-        }
-
-        bool hadFear = (usc != null && usc.Has(UnitStateId.Fear));
-
-        if (sc != null) sc.OnTurnStart();
-        if (usc != null) usc?.OnTurnStart();
-
-        var ambushSkill = GetAmbushSkillFor(_unit);
-        if (ambushSkill != null)
-        {
-            TryApplyAmbushTurnStartHeal(_unit, ambushSkill);
-        }
-
-        if (hadFear)
-        {
-            Debug.Log($"[Fear] {_unit.name} 공포 상태 턴 시작 → 강제 후퇴 진행");
-            state = BattleState.Resolving;
-            remainingActions = 0;
-            usedActions.Clear();
-
-            StartCoroutine(Co_HandleFearTurn(_unit));
-            return;
-        }
-
-        TickBeastDomainOnTurnStart(_unit);
-        TickStatusTileZonesOnTurnStart(_unit);
-
-        if (_unit.team == Team.Enemy)
-        {
-            var ecs = _unit.GetComponent<EnemyCastState>();
-            if (ecs != null && ecs.TryTakeReady(out var pending))
-            {
-                StartCoroutine(Co_EnemyFireWebThenConsume(_unit, pending));
-                return;
-            }
-        }
-
-        if (_unit.team == Team.Player)
-        {
-            state = BattleState.ActionSelect;
-        }
-        else
-        {
-            state = BattleState.Resolving;
-            StartCoroutine(EnemyTurnRoutine(_unit));
-        }
-    }
-
-    public void OnClickRest()
-    {
-        if (acting == null || !IsPlayerTurn) return;
-        if (remainingActions <= 0) return;
-
-        ClearAllPreviews();
-        ClearTargetSelection();
-
-        float before = acting.HP;
-        acting.HealPercent(0.10f);
-        float after = acting.HP;
-
-        OnActionConsumed(BattleAction.Rest);
-    }
-    public void OnClickCalm()
-    {
-        if (acting == null || !IsPlayerTurn) return;
-        if (remainingActions <= 0) return;
-
-        ClearAllPreviews();
-        ClearTargetSelection();
-
-        float maxMP = acting.MaxMP;
-        float maxRage = acting.MaxRage;
-        float beforeRage = acting.Rage;
-
-        int mpGain = Mathf.FloorToInt(maxMP * 0.10f);
-        if (mpGain <= 0 && maxMP > 0f) mpGain = 1;
-
-        if (acting.Rage <= 0f)
-        {
-            acting.GainMP(mpGain);
-            OnActionConsumed(BattleAction.Calm);
-            return;
-        }
-
-        if (mpGain > 0) acting.GainMP(mpGain);
-
-        float rageCostTarget = maxRage * 0.10f;
-        if (rageCostTarget <= 0f) rageCostTarget = beforeRage;
-
-        float spend = Mathf.Min(beforeRage, rageCostTarget);
-        if (spend > 0f) acting.AddRage(-spend);
-
-        OnActionConsumed(BattleAction.Calm);
-    }
+    public void OnClickRest() => turnManager?.Rest();
+    public void OnClickCalm() => turnManager?.Calm();
     #endregion
 
     #region Movement
     public void OnClickMove()
     {
-        if (acting == null || !IsPlayerTurn) return;
-        if (usedActions.Contains(BattleAction.Move) || remainingActions <= 0) return;
+        if (!IsPlayerTurn) return;
+        if (!turnManager.CanPerformAction(BattleAction.Move)) return;
 
         CloseSkillPanel();
         inputHandler.ClearAllPreviews();
 
         state = BattleState.Moving;
-        moveOptions = grid.GetAdjacentWalkable(acting.team, acting.Cell).ToList();
-
-        inputHandler.ShowMoveOptions(acting.CurrentMap, moveOptions);
+        moveOptions = gridManager.GetAdjacentWalkable(ActingUnit.team, ActingUnit.Cell).ToList();
+        inputHandler.ShowMoveOptions(ActingUnit.CurrentMap, moveOptions);
     }
 
     IEnumerator Co_MoveThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell, BattleAction act)
@@ -553,15 +423,14 @@ public class BattleManager : MonoBehaviour
         if (unit == null || map == null) yield break;
 
         Vector3Int fromCell = unit.Cell;
-        grid.SetOccupied(unit.team, fromCell, false);
+        gridManager.SetOccupied(unit.team, fromCell, false);
         yield return unit.AnimateMoveTo(map, toCell);
-        grid.SetOccupied(unit.team, unit.Cell, true);
+        gridManager.SetOccupied(unit.team, unit.Cell, true);
 
-        bool freeMove = IsBeastDomainFreeMove(unit, map, fromCell, toCell);
-
+        bool freeMove = fieldManager != null && fieldManager.IsBeastDomainFreeMove(unit, map, fromCell, toCell);
         if (freeMove)
         {
-            if (unit.team == Team.Player)
+            if (IsPlayerTurn)
             {
                 state = BattleState.ActionSelect;
                 EmitActionLabel(unit, "");
@@ -571,15 +440,16 @@ public class BattleManager : MonoBehaviour
 
         while (_reactionLocks > 0) yield return null;
 
-        OnActionConsumed(act);
+        // TurnManager에게 소비 요청
+        turnManager.OnActionConsumed(act);
     }
     #endregion
 
     #region Attack
     public void OnClickAttack()
     {
-        if (!IsPlayerTurn || acting == null) return;
-        if (usedActions.Contains(BattleAction.Attack) || remainingActions <= 0) return;
+        if (!IsPlayerTurn) return;
+        if (!turnManager.CanPerformAction(BattleAction.Attack)) return;
 
         inputHandler.ClearAllPreviews();
         OpenSkillPanel();
@@ -587,60 +457,6 @@ public class BattleManager : MonoBehaviour
     #endregion
 
     #region Action Consumption
-    void OnActionConsumed(BattleAction act)
-    {
-        if (acting == null) return;
-
-        usedActions.Add(act);
-        remainingActions = Mathf.Max(0, remainingActions - 1);
-
-        if (remainingActions > 0)
-        {
-            if (IsPlayerTurn)
-            {
-                state = BattleState.ActionSelect;
-            }
-            else
-            {
-                if (enemyRoutine != null) StopCoroutine(enemyRoutine);
-                enemyRoutine = StartCoroutine(EnemyTurnRoutine(acting));
-            }
-        }
-        else
-        {
-            if (IsPlayerTurn) EndPlayerTurn();
-            else EndEnemyTurn(acting);
-        }
-    }
-
-    void CheckStatusTileZoneEffect(BattleUnit unit)
-    {
-        if (unit == null || unit.IsDead) return;
-
-        foreach (var zone in _statusTileZones)
-        {
-            if (zone.map == unit.CurrentMap && zone.cell == unit.Cell)
-            {
-                var sc = unit.GetComponent<StatusController>();
-                if (sc != null)
-                {
-                    sc.ApplyWithTurnContext(zone.effectStatusId, zone.effectStack, zone.effectDuration);
-                }
-                break;
-            }
-        }
-    }
-
-    public IEnumerable<BattleUnit> GetLivingAlliesOf(BattleUnit unit)
-    {
-        if (unit == null) yield break;
-        var all = FindObjectsOfType<BattleUnit>();
-        foreach (var u in all)
-        {
-            if (u == null || u.IsDead || u.IsRetreated || u.team != unit.team) continue;
-            yield return u;
-        }
-    }
 
     public IEnumerable<BattleUnit> GetLivingEnemiesOf(BattleUnit _battleunit)
     {
@@ -652,85 +468,6 @@ public class BattleManager : MonoBehaviour
             if (units == null || units == _battleunit || units.team == _battleunit.team || units.IsDead || units.IsRetreated) continue;
             yield return units;
         }
-    }
-
-    public BattleUnit GetUnitAt(Vector3Int cell)
-    {
-        if (grid == null) return null;
-        var map = grid.GetMap(Team.Player);
-        if (map == null) return null;
-
-        Vector3 worldPos = map.GetCellCenterWorld(cell);
-        Collider2D hit = Physics2D.OverlapCircle(worldPos, 0.2f, unitMask);
-
-        if (hit != null) return hit.GetComponentInParent<BattleUnit>();
-        return null;
-    }
-
-    private bool TryProcessOverwork()
-    {
-        if (acting == null) return false;
-
-        var statusCtrl = acting.GetComponent<StatusController>();
-        var usc = acting.GetComponent<UnitStateController>();
-        if (statusCtrl == null) return false;
-
-        int overworkStacks = statusCtrl.GetStacks(StatusId.Overwork);
-        if (overworkStacks <= 0) return false;
-
-        int nextStack = overworkStacks - 1;
-        statusCtrl.SetStacks(StatusId.Overwork, nextStack);
-
-        if (nextStack == 0)
-        {
-            bool skipSleep = false;
-            if (acting.data != null && acting.data.skills != null)
-            {
-                foreach (var s in acting.data.skills)
-                {
-                    if (s is ParametricSupportSkill pss && pss.buffStatus == StatusId.Overwork)
-                    {
-                        int route = acting.GetTrainingRouteIndex(pss);
-                        if (pss.trainingNoSleepOnOverworkEnd &&
-                            pss.routeForNoSleepOnOverworkEnd >= 0 &&
-                            route == pss.routeForNoSleepOnOverworkEnd)
-                        {
-                            skipSleep = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (usc != null)
-            {
-                if (!skipSleep) usc.Apply(UnitStateId.Sleep);
-                else Debug.Log($"[BattleManager] {acting.name} 과로 종료 -> 훈련 효과로 수면 면제!");
-            }
-            return false;
-        }
-
-        Debug.Log($"[BattleManager] {acting.name} 과로 발동! (남은 스택: {nextStack})");
-
-        remainingActions = baseActionsPerTurn;
-        usedActions.Clear();
-        state = BattleState.ActionSelect;
-
-        OnOverworkTriggered?.Invoke(acting);
-        return true;
-    }
-
-    void EndPlayerTurn()
-    {
-        if (TryProcessOverwork()) return;
-        CheckStatusTileZoneEffect(acting);
-        ClearAllPreviews();
-        ClearTargetSelection();
-
-        OnUnitEndTurn?.Invoke(acting);
-        turnController.CompleteTurn(acting);
-        acting = null;
-        state = BattleState.Idle;
     }
 
     public void CancelCurrentAction()
@@ -758,7 +495,7 @@ public class BattleManager : MonoBehaviour
             {
                 inputHandler.ClearAllPreviews();
                 _isPostSkillMoveInProgress = false;
-                OnActionConsumed(BattleAction.Attack);
+                turnManager.OnActionConsumed(BattleAction.Attack);
                 return;
             }
 
@@ -808,7 +545,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        StartCoroutine(skillProcessor.PerformStandardUnitSkillFlow(currentSkillSO, acting, target));
+        StartCoroutine(skillProcessor.PerformStandardUnitSkillFlow(currentSkillSO, ActingUnit, target));
     }
 
     void ClearTargetSelection()
@@ -821,12 +558,12 @@ public class BattleManager : MonoBehaviour
     #region Death Handling
     void HandleUnitDied(BattleUnit dead)
     {
-        grid.SetOccupied(dead.team, dead.Cell, false);
+        gridManager.SetOccupied(dead.team, dead.Cell, false);
 
-        if (dead == acting)
+        if (dead == ActingUnit)
         {
             turnController.ResumeTime();
-            acting = null;
+            turnManager.ForceClearActingUnit();
             state = BattleState.Idle;
         }
 
@@ -896,7 +633,7 @@ public class BattleManager : MonoBehaviour
     public void HighlightUnitsInArea(Tilemap map, List<Vector3Int> cells)
     {
         // 범위 내에 있는 유닛들을 불러옴
-        var victims = GetUnitsInArea(map, cells);
+        var victims = gridManager.GetUnitsInArea(map, cells);
 
         // 패널에게 명단 넘겨서 하이라이트 작동
         StatusPanel?.HighlightUnits(victims);
@@ -940,8 +677,11 @@ public class BattleManager : MonoBehaviour
         return null;
     }
 
-    void TryApplyAmbushTurnStartHeal(BattleUnit unit, SelfAmbushSkill skill)
+    public void TryApplyAmbushTurnStartHeal(BattleUnit unit)
     {
+        // 내부 헬퍼를 이용해 스킬을 찾음
+        var skill = GetAmbushSkillFor(unit);
+
         if (unit == null || skill == null) return;
         var usc = unit.GetComponent<UnitStateController>();
         if (usc == null || !usc.Has(UnitStateId.Ambush)) return;
@@ -956,39 +696,6 @@ public class BattleManager : MonoBehaviour
     }
 
     #region Enemy AI
-    IEnumerator EnemyTurnRoutine(BattleUnit enemy)
-    {
-        yield return new WaitForSeconds(0.5f);
-
-        var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.team == Team.Player && !u.IsDead)
-            .Where(u => !SkillAsset.IsUntargetableByEnemy(u))
-            .ToList();
-
-        if (players.Count == 0) { EndEnemyTurn(enemy); yield break; }
-
-        BattleUnit target = players[Random.Range(0, players.Count)];
-
-        var ai = enemy.GetComponent<EnemyAI>();
-        SkillAsset so = (ai != null) ? ai.ConsumePlannedSkillOrPick() : null;
-
-        if (so != null) EmitActionLabel(enemy, so.displayName);
-
-        if (so != null)
-        {
-            if (so.targetMode == SkillTargetMode.Unit)
-            {
-                yield return StartCoroutine(so.ResolveOnUnit(this, enemy, target));
-                FinishActionAfterSkill();
-                yield break;
-            }
-            else if (so.targetMode == SkillTargetMode.Tile)
-            {
-                yield break;
-            }
-        }
-        EndEnemyTurn(enemy);
-    }
 
     IEnumerator Co_EnemyResolveSkillOnUnit_NoMove(SkillDefinition def, BattleUnit caster, BattleUnit target)
     {
@@ -1011,7 +718,7 @@ public class BattleManager : MonoBehaviour
         FinishActionAfterSkill();
     }
 
-    IEnumerator Co_EnemyFireWebThenConsume(BattleUnit caster, EnemyCastState.PendingCast p)
+    public IEnumerator Co_EnemyFireWebThenConsume(BattleUnit caster, EnemyCastState.PendingCast p)
     {
         state = BattleState.Resolving;
         caster.SetCasting(false);
@@ -1063,49 +770,22 @@ public class BattleManager : MonoBehaviour
         ClearSkillPreview();
         var ecs = caster.GetComponent<EnemyCastState>();
         ecs?.ClearPreviewAndFinalize(this);
-        OnActionConsumed(BattleAction.Attack);
+        turnManager.OnActionConsumed(BattleAction.Attack);
     }
 
-    void EndEnemyTurn(BattleUnit enemy)
-    {
-        if (enemy == null)
-        {
-            state = BattleState.Idle;
-            return;
-        }
-
-        if (TryProcessOverwork()) return;
-        enemyRoutine = null;
-        CheckStatusTileZoneEffect(enemy);
-
-        var ecs = enemy.GetComponent<EnemyCastState>();
-        if (ecs == null || !ecs.IsCasting)
-        {
-            EmitActionLabel(enemy, "");
-            var ai = enemy.GetComponent<EnemyAI>();
-            if (ai != null) ai.PlanNextSkill();
-        }
-
-        enemy.ResetATB();
-        OnUnitEndTurn?.Invoke(enemy);
-        turnController.CompleteTurn(enemy);
-
-        if (acting == enemy) acting = null;
-        state = BattleState.Idle;
-    }
     #endregion
 
     public async void OnClickEscape()
     {
-        if (acting == null || acting.team != Team.Player) return;
+        if (ActingUnit == null || ActingUnit.team != Team.Player) return;
         if (state == BattleState.Resolving) return;
 
         var aliveEnemies = FindObjectsOfType<BattleUnit>().Where(u => u.team == Team.Enemy && !u.IsDead).ToList();
         float enemyAgiSum = Mathf.Max(0.0001f, aliveEnemies.Sum(u => u.EffectiveAGI));
-        float successChance01 = Mathf.Clamp01(acting.EffectiveAGI / enemyAgiSum);
+        float successChance01 = Mathf.Clamp01(ActingUnit.EffectiveAGI / enemyAgiSum);
         int percent = Mathf.FloorToInt(successChance01 * 100f);
 
-        string unitName = GetUnitLabel(acting);
+        string unitName = GetUnitLabel(ActingUnit);
         string safeName = unitName.Replace("<", "&lt;").Replace(">", "&gt;");
         string msg = $"<color=#C60004>{safeName}</color> 유닛을 전투에서 제외합니다. 진행할까요?\n(탈출 성공 확률: {percent}%)";
 
@@ -1116,12 +796,12 @@ public class BattleManager : MonoBehaviour
         if (success)
         {
             await PopupManager.Instance.ConfirmAsync("탈출에 성공했습니다.", "확인", "");
-            RetreatCurrentUnit(acting);
+            RetreatCurrentUnit(ActingUnit);
         }
         else
         {
             await PopupManager.Instance.ConfirmAsync("탈출에 실패했습니다.", "확인", "");
-            EndPlayerTurn();
+            turnManager.EndPlayerTurn();
         }
 
         CancelCurrentAction();
@@ -1138,14 +818,14 @@ public class BattleManager : MonoBehaviour
     void RetreatCurrentUnit(BattleUnit _battleunit)
     {
         if (_battleunit == null) return;
-        TryReleaseGridOccupy(_battleunit);
+        if (gridManager != null) gridManager.SetOccupied(_battleunit.team, _battleunit.Cell, false);
         _battleunit.Retreat();
         Destroy(_battleunit.gameObject);
 
-        if (_battleunit == acting)
+        if (_battleunit == ActingUnit)
         {
             turnController.CompleteTurn(_battleunit);
-            acting = null;
+            turnManager.ForceClearActingUnit();
             state = BattleState.Idle;
         }
         CheckBattleEnd();
@@ -1154,16 +834,16 @@ public class BattleManager : MonoBehaviour
 
     public void OpenSkillPanel()
     {
-        if (!IsPlayerTurn || acting == null) return;
+        if (!IsPlayerTurn || ActingUnit == null) return;
         isSelectingSkill = true;
 
-        var raw = acting?.data?.skills ?? System.Array.Empty<SkillAsset>();
+        var raw = ActingUnit?.data?.skills ?? System.Array.Empty<SkillAsset>();
         var view = new SkillAsset[raw.Length];
         for (int i = 0; i < raw.Length; i++)
         {
             var s = raw[i];
             if (s is ISkillForStateResolver resolver)
-                view[i] = resolver.ResolveForCaster(acting) ?? s;
+                view[i] = resolver.ResolveForCaster(ActingUnit) ?? s;
             else view[i] = s;
         }
 
@@ -1180,12 +860,12 @@ public class BattleManager : MonoBehaviour
 
     public void SelectSkill(int index)
     {
-        var list = acting?.data?.skills;
+        var list = ActingUnit?.data?.skills;
         if (list == null || index < 0 || index >= list.Length) return;
 
         var picked = list[index];
         if (picked is ISkillForStateResolver resolver)
-            picked = resolver.ResolveForCaster(acting) ?? picked;
+            picked = resolver.ResolveForCaster(ActingUnit) ?? picked;
 
         currentSkillSO = picked;
         EnterSkillTargeting(currentSkillSO);
@@ -1194,27 +874,27 @@ public class BattleManager : MonoBehaviour
     {
         if (skill == null) return;
 
-        int effectiveCost = skill.GetEffectiveCost(acting);
-        if (!acting.HasMP(effectiveCost)) { Debug.Log($"[Skill] MP 부족"); return; }
-        if (acting.IsSkillOnCooldown(skill)) { Debug.Log($"[Skill] 쿨다운"); return; }
+        int effectiveCost = skill.GetEffectiveCost(ActingUnit);
+        if (!ActingUnit.HasMP(effectiveCost)) { Debug.Log($"[Skill] MP 부족"); return; }
+        if (ActingUnit.IsSkillOnCooldown(skill)) { Debug.Log($"[Skill] 쿨다운"); return; }
 
         if (skill is ISelfCastSkill self && self.SelfCastOnSelect)
         {
             if (skillProcessor.IsResolvingSelfCast) return;
             bool isFreeAction = false;
-            int route = acting.GetTrainingRouteIndex(skill);
+            int route = ActingUnit.GetTrainingRouteIndex(skill);
 
             if (skill is SelfStateSkill sss) { if (sss.trainingUseFreeAction && sss.routeForFreeAction >= 0 && route == sss.routeForFreeAction) isFreeAction = true; }
             else if (skill is SelfStateCleanseSkill scs) { if (scs.trainingUseFreeAction && scs.routeForFreeAction >= 0 && route == scs.routeForFreeAction) isFreeAction = true; }
             if (!isFreeAction && skill is HostilitySpikeSkill hss) { if (hss.trainingUseFreeAction && hss.routeForFreeAction >= 0 && route == hss.routeForFreeAction) isFreeAction = true; }
             if (!isFreeAction && skill is SelfBeastDomainSkill bds) { if (bds.trainingUseFreeAction && bds.routeForFreeAction >= 0 && route == bds.routeForFreeAction) isFreeAction = true; }
 
-            StartCoroutine(skillProcessor.PerformSelfCastFlow(skill, acting, isFreeAction));
+            StartCoroutine(skillProcessor.PerformSelfCastFlow(skill, ActingUnit, isFreeAction));
             return;
         }
 
         state = BattleState.Targeting;
-        inputHandler.PrepareSkillTargeting(skill, acting);
+        inputHandler.PrepareSkillTargeting(skill, ActingUnit);
 
         UpdateTargetingHint();
     }
@@ -1235,7 +915,7 @@ public class BattleManager : MonoBehaviour
         state = BattleState.Resolving;
         inputHandler.ClearAllPreviews();
 
-        StartCoroutine(RunSkillExecute(CurrentSkillSO, acting, target, null, default));
+        StartCoroutine(RunSkillExecute(CurrentSkillSO, ActingUnit, target, null, default));
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int cell)
     {
@@ -1243,7 +923,7 @@ public class BattleManager : MonoBehaviour
         state = BattleState.Resolving;
         inputHandler.ClearAllPreviews();
 
-        StartCoroutine(RunSkillExecute(CurrentSkillSO, acting, null, map, cell));
+        StartCoroutine(RunSkillExecute(CurrentSkillSO, ActingUnit, null, map, cell));
     }
     IEnumerator RunSkillExecute(SkillAsset skill, BattleUnit caster, BattleUnit target, Tilemap map, Vector3Int cell)
     {
@@ -1257,7 +937,7 @@ public class BattleManager : MonoBehaviour
             {
                 state = BattleState.Idle;
                 CancelCurrentAction();
-                if (IsPlayerTurn && remainingActions > 0) state = BattleState.ActionSelect;
+                if (IsPlayerTurn && turnManager.RemainingActions > 0) state = BattleState.ActionSelect;
             }
         }
     }
@@ -1300,29 +980,7 @@ public class BattleManager : MonoBehaviour
     public void ResolveSkillAtCell(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
         var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
-        var victims = GetUnitsInArea(map, area);
-    }
-
-    bool IsCellOccupied(Tilemap map, Vector3Int cell)
-    {
-        var team = (map == provider?.PlayerFloor) ? Team.Player : Team.Enemy;
-        return grid != null && grid.IsOccupied(team, cell);
-    }
-    bool IsWalkableCell(Tilemap map, Vector3Int cell)
-    {
-        if (!map.HasTile(cell)) return false;
-        var team = (map == provider?.PlayerFloor) ? Team.Player : Team.Enemy;
-        return grid != null && !grid.IsOccupied(team, cell);
-    }
-
-    public IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
-    {
-        var valid = new HashSet<Vector3Int>(cells.Where(c => map.HasTile(c)));
-        foreach (var u in FindObjectsOfType<BattleUnit>())
-        {
-            if (u == null || u.CurrentMap != map) continue;
-            if (valid.Contains(u.Cell)) yield return u;
-        }
+        var victims = gridManager.GetUnitsInArea(map, area);
     }
 
     public int GetFinalSkillDamage(BattleUnit caster, BattleUnit target, SkillAsset source, float baseDamage)
@@ -1356,20 +1014,20 @@ public class BattleManager : MonoBehaviour
 
     IEnumerator Co_PostSkillMoveThenConsume(BattleUnit unit)
     {
-        if (unit == null || grid == null)
+        if (unit == null || gridManager == null)
         {
-            OnActionConsumed(BattleAction.Attack);
+            turnManager.OnActionConsumed(BattleAction.Attack);
             yield break;
         }
 
         _isPostSkillMoveInProgress = true;
         state = BattleState.Moving;
-        moveOptions = grid.GetAdjacentWalkable(unit.team, unit.Cell).ToList();
+        moveOptions = gridManager.GetAdjacentWalkable(unit.team, unit.Cell).ToList();
 
         if (moveOptions.Count == 0)
         {
             _isPostSkillMoveInProgress = false;
-            OnActionConsumed(BattleAction.Attack);
+            turnManager.OnActionConsumed(BattleAction.Attack);
             yield break;
         }
 
@@ -1380,144 +1038,15 @@ public class BattleManager : MonoBehaviour
     IEnumerator Co_MoveAfterSkillThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell)
     {
         var fromCell = unit.Cell;
-        grid.SetOccupied(unit.team, fromCell, false);
+        gridManager.SetOccupied(unit.team, fromCell, false);
 
         yield return unit.AnimateMoveTo(map, toCell);
 
-        grid.SetOccupied(unit.team, unit.Cell, true);
+        gridManager.SetOccupied(unit.team, unit.Cell, true);
         _isPostSkillMoveInProgress = false;
 
         while (_reactionLocks > 0) yield return null;
-        OnActionConsumed(BattleAction.Attack);
-    }
-
-    public void SpawnBeastDomainZone(Tilemap map, BattleUnit owner, Vector3Int centerCell, int radius, int durationTurns)
-    {
-        if (!owner || !map) return;
-
-        for (int i = _beastZones.Count - 1; i >= 0; i--)
-        {
-            var old = _beastZones[i];
-            if (old.owner != owner) continue;
-            _beastZones.RemoveAt(i);
-        }
-
-        var cells = new List<Vector3Int>();
-        foreach (var c in AreaShapes.BeastDomainArea(centerCell, radius)) cells.Add(c);
-
-        int token = 0;
-        // [수정] 핸들러 하이라이터 사용
-        if (inputHandler.beastDomainHighlighter != null)
-        {
-            token = inputHandler.beastDomainHighlighter.CreateGroup();
-            inputHandler.beastDomainHighlighter.SetGroupCells(token, map, cells);
-        }
-
-        var zone = new BeastDomainZone
-        {
-            owner = owner,
-            map = map,
-            center = centerCell,
-            radius = radius,
-            remainingTurns = durationTurns,
-            highlightToken = token,
-        };
-        _beastZones.Add(zone);
-
-        Debug.Log($"[BeastDomain] {owner.name} 생성 - token:{token}");
-    }
-
-    public void CreateStatusTileZone(BattleUnit owner, Tilemap map, Vector3Int cell, int zoneDuration, TileBase newTileBase, StatusId statusId, int stack = 1, int statusDuration = 3)
-    {
-        if (!map.HasTile(cell)) return;
-
-        var existing = _statusTileZones.FirstOrDefault(z => z.map == map && z.cell == cell);
-        if (existing != null)
-        {
-            existing.owner = owner;
-            existing.remainingTurns = zoneDuration;
-            existing.effectStatusId = statusId;
-            existing.effectStack = stack;
-            existing.effectDuration = statusDuration;
-            if (newTileBase != null) map.SetTile(cell, newTileBase);
-            return;
-        }
-
-        TileBase oldTile = map.GetTile(cell);
-        if (newTileBase != null) map.SetTile(cell, newTileBase);
-
-        var newZone = new StatusTileZone
-        {
-            owner = owner,
-            map = map,
-            cell = cell,
-            remainingTurns = zoneDuration,
-            originalTile = oldTile,
-            effectStatusId = statusId,
-            effectStack = stack,
-            effectDuration = statusDuration
-        };
-        _statusTileZones.Add(newZone);
-    }
-    void TickBeastDomainOnTurnStart(BattleUnit unitWhoseTurnStarted)
-    {
-        if (unitWhoseTurnStarted == null) return;
-
-        for (int i = _beastZones.Count - 1; i >= 0; i--)
-        {
-            var z = _beastZones[i];
-            if (z.owner != unitWhoseTurnStarted) continue;
-
-            TryApplyBeastDomainRageTraining(z.owner);
-            z.remainingTurns--;
-
-            if (z.remainingTurns <= 0)
-            {
-                // [수정] 핸들러 하이라이터 사용
-                if (z.highlightToken != 0 && inputHandler.beastDomainHighlighter != null)
-                    inputHandler.beastDomainHighlighter.ClearGroup(z.highlightToken);
-
-                _beastZones.RemoveAt(i);
-            }
-        }
-    }
-
-    void TickStatusTileZonesOnTurnStart(BattleUnit unit)
-    {
-        if (unit == null) return;
-
-        for (int i = _statusTileZones.Count - 1; i >= 0; i--)
-        {
-            var z = _statusTileZones[i];
-            if (z.owner == unit)
-            {
-                z.remainingTurns--;
-                if (z.remainingTurns <= 0)
-                {
-                    if (z.map != null) z.map.SetTile(z.cell, z.originalTile);
-                    _statusTileZones.RemoveAt(i);
-                }
-            }
-        }
-    }
-    void TryApplyBeastDomainRageTraining(BattleUnit owner)
-    {
-        if (owner == null || owner.data == null || owner.data.skills == null) return;
-        SelfBeastDomainSkill domainSkill = null;
-        foreach (var s in owner.data.skills)
-        {
-            domainSkill = s as SelfBeastDomainSkill;
-            if (domainSkill != null) break;
-        }
-        if (domainSkill == null) return;
-
-        int route = owner.GetTrainingRouteIndex(domainSkill);
-        if (!domainSkill.trainingReduceRageOnTurnStart || domainSkill.routeForRageReduceOnTurnStart < 0 || route != domainSkill.routeForRageReduceOnTurnStart) return;
-
-        float amount = owner.MagicDamage * domainSkill.rageReducePerClv;
-        if (amount <= 0f) return;
-
-        owner.AddRage(-amount);
+        turnManager.OnActionConsumed(BattleAction.Attack);
     }
 
     public IEnumerator Co_HandleFearTurn(BattleUnit unit)
@@ -1526,25 +1055,25 @@ public class BattleManager : MonoBehaviour
         var usc = unit.GetComponent<UnitStateController>();
         if (usc == null) yield break;
         var map = unit.CurrentMap;
-        if (map == null || grid == null) yield break;
+        if (map == null || gridManager == null) yield break;
 
         var candidates = GetFearRetreatCandidates(unit);
         if (candidates.Count > 0)
         {
             var dest = candidates[Random.Range(0, candidates.Count)];
             var from = unit.Cell;
-            grid.SetOccupied(unit.team, from, false);
+            gridManager.SetOccupied(unit.team, from, false);
             yield return unit.AnimateMoveTo(map, dest);
-            grid.SetOccupied(unit.team, unit.Cell, true);
+            gridManager.SetOccupied(unit.team, unit.Cell, true);
         }
 
-        if (unit.team == Team.Player) EndPlayerTurn();
-        else EndEnemyTurn(unit);
+        if (unit.team == Team.Player) turnManager.EndPlayerTurn();
+        else turnManager.EndEnemyTurn(unit);
     }
     List<Vector3Int> GetFearRetreatCandidates(BattleUnit unit)
     {
         var result = new List<Vector3Int>();
-        if (unit == null || grid == null) return result;
+        if (unit == null || gridManager == null) return result;
         var map = unit.CurrentMap;
         if (map == null) return result;
 
@@ -1557,38 +1086,10 @@ public class BattleManager : MonoBehaviour
         {
             var dest = origin + off;
             if (!map.HasTile(dest)) continue;
-            if (grid.IsOccupied(Team.Player, dest) || grid.IsOccupied(Team.Enemy, dest)) continue;
+            if (gridManager.IsOccupied(Team.Player, dest) || gridManager.IsOccupied(Team.Enemy, dest)) continue;
             result.Add(dest);
         }
         return result;
-    }
-
-    int HexDistance(Vector3Int a, Vector3Int b)
-    {
-        var axA = SkillLibrary.OffsetToAxial(a);
-        var axB = SkillLibrary.OffsetToAxial(b);
-        int dq = Mathf.Abs(axA.x - axB.x);
-        int dr = Mathf.Abs(axA.y - axB.y);
-        int ds = Mathf.Abs((-axA.x - axA.y) - (-axB.x - axB.y));
-        return (dq + dr + ds) / 2;
-    }
-    bool IsBeastDomainFreeMove(BattleUnit unit, Tilemap map, Vector3Int fromCell, Vector3Int toCell)
-    {
-        if (unit == null || map == null) return false;
-        foreach (var z in _beastZones)
-        {
-            if (z.owner != unit) continue;
-            if (z.map != map) continue;
-            bool fromIn = HexDistance(z.center, fromCell) <= z.radius;
-            bool toIn = HexDistance(z.center, toCell) <= z.radius;
-            if (fromIn && toIn) return true;
-        }
-        return false;
-    }
-
-    bool IsEnemyOf(BattleUnit a, BattleUnit b)
-    {
-        return a != null && b != null && a.team != b.team;
     }
 
     public void UnlockSkillConfirm()
@@ -1599,7 +1100,7 @@ public class BattleManager : MonoBehaviour
     public void FinishActionAfterSkill()
     {
         var skill = currentSkillSO;
-        var unit = acting;
+        var unit = ActingUnit; // 프로퍼티 사용
 
         ClearSkillPreview();
         CloseSkillPanel();
@@ -1615,14 +1116,14 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        OnActionConsumed(BattleAction.Attack);
+        turnManager.OnActionConsumed(BattleAction.Attack);
 
         currentSkill = default;
         currentSkillSO = null;
         UpdateTargetingHint();
     }
 
-    // [수정] 핸들러 위임 (ClearTransient가 아니라 ClearMovePreview 호출)
+    // 핸들러 위임 (ClearTransient가 아니라 ClearMovePreview 호출)
     public void ShowMovePreview(Tilemap baseMap, IEnumerable<Vector3Int> cells) => inputHandler?.ShowMoveOptions(baseMap, cells);
     public void ShowSkillPreview(Tilemap baseMap, IEnumerable<Vector3Int> cells) => inputHandler?.ShowSkillPreview(baseMap, cells);
 
@@ -1641,7 +1142,7 @@ public class BattleManager : MonoBehaviour
         StatusPanel?.ClearHighlights();
     }
 
-    // [수정] 핸들러 하이라이터 사용
+    // 핸들러 하이라이터 사용
     public int CreateSkillPreviewToken() => inputHandler.skillHighlighter != null ? inputHandler.skillHighlighter.CreateGroup() : 0;
     public void SetSkillPreviewForToken(int token, Tilemap map, IEnumerable<Vector3Int> cells) => inputHandler.skillHighlighter?.SetGroupCells(token, map, cells);
     public void ClearSkillPreviewToken(int token) => inputHandler.skillHighlighter?.ClearGroup(token);

@@ -284,7 +284,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         if (!HasTile(_map, _cell)) return false;
 
         // 한 셀만 영역으로 만들어 BattleManager의 유닛 조회 유틸 사용
-        var units = _battlemanager.GetUnitsInArea(_map, new[] { _cell });
+        var units = _battlemanager.gridManager.GetUnitsInArea(_map, new[] { _cell });
         foreach (var u in units)
         {
             if (u != null && !u.IsDead && u.Cell == _cell)
@@ -321,8 +321,8 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         var startCell = _caster.Cell;
 
         // 이동 시 현재 칸 점유 해제
-        if (_battlemanager != null && _battlemanager.grid != null)
-            _battlemanager.grid.SetOccupied(_caster.team, startCell, false);
+        if (_battlemanager != null && _battlemanager.gridManager != null)
+            _battlemanager.gridManager.SetOccupied(_caster.team, startCell, false);
 
         if (dashAnimate)
         {
@@ -385,8 +385,8 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         _caster.MoveTo(_map, _landing); // 최종 스냅(셀 setter 보호)
 
         // 이동 끝: 새 칸 점유 설정
-        if (_battlemanager != null && _battlemanager.grid != null)
-            _battlemanager.grid.SetOccupied(_caster.team, _caster.Cell, true);
+        if (_battlemanager != null && _battlemanager.gridManager != null)
+            _battlemanager.gridManager.SetOccupied(_caster.team, _caster.Cell, true);
 
         yield return null;
     }

@@ -15,7 +15,7 @@ public enum SupportSkillMode
 public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTileSkill
 {
     // 기본 범위 설정 (기본값 Single)
-    public ParametricDamageSkill.AreaPreset areaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public AreaPreset areaPreset = AreaPreset.Single;
     public bool diagUseNEAxis = true;
 
     [Header("Support Mode")]
@@ -62,7 +62,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     [Header("범위 확대 훈련")]
     public bool trainingUseAreaOverride = false;
     [Range(-1, 2)] public int routeForAreaOverride = -1;
-    public ParametricDamageSkill.AreaPreset trainingAreaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public AreaPreset trainingAreaPreset = AreaPreset.Single;
     public bool trainingDiagUseNEAxis = true;
 
     [Header("적의 감소 훈련")]
@@ -258,7 +258,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     {
         var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
         // 범위 내 모든 유닛 가져오기 (BattleManager는 기본적으로 모든 유닛을 반환)
-        var allUnitsInArea = bm.GetUnitsInArea(map, area).ToList();
+        var allUnitsInArea = bm.gridManager.GetUnitsInArea(map, area).ToList();
 
         // 아군만 필터링
         var targets = allUnitsInArea.Where(u => u != null && u.team == caster.team);

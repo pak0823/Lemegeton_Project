@@ -19,9 +19,9 @@ public static class AreaShapes
     /// ParametricDamageSkill.AreaPreset 기반 범위 반환.
     /// 지원: Single / LineHorizontal(3) / LineDiagU3 / LineDiagU7 / Ring(반경1, center 포함)
     /// </summary>
-    public static IEnumerable<Vector3Int> GetCells(Vector3Int originCell, ParametricDamageSkill.AreaPreset preset, bool diagUseNEAxis)
+    public static IEnumerable<Vector3Int> GetCells(Vector3Int originCell, AreaPreset preset, bool diagUseNEAxis)
     {
-        if (preset == ParametricDamageSkill.AreaPreset.Single)
+        if (preset == AreaPreset.Single)
         {
             yield return originCell;
             yield break;
@@ -29,7 +29,7 @@ public static class AreaShapes
 
         var ax = SkillLibrary.OffsetToAxial(originCell);
 
-        if (preset == ParametricDamageSkill.AreaPreset.LineHorizontal)
+        if (preset == AreaPreset.LineHorizontal)
         {
             yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x - 1, ax.y));
             yield return originCell;
@@ -37,12 +37,12 @@ public static class AreaShapes
             yield break;
         }
 
-        if (preset == ParametricDamageSkill.AreaPreset.LineDiagU3 ||
-            preset == ParametricDamageSkill.AreaPreset.LineDiagU7)
+        if (preset == AreaPreset.LineDiagU3 ||
+            preset == AreaPreset.LineDiagU7)
         {
             // 대각선 축: (1,-1)=NE축 또는 (0,-1)=NW축
             var dir = diagUseNEAxis ? new Vector2Int(1, -1) : new Vector2Int(0, -1);
-            int radius = (preset == ParametricDamageSkill.AreaPreset.LineDiagU3) ? 1 : 3;
+            int radius = (preset == AreaPreset.LineDiagU3) ? 1 : 3;
             for (int i = -radius; i <= radius; i++)
             {
                 var p = new Vector2Int(ax.x + dir.x * i, ax.y + dir.y * i);
@@ -51,7 +51,7 @@ public static class AreaShapes
             yield break;
         }
 
-        if (preset == ParametricDamageSkill.AreaPreset.Ring)
+        if (preset == AreaPreset.Ring)
         {
             foreach (var d in AXIAL_RING_WITH_CENTER)
                 yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));

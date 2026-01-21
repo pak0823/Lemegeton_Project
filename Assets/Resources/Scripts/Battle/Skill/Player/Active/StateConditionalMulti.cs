@@ -30,7 +30,7 @@ public class StateConditionalSkillMulti : SkillAsset, ISkillForStateResolver
 
         [Header("옵션: ParametricDamageSkill 범위 프리셋 덮어쓰기")]
         public bool overrideAreaPreset = false;
-        public ParametricDamageSkill.AreaPreset areaPresetWhenMatched = ParametricDamageSkill.AreaPreset.Single;
+        public AreaPreset areaPresetWhenMatched = AreaPreset.Single;
 
         [Header("옵션: 표시 정보 덮어쓰기")]
         public bool overrideDisplayName = false;

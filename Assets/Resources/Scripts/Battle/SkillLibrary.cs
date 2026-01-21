@@ -3,22 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-public enum SkillId
-{
-    None = -1,
-    Skill1 = 0,
-    Skill2 = 1,
-    Skill3 = 2,
-    Skill4 = 3,
-    Skill5 = 4 
-}
-
-public enum SkillTargetMode
-{
-    Unit,   // 대상을 지목하는 스킬
-    Tile,   // 타일을 지목하는 스킬
-}
-
 [Serializable]
 public struct SkillDefinition
 {
@@ -34,16 +18,6 @@ public static class SkillLibrary
 {
     public static Vector2Int ToAxial(Vector3Int cell) => OffsetToAxial(cell);
     public static Vector3Int ToOffset(Vector2Int axial, int z = 0) => AxialToOffset(axial, z);
-
-    // =========================
-    // 1) 좌표 변환 (Pointed-Top, odd-r 기준)
-    //    - 오프셋(타일맵 x,y) ↔ Axial(q,r)
-    //    - odd-r 표준 변환식을 사용
-    //      q = x - (y - (y&1)) / 2
-    //      r = y
-    //      x = q + (r - (r&1)) / 2
-    //      y = r
-    // =========================
 
     public static Vector2Int OffsetToAxial(Vector3Int cell)
     {
@@ -138,7 +112,7 @@ public static class SkillLibrary
     public static IEnumerable<Vector3Int> GetAreaHorizontal3(Vector3Int originCell)
     {
         // 기존 직접 계산 → AreaShapes 위임
-        return AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineHorizontal, false);
+        return AreaShapes.GetCells(originCell, AreaPreset.LineHorizontal, false);
     }
 
     // 세로3
@@ -150,7 +124,7 @@ public static class SkillLibrary
     // 원형(반경1, 중심 포함)
     public static IEnumerable<Vector3Int> GetAreaRing1(Vector3Int originCell)
     {
-        return AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.Ring, false);
+        return AreaShapes.GetCells(originCell, AreaPreset.Ring, false);
     }
 
     // 도넛(반경1, 중심 제외)

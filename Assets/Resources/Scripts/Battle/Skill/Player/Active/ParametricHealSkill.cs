@@ -8,7 +8,7 @@ using UnityEngine.Tilemaps;
 public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTileSkill
 {
     // 기존 Damage와 동일한 프리셋을 그대로 사용해 재사용성 확보
-    public ParametricDamageSkill.AreaPreset areaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public AreaPreset areaPreset = AreaPreset.Single;
 
     [Header("Targeting")]
     public SkillTargetMode selectionMode = SkillTargetMode.Tile; // 보통 Ring은 타일 지목이 편함
@@ -31,7 +31,7 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
     [Header("범위 확대 훈련")]
     public bool trainingUseAreaOverride = false;
     [Range(-1, 2)] public int routeForAreaOverride = -1;
-    public ParametricDamageSkill.AreaPreset trainingAreaPreset = ParametricDamageSkill.AreaPreset.Single;
+    public AreaPreset trainingAreaPreset = AreaPreset.Single;
     public bool trainingDiagUseNEAxis = true;
 
     [Header("적의 감소 훈련")]
@@ -134,7 +134,7 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
     void HealArea(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
     {
         var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
-        var friends = _battlemanager.GetUnitsInArea(_map, area)
+        var friends = _battlemanager.gridManager.GetUnitsInArea(_map, area)
                         .Where(u => u != null && !u.IsDead && u.team == _caster.team)
                         .ToList();
 

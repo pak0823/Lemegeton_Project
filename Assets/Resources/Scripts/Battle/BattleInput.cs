@@ -24,6 +24,7 @@ public class BattleInput : MonoBehaviour
     public event Action<BattleUnit> OnUnitHover;
     public event Action OnCancelKeyPress;
     public event Action OnConfirmKeyPress;
+    public event Action OnEscapeKeyPress;
 
     // 내부 변수
     private Vector3Int _lastHoverCell = new Vector3Int(int.MaxValue, int.MaxValue, 0);
@@ -83,10 +84,10 @@ public class BattleInput : MonoBehaviour
         outMap = null;
         outCell = default;
 
-        if (battle.grid == null) return false;
+        if (battle.gridManager == null) return false;
 
         // 1. 플레이어 맵 먼저 체크
-        Tilemap pMap = battle.grid.GetMap(Team.Player);
+        Tilemap pMap = battle.gridManager.GetMap(Team.Player);
         if (pMap != null)
         {
             Vector3Int c = pMap.WorldToCell(worldPos);
@@ -99,7 +100,7 @@ public class BattleInput : MonoBehaviour
         }
 
         // 2. 적 맵 체크 (플레이어 맵에 없으면)
-        Tilemap eMap = battle.grid.GetMap(Team.Enemy);
+        Tilemap eMap = battle.gridManager.GetMap(Team.Enemy);
         if (eMap != null)
         {
             Vector3Int c = eMap.WorldToCell(worldPos);
@@ -150,7 +151,7 @@ public class BattleInput : MonoBehaviour
             }
 
             // 2. 타일 클릭 판정
-            if (battle.grid != null)
+            if (battle.gridManager != null)
             {
                 if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
                 {
@@ -178,6 +179,11 @@ public class BattleInput : MonoBehaviour
         if (Input.GetKeyDown(battle_CurrentKey) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
         {
             OnConfirmKeyPress?.Invoke();
+        }
+        // 도주 키
+        if (Input.GetKeyDown(battle_Escape))
+        {
+            OnEscapeKeyPress?.Invoke();
         }
 
         // 탭 키 (HUD 토글) - 이건 여기서 처리해도 무방

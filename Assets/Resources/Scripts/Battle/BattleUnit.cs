@@ -3,9 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
-using UnityEngine.UI;
 
-public enum Team { Player, Enemy }
+
 public class BattleUnit : MonoBehaviour
 {
     #region Data & Stats

@@ -44,7 +44,7 @@ public class EnemySkill : SkillAsset
                 yield return originCell; yield break;
 
             case AreaPresetEnemy.Horizontal3:
-                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineHorizontal, true))
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineHorizontal, true))
                     yield return c;
                 yield break;
 
@@ -54,7 +54,7 @@ public class EnemySkill : SkillAsset
                 yield break;
 
             case AreaPresetEnemy.Ring1_WithCenter:
-                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.Ring, false))
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.Ring, false))
                     yield return c;
                 yield break;
 
@@ -64,55 +64,55 @@ public class EnemySkill : SkillAsset
                 yield break;
 
             case AreaPresetEnemy.DiagU3_NE:
-                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU3, true))
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU3, true))
                     yield return c;
                 yield break;
 
             case AreaPresetEnemy.DiagU3_NW:
-                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU3, false))
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU3, false))
                     yield return c;
                 yield break;
 
             case AreaPresetEnemy.DiagU7_NE:
-                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU7, true))
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU7, true))
                     yield return c;
                 yield break;
 
             case AreaPresetEnemy.DiagU7_NW:
-                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.LineDiagU7, false))
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU7, false))
                     yield return c;
                 yield break;
 
             case AreaPresetEnemy.FanForwardR1:
                 // 프리뷰 단계에선 정면 정보가 없을 수 있으므로 안전하게 중심만, 또는 링1 등으로 간단 표시
                 // 필요하면 링1 표시가 더 친절함:
-                foreach (var c in AreaShapes.GetCells(originCell, ParametricDamageSkill.AreaPreset.Ring, false))
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.Ring, false))
                     yield return c;
                 yield break;
         }
     }
 
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
     {
-        if (bm == null || caster == null || target == null) yield break;
+        if (_battlemanager == null || _caster == null || _target == null) yield break;
 
-        var map = target.CurrentMap;
-        var origin = target.Cell;
+        var map = _target.CurrentMap;
+        var origin = _target.Cell;
 
-        var area = GetAreaCellsForContext(map, origin, caster, target);
-        var victims = bm.GetUnitsInArea(map, area);
-        bm.ExecuteSkillDamage(caster, victims, this, map, origin); // 중앙 경로(피해+적대감)
+        var area = GetAreaCellsForContext(map, origin, _caster, _target);
+        var victims = _battlemanager.gridManager.GetUnitsInArea(map, area);
+        _battlemanager.ExecuteSkillDamage(_caster, victims, this, map, origin); // 중앙 경로(피해+적대감)
         yield return null;
     }
 
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
-        if (bm == null || map == null || caster == null) yield break;
+        if (_battlemanager == null || map == null || caster == null) yield break;
 
         // 타일 지정형은 정면을 caster→origin으로 계산
         var area = GetAreaCellsForContext(map, originCell, caster, null);
-        var victims = bm.GetUnitsInArea(map, area);
-        bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
+        var victims = _battlemanager.gridManager.GetUnitsInArea(map, area);
+        _battlemanager.ExecuteSkillDamage(caster, victims, this, map, originCell);
         yield return null;
     }
 
