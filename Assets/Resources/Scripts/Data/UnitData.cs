@@ -33,6 +33,13 @@ public class UnitData : ScriptableObject
     [Header("Passives (per character)")]
     public PassiveAsset[] passives; // 패시브 스킬들 (해금 여부는 런타임에서 결정)
 
+    [Header("Bond & Traits")]
+    [Range(0, 60)]
+    public int currentBond = 0; // 현재 유대 수치 (Max 60)
+    public TraitAsset activeTrait; // 현재 장착중인 성격
+    // 성격 리스트 (순서대로 10, 30, 60에 해금)
+    public TraitAsset[] traits;
+
     [Header("UI")]
     public Sprite UnitIcon; // ATB 아이콘용 스프라이트
     public Sprite UnitStandImage; // 진형 배치용 스프라이트

@@ -24,6 +24,15 @@ public class EndTurnRegenPassive : PassiveAsset
     // 현재 전투의 BattleManager (이벤트 구독용)
     private BattleManager _battle;
 
+    public override float GetProgress()
+    {
+        // 1. 이미 해금 상태라면 1.0 (100%) 반환
+        // (부모의 IsUnlocked 로직: unlockedByDefault가 true거나 PlayerPrefs에 1로 저장됨)
+        if (IsUnlocked()) return 1.0f;
+
+        // 해금이 안 됐다면 테스트용으로 강제로 진행도 반환
+        return 1.0f;
+    }
     public override void OnAttach(BattleUnit owner, BattleManager battle)
     {
         base.OnAttach(owner, battle);
