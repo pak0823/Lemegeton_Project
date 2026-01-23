@@ -53,7 +53,6 @@ public class PlayerMovement : MonoBehaviour
     // 상호작용 이동용으로 선택된 상자(있다면)
     private BoxInteract pendingChest = null;
     private PortalController pendingPortal = null;
-    private TestNpc pendingNpc = null;
 
     // 현재 상호작용 대상(관찰/조사 버튼이 가리키는 대상)
     private Collider2D currentInteractTarget = null;
@@ -243,7 +242,6 @@ public class PlayerMovement : MonoBehaviour
             DescriptionData clickedDesc = null;
             PushObject clickedPush = null;
             PortalController clickedPortal = null;
-            TestNpc clickedNpc = null;
 
             var hits = Physics2D.OverlapPointAll(wp);
 
@@ -289,14 +287,6 @@ public class PlayerMovement : MonoBehaviour
                     if (clickedPortal == null) clickedPortal = portal;
                     if (!clickedCollider) clickedCollider = h;
                 }
-
-                // NPC 감지
-                var npc = h.GetComponentInParent<TestNpc>();
-                if (npc != null)
-                {
-                    if (clickedNpc == null) clickedNpc = npc;
-                    if (!clickedCollider) clickedCollider = h;
-                }
             }
 
             if (clickedPush != null)
@@ -312,13 +302,12 @@ public class PlayerMovement : MonoBehaviour
             }
 
             // 오브젝트(상자, NPC, 기타) 클릭
-            if (clickedChest != null || clickedPortal != null || clickedNpc != null || clickedCollider != null)
+            if (clickedChest != null || clickedPortal != null || clickedCollider != null)
             {
                 // 목표가 될 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
                 Transform targetTr = clickedChest ? clickedChest.transform :
                                     (clickedPortal != null ? clickedPortal.transform :
-                                    (clickedNpc != null ? clickedNpc.transform :
-                                     clickedCollider.transform));
+                                     clickedCollider.transform);
 
                 // 대상 셀
                 Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
@@ -368,7 +357,6 @@ public class PlayerMovement : MonoBehaviour
                     currentDescData = clickedDesc;
                     pendingChest = clickedChest;
                     pendingPortal = clickedPortal;
-                    pendingNpc = clickedNpc;
 
                     // 제자리에선 경로 프리뷰는 필요 없으니 호출해도 표시가 안 됨(Count < 2라서)
                     ShowPathPreview(currentPathCells);
@@ -380,13 +368,6 @@ public class PlayerMovement : MonoBehaviour
                     {
                         Shared.interactionHintUI?.ShowSurveyAt(targetTr, clickedPortal.GetHintLabel()); // "이동"
                                                                                                         // Portal은 관찰 버튼 불필요하면 생략
-                    }
-                    else if (clickedNpc != null)
-                    {
-                        Shared.interactionHintUI?.ShowSurveyAt(targetTr, clickedNpc.GetHintLabel());     // "대화"
-                                                                                                         // 필요하면 관찰 버튼도:
-                        if (clickedDesc != null && !string.IsNullOrWhiteSpace(clickedDesc.description))
-                            Shared.interactionHintUI?.ShowCommunicationAt(targetTr, "관찰");
                     }
                     else
                     {
@@ -408,7 +389,6 @@ public class PlayerMovement : MonoBehaviour
                     ClearPathPreview();
                     pendingChest = null;
                     pendingPortal = null;
-                    pendingNpc = null;
                     pathArrivalCallback = null;
                     currentInteractTarget = null;
                     currentDescData = null;
@@ -425,7 +405,6 @@ public class PlayerMovement : MonoBehaviour
 
                 pendingChest = clickedChest;
                 pendingPortal = clickedPortal;
-                pendingNpc = clickedNpc;
 
                 ShowPathPreview(newPath);
 
@@ -507,7 +486,6 @@ public class PlayerMovement : MonoBehaviour
         currentInteractTarget = null;
         currentDescData = null;
         pendingPortal = null;
-        pendingNpc = null;
         Shared.interactionHintUI?.HideAll();
     }
 
@@ -1289,20 +1267,17 @@ public class PlayerMovement : MonoBehaviour
             return;
 
         // Portal/NPC 이동 후 실행 또는 즉시 실행
-        if (pendingPortal != null || pendingNpc != null)
+        if (pendingPortal != null)
         {
             var portal = pendingPortal;
-            var npc = pendingNpc;
 
             // 이동 없이 즉시 실행(인접/제자리)
             if (currentPathCells == null || currentPathCells.Count < 2)
             {
                 if (portal != null) portal.UsePortal();
-                else if (npc != null) npc.Talk();
 
                 ClearPath();
                 pendingPortal = null;
-                pendingNpc = null;
                 return;
             }
 
@@ -1310,14 +1285,12 @@ public class PlayerMovement : MonoBehaviour
             Action onArrive = () =>
             {
                 if (portal != null) portal.UsePortal();
-                else if (npc != null) npc.Talk();
             };
 
             StartPathMove(currentPathCells, onArrive);
 
             // 예약 정리(한 번만)
             pendingPortal = null;
-            pendingNpc = null;
             return;
         }
 

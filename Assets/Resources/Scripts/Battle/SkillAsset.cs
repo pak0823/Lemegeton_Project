@@ -17,8 +17,12 @@ public struct SkillRuntime
 [System.Serializable]
 public struct TrainingRouteInfo
 {
-    public string title;
-    [TextArea] public string description;
+    public string title;    // 훈련 이름
+    [TextArea] public string description;   // 훈련 효과 설명
+
+    [Header("Override Info")]
+    [TextArea] public string overrideSkillDescription; // 이 훈련 적용 시 보여줄 스킬 설명
+
     public int trainingCost;  //해금 비용
 }
 

@@ -30,16 +30,18 @@ public class CampSubSkillSlot : MonoBehaviour
 
     private void OnClick()
     {
-        // 페이지에게 알림
-        // 왼쪽 설명: 파생 스킬 내용
-        // 오른쪽 훈련: 부모 스킬의 훈련 내용 (공유하므로)
         parentPage.OnSubSlotClicked(this, mySubSkill, myParentSkill, myUnit);
     }
 
+    // 외부에서 텍스트 위치를 가져갈 수 있게 함수 추가
+    public Transform GetTextTransform()
+    {
+        return nameText != null ? nameText.transform : this.transform;
+    }
     public void SetSelected(bool isSelected)
     {
         if (highlight) highlight.SetActive(isSelected);
         // 또는 텍스트 색상 변경
-        if (nameText) nameText.color = isSelected ? Color.cyan : Color.gray;
+        //if (nameText) nameText.color = isSelected ? Color.cyan : Color.gray;
     }
 }

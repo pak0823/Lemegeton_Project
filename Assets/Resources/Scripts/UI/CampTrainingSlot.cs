@@ -6,8 +6,7 @@ public class CampTrainingSlot : MonoBehaviour
     [Header("UI")]
     [SerializeField] private Text nameText;
     [SerializeField] private Button button;
-    [SerializeField] private Image lockIcon; // 자물쇠 아이콘 (있으면 좋음)
-    //[SerializeField] private Image selectionFrame; // 선택됐을 때 테두리(선택사항)
+    [SerializeField] private Image selectionHighlight; // 선택 시 하이라이트
 
     [Header("Colors")]
     [SerializeField] private Color activeColor = Color.green;      // 적용됨
@@ -28,9 +27,6 @@ public class CampTrainingSlot : MonoBehaviour
 
         if (nameText) nameText.text = trainingName;
 
-        // 자물쇠 아이콘
-        if (lockIcon) lockIcon.gameObject.SetActive(isLocked);
-
         button.onClick.RemoveAllListeners();
         button.onClick.AddListener(OnClickTraining);
     }
@@ -41,18 +37,18 @@ public class CampTrainingSlot : MonoBehaviour
         {
             // [잠김 상태]
             // 선택 효과(초록색)를 내지 않고, 부모에게 "잠긴거 눌렸다"고 보고함
-            parentSlot.OnLockedTrainingSelected(routeIndex, unlockCost);
+            parentSlot.OnLockedTrainingSelected(routeIndex, unlockCost, this.transform);
         }
         else
         {
             // [해금 상태]
             // 정상적으로 선택
-            parentSlot.OnTrainingSelected(routeIndex);
+            parentSlot.OnTrainingSelected(routeIndex, this.transform);
         }
     }
 
     // 상태에 따른 비주얼 갱신
-    public void UpdateVisualState(int currentActiveRoute)
+    public void UpdateVisualState(int currentActiveRoute, int focusedRouteIndex)
     {
         // 버튼 Interactable은 항상 true로 둬야 클릭해서 정보를 볼 수 있음
         button.interactable = true;
@@ -77,6 +73,23 @@ public class CampTrainingSlot : MonoBehaviour
             // [미선택/해금됨] 텍스트 흰색(inactiveColor), 배경 흰색
             if (nameText) nameText.color = inactiveColor;
             if (btnImage) btnImage.color = Color.white;
+        }
+
+        // 하이라이트 표시 처리
+        if (selectionHighlight != null)
+        {
+            // focusedRouteIndex(현재 클릭된 훈련 번호)
+            bool isFocused = (routeIndex == focusedRouteIndex);
+
+            // 잠겨있으면 포커스되어도 하이라이트 끄기
+            if (isLocked)
+            {
+                selectionHighlight.gameObject.SetActive(false);
+            }
+            else
+            {
+                selectionHighlight.gameObject.SetActive(isFocused);
+            }
         }
     }
 }
