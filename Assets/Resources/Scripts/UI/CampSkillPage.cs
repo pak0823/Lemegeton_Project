@@ -30,8 +30,11 @@ public class CampSkillPage : MonoBehaviour
     private Transform currentArrowTarget;   // 화살표가 따라다녀야 할 타겟의 Transform을 저장
 
     // 생성된 슬롯들 관리용 리스트
-    private List<CampSkillSlot> spawnedSlots = new List<CampSkillSlot>();
     private List<MonoBehaviour> allSlots = new List<MonoBehaviour>();
+    // 오브젝트 풀링을 위한 비활성 슬롯 스택
+    private Stack<CampSkillSlot> inactiveSkillSlots = new Stack<CampSkillSlot>();
+    private Stack<CampSubSkillSlot> inactiveSubSlots = new Stack<CampSubSkillSlot>();
+
     private CampSkillSlot currentSelectedSlot;
 
     // 현재 해금하려고 선택한 훈련 정보 임시 저장
@@ -40,7 +43,7 @@ public class CampSkillPage : MonoBehaviour
     private int targetRouteIndex = -1;
     private int targetCost = 0;
 
-    private void Update()
+    private void LateUpdate()
     {
         // 화살표가 켜져 있고, 타겟이 존재할 때만 따라다님
         if (selectionArrow != null && selectionArrow.gameObject.activeSelf && currentArrowTarget != null)
@@ -98,9 +101,8 @@ public class CampSkillPage : MonoBehaviour
             {
                 if (skill == null) continue;
 
-                // 메인 스킬 슬롯 생성
-                GameObject mainSkill = Instantiate(skillSlotPrefab, listContent);
-                CampSkillSlot slot = mainSkill.GetComponent<CampSkillSlot>();
+                // 메인 스킬 슬롯 생성 (풀링 사용)
+                CampSkillSlot slot = GetSkillSlot();
                 slot.Setup(unit, skill, this);
                 allSlots.Add(slot);
 
@@ -130,14 +132,51 @@ public class CampSkillPage : MonoBehaviour
     // 파생 슬롯 생성 함수
     private void CreateSubSlot(UnitData unit, SkillAsset subSkill, SkillAsset parentSkill)
     {
-        GameObject go = Instantiate(subSkillSlotPrefab, listContent);
-        CampSubSkillSlot subSlot = go.GetComponent<CampSubSkillSlot>();
+        // 파생 슬롯 생성 (풀링 사용)
+        CampSubSkillSlot subSlot = GetSubSkillSlot();
 
         if (subSlot != null)
         {
             subSlot.Setup(unit, subSkill, parentSkill, this);
             allSlots.Add(subSlot);
         }
+    }
+
+    // 스킬 슬롯 가져오기 (풀링)
+    private CampSkillSlot GetSkillSlot()
+    {
+        CampSkillSlot slot;
+        if (inactiveSkillSlots.Count > 0)
+        {
+            slot = inactiveSkillSlots.Pop();
+            slot.gameObject.SetActive(true);
+            // 순서 보장을 위해 맨 아래로 이동
+            slot.transform.SetAsLastSibling();
+        }
+        else
+        {
+            GameObject go = Instantiate(skillSlotPrefab, listContent);
+            slot = go.GetComponent<CampSkillSlot>();
+        }
+        return slot;
+    }
+
+    // 파생 스킬 슬롯 가져오기 (풀링)
+    private CampSubSkillSlot GetSubSkillSlot()
+    {
+        CampSubSkillSlot slot;
+        if (inactiveSubSlots.Count > 0)
+        {
+            slot = inactiveSubSlots.Pop();
+            slot.gameObject.SetActive(true);
+            slot.transform.SetAsLastSibling();
+        }
+        else
+        {
+            GameObject go = Instantiate(subSkillSlotPrefab, listContent);
+            slot = go.GetComponent<CampSubSkillSlot>();
+        }
+        return slot;
     }
 
     // 텍스트 갱신 헬퍼 함수
@@ -498,13 +537,30 @@ public class CampSkillPage : MonoBehaviour
         }
     }
 
+    // 리스트 초기화 (풀링 반환)
     private void ClearList()
     {
-        foreach (var slot in allSlots)
+        foreach (var component in allSlots)
         {
-            if (slot != null) Destroy(slot.gameObject);
+            if (component == null) continue;
+
+            if (component is CampSkillSlot skillSlot)
+            {
+                skillSlot.gameObject.SetActive(false);
+                inactiveSkillSlots.Push(skillSlot);
+            }
+            else if (component is CampSubSkillSlot subSlot)
+            {
+                subSlot.gameObject.SetActive(false);
+                inactiveSubSlots.Push(subSlot);
+            }
+            else
+            {
+                // 혹시 모를 다른 타입은 그냥 파괴
+                Destroy(component.gameObject);
+            }
         }
-        allSlots.Clear();
+            allSlots.Clear();
         currentSelectedSlot = null;
     }
 }

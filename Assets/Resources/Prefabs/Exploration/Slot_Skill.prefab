@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 221160347047136055}
   - component: {fileID: 4617057363051600275}
   - component: {fileID: 3356568496299358101}
-  - component: {fileID: 2908709234894730764}
+  - component: {fileID: 3218577676534500458}
   m_Layer: 5
   m_Name: Text
   m_TagString: Untagged
@@ -73,14 +73,14 @@ MonoBehaviour:
     m_BestFit: 0
     m_MinSize: 3
     m_MaxSize: 40
-    m_Alignment: 3
+    m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
-    m_HorizontalOverflow: 0
+    m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
   m_Text: Button
---- !u!114 &2908709234894730764
+--- !u!114 &3218577676534500458
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -313,7 +313,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_IgnoreLayout: 0
-  m_MinWidth: 250
+  m_MinWidth: 200
   m_MinHeight: -1
   m_PreferredWidth: -1
   m_PreferredHeight: -1
@@ -329,7 +329,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8254105859022302026}
-  - component: {fileID: 7734514158687582377}
   - component: {fileID: 4760351466618685090}
   - component: {fileID: 4913656026161134870}
   m_Layer: 5
@@ -338,7 +337,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &8254105859022302026
 RectTransform:
   m_ObjectHideFlags: 0
@@ -358,26 +357,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
---- !u!114 &7734514158687582377
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7879972561181538444}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_IgnoreLayout: 1
-  m_MinWidth: -1
-  m_MinHeight: -1
-  m_PreferredWidth: -1
-  m_PreferredHeight: -1
-  m_FlexibleWidth: -1
-  m_FlexibleHeight: -1
-  m_LayoutPriority: 1
 --- !u!114 &4760351466618685090
 MonoBehaviour:
   m_ObjectHideFlags: 0
