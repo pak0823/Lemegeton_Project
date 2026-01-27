@@ -1,9 +1,7 @@
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Playables;
 using UnityEngine.Tilemaps;
-using UnityEngine.tvOS;
 using static SmokeBombSkill;
 
 public class SmokeZoneRuntime : MonoBehaviour

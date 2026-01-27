@@ -19,6 +19,15 @@ public struct CampTab
     public Toggle tabToggle;     // 상단 탭 토글 버튼
     public GameObject contentPage; // 연결된 페이지 오브젝트 (Page_Status 등)
     public CampHeaderType headerType;   // 이 탭을 눌렀을 때 상단에 뭘 띄울지 결정
+
+    [Header("Visual Settings")]
+    public Image tabImage;           // 탭 버튼의 배경 이미지가 있는 컴포넌트
+    public Sprite normalSprite;      // 선택 안 됐을 때 (테두리 4면 다 있음)
+    public Sprite selectedSprite;    // 선택 됐을 때 (하단 테두리 없음, 배경색과 일치)
+    // 필요하다면 텍스트 색상도 추가 가능
+    // public TextMeshProUGUI tabText;
+    // public Color normalColor;
+    // public Color selectedColor;
 }
 
 public class CampUIManager : ModalWindowBase
@@ -186,14 +195,25 @@ public class CampUIManager : ModalWindowBase
     // 탭 선택 시 실행되는 로직
     private void OnTabSelected(CampTab activeTab)
     {
-        // 페이지 교체
+        // 페이지 및 비주얼 교체
         foreach (var tab in tabs)
         {
+            bool isActive = (tab.contentPage == activeTab.contentPage);
+
+            // 페이지 켜고 끄기
             if (tab.contentPage != null)
             {
-                bool isActive = (tab.contentPage == activeTab.contentPage);
                 if (tab.contentPage.activeSelf != isActive)
                     tab.contentPage.SetActive(isActive);
+            }
+
+            // 탭 이미지(스프라이트) 교체 로직
+            if (tab.tabImage != null)
+            {
+                // 활성화면 Selected(밑 뚫린 거), 아니면 Normal
+                tab.tabImage.sprite = isActive ? tab.selectedSprite : tab.normalSprite;
+
+
             }
         }
 
