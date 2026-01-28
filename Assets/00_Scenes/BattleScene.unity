@@ -497,7 +497,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_Sprite: {fileID: 10907, guid: 0000000000000000f000000000000000, type: 0}
-  m_Type: 1
+  m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -538,7 +538,7 @@ MonoBehaviour:
   followExternalSelection: 1
   disableUnitySelectableNavigation: 1
   lockWhileTargeting: 1
-  battle: {fileID: 0}
+  battleManager: {fileID: 0}
   focusOrHoverColor: {r: 1, g: 0.60784316, b: 0, a: 1}
   disabledLabelAlpha: 0.45
 --- !u!1 &88018940
@@ -552,10 +552,10 @@ GameObject:
   - component: {fileID: 88018941}
   - component: {fileID: 88018944}
   - component: {fileID: 88018943}
-  - component: {fileID: 88018942}
   - component: {fileID: 88018945}
+  - component: {fileID: 88018942}
+  - component: {fileID: 88018947}
   - component: {fileID: 88018946}
-  - component: {fileID: 88018948}
   m_Layer: 5
   m_Name: Panel
   m_TagString: Untagged
@@ -663,7 +663,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 45f0fa0af8d18b24a965e7228202dd3a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  battle: {fileID: 0}
+  battleManager: {fileID: 0}
   actionPanel: {fileID: 578301232}
   disableInteractWhenSkillOpen: 1
 --- !u!225 &88018946
@@ -678,7 +678,7 @@ CanvasGroup:
   m_Interactable: 1
   m_BlocksRaycasts: 1
   m_IgnoreParentGroups: 0
---- !u!114 &88018948
+--- !u!114 &88018947
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2586,6 +2586,7 @@ GameObject:
   - component: {fileID: 578301236}
   - component: {fileID: 578301235}
   - component: {fileID: 578301237}
+  - component: {fileID: 578301238}
   m_Layer: 5
   m_Name: Panel_Action
   m_TagString: Untagged
@@ -2635,7 +2636,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_Sprite: {fileID: 10907, guid: 0000000000000000f000000000000000, type: 0}
-  m_Type: 1
+  m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4
@@ -2676,9 +2677,21 @@ MonoBehaviour:
   followExternalSelection: 0
   disableUnitySelectableNavigation: 1
   lockWhileTargeting: 1
-  battle: {fileID: 0}
+  battleManager: {fileID: 0}
   focusOrHoverColor: {r: 1, g: 0.60784316, b: 0, a: 1}
   disabledLabelAlpha: 0.45
+--- !u!225 &578301238
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 578301232}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0
 --- !u!1 &579220630
 GameObject:
   m_ObjectHideFlags: 0
@@ -4242,6 +4255,63 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ad5b8ccad171f774f8702fcc60bdc5c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!1001 &1482948431
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.944
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.022
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4672613650323527469, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5926285863707375112, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
+      propertyPath: m_Name
+      value: LuckySix
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 3b72986dce2764a47a0cb81e9ee012ad, type: 3}
 --- !u!1 &1492203215 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 701260665423800257, guid: dccea296a87e6d24d9f1ab1dd2ecf2d5, type: 3}
@@ -6224,7 +6294,7 @@ Canvas:
   m_OverrideSorting: 0
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
-  m_VertexColorAlwaysGammaSpace: 0
+  m_VertexColorAlwaysGammaSpace: 1
   m_AdditionalShaderChannelsFlag: 0
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
@@ -6277,7 +6347,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   profile: {fileID: 11400000, guid: 299bf7b454c81db4db61684538a5a281, type: 2}
-  hud: {fileID: 88018948}
+  hud: {fileID: 0}
   turnBar: {fileID: 1075714700}
   skillPanel: {fileID: 88018942}
   actionPanel: {fileID: 88018945}
@@ -7212,7 +7282,7 @@ PrefabInstance:
     - target: {fileID: 2635015958816609302, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
       propertyPath: hudCtrl
       value: 
-      objectReference: {fileID: 88018948}
+      objectReference: {fileID: 0}
     - target: {fileID: 2635015958816609302, guid: 3e7a3abce95200441a37e1441648850f, type: 3}
       propertyPath: speedCtrl
       value: 
@@ -8072,3 +8142,4 @@ SceneRoots:
   - {fileID: 419949692}
   - {fileID: 901264282}
   - {fileID: 382211261}
+  - {fileID: 1482948431}
