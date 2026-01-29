@@ -83,7 +83,7 @@ public class CampCraftPage : MonoBehaviour
             MaterialSlotUI matUI = matObj.GetComponent<MaterialSlotUI>();
 
             // 임시 보유량 (나중에 인벤토리 연결)
-            int myCount = 10;
+            int myCount = InventoryManager.Instance.GetItemCount(ing.material.itemID); // 실시간 데이터 연동
 
             if (matUI != null)
             {
@@ -102,9 +102,17 @@ public class CampCraftPage : MonoBehaviour
     {
         if (currentSelectedRecipe == null) return;
 
-        // 1. 인벤토리 소모 로직 (지금은 생략, 나중에 추가)
-        // Inventory.Consume(currentSelectedRecipe.ingredients);
-        // Inventory.Add(currentSelectedRecipe.resultItem);
+        // 재료 소모
+        foreach (var ing in currentSelectedRecipe.ingredients)
+        {
+            InventoryManager.Instance.ConsumeItem(ing.material.itemID, ing.requiredCount);
+        }
+
+        // 결과물 추가
+        InventoryManager.Instance.AddItem(currentSelectedRecipe.resultItem.itemID, 1);
+
+        // UI 갱신 (현재 선택된 레시피를 다시 보여줘서 재료 현황 업데이트)
+        ShowDetail(currentSelectedRecipe);
 
         Debug.Log($"제작 성공: {currentSelectedRecipe.resultItem.itemName}");
 

@@ -10,7 +10,7 @@ public class ItemData : ScriptableObject
     public string itemName;      // 표시 이름
     public Sprite itemIcon;      // UI 표시용 아이콘
     [TextArea]
-    public string description;   // 아이템 설명
+    public string itemDescription;   // 아이템 설명
 
     [Header("속성")]
     public ItemType itemType;    // 아이템 종류
