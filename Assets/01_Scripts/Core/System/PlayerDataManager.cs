@@ -1,6 +1,9 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System;
+using UnityEngine.AddressableAssets; // 어드레서블 네임스페이스
+using UnityEngine.ResourceManagement.AsyncOperations; // 비동기 핸들
+using System.Threading.Tasks; // async/await 사용 시
 
 [System.Serializable]
 public class SaveData
@@ -15,15 +18,22 @@ public class PlayerDataManager : MonoBehaviour
     // 싱글톤 패턴 (어디서든 접근 가능하게)
     public static PlayerDataManager Instance;
 
-    [Header("보유 유닛 리스트")]
+    [Header("1. [설정용] 시작 시 보유할 유닛 (주소값)")]
+    // 기존: public List<UnitData> ownedUnits; -> 이건 이제 인스펙터에서 안 씀
+    // 변경: AssetReferenceT<UnitData>를 써서 특정 타입만 넣게 강제함 (실수 방지)
+    public List<AssetReferenceT<UnitData>> startingUnitRefs = new List<AssetReferenceT<UnitData>>();
+
+    [Header("2. [런타임] 실제 로딩된 유닛들")]
+    // 게임 로직(UI, 배틀 등)은 여전히 이 리스트를 씀. (기존 코드 호환성 100%)
     public List<UnitData> ownedUnits = new List<UnitData>();
 
-    [Header("전투 진형 (0~18번 인덱스)")]
-    // Key: 타일 인덱스(0~18), Value: 배치된 유닛 데이터
+    [Header("전투 진형")]
     public UnitData[] formation = new UnitData[19];
 
-    // 진형이 변경될 때마다 호출될 이벤트
     public event Action OnFormationChanged;
+
+    // 로딩 상태 확인용
+    public bool IsLoading { get; private set; } = true;
 
     void Awake()
     {
@@ -31,6 +41,9 @@ public class PlayerDataManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject); // 씬 넘어가도 파괴 안 됨
+
+            // 생성되자마자 로딩 시작
+            LoadStartingUnitsByLabel();
         }
         else
         {
@@ -42,6 +55,38 @@ public class PlayerDataManager : MonoBehaviour
     {
         // 게임 시작 시 자동으로 로드 시도
         LoadGame();
+    }
+    // === 어드레서블 로딩 로직 ===
+    public async void LoadStartingUnitsByLabel()
+    {
+        // "StartingUnit" 라벨이 붙은 모든 UnitData를 가져와라!
+        var handle = Addressables.LoadAssetsAsync<UnitData>("StartingUnit", (loadedUnit) =>
+        {
+            // 하나씩 로딩될 때마다 실행됨
+            if (loadedUnit != null)
+            {
+                ownedUnits.Add(loadedUnit);
+                Debug.Log($"[라벨 로딩] 유닛 획득: {loadedUnit.DisplayName}");
+            }
+        });
+
+        await handle.Task; // 다 끝날 때까지 대기
+        Debug.Log("초기 유닛 로딩 완료!");
+    }
+
+    // (추가 기능) 게임 도중 유닛을 획득했을 때 로딩하는 함수
+    public async void AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
+    {
+        if (unitRef == null) return;
+
+        var handle = unitRef.LoadAssetAsync();
+        await handle.Task;
+
+        if (handle.Status == AsyncOperationStatus.Succeeded)
+        {
+            ownedUnits.Add(handle.Result);
+            Debug.Log($"[UnitGet] 신규 유닛 획득: {handle.Result.DisplayName}");
+        }
     }
 
     // 진형 설정 함수

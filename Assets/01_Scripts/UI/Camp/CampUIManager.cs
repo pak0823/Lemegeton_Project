@@ -148,7 +148,7 @@ public class CampUIManager : ModalWindowBase
                 if (isOn)
                 {
                     currentCharIndex = index;
-                    Debug.Log($"[CampUI] 캐릭터 변경됨: 인덱스 {index}");
+                    //Debug.Log($"[CampUI] 캐릭터 변경됨: 인덱스 {index}");
                     // 여기에 OnSelectCharacter(해당 유닛 데이터) 호출 로직 넣으면 됨
                 }
             });
@@ -305,7 +305,7 @@ public class CampUIManager : ModalWindowBase
     public void OnSelectCharacter(UnitData unit)
     {
         selectedUnit = unit;
-        Debug.Log($"배치 모드: {unit.DisplayName} 선택됨");
+        //Debug.Log($"배치 모드: {unit.DisplayName} 선택됨");
 
         // 상태창 정보 갱신
         if (statusPage != null && statusPage.gameObject.activeInHierarchy)

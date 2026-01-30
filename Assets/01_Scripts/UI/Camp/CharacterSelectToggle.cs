@@ -50,7 +50,7 @@ public class CharacterSelectToggle : MonoBehaviour
             if (CampUIManager.Instance != null && myUnitData != null)
             {
                 CampUIManager.Instance.OnSelectCharacter(myUnitData);
-                Debug.Log($"[Toggle] {myUnitData.DisplayName} º±≈√µ !");
+                //Debug.Log($"[Toggle] {myUnitData.DisplayName} º±≈√µ !");
             }
         }
     }

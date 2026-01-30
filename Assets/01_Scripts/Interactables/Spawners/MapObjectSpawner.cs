@@ -1,24 +1,27 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using UnityEngine.AddressableAssets; // 어드레서블
+using UnityEngine.ResourceManagement.AsyncOperations; // 비동기 핸들
+using System.Threading.Tasks; // Task 사용
 
 public class MapObjectSpawner : MonoBehaviour
 {
     [Header("Trap")]
-    public List<GameObject> trapPrefabs;
+    public List<AssetReferenceGameObject> trapRefs;
     public int trapMinCount = 0;
     public int trapMaxCount = 1;
 
     [Header("Object")]
-    public List<GameObject> chestPrefabs;
+    public List<AssetReferenceGameObject> chestRefs;
     public int chestMinCount = 0;
     public int chestMaxCount = 1;
 
     [Header("Pattern")]
-    public List<GameObject> patternPrefabs;
+    public List<AssetReferenceGameObject> patternRefs;
     const int patternCount = 1;
 
-    // 스폰 위치 후보를 저장할 구조체 (어느 타일맵의 어느 좌표인가)
+    // 스폰 위치 후보를 저장할 구조체
     private struct SpawnCandidate
     {
         public Tilemap map;
@@ -26,14 +29,10 @@ public class MapObjectSpawner : MonoBehaviour
         public Vector3 worldPos;
     }
 
-    // 맵 생성 직후 MapManager가 호출
-    public void Spawn(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall, params Collider2D[] _excludeColliders)
+    public async void Spawn(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall, params Collider2D[] _excludeColliders)
     {
         if (_floors == null || _floors.Count == 0) return;
 
-        // 좌표별 가장 높은 층의 타일맵 찾기
-        // Dictionary를 사용해 (x,y) 좌표 하나당 최상단 타일맵 하나만 남깁니다.
-        // floors 리스트는 보통 [Ground1, Ground2, Ground3] 순서이므로, 나중에 나오는 게 위쪽 층입니다.
         Dictionary<Vector3Int, Tilemap> highestFloorMap = new Dictionary<Vector3Int, Tilemap>();
 
         foreach (var map in _floors)
@@ -43,21 +42,17 @@ public class MapObjectSpawner : MonoBehaviour
             {
                 if (map.HasTile(pos))
                 {
-                    // 같은 좌표에 이미 타일이 있어도, 더 나중(높은 층)의 타일로 덮어씁니다.
                     highestFloorMap[pos] = map;
                 }
             }
         }
 
-        // 2. 유효성 검사 (벽, 장애물, 제외영역 필터링)
         List<SpawnCandidate> candidates = new List<SpawnCandidate>();
 
         foreach (var kvp in highestFloorMap)
         {
             Vector3Int pos = kvp.Key;
-            Tilemap map = kvp.Value; // 해당 좌표의 최상단 타일맵
-
-            // 벽이 있는 곳 제외
+            Tilemap map = kvp.Value;
 
             if (_wall != null)
             {
@@ -73,8 +68,6 @@ public class MapObjectSpawner : MonoBehaviour
                 if (hasWall) continue;
             }
 
-            // 장애물(물, 구멍 등)이 있는 곳 제외
-            // 바닥(Ground 0)이 있어도 그 위에 물(Water 0)이 칠해져 있다면 생성 불가
             if (_obstacles != null)
             {
                 bool isObstacle = false;
@@ -89,12 +82,7 @@ public class MapObjectSpawner : MonoBehaviour
                 if (isObstacle) continue;
             }
 
-            // 스폰 제외 영역(플레이어 시작점 등) 체크
-            // GetCellCenterWorld는 Tile Anchor 설정이 반영된 시각적 위치를 반환하므로 [요청사항 1] 해결
             Vector3 worldPos = map.GetCellCenterWorld(pos);
-
-            // 2D 정렬을 위해 Z는 0으로 맞추되, 시각적 Y위치는 map의 Anchor설정을 따름
-            // (만약 오브젝트가 타일 뒤로 숨는다면 Sprite Sort Point를 Pivot으로 하거나 Order in Layer 조정 필요)
             worldPos.z = 0;
 
             bool isExcluded = false;
@@ -122,8 +110,7 @@ public class MapObjectSpawner : MonoBehaviour
             return;
         }
 
-        // 3. 컨테이너 준비
-        Transform root = _floors[0].transform.parent; // WalkableLayers
+        Transform root = _floors[0].transform.parent;
         if (root == null) root = this.transform;
 
         Transform fallback = this.transform;
@@ -131,15 +118,14 @@ public class MapObjectSpawner : MonoBehaviour
         Transform chestContainer = GetOrFallbackContainer(root, "ItemBoxObject", fallback);
         Transform patternContainer = GetOrFallbackContainer(root, "PatternObject", fallback);
 
-        // 4. 오브젝트 배치 (랜덤 선택)
         int trapSpawnCount = Random.Range(trapMinCount, trapMaxCount + 1);
         int chestSpawnCount = Random.Range(chestMinCount, chestMaxCount + 1);
 
         // [문양]
-        if (patternPrefabs != null && patternPrefabs.Count > 0 && candidates.Count > 0)
+        if (patternRefs != null && patternRefs.Count > 0 && candidates.Count > 0)
         {
             int idx = Random.Range(0, candidates.Count);
-            SpawnObj(patternPrefabs, candidates[idx], patternContainer, _wall);
+            await SpawnObjAsync(patternRefs, candidates[idx], patternContainer, _wall);
             candidates.RemoveAt(idx);
         }
 
@@ -147,7 +133,7 @@ public class MapObjectSpawner : MonoBehaviour
         for (int i = 0; i < trapSpawnCount && candidates.Count > 0; i++)
         {
             int idx = Random.Range(0, candidates.Count);
-            SpawnObj(trapPrefabs, candidates[idx], trapContainer, _wall);
+            await SpawnObjAsync(trapRefs, candidates[idx], trapContainer, _wall);
             candidates.RemoveAt(idx);
         }
 
@@ -155,8 +141,10 @@ public class MapObjectSpawner : MonoBehaviour
         for (int i = 0; i < chestSpawnCount && candidates.Count > 0; i++)
         {
             int idx = Random.Range(0, candidates.Count);
-            GameObject obj = SpawnObj(chestPrefabs, candidates[idx], chestContainer, _wall);
 
+            GameObject obj = await SpawnObjAsync(chestRefs, candidates[idx], chestContainer, _wall);
+
+            // 생성된 오브젝트가 있으면 뒤집기
             if (obj != null && candidates[idx].worldPos.x > 0f)
             {
                 var sr = obj.GetComponent<SpriteRenderer>();
@@ -167,39 +155,52 @@ public class MapObjectSpawner : MonoBehaviour
             candidates.RemoveAt(idx);
         }
     }
-    GameObject SpawnObj(List<GameObject> prefabs, SpawnCandidate data, Transform parent, List<Tilemap> walls)
+
+    async Task<GameObject> SpawnObjAsync(List<AssetReferenceGameObject> refs, SpawnCandidate data, Transform parent, List<Tilemap> walls)
     {
-        if (prefabs == null || prefabs.Count == 0) return null;
+        if (refs == null || refs.Count == 0) return null;
 
-        var prefab = prefabs[Random.Range(0, prefabs.Count)];
+        // 랜덤으로 주소(Reference) 선택
+        var targetRef = refs[Random.Range(0, refs.Count)];
 
-        // SpawnCandidate에서 이미 계산된, 최상단 타일 기준 위치 사용
+        // SpawnCandidate 위치 사용
         Vector3 spawnPos = data.worldPos;
 
-        GameObject obj = Instantiate(prefab, spawnPos, Quaternion.identity, parent);
+        var handle = targetRef.InstantiateAsync(spawnPos, Quaternion.identity, parent);
+        await handle.Task;
 
-        var pid = obj.GetComponent<ExplorationPersistId>();
-        if (pid == null) pid = obj.AddComponent<ExplorationPersistId>();
-        obj.name = prefab.name;
-
-        var push = obj.GetComponent<PushObject>();
-        if (push != null)
+        if (handle.Status == AsyncOperationStatus.Succeeded)
         {
-            // 단일 맵을 리스트로 포장해서 전달
-            push.SetTilemaps(new List<Tilemap> { data.map }, walls);
-        }
+            GameObject obj = handle.Result;
 
-        return obj;
+            // 컴포넌트 설정 
+            var pid = obj.GetComponent<ExplorationPersistId>();
+            if (pid == null) pid = obj.AddComponent<ExplorationPersistId>();
+
+            // 이름 설정 (EditorAsset을 통해 원래 프리팹 이름을 가져올 수 있음)
+            obj.name = targetRef.editorAsset != null ? targetRef.editorAsset.name : "SpawnedObject";
+
+            var push = obj.GetComponent<PushObject>();
+            if (push != null)
+            {
+                push.SetTilemaps(new List<Tilemap> { data.map }, walls);
+            }
+
+            return obj;
+        }
+        else
+        {
+            Debug.LogError($"[MapObjectSpawner] 생성 실패: {targetRef.AssetGUID}");
+            return null;
+        }
     }
 
     Transform GetOrFallbackContainer(Transform parent, string childName, Transform fallback)
     {
         if (parent == null) return fallback;
-        
-        // 부모 바로 아래에 있는지 찾기
+
         var t = parent.Find(childName);
-        
-        // 없으면 새로 생성
+
         if (t == null)
         {
             GameObject go = new GameObject(childName);
@@ -211,7 +212,6 @@ public class MapObjectSpawner : MonoBehaviour
         return t;
     }
 
-    // min > max가 되는 것을 방지
     void OnValidate()
     {
         if (trapMinCount > trapMaxCount) trapMaxCount = trapMinCount;
