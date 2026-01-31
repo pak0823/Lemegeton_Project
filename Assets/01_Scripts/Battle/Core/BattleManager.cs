@@ -11,15 +11,20 @@ public class BattleManager : MonoBehaviour
 
     // Core Modules (하위 시스템 연결)
     [Header("Core Modules")]
-    [SerializeField] public BattleInputHandler inputHandler;       // 입력 및 시각적 피드백 담당
-    [SerializeField] public BattleSkillProcessor skillProcessor;   // 스킬 효과 및 데미지 계산 담당
-    [SerializeField] public BattleFieldManager fieldManager;       // 장판 및 환경 효과 담당
-    [SerializeField] public BattleGridManager gridManager;         // 그리드 조회 및 유닛 위치 관리
+    [SerializeField] private BattleGridManager gridManager;         // 그리드 조회 및 유닛 위치 관리
+    [SerializeField] private BattleFieldManager fieldManager;       // 장판 및 환경 효과 담당
+    [SerializeField] private BattleTurnManager turnManager;
+    [SerializeField] private BattleInputHandler inputHandler;       // 입력 및 시각적 피드백 담당
+    [SerializeField] private BattleMapManager mapManager;
+    [SerializeField] private BattleSkillProcessor skillProcessor;   // 스킬 효과 및 데미지 계산 담당
     [SerializeField] private BattleWaveManager waveManager;        // 웨이브 스폰 및 스테이지 관리
-    [SerializeField] public BattleTurnManager turnManager;
+
+    public IGridProvider Grid => gridManager;
+    public IFieldController Field => fieldManager;
 
     [Header("Controllers")]
     public ATBTurnController turnController;                       // 턴 순서(ATB) 관리자
+    public BattleInput battleInput;
 
     // Battle State (전투 핵심 상태)
     public BattleState state { get; private set; } = BattleState.Idle; // 현재 전투 상태 (FSM)
@@ -27,7 +32,9 @@ public class BattleManager : MonoBehaviour
     private bool _battleEndedOnce = false;                             // 전투 종료 처리 중복 방지
 
     // Action & Turn Rules (행동력 및 턴 규칙)
-    public BattleUnit ActingUnit => turnManager.ActingUnit;
+    private BattleUnit acting;
+    public BattleUnit ActingUnit => acting;
+    //public BattleUnit ActingUnit => turnManager.ActingUnit;
     public bool IsPlayerTurn => turnManager.IsPlayerTurn;
 
     // Skill & Input Context (스킬 시전 및 입력 관련 상태)
@@ -128,49 +135,45 @@ public class BattleManager : MonoBehaviour
     #region Unity Callbacks
     void Awake()
     {
-        provider = BattleMapManager.Instance as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>();
-        if (provider != null) provider.OnMapsReady += Init;
-        else { Debug.LogWarning("[BattleManager] BattleMapManager not ready in Awake. Will retry in Start."); }
         if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        else { Destroy(gameObject); return; }
 
         if (!turnController) turnController = FindObjectOfType<ATBTurnController>();
-        turnController.OnTurnReady += HandleTurnReady;
+        if (!waveManager) waveManager = GetComponentInChildren<BattleWaveManager>();
+        if (!skillProcessor) skillProcessor = GetComponentInChildren<BattleSkillProcessor>();
+        if (!inputHandler) inputHandler = GetComponentInChildren<BattleInputHandler>();
+        if (!turnManager) turnManager = GetComponentInChildren<BattleTurnManager>();
 
-        if (waveManager == null) waveManager = GetComponentInChildren<BattleWaveManager>();
-        waveManager.OnWaveLoaded += HandleWaveLoaded;
-        waveManager.OnWaveInfoUpdated += (cur, tot, lbl) => OnWaveChanged?.Invoke(cur, tot, lbl);
-        waveManager.OnWaveTransitionStarted += (next, tot) => OnWaveTransition?.Invoke(next, tot);
-        waveManager.OnAllWavesCleared += HandleVictory;
+        gridManager.Initialize(mapManager);
+        fieldManager.Initialize(this, gridManager, inputHandler);
+        inputHandler.Initialize(this);
+        turnManager.Initialize(this, gridManager, inputHandler, fieldManager);
+        waveManager.Initialize(this, gridManager, mapManager);
+        skillProcessor.Initialize(this, gridManager);
 
-        waveManager.Initialize();
+        // MapReady 이벤트
+        if (mapManager != null) mapManager.OnMapsReady += Init;
 
-        if (skillProcessor == null) skillProcessor = GetComponentInChildren<BattleSkillProcessor>();
+        // TurnController 이벤트
+        if (turnController != null) turnController.OnTurnReady += HandleTurnReady;
 
-        if (skillProcessor != null)
+        // WaveManager 이벤트
+        if (waveManager != null)
         {
-            skillProcessor.Initialize(this);
+            waveManager.OnWaveLoaded += HandleWaveLoaded;
+            waveManager.OnWaveInfoUpdated += (cur, tot, lbl) => OnWaveChanged?.Invoke(cur, tot, lbl);
+            waveManager.OnWaveTransitionStarted += (next, tot) => OnWaveTransition?.Invoke(next, tot);
+            waveManager.OnAllWavesCleared += HandleVictory;
         }
-        else
-        {
-            Debug.LogError("[BattleManager] BattleSkillProcessor가 없습니다! 인스펙터나 자식 오브젝트를 확인하세요.");
-        }
-
-        if (inputHandler == null) inputHandler = GetComponentInChildren<BattleInputHandler>();
-        if (inputHandler != null) inputHandler.Initialize(this);
-
-        // FieldManager 초기화
-        if (fieldManager == null) fieldManager = GetComponentInChildren<BattleFieldManager>();
-        if (fieldManager != null) fieldManager.Initialize(this);
-
-        if (gridManager == null) gridManager = GetComponentInChildren<BattleGridManager>();
 
         if (turnManager != null)
         {
-            turnManager.Initialize(this);
             turnManager.OnUnitEndTurn += (u) => OnUnitEndTurn?.Invoke(u);
             turnManager.OnOverworkTriggered += (u) => OnOverworkTriggered?.Invoke(u);
         }
+
+        battleInput = FindObjectOfType<BattleInput>();
+        if (battleInput != null) battleInput.Initialize(this, gridManager, mapManager);
     }
 
     void Start()
@@ -331,8 +334,8 @@ public class BattleManager : MonoBehaviour
         while (provider.PlayerFloor == null || provider.EnemyFloor == null)
             yield return null;
 
-        if (BattleInput.Instance != null)
-            BattleInput.Instance.RebindProviders();
+        if (battleInput != null)
+            battleInput.RebindProviders();
     }
 
     private void RebindAllUnitsAndInitATB()
@@ -391,8 +394,8 @@ public class BattleManager : MonoBehaviour
             mapMgr.UseEnemyFloor(enemyFloor, enemyOverlay);
             provider = mapMgr;
 
-            BattleInput.Instance?.RebindProviders();
-            BattleGridManager.Instance?.RebindProvider();
+            battleInput?.RebindProviders();
+            gridManager.RebindProvider();
         }
 
         RebindAllUnitsAndInitATB();
@@ -401,7 +404,11 @@ public class BattleManager : MonoBehaviour
     }
 
     #region Turn Management
-
+    public void OnUnitTurnStartedByManager(BattleUnit unit)
+    {
+        this.acting = unit;
+        Debug.Log($"[BattleManager] 현재 행동 주체 동기화 완료: {unit.name}");
+    }
     public void OnClickRest() => turnManager?.Rest();
     public void OnClickCalm() => turnManager?.Calm();
     #endregion
@@ -411,6 +418,19 @@ public class BattleManager : MonoBehaviour
     {
         if (!IsPlayerTurn) return;
         if (!turnManager.CanPerformAction(BattleAction.Move)) return;
+
+        if (acting == null)
+        {
+            Debug.LogWarning("현재 행동 중인 유닛이 없는데 이동 버튼이 눌림.");
+            return;
+        }
+
+        // 2. 핸들러가 있는지 확인
+        if (inputHandler == null)
+        {
+            Debug.LogError("InputHandler 참조가 비어있음!");
+            return;
+        }
 
         CloseSkillPanel();
         inputHandler.ClearAllPreviews();

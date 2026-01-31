@@ -213,7 +213,7 @@ public class SmokeZoneRuntime : MonoBehaviour
 
         // 현재 존 위 유닛 수집
         var nowSet = new HashSet<BattleUnit>();
-        var units = battleManager.gridManager.GetUnitsInArea(map, cells);
+        var units = battleManager.Grid.GetUnitsInArea(map, cells);
 
         foreach (var u in units)
         {

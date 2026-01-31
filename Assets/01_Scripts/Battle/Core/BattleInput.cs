@@ -6,12 +6,13 @@ using System;
 
 public class BattleInput : MonoBehaviour
 {
-    public static BattleInput Instance {  get; private set; }
+    public BattleManager battleManager;
+    private IGridProvider grid; // 필드 추가
+    private IBattleMapProvider mapProvider; // 추가
 
     // Inspector
     public Camera cam;
     public LayerMask unitMask;
-    public BattleManager battle;    // (삭제 예정이지만, 좌표 변환 등을 위해 일단 유지)
 
     public GameSpeedController speedCtrl; // GameSpeedController 할당
     public HudController hudCtrl;   //HUD 컨트롤러 할당
@@ -51,16 +52,14 @@ public class BattleInput : MonoBehaviour
     void Awake()
     {
         if (cam == null) cam = Camera.main;
-        provider = BattleMapManager.Instance as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>();
 
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
     }
 
-    void Start()
+    public void Initialize(BattleManager _battleManager, IGridProvider _grid, IBattleMapProvider _mapProvider)
     {
-        if (provider == null)
-            provider = BattleMapManager.Instance as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>();
+        this.battleManager = _battleManager;
+        this.grid = _grid;
+        this.mapProvider = _mapProvider;
     }
 
     void Update()
@@ -87,10 +86,10 @@ public class BattleInput : MonoBehaviour
         outMap = null;
         outCell = default;
 
-        if (battle.gridManager == null) return false;
+        if (grid == null) return false;
 
         // 1. 플레이어 맵 먼저 체크
-        Tilemap pMap = battle.gridManager.GetMap(Team.Player);
+        Tilemap pMap = grid.GetMap(Team.Player);
         if (pMap != null)
         {
             Vector3Int c = pMap.WorldToCell(worldPos);
@@ -103,7 +102,7 @@ public class BattleInput : MonoBehaviour
         }
 
         // 2. 적 맵 체크 (플레이어 맵에 없으면)
-        Tilemap eMap = battle.gridManager.GetMap(Team.Enemy);
+        Tilemap eMap = grid.GetMap(Team.Enemy);
         if (eMap != null)
         {
             Vector3Int c = eMap.WorldToCell(worldPos);
@@ -154,7 +153,7 @@ public class BattleInput : MonoBehaviour
             }
 
             // 2. 타일 클릭 판정
-            if (battle.gridManager != null)
+            if (grid != null)
             {
                 if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
                 {

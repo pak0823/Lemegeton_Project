@@ -134,7 +134,7 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
     void HealArea(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
     {
         var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
-        var friends = _battlemanager.gridManager.GetUnitsInArea(_map, area)
+        var friends = _battlemanager.Grid.GetUnitsInArea(_map, area)
                         .Where(u => u != null && !u.IsDead && u.team == _caster.team)
                         .ToList();
 

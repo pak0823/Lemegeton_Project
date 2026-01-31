@@ -4,9 +4,11 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class BattleFieldManager : MonoBehaviour
+public class BattleFieldManager : MonoBehaviour, IFieldController
 {
+    private IGridProvider gridProvider;
     private BattleManager battleManager;
+    private BattleInputHandler inputHandler;
 
     [System.Serializable]
     public class BeastDomainZone
@@ -35,9 +37,10 @@ public class BattleFieldManager : MonoBehaviour
     List<StatusTileZone> _statusTileZones = new List<StatusTileZone>();
     List<BeastDomainZone> _beastZones = new List<BeastDomainZone>();
 
-    public void Initialize(BattleManager _battlemanager)
+    public void Initialize(BattleManager _battleManager, IGridProvider _gridProvider, BattleInputHandler _inputHandler)
     {
-        this.battleManager = _battlemanager;
+        this.battleManager = _battleManager;
+        this.gridProvider = _gridProvider;
     }
 
     // === 턴 시작 시 업데이트 (BM이 호출) ===
@@ -64,8 +67,8 @@ public class BattleFieldManager : MonoBehaviour
             var old = _beastZones[i];
             if (old.owner != owner) continue;
             // 기존 하이라이트 제거
-            if (old.highlightToken != 0 && battleManager.inputHandler.beastDomainHighlighter != null)
-                battleManager.inputHandler.beastDomainHighlighter.ClearGroup(old.highlightToken);
+            if (old.highlightToken != 0 && inputHandler.beastDomainHighlighter != null)
+                inputHandler.beastDomainHighlighter.ClearGroup(old.highlightToken);
             _beastZones.RemoveAt(i);
         }
 
@@ -75,10 +78,10 @@ public class BattleFieldManager : MonoBehaviour
 
         // 하이라이트 생성 (InputHandler 사용)
         int token = 0;
-        if (battleManager.inputHandler.beastDomainHighlighter != null)
+        if (inputHandler.beastDomainHighlighter != null)
         {
-            token = battleManager.inputHandler.beastDomainHighlighter.CreateGroup();
-            battleManager.inputHandler.beastDomainHighlighter.SetGroupCells(token, map, cells);
+            token = inputHandler.beastDomainHighlighter.CreateGroup();
+            inputHandler.beastDomainHighlighter.SetGroupCells(token, map, cells);
         }
 
         var zone = new BeastDomainZone
@@ -109,8 +112,8 @@ public class BattleFieldManager : MonoBehaviour
 
             if (z.remainingTurns <= 0)
             {
-                if (z.highlightToken != 0 && battleManager.inputHandler.beastDomainHighlighter != null)
-                    battleManager.inputHandler.beastDomainHighlighter.ClearGroup(z.highlightToken);
+                if (z.highlightToken != 0 && inputHandler.beastDomainHighlighter != null)
+                    inputHandler.beastDomainHighlighter.ClearGroup(z.highlightToken);
 
                 _beastZones.RemoveAt(i);
             }
@@ -147,22 +150,12 @@ public class BattleFieldManager : MonoBehaviour
             if (z.owner != unit) continue;
             if (z.map != map) continue; // 맵 다르면 무효
 
-            // HexDistance 계산 (BM에 있던 거 가져오거나 Util로 빼야 함. 여기선 로컬로 구현)
-            bool fromIn = HexDistance(z.center, fromCell) <= z.radius;
-            bool toIn = HexDistance(z.center, toCell) <= z.radius;
+            // HexDistance 계산
+            bool fromIn = HexUtil.GetDistance(z.center, fromCell) <= z.radius;
+            bool toIn = HexUtil.GetDistance(z.center, toCell) <= z.radius;
             if (fromIn && toIn) return true;
         }
         return false;
-    }
-
-    private int HexDistance(Vector3Int a, Vector3Int b)
-    {
-        var axA = SkillLibrary.OffsetToAxial(a);
-        var axB = SkillLibrary.OffsetToAxial(b);
-        int dq = Mathf.Abs(axA.x - axB.x);
-        int dr = Mathf.Abs(axA.y - axB.y);
-        int ds = Mathf.Abs((-axA.x - axA.y) - (-axB.x - axB.y));
-        return (dq + dr + ds) / 2;
     }
     #endregion
 

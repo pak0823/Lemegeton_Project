@@ -8,6 +8,7 @@ public class BattleSkillProcessor : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private BattleManager battleManager;
+    private IGridProvider grid;
 
     // === 내부 상태 변수 ===
     private bool _isResolvingSelfCast = false;
@@ -19,9 +20,10 @@ public class BattleSkillProcessor : MonoBehaviour
     private BattleUnit _pendingKnockbackTarget;
     private Vector3Int _pendingKnockbackDest;
 
-    public void Initialize(BattleManager manager)
+    public void Initialize(BattleManager _battleManager, IGridProvider _grid) // 인자 추가
     {
-        this.battleManager = manager;
+        battleManager = _battleManager;
+        grid = _grid;
     }
 
     #region Damage Calculation
@@ -218,16 +220,16 @@ public class BattleSkillProcessor : MonoBehaviour
             if (sc != null && sc.Has(StatusId.Fixing)) canMove = false;
 
             // 점유 체크 (BM 그리드 사용)
-            if (canMove && battleManager.gridManager != null && (battleManager.gridManager.IsOccupied(Team.Player, dest) || battleManager.gridManager.IsOccupied(Team.Enemy, dest)))
+            if (canMove && grid != null && (grid.IsOccupied(Team.Player, dest) || grid.IsOccupied(Team.Enemy, dest)))
             {
                 canMove = false;
             }
 
             if (canMove)
             {
-                if (battleManager.gridManager != null) battleManager.gridManager.SetOccupied(v.team, v.Cell, false);
+                if (grid != null) grid.SetOccupied(v.team, v.Cell, false);
                 v.MoveTo(map, dest);
-                if (battleManager.gridManager != null) battleManager.gridManager.SetOccupied(v.team, v.Cell, true);
+                if (grid != null) grid.SetOccupied(v.team, v.Cell, true);
             }
 
             // 사용된 Pending 초기화
@@ -238,11 +240,8 @@ public class BattleSkillProcessor : MonoBehaviour
     public void ResolveSkillAtCell(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
     {
         var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
-        if (battleManager.gridManager != null)
-        {
-            var victims = battleManager.gridManager.GetUnitsInArea(map, area);
-        }
-            
+        var victims = grid.GetUnitsInArea(map, area);
+
         // 여기서 ExecuteSkillDamage 호출하고 싶지만, 
         // SkillDefinition 구조체에는 SkillAsset 정보가 없어서 대미지 처리가 애매함.
         // 기존 코드에서도 ResolveSkillAtCell은 Enemy AI 등에서 제한적으로 쓰였음.

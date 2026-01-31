@@ -491,7 +491,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
                 continue;
 
             // 점유 여부 체크
-            var units = _battlemanager.gridManager.GetUnitsInArea(map, new[] { cell });
+            var units = _battlemanager.Grid.GetUnitsInArea(map, new[] { cell });
             bool occupied = false;
             foreach (var u in units)
             {
@@ -538,7 +538,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         }
         else
         {
-            victims = _battlemanager.gridManager.GetUnitsInArea(_map, area)
+            victims = _battlemanager.Grid.GetUnitsInArea(_map, area)
                             .Where(u => u != null && !u.IsDead && u.team != _caster.team).ToList();
         }
 
@@ -548,7 +548,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
             // 공격 범위(area) 전체를 순회하며 지대 생성
             foreach (var cell in area)
             {
-                _battlemanager.fieldManager.CreateStatusTileZone(
+                _battlemanager.Field.CreateStatusTileZone(
                     _caster,
                     _map,
                     cell,

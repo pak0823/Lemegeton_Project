@@ -6,6 +6,10 @@ using UnityEngine.Tilemaps;
 
 public class BattleWaveManager : MonoBehaviour
 {
+    private BattleManager battleManager;
+    private IGridProvider grid;
+    private IBattleMapProvider map;
+
     #region Variables
     [Header("Configuration")]
     [SerializeField] private WaveSet waveSet;
@@ -41,12 +45,11 @@ public class BattleWaveManager : MonoBehaviour
     public event System.Action OnAllWavesCleared;
     #endregion
 
-    public void Initialize()
+    public void Initialize(BattleManager _battleManager, IGridProvider _grid, IBattleMapProvider _map)
     {
-        if (autoAssignWaveSet && waveSet == null)
-        {
-            AutoResolveWaveSet();
-        }
+        battleManager = _battleManager;
+        grid = _grid;
+        map = _map;
     }
 
     // 초기화 혹은 첫 웨이브 시작
@@ -160,9 +163,7 @@ public class BattleWaveManager : MonoBehaviour
                 if (u == null) continue;
                 if (!u.IsDead)
                 {
-                    // BM을 통해 그리드 해제를 해야 하지만, 
-                    // 여기선 강제로 파괴하므로 BM이 HandleUnitDied 등에서 처리하도록 둠.
-                    // 엄밀히는 BM.Grid.SetOccupied(false)를 호출해주는 게 좋음.
+                    grid?.SetOccupied(u.team, u.Cell, false);
                 }
                 Destroy(u.gameObject);
             }

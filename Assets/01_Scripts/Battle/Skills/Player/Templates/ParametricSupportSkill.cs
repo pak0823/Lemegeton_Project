@@ -258,7 +258,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
     {
         var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
         // 범위 내 모든 유닛 가져오기 (BattleManager는 기본적으로 모든 유닛을 반환)
-        var allUnitsInArea = bm.gridManager.GetUnitsInArea(map, area).ToList();
+        var allUnitsInArea = bm.Grid.GetUnitsInArea(map, area).ToList();
 
         // 아군만 필터링
         var targets = allUnitsInArea.Where(u => u != null && u.team == caster.team);

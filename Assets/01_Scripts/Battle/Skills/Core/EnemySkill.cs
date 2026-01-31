@@ -100,7 +100,7 @@ public class EnemySkill : SkillAsset
         var origin = _target.Cell;
 
         var area = GetAreaCellsForContext(map, origin, _caster, _target);
-        var victims = _battlemanager.gridManager.GetUnitsInArea(map, area);
+        var victims = _battlemanager.Grid.GetUnitsInArea(map, area);
         _battlemanager.ExecuteSkillDamage(_caster, victims, this, map, origin); // 중앙 경로(피해+적대감)
         yield return null;
     }
@@ -111,7 +111,7 @@ public class EnemySkill : SkillAsset
 
         // 타일 지정형은 정면을 caster→origin으로 계산
         var area = GetAreaCellsForContext(map, originCell, caster, null);
-        var victims = _battlemanager.gridManager.GetUnitsInArea(map, area);
+        var victims = _battlemanager.Grid.GetUnitsInArea(map, area);
         _battlemanager.ExecuteSkillDamage(caster, victims, this, map, originCell);
         yield return null;
     }

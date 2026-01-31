@@ -41,9 +41,6 @@ public class PlayerDataManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject); // 씬 넘어가도 파괴 안 됨
-
-            // 생성되자마자 로딩 시작
-            LoadStartingUnitsByLabel();
         }
         else
         {
@@ -53,6 +50,10 @@ public class PlayerDataManager : MonoBehaviour
 
     private void Start()
     {
+        // 생성되자마자 로딩 시작
+        if(Instance == null)
+            LoadStartingUnitsByLabel();
+
         // 게임 시작 시 자동으로 로드 시도
         LoadGame();
     }

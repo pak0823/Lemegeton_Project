@@ -41,7 +41,7 @@ public class LastVorgToxicPassive : PassiveAsset
                 if (battle != null && poisonTileAsset != null)
                 {
                     // 현재 위치를 독 타일로 변경 요청
-                    battle.fieldManager.CreateStatusTileZone(
+                    battle.Field.CreateStatusTileZone(
                         owner,
                         owner.CurrentMap,
                         owner.Cell,

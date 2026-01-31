@@ -6,6 +6,9 @@ using UnityEngine;
 public class BattleTurnManager : MonoBehaviour
 {
     private BattleManager battleManager;
+    private IGridProvider grid;
+    private BattleInputHandler inputHandler;
+    private BattleFieldManager fieldManager;
 
     [Header("Settings")]
     [SerializeField] private int baseActionsPerTurn = 1;
@@ -24,9 +27,12 @@ public class BattleTurnManager : MonoBehaviour
     public event System.Action<BattleUnit> OnUnitEndTurn;
     public event System.Action<BattleUnit> OnOverworkTriggered;
 
-    public void Initialize(BattleManager manager)
+    public void Initialize(BattleManager _battleManager,IGridProvider _grid, BattleInputHandler _input, BattleFieldManager _fieldManager)
     {
-        this.battleManager = manager;
+        battleManager = _battleManager;
+        grid = _grid;
+        inputHandler = _input;
+        fieldManager = _fieldManager;
     }
     // 유닛 사망 시 강제로 턴 주체를 비우기 위해 호출
     public void ForceClearActingUnit()
@@ -54,7 +60,10 @@ public class BattleTurnManager : MonoBehaviour
 
         // 초기화
         battleManager.ClearAllPreviews();
-        battleManager.inputHandler.ClearAllPreviews(); // 타겟팅 초기화
+        inputHandler.ClearAllPreviews(); // 타겟팅 초기화
+
+        //BattleManager에게 현재 턴 유닛 전달
+        battleManager.OnUnitTurnStartedByManager(unit);
 
         // 이벤트 발송
         OnUnitTurnStarted?.Invoke(unit);
@@ -98,7 +107,7 @@ public class BattleTurnManager : MonoBehaviour
         }
 
         // 필드 효과 (장판)
-        battleManager.fieldManager?.OnTurnStart(unit);
+        fieldManager?.OnTurnStart(unit);
 
         // 적: 웹 캐스팅 체크
         if (unit.team == Team.Enemy)
@@ -133,7 +142,7 @@ public class BattleTurnManager : MonoBehaviour
     {
         if (TryProcessOverwork()) return;
 
-        battleManager.fieldManager?.OnTurnEnd(ActingUnit);
+        fieldManager?.OnTurnEnd(ActingUnit);
         battleManager.ClearAllPreviews();
 
         OnUnitEndTurn?.Invoke(ActingUnit);
@@ -156,7 +165,7 @@ public class BattleTurnManager : MonoBehaviour
         if (TryProcessOverwork()) return;
         enemyRoutine = null;
 
-        battleManager.fieldManager?.OnTurnEnd(enemy);
+        fieldManager?.OnTurnEnd(enemy);
 
         // 적 AI 계획 수립
         var ecs = enemy.GetComponent<EnemyCastState>();

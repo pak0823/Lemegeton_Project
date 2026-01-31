@@ -52,3 +52,25 @@ public interface ITrainingRouteInfoProvider //인덱스에 해당하는 Title/설명 가져�
     string GetTrainingRouteTitle(int routeIndex);
     string GetTrainingRouteDescription(int routeIndex);
 }
+public interface IGridProvider
+{
+    Tilemap GetMap(Team team);
+    void SetOccupied(Team team, Vector3Int cell, bool occupied);
+    bool IsOccupied(Team team, Vector3Int cell);
+    bool IsWalkable(Tilemap map, Vector3Int cell);
+    BattleUnit GetUnitAt(Vector3Int cell);
+    int CrossMapDistance(Tilemap reference, Tilemap fromMap, Vector3Int fromCell, Tilemap toMap, Vector3Int toCell);
+    IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells);
+}
+public interface IFieldController
+{
+    // 야수의 영역 생성 (SelfBeastDomainSkill 등에서 사용)
+    void SpawnBeastDomainZone(Tilemap map, BattleUnit owner, Vector3Int center, int radius, int duration);
+
+    // 상태 이상 타일 생성 (LastVorgToxicPassive, ParametricDamageSkill 등에서 사용)
+    void CreateStatusTileZone(BattleUnit owner, Tilemap map, Vector3Int cell, int zoneDuration, TileBase newTileBase, StatusId statusId, int stack = 1, int statusDuration = 3);
+
+    // 턴 시작/종료 시 호출되는 로직 (필요시 추가)
+    void OnTurnStart(BattleUnit unit);
+    void OnTurnEnd(BattleUnit unit);
+}

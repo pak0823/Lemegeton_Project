@@ -4,23 +4,18 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-public class BattleGridManager : MonoBehaviour
+public class BattleGridManager : MonoBehaviour, IGridProvider
 {
-    public static BattleGridManager Instance { get; private set;}
-
     [Header("Settings")]
     public LayerMask unitMask;
 
     IBattleMapProvider provider;
-    HashSet<Vector3Int> playerOcc = new();
-    HashSet<Vector3Int> enemyOcc = new();
+    private HashSet<Vector3Int> playerOcc = new();
+    private HashSet<Vector3Int> enemyOcc = new();
 
-    private void Awake()
+    public void Initialize(IBattleMapProvider mapProvider)
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-            provider = (IBattleMapProvider)BattleMapManager.Instance;
+        this.provider = mapProvider;
     }
     public Tilemap GetMap(Team team)
     {
