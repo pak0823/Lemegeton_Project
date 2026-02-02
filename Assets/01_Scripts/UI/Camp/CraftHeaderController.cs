@@ -1,6 +1,8 @@
-using UnityEngine;
-using UnityEngine.UI;
 using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.UI;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 public class CraftHeaderController : MonoBehaviour
 {
@@ -17,6 +19,8 @@ public class CraftHeaderController : MonoBehaviour
     public List<HeaderSlot> headerSlots;
     public CampCraftPage craftPage;
 
+    private AsyncOperationHandle<Sprite> _handle;
+
     private void Start()
     {
         // 토글 이벤트 연결
@@ -25,27 +29,39 @@ public class CraftHeaderController : MonoBehaviour
             if (slot.linkedMaterial != null)
             {
                 // 아이콘 세팅
-                if (slot.iconImage) slot.iconImage.sprite = slot.linkedMaterial.itemIcon;
-
-                // 토글 변경 이벤트 (켜질 때만 로직 실행)
-                slot.toggle.onValueChanged.AddListener((isOn) =>
+                if (slot.linkedMaterial != null)
                 {
-                    if (isOn)
+                    // 아이콘 비동기 로드
+                    _handle = Addressables.LoadAssetAsync<Sprite>(slot.linkedMaterial.GetAtlasKey());
+                    _handle.Completed += h =>
                     {
-                        // 이 재료가 선택됐다고 알림
-                        craftPage.FilterRecipesByMaterial(slot.linkedMaterial);
-                        // 디버그용 (확인 후 삭제)
-                        Debug.Log($"[CraftUI] {slot.linkedMaterial.itemName} 필터 적용");
-                    }
-                });
+                        if (h.Status == AsyncOperationStatus.Succeeded) slot.iconImage.sprite = h.Result;
+                    };
+
+                    // 토글 변경 이벤트 (켜질 때만 로직 실행)
+                    slot.toggle.onValueChanged.AddListener((isOn) =>
+                    {
+                        if (isOn)
+                        {
+                            // 이 재료가 선택됐다고 알림
+                            craftPage.FilterRecipesByMaterial(slot.linkedMaterial);
+                            // 디버그용 (확인 후 삭제)
+                            Debug.Log($"[CraftUI] {slot.linkedMaterial.itemName} 필터 적용");
+                        }
+                    });
+                }
+            }
+
+            // 창 켜질 때 첫 번째 재료 강제 선택 (안 그러면 처음에 리스트가 비어있음)
+            if (headerSlots.Count > 0 && headerSlots[0].toggle != null)
+            {
+                headerSlots[0].toggle.isOn = true;
+                // isOn = true로 바꾸는 순간 위 리스너가 호출돼서 필터링 됨
             }
         }
-
-        // 창 켜질 때 첫 번째 재료 강제 선택 (안 그러면 처음에 리스트가 비어있음)
-        if (headerSlots.Count > 0 && headerSlots[0].toggle != null)
-        {
-            headerSlots[0].toggle.isOn = true;
-            // isOn = true로 바꾸는 순간 위 리스너가 호출돼서 필터링 됨
-        }
+    }
+    private void OnDestroy()
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
     }
 }

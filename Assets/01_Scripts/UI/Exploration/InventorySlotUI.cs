@@ -33,6 +33,6 @@ public class InventorySlotUI : MonoBehaviour
             countText.text = item.count > 1 ? item.count.ToString() : "";
         }
 
-        dragHandler.SetIcon(data.itemIcon);
+        dragHandler.SetIcon(data);
     }
 }

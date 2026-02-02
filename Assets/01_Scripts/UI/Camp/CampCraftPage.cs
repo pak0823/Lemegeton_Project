@@ -1,8 +1,10 @@
-using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
 using System.Collections.Generic;
 using System.Linq; // 리스트 필터링용
+using TMPro;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
 
 public class CampCraftPage : MonoBehaviour
 {
@@ -24,6 +26,7 @@ public class CampCraftPage : MonoBehaviour
     [Header("Popup")]
     public CraftResultPopup resultPopup; // 팝업창
 
+    private AsyncOperationHandle<Sprite> _handle;
     private CraftRecipe currentSelectedRecipe;
 
     private void Start()
@@ -31,6 +34,10 @@ public class CampCraftPage : MonoBehaviour
         // 제작 버튼 클릭 시 TryCraft 실행 연결
         if (craftButton != null)
             craftButton.onClick.AddListener(TryCraft);
+    }
+    private void OnDestroy() 
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
     }
 
     // 헤더에서 호출하는 함수 (필터링)
@@ -67,7 +74,10 @@ public class CampCraftPage : MonoBehaviour
     private void ShowDetail(CraftRecipe recipe)
     {
         currentSelectedRecipe = recipe;
-        resultIcon.sprite = recipe.resultItem.itemIcon;
+        _handle = Addressables.LoadAssetAsync<Sprite>(recipe.resultItem.GetAtlasKey());
+        _handle.Completed += h => {
+            if (h.Status == AsyncOperationStatus.Succeeded) resultIcon.sprite = h.Result;
+        };
         resultIcon.gameObject.SetActive(true);
         //resultNameText.text = recipe.resultItem.itemName;
 

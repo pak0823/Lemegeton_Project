@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using UnityEngine.EventSystems;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.UI;
 
 public class InventoryDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
@@ -8,6 +10,8 @@ public class InventoryDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandl
     private Transform originalParent;
     private Vector3 originalPosition;
     private int fromIndex;
+
+    private AsyncOperationHandle<Sprite> _handle;
 
     private void Awake()
     {
@@ -21,7 +25,20 @@ public class InventoryDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandl
         if (canvasGroup != null) canvasGroup.blocksRaycasts = true;
     }
 
-    public void SetIcon(Sprite icon) => GetComponent<Image>().sprite = icon;
+    public void SetIcon(ItemData data)
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
+
+        _handle = Addressables.LoadAssetAsync<Sprite>(data.GetAtlasKey());
+        _handle.Completed += h => {
+            if (h.Status == AsyncOperationStatus.Succeeded)
+                GetComponent<Image>().sprite = h.Result;
+        };
+    }
+    private void OnDestroy()
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
+    }
 
     public int GetFromIndex() { return fromIndex; }
 

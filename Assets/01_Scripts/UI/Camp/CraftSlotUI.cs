@@ -1,6 +1,8 @@
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.AddressableAssets;
 using UnityEngine.Events;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
 
 public class CraftSlotUI : MonoBehaviour
 {
@@ -10,14 +12,19 @@ public class CraftSlotUI : MonoBehaviour
     [SerializeField] private Button button;
     [SerializeField] private GameObject highlightObj; // 선택됐을 때 켜질 테두리 같은 거 (옵션)
 
+    private AsyncOperationHandle<Sprite> _handle;
+
     // 데이터 세팅 함수
     public void Setup(CraftRecipe recipe, UnityAction onClickAction)
     {
-        // 1. 기본 정보 표시
         if (recipe.resultItem != null)
         {
-            iconImage.sprite = recipe.resultItem.itemIcon;
             nameText.text = recipe.resultItem.itemName;
+
+            // 비동기 로드
+            if (_handle.IsValid()) Addressables.Release(_handle);
+            _handle = Addressables.LoadAssetAsync<Sprite>(recipe.resultItem.GetAtlasKey());
+            _handle.Completed += h => { if (h.Status == AsyncOperationStatus.Succeeded) iconImage.sprite = h.Result; };
         }
 
         // 클릭 이벤트 연결
@@ -26,6 +33,10 @@ public class CraftSlotUI : MonoBehaviour
         button.onClick.AddListener(onClickAction);
 
         // 클릭 시 하이라이트 갱신 로직 등은 여기서 추가 가능
+    }
+    private void OnDestroy()
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
     }
 
     // 선택 표시 켜고 끄기 (필요하면 호출)
