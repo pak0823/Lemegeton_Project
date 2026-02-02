@@ -92,7 +92,7 @@ public class BattleSkillProcessor : MonoBehaviour
         foreach (var v in victims)
         {
             if (v == null) continue;
-            if (v.team == caster.team) continue;
+            if (v.data.team == caster.data.team) continue;
 
             var ctx = new SkillRuntime
             {
@@ -227,9 +227,9 @@ public class BattleSkillProcessor : MonoBehaviour
 
             if (canMove)
             {
-                if (grid != null) grid.SetOccupied(v.team, v.Cell, false);
+                if (grid != null) grid.SetOccupied(v.data.team, v.Cell, false);
                 v.MoveTo(map, dest);
-                if (grid != null) grid.SetOccupied(v.team, v.Cell, true);
+                if (grid != null) grid.SetOccupied(v.data.team, v.Cell, true);
             }
 
             // 사용된 Pending 초기화

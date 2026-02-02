@@ -47,7 +47,7 @@ public class LuckySixReactiveMoveAttackPassive : PassiveAsset
         if (_mover == _owner) return;
 
         // 아군 이동은 무시 (요구사항: 적군 유닛이 이동했을 때)
-        if (_mover.team == _owner.team) return;
+        if (_mover.data.team == _owner.data.team) return;
 
         // "이 유닛의 차례가 아닐 때"만 발동
         if (_battle.ActingUnit == _owner) return;
@@ -82,7 +82,7 @@ public class LuckySixReactiveMoveAttackPassive : PassiveAsset
         }
 
         // 유효한 적만 남기기
-        _candidates.RemoveAll(u => u == null || u.IsDead || u.IsRetreated || u.team == _owner.team);
+        _candidates.RemoveAll(u => u == null || u.IsDead || u.IsRetreated || u.data.team == _owner.data.team);
         if (_candidates.Count == 0)
         {
             _battle.UnregisterReactionLock();

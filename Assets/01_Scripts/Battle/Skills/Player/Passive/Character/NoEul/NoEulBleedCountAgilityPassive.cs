@@ -67,11 +67,16 @@ public class NoEulBleedCountAgilityPassive : PassiveAsset
         // 기본 민첩 배수 = (1.40 ^ 출혈 적 수)
         float multiplier = Mathf.Pow(1.40f, bleedCount);
 
+        float beforeAGI = owner.EffectiveAGI; // 변경 전 값 계산
+
         owner.SetPassiveAgilityMultiplier(multiplier);
 
-        Debug.Log(
-            $"[Passive:BleedCountAgility] {owner.name} 출혈 적 {bleedCount}명 → " +
-            $"배수 {multiplier:0.000}, baseAGI={owner.AGI:0.000}, effectiveAGI={owner.EffectiveAGI:0.000}"
-        );
+        float afterAGI = owner.EffectiveAGI;  // 변경 후 값 재계산
+
+        // 로그 출력 (값이 변했다면 출력)
+        if (!Mathf.Approximately(beforeAGI, afterAGI))
+        {
+            Debug.Log($"[Passive] {owner.name} (Bleed targets: {bleedCount}) AGI Updated: {beforeAGI:F1} -> {afterAGI:F1}");
+        }
     }
 }

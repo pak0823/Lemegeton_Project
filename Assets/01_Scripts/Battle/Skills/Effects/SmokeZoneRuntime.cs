@@ -89,7 +89,7 @@ public class SmokeZoneRuntime : MonoBehaviour
     void HandleUnitEndTurn(BattleUnit unit)
     {
         // 연막존 안에서 턴을 끝낸 아군의 MP 회복
-        if (enableMpRegen && unit != null && caster != null && unit.team == caster.team)
+        if (enableMpRegen && unit != null && caster != null && unit.data.team == caster.data.team)
         {
             if (map != null && cells != null && cells.Contains(unit.Cell))
             {

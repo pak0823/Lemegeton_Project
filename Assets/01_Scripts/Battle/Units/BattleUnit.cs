@@ -7,112 +7,169 @@ using UnityEngine.Tilemaps;
 
 public class BattleUnit : MonoBehaviour
 {
-    #region Data & Stats
-    [Header("Data")]
-    public UnitData data; // 유닛 데이터 참조
+    #region 1. Core Data & Configuration (데이터 및 설정)
+    [Header("Data Source")]
+    public UnitData data;                   // 유닛 데이터 원본 (ScriptableObject)
+    public StateStatModifierDB stateStatDB; // 상태 이상 스탯 보정 DB
 
-    [Header("BattleManager")]
-    BattleManager battleManager;
+    [Header("Prefab Settings")]
+    public ProjectileController defaultProjectilePrefab; // 기본 투사체 프리팹
+
+    [Header("Debug")]
+    [SerializeField] private bool debugLogStats = false; // 스탯 디버깅용 (빌드 시 제외 가능)
+    #endregion
+
+    #region 2. Dependencies (외부 의존성)
+    [Header("Managers & Controllers")]
+    // BattleManager: 외부에서는 프로퍼티로 접근
+    [SerializeField] private BattleManager battleManager;
     public BattleManager Battle => battleManager;
 
-    [Header("FX / Projectile")]
-    public ProjectileController defaultProjectilePrefab;  // 유닛 기본 투사체
+    // 내부 캐싱용 컨트롤러
+    private UnitStateController unitStateController;
+    private StatusController statusController;
+    #endregion
 
-    public bool IsRetreated { get; private set; } = false;  //도주 확인용
-    
-
-    [Header("Runtime Stats")]
-    public Team team;
-    public ISBOSS isBoss;
-    public float AGI;
-    [NonSerialized] public float ATB = 0f; // 0~100
-    float _agiMinRef, _agiMaxRef;
-    public float Overfill { get; private set; } = 0f; // ATB가 그 프레임에 100을 넘기면 얼마큼 넘었는지 저장(동시턴 우선순위 1순위)
-    public float MaxATB { get; private set; } = 100f; // 기본 100
-    public bool IsTurnReady => ATB >= 100f; // ATB가 최대가 되어 행동 가능 상태
-    public float atbPerSecond; // 초당 ATB 충전 속도
-
-    [System.Serializable]
-    public struct AttrMod { public AttackAttr attr; public float mult; } // 예: (Strike, 1.2f)
-    public AttrMod[] resistTable;
-
-    public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
-
-    [SerializeField] private bool debugLogStats = false; //스탯 확인 임시용 - 사용 후 제거하기
-
+    #region 3. Runtime Status (실시간 전투 상태)
+    //Vital Stats
     public float HP { get; private set; }
     public float MP { get; private set; }
     public float Rage { get; private set; }
+    public bool IsRetreated { get; private set; } = false; // 도주 여부
+
+    [Header("Map Position")]
+    public Tilemap CurrentMap;      // 현재 위치한 타일맵
+    public Vector3Int Cell { get; private set; } // 그리드 좌표
+
+    // 속성 저항 테이블 (런타임 변동 가능성 고려하여 구조체 배열 유지)
+    [System.Serializable]
+    public struct AttrMod { public AttackAttr attr; public float mult; }
+    public AttrMod[] resistTable;
     #endregion
 
-    #region Visual
-    [Header("Visual")]
-    [SerializeField] Animator animator;
-    [SerializeField] SpriteRenderer spriteRenderer;
-    [SerializeField] float moveDuration = 0.18f; // 1칸 이동 연출 시간
+    #region 4. ATB System (턴 관리 시스템)
+    [Header("ATB Settings")]
+    [NonSerialized] public float ATB = 0f;
+    public float MaxATB { get; private set; } = 100f;
+    public float Overfill { get; private set; } = 0f; // 턴 초과분 (우선권 결정용)
+
+    // 설정할 수 있는 턴 소요 시간 제한 (초 단위)
+    [Header("Turn Speed Constraints")]
+    [Tooltip("AGI가 아무리 높아도 이 시간보다 빨리 턴이 올 순 없음")]
+    [SerializeField] private float minTurnTime = 0.5f;
+
+    [Tooltip("AGI가 아무리 낮아도 이 시간 안에는 턴이 옴")]
+    [SerializeField] private float maxTurnTime = 8.0f;
+
+    [Tooltip("AGI가 몇일 때 1초에 턴이 오는지 기준값 (예: 50이면 AGI 50일 때 2초, 100일 때 1초)")]
+    [SerializeField] private float agiToSpeedConstant = 100f;
+
+    // ATB 계산 프로퍼티
+    public bool IsTurnReady => ATB >= MaxATB;
+    public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
+    public float atbPerSecond
+    {
+        get
+        {
+            float currentAgi = EffectiveAGI;
+
+            // AGI가 0 이하일 경우 턴이 영원히 안 오는 것을 방지하기 위해 최소값 보정
+            if (currentAgi <= 0.1f) currentAgi = 0.1f;
+
+            // 1. 순수 AGI에 따른 예상 소요 시간 계산 (반비례 관계: AGI 높음 -> 시간 짧음)
+            // 공식: (MaxATB * 기준상수) / AGI
+            // 예: MaxATB(100) / (AGI(50) * 0.1(계수)) 같은 방식 등으로 커스텀 가능
+            // 여기서는 단순하게: "AGI가 높을수록 시간이 줄어든다"는 로직 구현
+            // 기준: EffectiveAGI가 agiToSpeedConstant와 같으면 1초 걸림
+            float rawTurnTime = agiToSpeedConstant / currentAgi;
+
+            // 2. 기획자가 정한 최소/최대 시간으로 자르기 (Clamping)
+            float clampedTime = Mathf.Clamp(rawTurnTime, minTurnTime, maxTurnTime);
+
+            // 3. 시간을 다시 속도(채우는 양)로 변환 (속도 = 거리 / 시간)
+            return MaxATB / clampedTime;
+        }
+    }
+
+    // 내부 연산용 변수
+    private float _agiMinRef, _agiMaxRef;
     #endregion
 
-    #region Animation Callbacks
-    // 공격 타이밍/종료 콜백(애니메이션 이벤트용)
-    public Action OnAttackImpact; // 타격 타이밍(데미지 적용)
-    public Action OnAttackEnded; // 공격 모션 종료 시
-    #endregion
+    #region 5. Visuals & Animation (비주얼)
+    [Header("Visual Components")]
+    [SerializeField] private Animator animator;
+    [SerializeField] private SpriteRenderer spriteRenderer;
 
-    #region Map & Position
-    public Tilemap CurrentMap; // 팀에 따라 Player_Tilemap or Enemy_Tilemap
-    public Vector3Int Cell { get; private set; }
-    #endregion
-
-    [SerializeField] private float defaultAnimEndTimeout = 8f; // 기존 2f 대신, "비상용"으로 충분히 크게
+    [Header("Animation Settings")]
+    [SerializeField] private float moveDuration = 0.18f; // 이동 연출 시간
+    [SerializeField] private float defaultAnimEndTimeout = 8f; // 애니메이션 강제 종료 타임아웃
     private const float MinTimeout = 0.25f;
 
-    #region Events
-    public event Action<int> OnDamaged;  //피격 이벤트
-    public event Action<BattleUnit> OnDied; // 사망 이벤트
-    public event Action<BattleUnit> OnRetreated; //도주 이벤트
-    public event System.Action<BattleUnit, BattleUnit, int, SkillAsset> OnDealtDamage;  // 유닛이 피해를 "성공적으로 입혔을 때" 알림 (패시브 트리거용)
-    public event Action<BattleUnit, Tilemap, Vector3Int, Vector3Int> OnMoved;   //유닛의 이동 확인
-    public static event Action<BattleUnit> OnAnyMoved;
+    // 애니메이션 이벤트 콜백 (Action)
+    public Action OnAttackImpact;  // 타격 시점 (데미지 적용)
+    public Action OnAttackEnded;   // 모션 종료 시점
+    #endregion
 
-    // 스킬 사용 알림 이벤트
-    public event Action<SkillAsset> OnSkillUsed;
+    #region 6. Internal Logic & Cache (내부 로직용)
+    // 패시브 관리
+    private readonly List<PassiveAsset> _activePassives = new();
+    private int _passiveBDYBonus = 0;
+
+    // 스탯 캐싱 플래그
+    private bool _statCacheDirty = true;
+    #endregion
+
+    #region 7. Events (외부 알림용)
+    // 상태 변화 이벤트
+    public event Action<int> OnDamaged;       // 피격 시
+    public event Action<BattleUnit> OnDied;   // 사망 시
+    public event Action<BattleUnit> OnRetreated; // 도주 시
+
+    // 행동 및 이동 이벤트
+    public event Action<BattleUnit, Tilemap, Vector3Int, Vector3Int> OnMoved; // 이동 완료 시
+    public static event Action<BattleUnit> OnAnyMoved; // (Static) 누군가 이동했을 때
+
+    // 전투 로직 이벤트
+    public event Action<BattleUnit, BattleUnit, int, SkillAsset> OnDealtDamage; // 피해를 입혔을 때 (트리거용)
+    public event Action<SkillAsset> OnSkillUsed; // 스킬 사용 시
+
+    // 이벤트 호출 헬퍼
     public void NotifySkillUsed(SkillAsset skill) => OnSkillUsed?.Invoke(skill);
     #endregion
 
-    #region ----- State-based Stat System -----
-    [Header("State-based Stat DB (Shared)")]
-    public StateStatModifierDB stateStatDB;
+    #region 8. State-based Stat System (스탯 및 상태 계산 시스템)
 
-    // 베이스 스탯(인스펙터/데이터로 세팅)
-    [SerializeField] private float basePhysicalDamage = 1;
-    [SerializeField] private float baseMagicDamage = 1;
-    [SerializeField] private float baseBDY = 1;
-    [SerializeField] private float baseMND = 1;
-    [SerializeField] private float baseINS = 1;
+    // ========================================================================
+    // [1] Calculation Structs (내부 연산용 구조체)
+    // ========================================================================
 
-    [Header("Passives (runtime)")]
-    // UnitData.passives를 복사해 두고, 활성 상태만 OnAttach 호출
-    private readonly List<PassiveAsset> _activePassives = new();
-    int _passiveBDYBonus = 0;
-
-    // 상태 컨트롤러 캐시/보정 캐시
-    UnitStateController unitStateController;
-    bool _statCacheDirty = true;
-
-    struct StatMult
+    // 각종 배율(Multiplier)과 가산치(Add)를 모아둔 구조체
+    private struct StatMult
     {
-        public float atk, mag, def, agi, ins;
+        public float str, clv, mnd, agi, ins;
         public int hpAdd, mpAdd;
         public float hostilityGain, hostilityDecay;
         public float hostilityGenerationMultiplier;
 
-        public static StatMult Identity => new StatMult { atk = 1f, mag = 1f, agi = 1f, ins = 1f, hpAdd = 0, mpAdd = 0, hostilityGenerationMultiplier = 1.0f};
+        // 초기값 (배율은 1.0, 가산치는 0)
+        public static StatMult Identity => new StatMult
+        {
+            str = 1f,
+            clv = 1f,
+            agi = 1f,
+            ins = 1f,
+            mnd = 1f,
+            hpAdd = 0,
+            mpAdd = 0,
+            hostilityGenerationMultiplier = 1.0f
+        };
 
+        // 상태 이상(State) 적용
         public void Apply(StateStatModifierDB.Entry e)
         {
             if (e == null) return;
-            atk *= Mathf.Max(0f, e.atkMultiplier);
-            mag *= Mathf.Max(0f, e.magMultiplier);
+            str *= Mathf.Max(0f, e.atkMultiplier);
+            clv *= Mathf.Max(0f, e.magMultiplier);
             agi *= Mathf.Max(0f, e.agiMultiplier);
             ins *= Mathf.Max(0f, e.insMultiplier);
             hpAdd += e.hpFlatAdd;
@@ -120,29 +177,26 @@ public class BattleUnit : MonoBehaviour
             hostilityGenerationMultiplier *= Mathf.Max(0f, e.hostilityStatMultiplier);
         }
 
+        // 버프(Buff) 적용
         public void ApplyBuff(StateStatModifierDB.BuffEntry e)
         {
             if (e == null) return;
-
-            atk *= e.atkMultiplier;
-            mag *= e.magMultiplier;
+            str *= e.atkMultiplier;
+            clv *= e.magMultiplier;
             agi *= e.agiMultiplier;
             ins *= e.insMultiplier;
-
             hpAdd += e.hpFlatAdd;
             mpAdd += e.mpFlatAdd;
-
             hostilityGenerationMultiplier *= e.hostilityStatMultiplier;
         }
     }
-    StatMult _cachedMult = StatMult.Identity;
 
-    struct StatSnapshot
+    // 스탯 변화 추적용 스냅샷 (디버깅용)
+    private struct StatSnapshot
     {
         public float MaxHP, MaxMP;
         public float PhysicalDamage, MagicDamage;
-        public float EffectiveAGI;
-        public float EffectiveINS;
+        public float EffectiveAGI, EffectiveINS;
         public float CritChance;
 
         public static StatSnapshot From(BattleUnit u)
@@ -151,8 +205,8 @@ public class BattleUnit : MonoBehaviour
             {
                 MaxHP = u.MaxHP,
                 MaxMP = u.MaxMP,
-                PhysicalDamage = u.PhysicalDamage,
-                MagicDamage = u.MagicDamage,
+                PhysicalDamage = u.STR,
+                MagicDamage = u.CLV,
                 EffectiveAGI = u.EffectiveAGI,
                 EffectiveINS = u.INS,
                 CritChance = u.CritChance,
@@ -160,61 +214,16 @@ public class BattleUnit : MonoBehaviour
         }
     }
 
-    StatSnapshot _lastSnapshot;
-    bool _hasSnapshot = false;
+    // ========================================================================
+    // [2] Caching & Core Logic (캐싱 및 핵심 계산)
+    // ========================================================================
 
-    void InvalidateStatCache() 
-    { 
-        _statCacheDirty = true;
+    private StatMult _cachedMult = StatMult.Identity;
+    private StatSnapshot _lastSnapshot;
+    private bool _hasSnapshot = false;
 
-        // 최대치가 줄어들 땐 현재값도 즉시 맞추기
-        HP = Mathf.Min(HP, MaxHP);
-        MP = Mathf.Min(MP, MaxMP);
-        Rage = Mathf.Min(Rage, MaxRage);
-
-        if (debugLogStats)
-        {
-            // 새 값 계산 강제 (Mult, MaxHP, EffectiveAGI 등)
-            var _ = Mult;
-            var newSnap = StatSnapshot.From(this);
-
-            if (!_hasSnapshot)
-            {
-                _lastSnapshot = newSnap;
-                _hasSnapshot = true;
-
-                Debug.Log(
-                    $"[STAT] {name} 초기 스냅샷: " +
-                    $"HP={HP}/{newSnap.MaxHP}, MP={MP}/{newSnap.MaxMP}, " +
-                    $"ATK={newSnap.PhysicalDamage}, MAG={newSnap.MagicDamage}, " +
-                    $"AGI={newSnap.EffectiveAGI:F2}, INS={newSnap.EffectiveINS}, " +
-                    $"Crit={newSnap.CritChance:P1}"
-                );
-            }
-            else
-            {
-                // 바뀐 항목만 로그 출력
-                if (newSnap.MaxHP != _lastSnapshot.MaxHP)
-                    Debug.Log($"[STATΔ] {name} MaxHP: {_lastSnapshot.MaxHP} -> {newSnap.MaxHP}");
-                if (newSnap.MaxMP != _lastSnapshot.MaxMP)
-                    Debug.Log($"[STATΔ] {name} MaxMP: {_lastSnapshot.MaxMP} -> {newSnap.MaxMP}");
-                if (newSnap.PhysicalDamage != _lastSnapshot.PhysicalDamage)
-                    Debug.Log($"[STATΔ] {name} ATK: {_lastSnapshot.PhysicalDamage} -> {newSnap.PhysicalDamage}");
-                if (newSnap.MagicDamage != _lastSnapshot.MagicDamage)
-                    Debug.Log($"[STATΔ] {name} MAG: {_lastSnapshot.MagicDamage} -> {newSnap.MagicDamage}");
-                if (Mathf.Abs(newSnap.EffectiveAGI - _lastSnapshot.EffectiveAGI) > 0.0001f)
-                    Debug.Log($"[STATΔ] {name} AGI: {_lastSnapshot.EffectiveAGI:F2} -> {newSnap.EffectiveAGI:F2}");
-                if (newSnap.EffectiveINS != _lastSnapshot.EffectiveINS)
-                    Debug.Log($"[STATΔ] {name} INS: {_lastSnapshot.EffectiveINS} -> {newSnap.EffectiveINS}");
-                if (Mathf.Abs(newSnap.CritChance - _lastSnapshot.CritChance) > 0.0001f)
-                    Debug.Log($"[STATΔ] {name} Crit: {_lastSnapshot.CritChance:P1} -> {newSnap.CritChance:P1}");
-
-                _lastSnapshot = newSnap;
-            }
-        }
-    }
-
-    StatMult Mult
+    // 배율 계산 프로퍼티 (캐싱 적용)
+    private StatMult Mult
     {
         get
         {
@@ -223,20 +232,18 @@ public class BattleUnit : MonoBehaviour
                 _cachedMult = StatMult.Identity;
                 if (unitStateController != null && stateStatDB != null)
                 {
-                    // 상태(State) 배수 적용
+                    // 1. 상태(State) 배수 적용
                     foreach (var s in unitStateController.GetAll())
                     {
                         var entry = stateStatDB.Get(s);
-                        if (entry != null)
-                            _cachedMult.Apply(entry);
+                        if (entry != null) _cachedMult.Apply(entry);
                     }
 
-                    // 버프(Buff) 배수 적용
+                    // 2. 버프(Buff) 배수 적용
                     foreach (var b in unitStateController.GetAllBuffs())
                     {
                         var buffEntry = stateStatDB.GetBuff(b);
-                        if (buffEntry != null)
-                            _cachedMult.ApplyBuff(buffEntry);
+                        if (buffEntry != null) _cachedMult.ApplyBuff(buffEntry);
                     }
                 }
                 _statCacheDirty = false;
@@ -245,18 +252,86 @@ public class BattleUnit : MonoBehaviour
         }
     }
 
-    // === 외부에서 그대로 쓰던 이름을 '프로퍼티'로 유지 (상태 보정 반영) ===
+    // 스탯 캐시 초기화 (상태 변화 시 호출)
+    public void InvalidateStatCache()
+    {
+        _statCacheDirty = true;
+
+        // 최대치가 줄어들 땐 현재값도 즉시 맞춰줌 (Clamping)
+        HP = Mathf.Min(HP, MaxHP);
+        MP = Mathf.Min(MP, MaxMP);
+        Rage = Mathf.Min(Rage, MaxRage);
+
+        // 디버그 모드일 때만 로그 출력 (성능 부하 방지)
+        if (debugLogStats)
+        {
+            // 새 값 계산 강제 (Mult 재계산 유도)
+            var _ = Mult;
+            var newSnap = StatSnapshot.From(this);
+
+            if (!_hasSnapshot)
+            {
+                _lastSnapshot = newSnap;
+                _hasSnapshot = true;
+                Debug.Log($"[STAT] {name} 초기 스냅샷: HP={HP}/{newSnap.MaxHP}, ATK={newSnap.PhysicalDamage}, AGI={newSnap.EffectiveAGI:F2}");
+            }
+            else
+            {
+                CompareAndLogSnapshot(_lastSnapshot, newSnap);
+                _lastSnapshot = newSnap;
+            }
+        }
+    }
+
+    private void CompareAndLogSnapshot(StatSnapshot oldSnap, StatSnapshot newSnap)
+    {
+        if (newSnap.MaxHP != oldSnap.MaxHP) Debug.Log($"[STATΔ] {name} MaxHP: {oldSnap.MaxHP} -> {newSnap.MaxHP}");
+        if (newSnap.PhysicalDamage != oldSnap.PhysicalDamage) Debug.Log($"[STATΔ] {name} STR: {oldSnap.PhysicalDamage} -> {newSnap.PhysicalDamage}");
+        if (Mathf.Abs(newSnap.EffectiveAGI - oldSnap.EffectiveAGI) > 0.001f) Debug.Log($"[STATΔ] {name} AGI: {oldSnap.EffectiveAGI:F2} -> {newSnap.EffectiveAGI:F2}");
+        // 필요한 항목 추가 가능
+    }
+
+    // ========================================================================
+    // [3] Public Stat Properties (최종 스탯 반환)
+    // ========================================================================
+
+    // 기본 6대 스탯 (Data * Mult)
+    public float STR => Mathf.Max(0f, data.baseSTR * Mult.str);
+    public float CLV => Mathf.Max(0f, data.baseCLV * Mult.clv);
+    public float MND => Mathf.Max(0, data.baseMND * Mult.mnd); // (* Mult.mnd로 수정: 구조체 로직과 일치)
+    public float INS => Mathf.Max(0, data.baseINS * Mult.ins);
+
+    // 신체(BDY)는 패시브 보너스 가산 방식
+    public float BDY => Mathf.Max(0, data.baseBDY + _passiveBDYBonus);
+    public float EffectiveAGI
+    {
+        get
+        {
+            if (data == null) return 0f;
+
+            // 1. 기존 StatusController 배율 (Awake에서 캐싱된 statusController 사용)
+            float scMul = (statusController != null) ? statusController.GetAgilityMultiplier() : 1f;
+
+            // 2. 신규 DB 시스템 배율 (Mult.agi에 이미 캐싱되어 있음)
+            float dbMul = Mult.agi;
+
+            // 3. 패시브 및 최종 연산
+            return Mathf.Max(0f, data.baseAGI * scMul * dbMul * _passiveAgilityMultiplier);
+        }
+    }
+
+    // 민첩(AGI)은 패시브 승수 추가 적용
+    private float _passiveAgilityMultiplier = 1f;
+
+    // 파생 스탯 (MaxHP, MaxMP, MaxRage)
     public float MaxHP
     {
         get
         {
             float fromBody = BDY * 3f;
-            float fromStr = PhysicalDamage;
+            float fromStr = STR;
             float buffAdd = Mult.hpAdd;
-
-            // 체력 공식 = (BDY * 3) + PhysicalDamage + 상태/버프에서 온 hpFlatAdd
-            float raw = fromBody + fromStr + buffAdd;
-            return Mathf.Max(1, Mathf.FloorToInt(raw));
+            return Mathf.Max(1, Mathf.FloorToInt(fromBody + fromStr + buffAdd));
         }
     }
 
@@ -264,92 +339,64 @@ public class BattleUnit : MonoBehaviour
     {
         get
         {
-            float raw = (baseMND * 3f) + MagicDamage + Mult.mpAdd;
+            // (주의: Mult.mpAdd 사용)
+            float raw = (MND * 3f) + CLV + Mult.mpAdd;
             return Mathf.Max(0, Mathf.FloorToInt(raw));
         }
     }
+
     public float MaxRage
     {
         get
         {
-            // 현재 전투 상황이 반영된 6 스탯
-            float str = PhysicalDamage;   // 근력
-            float mag = MagicDamage;      // 마력
-            float agi = EffectiveAGI;     // 민첩
-            float bdy = BDY;              // 신체
-            float mnd = baseMND;          // 정신
-            float ins = INS;              // 통찰
-
-            return Mathf.Max(0f, str + mag + agi + bdy + mnd + ins);
+            // 6대 스탯 총합
+            return Mathf.Max(0f, STR + CLV + EffectiveAGI + BDY + MND + INS);
         }
     }
-    public float PhysicalDamage => Mathf.Max(0f, basePhysicalDamage * Mult.atk);
-    public float MagicDamage => Mathf.Max(0f, baseMagicDamage * Mult.mag);
-    public float BDY => Mathf.Max(0, baseBDY + _passiveBDYBonus);
-    public float INS => Mathf.Max(0, (baseINS * Mult.ins));
-    public float Hostility { get; private set; } = 1.0f; // 전투 시작 시 기본 적대감 (0으로 시작하면 첫 타겟팅이 불가능하므로 1 등으로 설정)
 
-    // === Rage 조작 헬퍼 ===
+    public float CritChance => data.baseINS * Mult.ins * 0.01f;  // 예: INS 30 → 30%
+
+    // ========================================================================
+    // [4] Helper Methods (Rage, Hostility 조작)
+    // ========================================================================
+
+    // --- Rage ---
     public void AddRage(float amount)
     {
         if (Mathf.Approximately(amount, 0f)) return;
-
         float before = Rage;
         Rage = Mathf.Clamp(before + amount, 0f, MaxRage);
-
-        Debug.Log($"[RAGE] {name} Rage: {before:F2} -> {Rage:F2} (Δ={amount:F2})");
+        if (debugLogStats) Debug.Log($"[RAGE] {name}: {before:F1} -> {Rage:F1} ({amount:+#;-#;0})");
     }
 
     public void ReduceRageByRatio(float ratio)
     {
-        ratio = Mathf.Clamp01(ratio);
         if (ratio <= 0f) return;
-
-        float before = Rage;
-        float delta = before * ratio;
-        if (delta <= 0f) return;
-
-        Rage = Mathf.Clamp(before - delta, 0f, MaxRage);
-        Debug.Log($"[RAGE] {name} Rage Calm: {before:F2} -> {Rage:F2} (-{delta:F2}, ratio={ratio * 100f:F1}%)");
+        float amount = Rage * Mathf.Clamp01(ratio);
+        Rage = Mathf.Clamp(Rage - amount, 0f, MaxRage);
     }
 
-    // === Hostility 조작 헬퍼 ===
-    public void AddHostility(float amount)
-    {
-        float before = Hostility;
-
-        float applied = amount;
-
-        // 적의가 증가할 때만 각종 배율 적용
-        if (applied > 0f)
-        {
-            applied *= HostilityGenerationMultiplier;
-        }
-
-        // 음수로 내려가면 0 밑으로는 안 떨어지게 클램프
-        Hostility = Mathf.Max(0f, Hostility + applied);
-
-        float after = Hostility;
-        Debug.Log($"[HOSTILITY] {name} Hostility: {before:F2} -> {after:F2} (Δ={applied:F2})");
-    }
-
-    public void ResetHostility()
-    {
-        Hostility = 1.0f; // 전투 시작 시 기본값과 동일하게 맞춰줍니다.
-    }
-
-    // 상태 효과가 적용된 최종 적대감 '생성량' 배율 (예: 도발 상태일 때 2.0f)
+    // --- Hostility (적대감) ---
+    public float Hostility { get; private set; } = 1.0f;
     public float HostilityGenerationMultiplier => Mult.hostilityGenerationMultiplier;
 
+    public void AddHostility(float amount)
+    {
+        if (amount > 0f) amount *= HostilityGenerationMultiplier; // 적대감 생성 배율 적용
+        Hostility = Mathf.Max(0f, Hostility + amount);
+    }
+
+    public void ResetHostility() => Hostility = 1.0f;
+
+    // --- Utils ---
     public void SetPassiveAgilityMultiplier(float multiplier)
     {
         _passiveAgilityMultiplier = Mathf.Max(0f, multiplier);
-        // AGI가 변하면 ATB도 영향을 받으므로 재계산
-        RecomputeATBFromRefs();
-    }
-    private float _passiveAgilityMultiplier = 1f;
+        InvalidateStatCache(); // AGI 변경 시 캐시 갱신
 
-    public float CritChance => baseINS * Mult.ins * 0.01f;  // 예: INS 30 → 30% 크리티컬
+        // 만약 ATB 시스템이 이 값을 캐싱하고 있다면 알림 필요 (예: ATBTurnController.RefreshUnits())
+    }
+
     #endregion
 
     #region Unity Callbacks
@@ -398,7 +445,7 @@ public class BattleUnit : MonoBehaviour
     {
         if (CurrentMap == null && BattleMapManager.Instance != null)
         {
-            var map = (team == Team.Player) ? BattleMapManager.Instance.PlayerFloor : BattleMapManager.Instance.EnemyFloor;
+            var map = (data.team == Team.Player) ? BattleMapManager.Instance.PlayerFloor : BattleMapManager.Instance.EnemyFloor;
             var cell = map.WorldToCell(transform.position);
             MoveTo(map, cell);
         }
@@ -408,19 +455,8 @@ public class BattleUnit : MonoBehaviour
     #region Data Initialization
     public void ApplyData()
     {
-        if (data != null)
-        {
-            name = data.DisplayName;
-            team = data.team;
-            basePhysicalDamage = data.PhysicalDamage;
-            baseMagicDamage = data.MagicDamage;
-            AGI = data.AGI;
-            baseBDY = data.BDY;
-            baseMND = data.MND;
-            baseINS = data.INS;
-            isBoss = data.isBoss;
-            Hostility = data.Hostility;
-        }
+        gameObject.name = data.DisplayName;
+        Hostility = data.baseHostility; // 런타임에 변하는 값만 초기값 대입
 
         // 상태 반영된 최대치가 필요하므로 먼저 캐시 무효화
         InvalidateStatCache();
@@ -450,12 +486,8 @@ public class BattleUnit : MonoBehaviour
 
     public void InitializeATB(float minAGI, float maxAGI)
     {
-        _agiMinRef = minAGI;                 // 기준 저장
+        _agiMinRef = minAGI;
         _agiMaxRef = maxAGI;
-
-        float normalized = (EffectiveAGI - minAGI) / Mathf.Max(0.01f, maxAGI - minAGI);
-        float turnTime = Mathf.Lerp(12f, 6f, normalized); // 6~12초
-        atbPerSecond = MaxATB / turnTime;
     }
 
     // 버프/상태 변경 시 불러줄 헬퍼
@@ -487,22 +519,6 @@ public class BattleUnit : MonoBehaviour
         _passiveBDYBonus += delta;
         // BDY가 바뀌면 MaxHP도 다시 계산되도록 캐시 갱신
         InvalidateStatCache();
-    }
-
-    public float EffectiveAGI
-    {
-        get
-        {
-            var sc = GetComponent<StatusController>();
-            float mul = (sc != null) ? sc.GetAgilityMultiplier() : 1f;
-
-            // 상태/버프 DB 배수(특히 연막 AgiUp)는 여기서 곱해진다
-            float stateMul = 1f;
-            if (stateStatDB != null && unitStateController != null)
-                stateMul = stateStatDB.ComputeMultipliers(unitStateController).agi;
-
-            return AGI * mul * stateMul * _passiveAgilityMultiplier;
-        }
     }
 
     // 턴이 끝났을 때 ATB 초기화
@@ -816,7 +832,7 @@ public class BattleUnit : MonoBehaviour
     {
         if (animator)
         {
-            if (team == Team.Player)
+            if (data.team == Team.Player)
                 animator.SetTrigger("Die");
         }
         yield return new WaitForSeconds(maxWait); // 간단 대기
@@ -845,7 +861,7 @@ public class BattleUnit : MonoBehaviour
 
         if (HP == 0) //죽었을 시
         {
-            if (animator && Team.Player == team) animator.SetBool("hurt", false);
+            if (animator && Team.Player == data.team) animator.SetBool("hurt", false);
             OnDied?.Invoke(this);
         }
         else if (HP <= (MaxHP * 0.3f)) // 최대체력의 30% Hp보다 작거나 같을 때

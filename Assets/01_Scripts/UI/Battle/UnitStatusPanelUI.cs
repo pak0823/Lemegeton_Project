@@ -37,7 +37,7 @@ public class UnitStatusPanelUI : MonoBehaviour
         if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // 기술명 라벨 업데이트
 
         //아군 카드가 하나도 없으면 즉시 보강
-        if (!views.Keys.Any(k => k && k.team == Team.Player))
+        if (!views.Keys.Any(k => k && k.data.team == Team.Player))
             BuildOnce();
     }
 
@@ -60,7 +60,7 @@ public class UnitStatusPanelUI : MonoBehaviour
         {
             case UnitSort.NameAsc: return src.OrderBy(u => u.name);
             case UnitSort.YPosDesc: return src.OrderByDescending(u => u.transform.position.y); // 화면 위→아래
-            case UnitSort.AgiDesc: return src.OrderByDescending(u => u.AGI);
+            case UnitSort.AgiDesc: return src.OrderByDescending(u => u.EffectiveAGI);
             default: return src; // 검색된 그대로
         }
     }
@@ -70,8 +70,8 @@ public class UnitStatusPanelUI : MonoBehaviour
         // 현재 씬의 생존 유닛 조회
         var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
 
-        var enemies = Sort(units.Where(u => u.team == Team.Enemy), enemySort);
-        var allies = Sort(units.Where(u => u.team == Team.Player), playerSort);
+        var enemies = Sort(units.Where(u => u.data.team == Team.Enemy), enemySort);
+        var allies = Sort(units.Where(u => u.data.team == Team.Player), playerSort);
 
         // 이미 만들어진 카드가 있어도 없는 것만 채워 넣음
         foreach (var u in enemies) if (!views.ContainsKey(u)) SpawnCard(enemyParent, enemyItemPrefab, u);
@@ -111,7 +111,7 @@ public class UnitStatusPanelUI : MonoBehaviour
         }
 
         // 초기 상태가 이미 죽어있다면(예외 케이스), Player만 회색 유지
-        if (u.team == Team.Player && u.IsDead) item.SetDeadStyle(true);
+        if (u.data.team == Team.Player && u.IsDead) item.SetDeadStyle(true);
 
         views[u] = item;
         u.OnDied += OnUnitDied; //사망 이벤트 구독
@@ -133,7 +133,7 @@ public class UnitStatusPanelUI : MonoBehaviour
         if (u == null) return;
         if (!views.TryGetValue(u, out var item)) return;
 
-        if (u.team == Team.Enemy)
+        if (u.data.team == Team.Enemy)
         {
             // 적은 즉시 제거
             RemoveView(u);
@@ -148,7 +148,7 @@ public class UnitStatusPanelUI : MonoBehaviour
     void OnUnitRetreated(BattleUnit u)
     {
         if (u == null) return;
-        if (u.team == Team.Enemy) return;
+        if (u.data.team == Team.Enemy) return;
         RemoveView(u);
     }
 
@@ -165,7 +165,7 @@ public class UnitStatusPanelUI : MonoBehaviour
     {
         var toRemove = views
         .Where(kv =>
-            (kv.Key != null && kv.Key.team == Team.Enemy) ||
+            (kv.Key != null && kv.Key.data.team == Team.Enemy) ||
             (kv.Key == null && kv.Value != null && kv.Value.transform != null &&
               enemyParent != null && kv.Value.transform.IsChildOf(enemyParent)))
         .Select(kv => kv.Key)
@@ -180,7 +180,7 @@ public class UnitStatusPanelUI : MonoBehaviour
 
         // 2) 현재 씬의 '생존 적'만 다시 카드 생성
         var enemies = Sort(
-        FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead && u.team == Team.Enemy),
+        FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead && u.data.team == Team.Enemy),
         enemySort
             );
         foreach (var u in enemies)

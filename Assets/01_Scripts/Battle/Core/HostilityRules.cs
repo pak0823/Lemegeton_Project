@@ -8,7 +8,7 @@ public static class HostilityRules
         if (caster == null || target == null) return 0f;
         float missingHpRatio = 1f - ((float)target.HP / Mathf.Max(1, target.MaxHP));
         float healthMultiplier = 1f + missingHpRatio;
-        float bossScaling = (target.isBoss == ISBOSS.Boss) ? 2.0f : 1.0f;
+        float bossScaling = (target.data.isBoss == ISBOSS.Boss) ? 2.0f : 1.0f;
         float statusMultiplier = caster.HostilityGenerationMultiplier;
         return Mathf.Max(0f, dmg) * healthMultiplier * bossScaling * statusMultiplier;
     }

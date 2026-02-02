@@ -72,6 +72,9 @@ public class CampUIManager : ModalWindowBase
 
     private bool isOpen = false;
 
+    // 버튼 위치 변경 시 캐싱
+    private WaitForEndOfFrame _waitForEndOfFrame = new WaitForEndOfFrame();
+
     protected override void Awake()
     {
         base.Awake();
@@ -201,24 +204,29 @@ public class CampUIManager : ModalWindowBase
             bool isActive = (tab.contentPage == activeTab.contentPage);
 
             // 페이지 켜고 끄기
-            if (tab.contentPage != null)
-            {
-                if (tab.contentPage.activeSelf != isActive)
-                    tab.contentPage.SetActive(isActive);
-            }
+            if (tab.contentPage != null) tab.contentPage.SetActive(isActive);
 
             // 탭 이미지(스프라이트) 교체 로직
-            if (tab.tabImage != null)
-            {
-                // 활성화면 Selected(밑 뚫린 거), 아니면 Normal
-                tab.tabImage.sprite = isActive ? tab.selectedSprite : tab.normalSprite;
+            if (tab.tabImage != null) tab.tabImage.sprite = isActive ? tab.selectedSprite : tab.normalSprite;
 
-
-            }
+            StartCoroutine(ApplyTabPosition(tab, isActive));
         }
 
         // 헤더 교체
         UpdateHeader(activeTab.headerType);
+    }
+
+    private System.Collections.IEnumerator ApplyTabPosition(CampTab tab, bool isActive)
+    {
+        // 유니티 레이아웃 시스템이 위치를 다 잡을 때까지 기다림
+        yield return _waitForEndOfFrame;
+
+        if (tab.tabImage != null)
+        {
+            RectTransform imageRT = tab.tabImage.rectTransform;
+            // 이제 레이아웃 그룹이 계산을 끝냈으므로, 강제로 좌표를 덮어씌움
+            imageRT.anchoredPosition = new Vector2(imageRT.anchoredPosition.x, isActive ? -30f : -26f);
+        }
     }
 
     public override void Show()

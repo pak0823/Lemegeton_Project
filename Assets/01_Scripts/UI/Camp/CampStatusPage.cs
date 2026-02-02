@@ -1,3 +1,4 @@
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -24,6 +25,7 @@ public class CampStatusPage : MonoBehaviour
     [SerializeField] private Slider bondSlider; // 유대 게이지
 
     [Header("Description UI")]
+    [SerializeField] private Text descriptionTitle; // 설명 텍스트
     [SerializeField] private Text descriptionText; // 설명 텍스트 (Bottom_Context에 있는거)
     [SerializeField] private RectTransform selectionArrow; // 아까 만든 화살표
     [SerializeField] private Vector2 arrowOffset = new Vector2(-150f, 0f); // 화살표 위치 보정값
@@ -40,6 +42,10 @@ public class CampStatusPage : MonoBehaviour
         // 화살표 끄기
         if (selectionArrow != null)
             selectionArrow.gameObject.SetActive(false);
+
+        // 제목 텍스트 비우기
+        if (descriptionTitle != null)
+            descriptionTitle.text = "";
 
         // 설명 텍스트 비우기
         if (descriptionText != null)
@@ -68,12 +74,12 @@ public class CampStatusPage : MonoBehaviour
 
         // 스탯 표시 형식: "최종값 (기본값 + 추가값)"
         // 지금은 장비가 없으니 bonus는 0으로 고정. 나중에 여기서 장비 스탯을 가져오면 됨.
-        strText.text = GetStatString(unit.PhysicalDamage, 0);
-        magText.text = GetStatString(unit.MagicDamage, 0);
-        agiText.text = GetStatString(unit.AGI, 0);
-        bdyText.text = GetStatString(unit.BDY, 0);
-        mndText.text = GetStatString(unit.MND, 0);
-        insText.text = GetStatString(unit.INS, 0);
+        strText.text = GetStatString(unit.baseSTR, 0);
+        magText.text = GetStatString(unit.baseCLV, 0);
+        agiText.text = GetStatString(unit.baseAGI, 0);
+        bdyText.text = GetStatString(unit.baseBDY, 0);
+        mndText.text = GetStatString(unit.baseMND, 0);
+        insText.text = GetStatString(unit.baseINS, 0);
 
         // 소질(Passive) 리스트 갱신
         RefreshPassives(unit);
@@ -185,11 +191,12 @@ public class CampStatusPage : MonoBehaviour
     }
 
     // 아이템 선택 시 실행되는 함수
-    private void OnItemSelected(string desc, Transform targetTransform)
+    private void OnItemSelected(string title, string desc, Transform targetTransform)
     {
         // 설명 텍스트 갱신
-        if (descriptionText != null)
+        if (descriptionTitle != null && descriptionText != null)
         {
+            descriptionTitle.text = title;
             descriptionText.text = desc;
         }
 

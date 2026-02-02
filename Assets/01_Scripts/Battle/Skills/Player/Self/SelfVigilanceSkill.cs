@@ -105,7 +105,7 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
             foreach (var u in Object.FindObjectsOfType<BattleUnit>())
             {
                 if (u == null || u.IsDead) continue;
-                if (u.team != caster.team) continue; // 같은 편 기준(설정에 따라 바꿀 수 있음)
+                if (u.data.team != caster.data.team) continue; // 같은 편 기준(설정에 따라 바꿀 수 있음)
 
                 maxHost = Mathf.Max(maxHost, Mathf.Max(0f, u.Hostility));
             }

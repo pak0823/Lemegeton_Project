@@ -246,7 +246,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
 
             case SupportSkillMode.Revive:
                 if (usc != null) usc.Remove(moribundityStateId);
-                int healAmount = Mathf.RoundToInt(caster.MagicDamage * healPower);
+                int healAmount = Mathf.RoundToInt(caster.CLV * healPower);
                 target.Heal(healAmount);
                 bm.EmitActionLabel(target, "Revived");
                 break;
@@ -261,7 +261,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
         var allUnitsInArea = bm.Grid.GetUnitsInArea(map, area).ToList();
 
         // 아군만 필터링
-        var targets = allUnitsInArea.Where(u => u != null && u.team == caster.team);
+        var targets = allUnitsInArea.Where(u => u != null && u.data.team == caster.data.team);
 
         // 모드에 따른 생사 필터링
         if (mode == SupportSkillMode.Revive)
@@ -282,7 +282,7 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
             // 부활(Revive)인 경우 회복량 기반 적의 생성
             if (mode == SupportSkillMode.Revive)
             {
-                int healAmount = Mathf.RoundToInt(caster.MagicDamage * healPower);
+                int healAmount = Mathf.RoundToInt(caster.CLV * healPower);
                 hostilityGained = HostilityRules.FromHeal(healAmount, caster);
             }
             // (Buff나 Cleanse는 기본적으로 적의를 생성하지 않지만, 필요하면 여기서 추가)

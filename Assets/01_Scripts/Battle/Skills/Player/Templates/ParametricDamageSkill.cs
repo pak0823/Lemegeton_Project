@@ -325,7 +325,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
     BattleUnit PickPrimaryTarget()
     {
         var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u && u.team == Team.Player && !u.IsDead).ToList();
+            .Where(u => u && u.data.team == Team.Player && !u.IsDead).ToList();
         if (players.Count == 0) return null;
 
         switch (priorityMode)
@@ -513,7 +513,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
     bool IsInFrontline(BattleUnit _battleunit, int _depth)
     {
         if (!_battleunit || !_battleunit.CurrentMap) return false;
-        var set = GetFrontlineSet(_battleunit.CurrentMap, _battleunit.team, _depth);
+        var set = GetFrontlineSet(_battleunit.CurrentMap, _battleunit.data.team, _depth);
         return set != null && set.Contains(_battleunit.Cell);
     }
 
@@ -534,12 +534,12 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         if (trainingHitAllEnemies && routeForHitAllEnemies >= 0 && route == routeForHitAllEnemies)
         {
             victims = Object.FindObjectsOfType<BattleUnit>()
-                .Where(u => u != null && !u.IsDead && u.team != _caster.team && u.CurrentMap == _map).ToList();
+                .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team && u.CurrentMap == _map).ToList();
         }
         else
         {
             victims = _battlemanager.Grid.GetUnitsInArea(_map, area)
-                            .Where(u => u != null && !u.IsDead && u.team != _caster.team).ToList();
+                            .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team).ToList();
         }
 
         // 타일 변경 및 지대(Zone) 생성 로직

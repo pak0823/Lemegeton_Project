@@ -48,7 +48,7 @@ public class AddressableLoaderTest : MonoBehaviour
             // 만약 UnitData라면 캐스팅해서 데이터 확인 가능
             if (loadedData is UnitData unit)
             {
-                Debug.Log($"유닛 이름: {unit.DisplayName}, 공격력: {unit.PhysicalDamage}");
+                Debug.Log($"유닛 이름: {unit.DisplayName}, 공격력: {unit.baseSTR}");
             }
         }
         else

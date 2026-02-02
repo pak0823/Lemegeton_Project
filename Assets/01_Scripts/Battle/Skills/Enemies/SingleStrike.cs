@@ -37,7 +37,7 @@ public class SingleStrike : SkillAsset
         if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
 
         float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
-        float raw = caster.PhysicalDamage * mult;
+        float raw = caster.STR * mult;
         return Mathf.Max(0, Mathf.FloorToInt(raw));
     }
 
@@ -47,7 +47,7 @@ public class SingleStrike : SkillAsset
 
         // 생존 플레이어 수집
         var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.team == Team.Player && !u.IsDead)
+            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead)
             .Where(u => !SkillAsset.IsUntargetableByEnemy(u)) // 잠복 + 연막 은신 모두 제외
             .ToList();
 

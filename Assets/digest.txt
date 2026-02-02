@@ -522,7 +522,7 @@ public class BattleFieldManager : MonoBehaviour, IFieldController
         int route = owner.GetTrainingRouteIndex(domainSkill);
         if (!domainSkill.trainingReduceRageOnTurnStart || domainSkill.routeForRageReduceOnTurnStart < 0 || route != domainSkill.routeForRageReduceOnTurnStart) return;
 
-        float amount = owner.MagicDamage * domainSkill.rageReducePerClv;
+        float amount = owner.CLV * domainSkill.rageReducePerClv;
         if (amount <= 0f) return;
 
         owner.AddRage(-amount);

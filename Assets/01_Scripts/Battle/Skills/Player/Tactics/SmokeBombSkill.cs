@@ -89,7 +89,7 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
     {
         var prov = BattleMapManager.Instance;
         if (prov == null) return null;
-        return (caster != null && caster.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
+        return (caster != null && caster.data.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
     }
 
     public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
@@ -169,7 +169,7 @@ public class SmokeBombSkill : SkillAsset, ITargetMapProvider
         comp.SetEffectMode(effectMode, smokeHiddenBuffState, agiBuffState, agiMultiplier);
 
         // VFX ¹èÄ¡
-        comp.AttachVfx(smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder, caster.team);
+        comp.AttachVfx(smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder, caster.data.team);
     }
 
     public override int GetEffectiveCost(BattleUnit _caster)

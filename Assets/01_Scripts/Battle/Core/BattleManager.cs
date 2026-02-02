@@ -212,15 +212,15 @@ public class BattleManager : MonoBehaviour
         if (!isReviveSkill && target.IsDead) return false;
 
         // 2. 타겟팅 불가 상태(잠복/연막) 체크 (적군이 플레이어를 노릴 때만 적용되지만, 안전상 체크)
-        if (caster.team != target.team && SkillAsset.IsUntargetableByEnemy(target)) return false;
+        if (caster.data.team != target.data.team && SkillAsset.IsUntargetableByEnemy(target)) return false;
 
         // 3. 타겟 성향(Alignment) 체크
         switch (skill.targetAlignment)
         {
             case SkillTargetAlignment.Enemy:
-                return caster.team != target.team;
+                return caster.data.team != target.data.team;
             case SkillTargetAlignment.Ally:
-                return caster.team == target.team;
+                return caster.data.team == target.data.team;
             case SkillTargetAlignment.Self:
                 return caster == target;
             case SkillTargetAlignment.Any:
@@ -311,7 +311,7 @@ public class BattleManager : MonoBehaviour
                 if (unit != null)
                 {
                     unit.data = data;
-                    unit.team = Team.Player;
+                    unit.data.team = Team.Player;
                     var sr = go.GetComponentInChildren<SpriteRenderer>();
                     if (sr != null && data.UnitIcon != null)
                     {
@@ -347,11 +347,11 @@ public class BattleManager : MonoBehaviour
 
         foreach (var unit in battleUnit)
         {
-            var map = (unit.team == Team.Player) ? provider.PlayerFloor : provider.EnemyFloor;
+            var map = (unit.data.team == Team.Player) ? provider.PlayerFloor : provider.EnemyFloor;
             var cell = map.WorldToCell(unit.transform.position);
 
             unit.Bind(map, cell);
-            gridManager.SetOccupied(unit.team, unit.Cell, true);
+            gridManager.SetOccupied(unit.data.team, unit.Cell, true);
             unit.InitializeATB(minAGI, maxAGI);
             unit.InitPassives(this);
 
@@ -436,7 +436,7 @@ public class BattleManager : MonoBehaviour
         inputHandler.ClearAllPreviews();
 
         state = BattleState.Moving;
-        moveOptions = gridManager.GetAdjacentWalkable(ActingUnit.team, ActingUnit.Cell).ToList();
+        moveOptions = gridManager.GetAdjacentWalkable(ActingUnit.data.team, ActingUnit.Cell).ToList();
         inputHandler.ShowMoveOptions(ActingUnit.CurrentMap, moveOptions);
     }
 
@@ -445,9 +445,9 @@ public class BattleManager : MonoBehaviour
         if (unit == null || map == null) yield break;
 
         Vector3Int fromCell = unit.Cell;
-        gridManager.SetOccupied(unit.team, fromCell, false);
+        gridManager.SetOccupied(unit.data.team, fromCell, false);
         yield return unit.AnimateMoveTo(map, toCell);
-        gridManager.SetOccupied(unit.team, unit.Cell, true);
+        gridManager.SetOccupied(unit.data.team, unit.Cell, true);
 
         bool freeMove = fieldManager != null && fieldManager.IsBeastDomainFreeMove(unit, map, fromCell, toCell);
         if (freeMove)
@@ -487,7 +487,7 @@ public class BattleManager : MonoBehaviour
 
         foreach (var units in currentUnit)
         {
-            if (units == null || units == _battleunit || units.team == _battleunit.team || units.IsDead || units.IsRetreated) continue;
+            if (units == null || units == _battleunit || units.data.team == _battleunit.data.team || units.IsDead || units.IsRetreated) continue;
             yield return units;
         }
     }
@@ -580,7 +580,7 @@ public class BattleManager : MonoBehaviour
     #region Death Handling
     void HandleUnitDied(BattleUnit dead)
     {
-        gridManager.SetOccupied(dead.team, dead.Cell, false);
+        gridManager.SetOccupied(dead.data.team, dead.Cell, false);
 
         if (dead == ActingUnit)
         {
@@ -624,8 +624,8 @@ public class BattleManager : MonoBehaviour
     void CheckBattleEnd()
     {
         var units = FindObjectsOfType<BattleUnit>();
-        bool anyPlayer = units.Any(u => u.team == Team.Player && !u.IsDead);
-        bool anyEnemy = units.Any(u => u.team == Team.Enemy && !u.IsDead);
+        bool anyPlayer = units.Any(u => u.data.team == Team.Player && !u.IsDead);
+        bool anyEnemy = units.Any(u => u.data.team == Team.Enemy && !u.IsDead);
 
         if (!anyEnemy)
         {
@@ -792,10 +792,10 @@ public class BattleManager : MonoBehaviour
 
     public async void OnClickEscape()
     {
-        if (ActingUnit == null || ActingUnit.team != Team.Player) return;
+        if (ActingUnit == null || ActingUnit.data.team != Team.Player) return;
         if (state == BattleState.Resolving) return;
 
-        var aliveEnemies = FindObjectsOfType<BattleUnit>().Where(u => u.team == Team.Enemy && !u.IsDead).ToList();
+        var aliveEnemies = FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy && !u.IsDead).ToList();
         float enemyAgiSum = Mathf.Max(0.0001f, aliveEnemies.Sum(u => u.EffectiveAGI));
         float successChance01 = Mathf.Clamp01(ActingUnit.EffectiveAGI / enemyAgiSum);
         int percent = Mathf.FloorToInt(successChance01 * 100f);
@@ -833,7 +833,7 @@ public class BattleManager : MonoBehaviour
     void RetreatCurrentUnit(BattleUnit _battleunit)
     {
         if (_battleunit == null) return;
-        if (gridManager != null) gridManager.SetOccupied(_battleunit.team, _battleunit.Cell, false);
+        if (gridManager != null) gridManager.SetOccupied(_battleunit.data.team, _battleunit.Cell, false);
         _battleunit.Retreat();
         Destroy(_battleunit.gameObject);
 
@@ -1037,7 +1037,7 @@ public class BattleManager : MonoBehaviour
 
         _isPostSkillMoveInProgress = true;
         state = BattleState.Moving;
-        moveOptions = gridManager.GetAdjacentWalkable(unit.team, unit.Cell).ToList();
+        moveOptions = gridManager.GetAdjacentWalkable(unit.data.team, unit.Cell).ToList();
 
         if (moveOptions.Count == 0)
         {
@@ -1053,11 +1053,11 @@ public class BattleManager : MonoBehaviour
     IEnumerator Co_MoveAfterSkillThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell)
     {
         var fromCell = unit.Cell;
-        gridManager.SetOccupied(unit.team, fromCell, false);
+        gridManager.SetOccupied(unit.data.team, fromCell, false);
 
         yield return unit.AnimateMoveTo(map, toCell);
 
-        gridManager.SetOccupied(unit.team, unit.Cell, true);
+        gridManager.SetOccupied(unit.data.team, unit.Cell, true);
         _isPostSkillMoveInProgress = false;
 
         while (_reactionLocks > 0) yield return null;
@@ -1077,12 +1077,12 @@ public class BattleManager : MonoBehaviour
         {
             var dest = candidates[Random.Range(0, candidates.Count)];
             var from = unit.Cell;
-            gridManager.SetOccupied(unit.team, from, false);
+            gridManager.SetOccupied(unit.data.team, from, false);
             yield return unit.AnimateMoveTo(map, dest);
-            gridManager.SetOccupied(unit.team, unit.Cell, true);
+            gridManager.SetOccupied(unit.data.team, unit.Cell, true);
         }
 
-        if (unit.team == Team.Player) turnManager.EndPlayerTurn();
+        if (unit.data.team == Team.Player) turnManager.EndPlayerTurn();
         else turnManager.EndEnemyTurn(unit);
     }
     List<Vector3Int> GetFearRetreatCandidates(BattleUnit unit)
@@ -1094,7 +1094,7 @@ public class BattleManager : MonoBehaviour
 
         var origin = unit.Cell;
         Vector3Int[] offsets;
-        if (unit.team == Team.Player) offsets = new[] { new Vector3Int(-1, 0, 0), new Vector3Int(-1, -1, 0), };
+        if (unit.data.team == Team.Player) offsets = new[] { new Vector3Int(-1, 0, 0), new Vector3Int(-1, -1, 0), };
         else offsets = new[] { new Vector3Int(1, 0, 0), new Vector3Int(0, 1, 0), };
 
         foreach (var off in offsets)

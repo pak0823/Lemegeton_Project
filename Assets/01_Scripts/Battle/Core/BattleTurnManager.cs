@@ -15,7 +15,7 @@ public class BattleTurnManager : MonoBehaviour
 
     // State
     public BattleUnit ActingUnit { get; private set; }
-    public bool IsPlayerTurn => ActingUnit != null && ActingUnit.team == Team.Player;
+    public bool IsPlayerTurn => ActingUnit != null && ActingUnit.data.team == Team.Player;
 
     private int remainingActions = 0;
     public int RemainingActions => remainingActions;
@@ -110,7 +110,7 @@ public class BattleTurnManager : MonoBehaviour
         fieldManager?.OnTurnStart(unit);
 
         // 적: 웹 캐스팅 체크
-        if (unit.team == Team.Enemy)
+        if (unit.data.team == Team.Enemy)
         {
             var ecs = unit.GetComponent<EnemyCastState>();
             if (ecs != null && ecs.TryTakeReady(out var pending))
@@ -121,7 +121,7 @@ public class BattleTurnManager : MonoBehaviour
         }
 
         // 상태 전환
-        if (unit.team == Team.Player)
+        if (unit.data.team == Team.Player)
         {
             battleManager.SetState(BattleState.ActionSelect);
         }
@@ -134,7 +134,7 @@ public class BattleTurnManager : MonoBehaviour
 
     private void EndTurnDirectly(BattleUnit unit)
     {
-        if (unit.team == Team.Player) EndPlayerTurn();
+        if (unit.data.team == Team.Player) EndPlayerTurn();
         else EndEnemyTurn(unit);
     }
 
@@ -337,7 +337,7 @@ public class BattleTurnManager : MonoBehaviour
 
         // 타겟 찾기 (Grid/Unit 조회는 BM을 통하거나 GridManager 직접 사용)
         var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.team == Team.Player && !u.IsDead)
+            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead)
             .Where(u => !SkillAsset.IsUntargetableByEnemy(u))
             .ToList();
 

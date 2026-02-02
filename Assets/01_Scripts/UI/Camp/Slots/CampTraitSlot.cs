@@ -11,7 +11,7 @@ public class CampTraitSlot : MonoBehaviour
     // 나중에 설명 띄울 때 쓸 데이터 저장용
     private TraitAsset _trait;
 
-    public void Setup(TraitAsset trait, bool isActive, Action<string, Transform> onSelected, Action<TraitAsset> onEquip)
+    public void Setup(TraitAsset trait, bool isActive, Action<string, string, Transform> onSelected, Action<TraitAsset> onEquip)
     {
         _trait = trait;
 
@@ -34,7 +34,7 @@ public class CampTraitSlot : MonoBehaviour
             if (_trait != null)
             {
                 Transform target = (nameText != null) ? nameText.transform : this.transform;
-                onSelected?.Invoke(_trait.description, target);
+                onSelected?.Invoke(_trait.displayName, _trait.description, target);
                 onEquip?.Invoke(_trait);
             }
         });

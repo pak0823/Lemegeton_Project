@@ -163,7 +163,7 @@ public class BattleWaveManager : MonoBehaviour
                 if (u == null) continue;
                 if (!u.IsDead)
                 {
-                    grid?.SetOccupied(u.team, u.Cell, false);
+                    grid?.SetOccupied(u.data.team, u.Cell, false);
                 }
                 Destroy(u.gameObject);
             }
@@ -172,7 +172,7 @@ public class BattleWaveManager : MonoBehaviour
         }
 
         // 2) 잔여 적 제거 (혹시 레이아웃 밖에서 생성된 놈들)
-        var leftovers = FindObjectsOfType<BattleUnit>().Where(u => u.team == Team.Enemy).ToList();
+        var leftovers = FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy).ToList();
         foreach (var u in leftovers)
         {
             Destroy(u.gameObject);

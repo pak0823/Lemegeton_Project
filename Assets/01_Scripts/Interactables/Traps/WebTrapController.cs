@@ -37,7 +37,7 @@ public class WebTrapController : MonoBehaviour
 
         // 현재 셀을 밟고 있는 플레이어 수색(아무나 1명이라도)
         var players = FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.team == Team.Player && !u.IsDead && u.CurrentMap == _map && u.Cell == _cell)
+            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead && u.CurrentMap == _map && u.Cell == _cell)
             .ToList();
 
         if (players.Count > 0)

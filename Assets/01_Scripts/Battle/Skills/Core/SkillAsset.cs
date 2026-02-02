@@ -132,20 +132,20 @@ public abstract class SkillAsset : ScriptableObject
         switch (school)
         {
             case DamageSchool.Physical:
-                stat = _caster.PhysicalDamage;
+                stat = _caster.STR;
                 break;
 
             case DamageSchool.Magical:
-                stat = _caster.MagicDamage;
+                stat = _caster.CLV;
                 break;
 
             case DamageSchool.Composite:
                 // 고정 대미지 STR + MAG
-                stat = _caster.PhysicalDamage + _caster.MagicDamage;
+                stat = _caster.STR + _caster.CLV;
                 break;
 
             default:
-                stat = _caster.PhysicalDamage; // 혹은 0f
+                stat = _caster.STR; // 혹은 0f
                 break;
         }
 
@@ -213,7 +213,7 @@ public abstract class SkillAsset : ScriptableObject
     {
         if (_candidates == null) return null;
         var list = _candidates
-            .Where(u => u && u.team == Team.Player && !u.IsDead)
+            .Where(u => u && u.data.team == Team.Player && !u.IsDead)
             .Where(u => !IsUntargetableByEnemy(u))   // 연막 은신/잠복 타겟 제외
             .ToList();
         if (list.Count == 0) return null;

@@ -5,17 +5,20 @@ public enum ISBOSS { None, Boss }  //º¸½º ±¸º°
 [CreateAssetMenu(menuName = "Battle/UnitData", fileName = "UnitData")]
 public class UnitData : ScriptableObject
 {
+    [Header("Unique ID")]
+    public int unitID;
+
     [Header("Name")]
     public string DisplayName;
     
     [Header("Attributes")]
-    public int PhysicalDamage = 0;  //±Ù·Â
-    public int MagicDamage = 0; //ÃÑ¸í
-    public int AGI = 0; //¹ÎÃ¸
-    public int BDY=0;   //½ÅÃ¼
-    public int MND=0;   //Á¤½Å
-    public int INS = 0; //ÅëÂû
-    public int Hostility = 0; //ÀûÀÇ
+    public int baseSTR = 0;  //±Ù·Â
+    public int baseCLV = 0; //ÃÑ¸í
+    public int baseAGI = 0; //¹ÎÃ¸
+    public int baseBDY=0;   //½ÅÃ¼
+    public int baseMND=0;   //Á¤½Å
+    public int baseINS = 0; //ÅëÂû
+    public int baseHostility = 0; //ÀûÀÇ
 
     [Header("Team Check")]
     public Team team = Team.Player;   // Player / Enemy

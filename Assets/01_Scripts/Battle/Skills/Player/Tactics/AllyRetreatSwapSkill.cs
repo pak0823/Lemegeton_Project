@@ -64,7 +64,7 @@ public class AllyRetreatSwapSkill : SkillAsset
     public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
     {
         // 1. 자기 자신 선택 불가 및 팀 체크
-        if (targetUnit == caster || targetUnit.team != caster.team) yield break;
+        if (targetUnit == caster || targetUnit.data.team != caster.data.team) yield break;
 
         // 2. 후퇴 가능한 칸 계산 (자신이 들고 있던 로직 사용)
         var candidates = GetRetreatCandidates(bm, targetUnit).ToList();
@@ -117,7 +117,7 @@ public class AllyRetreatSwapSkill : SkillAsset
     {
         if (!_battlemanager || _caster == null || _target == null) yield break;
         if (_caster.IsDead || _target.IsDead) yield break;
-        if (_caster.team != _target.team) yield break;
+        if (_caster.data.team != _target.data.team) yield break;
         if (_target.CurrentMap == null || _caster.CurrentMap != _target.CurrentMap) yield break;
 
         // 이동 후보 계산
@@ -156,7 +156,7 @@ public class AllyRetreatSwapSkill : SkillAsset
         // Player: 뒤 = W, SW / Enemy: 뒤 = E, NE
         Vector3Int backA, backB;
 
-        if (_teamunit.team == Team.Player)
+        if (_teamunit.data.team == Team.Player)
         {
             // 플레이어 기준: 뒤(W, SW)
             backA = new Vector3Int(-1, 0, 0); // W
@@ -244,8 +244,8 @@ public class AllyRetreatSwapSkill : SkillAsset
         // 그리드 점유 해제
         if (_battlemanager.Grid != null)
         {
-            _battlemanager.Grid.SetOccupied(_caster.team, casterStartCell, false);
-            _battlemanager.Grid.SetOccupied(_teamunit.team, allyStartCell, false);
+            _battlemanager.Grid.SetOccupied(_caster.data.team, casterStartCell, false);
+            _battlemanager.Grid.SetOccupied(_teamunit.data.team, allyStartCell, false);
         }
 
         // 우선 아군 후퇴  그 다음 캐스터 이동
@@ -310,8 +310,8 @@ public class AllyRetreatSwapSkill : SkillAsset
         // 그리드 점유 재설정
         if (_battlemanager.Grid != null)
         {
-            _battlemanager.Grid.SetOccupied(_teamunit.team, _teamunit.Cell, true);
-            _battlemanager.Grid.SetOccupied(_caster.team, _caster.Cell, true);
+            _battlemanager.Grid.SetOccupied(_teamunit.data.team, _teamunit.Cell, true);
+            _battlemanager.Grid.SetOccupied(_caster.data.team, _caster.Cell, true);
         }
     }
 

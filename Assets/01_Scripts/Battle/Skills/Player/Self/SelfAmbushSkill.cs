@@ -102,7 +102,7 @@ public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
     {
         if (!caster) return 0;
 
-        int amount = Mathf.Max(1, Mathf.FloorToInt(caster.MagicDamage * healPerClv));
+        int amount = Mathf.Max(1, Mathf.FloorToInt(caster.CLV * healPerClv));
         return amount;
     }
 

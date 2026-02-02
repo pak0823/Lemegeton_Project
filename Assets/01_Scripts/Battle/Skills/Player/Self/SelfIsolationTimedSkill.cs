@@ -118,7 +118,7 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
                 if (u == null || u.IsDead || u.IsRetreated) continue;
 
                 // 아군만
-                if (u.team != _caster.team) continue;
+                if (u.data.team != _caster.data.team) continue;
 
                 var sc = u.GetComponent<StatusController>();
                 if (sc == null) continue;
@@ -142,7 +142,7 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
                 if (u == null || u.IsDead || u.IsRetreated) continue;
 
                 // 아군만
-                if (u.team != _caster.team) continue;
+                if (u.data.team != _caster.data.team) continue;
 
                 var sc = u.GetComponent<StatusController>();
                 if (sc == null) continue;

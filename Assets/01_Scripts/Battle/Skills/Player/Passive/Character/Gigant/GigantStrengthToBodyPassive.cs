@@ -22,7 +22,7 @@ public class GigantStrengthToBodyPassive : PassiveAsset
         if (owner == null) return;
 
         // 현재 근력(상태/버프까지 반영된 값)을 기준으로 계산
-        float curPhysical = owner.PhysicalDamage;
+        float curPhysical = owner.STR;
         int bonusBDY = Mathf.RoundToInt(curPhysical * ratio);
 
         if (bonusBDY <= 0)

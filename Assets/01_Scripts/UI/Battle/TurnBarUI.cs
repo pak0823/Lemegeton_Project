@@ -90,7 +90,7 @@ public class TurnBarUI : MonoBehaviour
 
             var rt = img.rectTransform;
             // 초기 Y를 팀별로 분리
-            rt.anchoredPosition = new Vector2(0f, u.team == Team.Player ? playerRowY : enemyRowY);
+            rt.anchoredPosition = new Vector2(0f, u.data.team == Team.Player ? playerRowY : enemyRowY);
 
             // 사망,도주 이벤트 구독 → 제거
             u.OnDied += RemoveUnitIcon;
@@ -120,7 +120,7 @@ public class TurnBarUI : MonoBehaviour
             if (u.data != null) img.sprite = u.data.UnitIcon;
             unitIcons[u] = img;
             var rt = img.rectTransform;
-            rt.anchoredPosition = new Vector2(0f, u.team == Team.Player ? playerRowY : enemyRowY);
+            rt.anchoredPosition = new Vector2(0f, u.data.team == Team.Player ? playerRowY : enemyRowY);
             u.OnDied += RemoveUnitIcon;
         }
     }
@@ -189,10 +189,10 @@ public class TurnBarUI : MonoBehaviour
                 width = width,
                 pivot = pivot,
                 desired = desired,
-                y = (unit.team == Team.Player) ? playerRowY : enemyRowY
+                y = (unit.data.team == Team.Player) ? playerRowY : enemyRowY
             };
 
-            if (unit.team == Team.Player) players.Add(item); else enemies.Add(item);
+            if (unit.data.team == Team.Player) players.Add(item); else enemies.Add(item);
         }
 
         ArrangeRow(players);
@@ -362,7 +362,7 @@ public class TurnBarUI : MonoBehaviour
             img.gameObject.SetActive(true);
             var rt = img.rectTransform;
             float xMin = rt.rect.width * rt.pivot.x; // 바의 왼쪽 경계 내 피벗 최소
-            float y = (u.team == Team.Player) ? playerRowY : enemyRowY;
+            float y = (u.data.team == Team.Player) ? playerRowY : enemyRowY;
             rt.anchoredPosition = new Vector2(xMin, y); // 즉시 왼쪽으로 스냅
         }
 

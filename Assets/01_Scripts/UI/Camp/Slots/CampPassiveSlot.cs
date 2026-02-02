@@ -14,7 +14,7 @@ public class CampPassiveSlot : MonoBehaviour
     private PassiveAsset _passive;
 
     // 데이터 세팅 및 UI 갱신
-    public void Setup(PassiveAsset passive, Action<string, Transform> onSelected)
+    public void Setup(PassiveAsset passive, Action<string, string,Transform> onSelected)
     {
         _passive = passive;
 
@@ -30,7 +30,7 @@ public class CampPassiveSlot : MonoBehaviour
             if (_passive != null && _passive.IsUnlocked())
             {
                 Transform target = (passiveNameText != null) ? passiveNameText.transform : this.transform;
-                onSelected?.Invoke(_passive.description, target);
+                onSelected?.Invoke(_passive.displayName, _passive.description, target);
             }
         });
 

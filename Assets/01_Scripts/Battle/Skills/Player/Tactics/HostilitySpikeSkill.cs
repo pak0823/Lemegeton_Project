@@ -104,7 +104,7 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
         foreach (var u in Object.FindObjectsOfType<BattleUnit>())
         {
             if (u == null || u.IsDead) continue;
-            if (u.team != _caster.team) continue;    // 같은 편 기준
+            if (u.data.team != _caster.data.team) continue;    // 같은 편 기준
 
             maxHost = Mathf.Max(maxHost, Mathf.Max(0f, u.Hostility));
         }

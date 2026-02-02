@@ -39,7 +39,7 @@ public class NoEulWeakOnLowestHpPassive : PassiveAsset
         if (attacker != owner) return;
         if (battle == null) return;
         if (target == null || target.IsDead) return;
-        if (target.team == owner.team) return; // 아군은 제외
+        if (target.data.team == owner.data.team) return; // 아군은 제외
 
         // 이 공격을 맞기 전 대상 HP 복원
         float targetHpBefore = target.HP + Mathf.Max(0, damage);

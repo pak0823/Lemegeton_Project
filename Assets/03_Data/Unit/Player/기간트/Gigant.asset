@@ -12,14 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4381f591acc10804da7e4a02b33af223, type: 3}
   m_Name: Gigant
   m_EditorClassIdentifier: 
-  DisplayName: "\uAE30\uAC04\uD2B8"
-  PhysicalDamage: 5
-  MagicDamage: 2
-  AGI: 1
-  BDY: 50
-  MND: 50
-  INS: 2
-  Hostility: 1
+  unitID: 103
+  DisplayName: Gigant
+  baseSTR: 5
+  baseCLV: 2
+  baseAGI: 1
+  baseBDY: 6
+  baseMND: 2
+  baseINS: 2
+  baseHostility: 0
   team: 0
   isBoss: 0
   skillAnimBindings: []
@@ -33,7 +34,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a0c8db05d76f2094ebd7e0ef1bbf86e3, type: 2}
   - {fileID: 11400000, guid: ed59ea20b6fe7ad4c8ba02c1b773cbef, type: 2}
   - {fileID: 11400000, guid: ae3039e8bb7cd8845bdd3cdd0460033e, type: 2}
-  currentBond: 30
+  currentBond: 0
   activeTrait: {fileID: 0}
   traits:
   - {fileID: 11400000, guid: 98d77189490d82f42abf04e6077418b9, type: 2}

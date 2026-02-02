@@ -10,16 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4381f591acc10804da7e4a02b33af223, type: 3}
-  m_Name: LastVorg
+  m_Name: Rastvor
   m_EditorClassIdentifier: 
-  DisplayName: "\uB77C\uC2A4\uD2B8\uBCF4\uB974"
-  PhysicalDamage: 2
-  MagicDamage: 6
-  AGI: 3
-  BDY: 50
-  MND: 50
-  INS: 1
-  Hostility: 1
+  unitID: 102
+  DisplayName: Rastvor
+  baseSTR: 2
+  baseCLV: 6
+  baseAGI: 3
+  baseBDY: 2
+  baseMND: 4
+  baseINS: 1
+  baseHostility: 0
   team: 0
   isBoss: 0
   skillAnimBindings: []
@@ -33,6 +34,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 9d35719223996084d84ec7ed00f1f61e, type: 2}
   - {fileID: 11400000, guid: f8c95f47f69ad584bb5015bb43ea68d1, type: 2}
   - {fileID: 11400000, guid: a7d2c4f52b65bb5488bfaf3d9a291e07, type: 2}
+  currentBond: 0
+  activeTrait: {fileID: 0}
+  traits: []
   UnitIcon: {fileID: 21300000, guid: 17e7ac3139b614c458e7e43dfdd2e137, type: 3}
   UnitStandImage: {fileID: 21300000, guid: 17e7ac3139b614c458e7e43dfdd2e137, type: 3}
   battlePrefab: {fileID: 8042180859786350050, guid: 72a5565371150e94bbcc90eb113d26ac, type: 3}

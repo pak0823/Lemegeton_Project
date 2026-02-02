@@ -120,13 +120,13 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
         var prov = BattleMapManager.Instance; // 프로젝트에서 쓰는 맵 프로바이더(같은 접근 방식 사용)
         if (prov == null) return null;
         // 플레이어면 PlayerFloor, 적이면 EnemyFloor(= "그 유닛의 아군 맵")
-        return (_caster != null && _caster.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
+        return (_caster != null && _caster.data.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
     }
 
     int CalcHealAmount(BattleUnit _caster, BattleUnit _target)
     {
         // 마법공격력 * 배수. 필요하면 라우터/상태/장비에 따른 보정도 추가 가능
-        float baseStat = Mathf.Max(1, _caster.MagicDamage);
+        float baseStat = Mathf.Max(1, _caster.CLV);
         float mult = Mathf.Max(0f, power);
         return Mathf.Max(1, Mathf.FloorToInt(baseStat * mult));
     }
@@ -135,7 +135,7 @@ public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTi
     {
         var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
         var friends = _battlemanager.Grid.GetUnitsInArea(_map, area)
-                        .Where(u => u != null && !u.IsDead && u.team == _caster.team)
+                        .Where(u => u != null && !u.IsDead && u.data.team == _caster.data.team)
                         .ToList();
 
         int route = GetRoute(_caster);

@@ -171,7 +171,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         var map = _caster.CurrentMap;
         var start = _caster.Cell;
 
-        var labels = GetDirectionsFor(_caster.team, start, direction, backMode);
+        var labels = GetDirectionsFor(_caster.data.team, start, direction, backMode);
         var results = new HashSet<Vector3Int>();
 
         foreach (var label in labels)
@@ -322,7 +322,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
         // 이동 시 현재 칸 점유 해제
         if (_battlemanager != null && _battlemanager.Grid != null)
-            _battlemanager.Grid.SetOccupied(_caster.team, startCell, false);
+            _battlemanager.Grid.SetOccupied(_caster.data.team, startCell, false);
 
         if (dashAnimate)
         {
@@ -336,7 +336,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
                 if (useDirectionalDashTrigger)
                 {
-                    bool isBack = IsBackMove(_caster.team, startCell, _landing);
+                    bool isBack = IsBackMove(_caster.data.team, startCell, _landing);
                     trigger = isBack ? "Skill_3" : forwardDashTrigger;
                 }
                 else
@@ -386,7 +386,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
         // 이동 끝: 새 칸 점유 설정
         if (_battlemanager != null && _battlemanager.Grid != null)
-            _battlemanager.Grid.SetOccupied(_caster.team, _caster.Cell, true);
+            _battlemanager.Grid.SetOccupied(_caster.data.team, _caster.Cell, true);
 
         yield return null;
     }
