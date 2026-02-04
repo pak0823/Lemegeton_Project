@@ -19,49 +19,72 @@ public class CraftHeaderController : MonoBehaviour
     public List<HeaderSlot> headerSlots;
     public CampCraftPage craftPage;
 
-    private AsyncOperationHandle<Sprite> _handle;
+    [Header("Navigation Buttons")]
+    [SerializeField] private Button arrowLeftButton;
+    [SerializeField] private Button arrowRightButton;
+
+    private int currentSelectedIndex = 0;
+    private List<AsyncOperationHandle<Sprite>> loadedHandles = new List<AsyncOperationHandle<Sprite>>();
 
     private void Start()
     {
-        // 토글 이벤트 연결
-        foreach (var slot in headerSlots)
+        for (int i = 0; i < headerSlots.Count; i++)
         {
+            int index = i; // 람다식 캡처를 위해 지역 변수에 저장
+            var slot = headerSlots[i];
+
             if (slot.linkedMaterial != null)
             {
-                // 아이콘 세팅
-                if (slot.linkedMaterial != null)
+                // 아이콘 비동기 로드
+                var handle = Addressables.LoadAssetAsync<Sprite>(slot.linkedMaterial.GetAtlasKey());
+                handle.Completed += h =>
                 {
-                    // 아이콘 비동기 로드
-                    _handle = Addressables.LoadAssetAsync<Sprite>(slot.linkedMaterial.GetAtlasKey());
-                    _handle.Completed += h =>
-                    {
-                        if (h.Status == AsyncOperationStatus.Succeeded) slot.iconImage.sprite = h.Result;
-                    };
+                    // 구조체 리스트이므로 인덱스로 접근해서 수정 권장
+                    if (h.Status == AsyncOperationStatus.Succeeded)
+                        headerSlots[index].iconImage.sprite = h.Result;
+                };
+                loadedHandles.Add(handle);
 
-                    // 토글 변경 이벤트 (켜질 때만 로직 실행)
-                    slot.toggle.onValueChanged.AddListener((isOn) =>
+                // [수정 2] 토글 이벤트 연결
+                slot.toggle.onValueChanged.AddListener((isOn) =>
+                {
+                    if (isOn)
                     {
-                        if (isOn)
-                        {
-                            // 이 재료가 선택됐다고 알림
-                            craftPage.FilterRecipesByMaterial(slot.linkedMaterial);
-                            // 디버그용 (확인 후 삭제)
-                            Debug.Log($"[CraftUI] {slot.linkedMaterial.itemName} 필터 적용");
-                        }
-                    });
-                }
-            }
+                        currentSelectedIndex = index;
 
-            // 창 켜질 때 첫 번째 재료 강제 선택 (안 그러면 처음에 리스트가 비어있음)
-            if (headerSlots.Count > 0 && headerSlots[0].toggle != null)
-            {
-                headerSlots[0].toggle.isOn = true;
-                // isOn = true로 바꾸는 순간 위 리스너가 호출돼서 필터링 됨
+                        craftPage.FilterRecipesByMaterial(slot.linkedMaterial);
+                        Debug.Log($"[CraftUI] {slot.linkedMaterial.itemName} 필터 적용");
+                    }
+                });
             }
         }
+
+        if (arrowLeftButton) arrowLeftButton.onClick.AddListener(() => SelectNextSlot(-1));
+        if (arrowRightButton) arrowRightButton.onClick.AddListener(() => SelectNextSlot(1));
+
+        // 첫 번째 재료 선택은 모든 리스너 등록 후 마지막에 한 번만
+        if (headerSlots.Count > 0 && headerSlots[0].toggle != null)
+            headerSlots[0].toggle.isOn = true;
     }
+
+    public void SelectNextSlot(int direction)
+    {
+        if (headerSlots.Count == 0) return;
+
+        int nextIndex = Mathf.Clamp(currentSelectedIndex + direction, 0, headerSlots.Count - 1);
+        // 인덱스가 실제로 변했을 때만 토글 변경 (불필요한 호출 방지)
+        if (nextIndex != currentSelectedIndex)
+        {
+            headerSlots[nextIndex].toggle.isOn = true;
+            // 토글이 켜지면 위에서 등록한 onValueChanged가 실행되면서 currentSelectedIndex도 자동으로 바뀜
+        }
+    }
+
     private void OnDestroy()
     {
-        if (_handle.IsValid()) Addressables.Release(_handle);
+        foreach (var handle in loadedHandles)
+        {
+            if (handle.IsValid()) Addressables.Release(handle);
+        }
     }
 }

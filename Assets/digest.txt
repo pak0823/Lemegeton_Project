@@ -162,10 +162,13 @@ Directory structure:
     │   │   │   └── UnitStatusPanelUI.cs
     │   │   ├── Camp/
     │   │   │   ├── CampCraftPage.cs
+    │   │   │   ├── CampHeaderController.cs
     │   │   │   ├── CampOptionPage.cs
     │   │   │   ├── CampSkillPage.cs
     │   │   │   ├── CampStatusPage.cs
+    │   │   │   ├── CampTabController.cs
     │   │   │   ├── CampUIManager.cs
+    │   │   │   ├── CharacterHeaderController.cs
     │   │   │   ├── CharacterSelectToggle.cs
     │   │   │   ├── CraftHeaderController.cs
     │   │   │   ├── CraftResultPopup.cs
@@ -223,6 +226,7 @@ Directory structure:
     │       └── Debug/
     │           ├── AddressableLoaderTest.cs
     │           ├── AddressableSpawnerTest.cs
+    │           ├── ItemIconLoader.cs
     │           ├── TileCounter.cs
     │           └── TilemapDebugger.cs
     ├── 04_Art/
@@ -248,6 +252,8 @@ Directory structure:
     │       │           │   └── 럭키식스 1.aseprite
     │       │           └── NoEul/
     │       │               └── 노을 시트 1.aseprite
+    │       ├── Object/
+    │       │   └── ItemAtlas.spriteatlasv2
     │       └── Ui/
     │           └── Exploration/
     │               ├── Menu/
@@ -289,6 +295,8 @@ Directory structure:
     │   ├── New Sprite Atlas.spriteatlasv2
     │   ├── ResolutionTester.cs
     │   ├── WhoKilledMe.cs
+    │   ├── ItemIcon/
+    │   │   └── TestAtlas.spriteatlasv2
     │   ├── Tiled/
     │   │   ├── SAMPLETILE.tsx
     │   │   └── tiled.tmx
@@ -305,6 +313,8 @@ Directory structure:
     │       └── UI log.aseprite
     ├── Editor/
     │   ├── EntranceAutoAligner.cs
+    │   ├── GoogleSheetImporter.cs
+    │   ├── ItemDataImporter.cs
     │   ├── ParametricDamageSkillEditor.cs
     │   ├── SaveTool.cs
     │   └── TileCellDebugger.cs
@@ -1695,6 +1705,26 @@ FILE: 01_Scripts/UI/Camp/CampCraftPage.cs
 
 
 ================================================
+FILE: 01_Scripts/UI/Camp/CampHeaderController.cs
+================================================
+using UnityEngine;
+
+
+public class CampHeaderController : MonoBehaviour
+{
+    [SerializeField] private GameObject charSelectorRoot;
+    [SerializeField] private GameObject itemSelectorRoot;
+
+    public void UpdateHeader(CampHeaderType type)
+    {
+        if (charSelectorRoot) charSelectorRoot.SetActive(type == CampHeaderType.Character);
+        if (itemSelectorRoot) itemSelectorRoot.SetActive(type == CampHeaderType.Item);
+    }
+}
+
+
+
+================================================
 FILE: 01_Scripts/UI/Camp/CampOptionPage.cs
 ================================================
 [Binary file]
@@ -1713,7 +1743,19 @@ FILE: 01_Scripts/UI/Camp/CampStatusPage.cs
 
 
 ================================================
+FILE: 01_Scripts/UI/Camp/CampTabController.cs
+================================================
+[Binary file]
+
+
+================================================
 FILE: 01_Scripts/UI/Camp/CampUIManager.cs
+================================================
+[Binary file]
+
+
+================================================
+FILE: 01_Scripts/UI/Camp/CharacterHeaderController.cs
 ================================================
 [Binary file]
 
@@ -2184,6 +2226,12 @@ FILE: 01_Scripts/Utils/Debug/AddressableSpawnerTest.cs
 
 
 ================================================
+FILE: 01_Scripts/Utils/Debug/ItemIconLoader.cs
+================================================
+[Binary file]
+
+
+================================================
 FILE: 01_Scripts/Utils/Debug/TileCounter.cs
 ================================================
 [Binary file]
@@ -2355,6 +2403,27 @@ FILE: 04_Art/Sprites/Character/Player/Battle/LuckySix/럭키식스 1.aseprite
 FILE: 04_Art/Sprites/Character/Player/Battle/NoEul/노을 시트 1.aseprite
 ================================================
 [Binary file]
+
+
+================================================
+FILE: 04_Art/Sprites/Object/ItemAtlas.spriteatlasv2
+================================================
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!612988286 &1
+SpriteAtlasAsset:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  serializedVersion: 2
+  m_MasterAtlas: {fileID: 0}
+  m_ImporterData:
+    packables:
+    - {fileID: 2800000, guid: 0e4a8ddf1f60caa4d8f0366225344627, type: 3}
+  m_IsVariant: 0
+
 
 
 ================================================
@@ -3117,6 +3186,27 @@ FILE: 07_Test/WhoKilledMe.cs
 
 
 ================================================
+FILE: 07_Test/ItemIcon/TestAtlas.spriteatlasv2
+================================================
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!612988286 &1
+SpriteAtlasAsset:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: 
+  serializedVersion: 2
+  m_MasterAtlas: {fileID: 0}
+  m_ImporterData:
+    packables:
+    - {fileID: 21300000, guid: 721d333f37be925478ef82a7eef28f8d, type: 3}
+  m_IsVariant: 0
+
+
+
+================================================
 FILE: 07_Test/Tiled/SAMPLETILE.tsx
 ================================================
 <?xml version="1.0" encoding="UTF-8"?>
@@ -3229,6 +3319,18 @@ FILE: 07_Test/ui_size_test/UI log.aseprite
 
 ================================================
 FILE: Editor/EntranceAutoAligner.cs
+================================================
+[Binary file]
+
+
+================================================
+FILE: Editor/GoogleSheetImporter.cs
+================================================
+[Binary file]
+
+
+================================================
+FILE: Editor/ItemDataImporter.cs
 ================================================
 [Binary file]
 

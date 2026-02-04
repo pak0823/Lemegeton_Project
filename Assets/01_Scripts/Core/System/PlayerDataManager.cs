@@ -31,6 +31,7 @@ public class PlayerDataManager : MonoBehaviour
     public UnitData[] formation = new UnitData[19];
 
     public event Action OnFormationChanged;
+    public event Action OnUnitsLoaded; // 로딩 완료 알림 이벤트 추가
 
     // 로딩 상태 확인용
     public bool IsLoading { get; private set; } = true;
@@ -72,10 +73,12 @@ public class PlayerDataManager : MonoBehaviour
         });
 
         await handle.Task; // 다 끝날 때까지 대기
+        IsLoading = false;
+        OnUnitsLoaded?.Invoke();
         Debug.Log("초기 유닛 로딩 완료!");
     }
 
-    // (추가 기능) 게임 도중 유닛을 획득했을 때 로딩하는 함수
+    // 게임 도중 유닛을 획득했을 때 로딩하는 함수
     public async void AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
     {
         if (unitRef == null) return;
@@ -88,6 +91,16 @@ public class PlayerDataManager : MonoBehaviour
             ownedUnits.Add(handle.Result);
             Debug.Log($"[UnitGet] 신규 유닛 획득: {handle.Result.DisplayName}");
         }
+    }
+    public UnitData GetOwnedUnit(int index)
+    {
+        // 인덱스 범위 체크 (에러 방지용)
+        if (index < 0 || index >= ownedUnits.Count)
+        {
+            Debug.LogWarning($"[PlayerData] 인덱스 {index}에 해당하는 유닛이 없습니다.");
+            return null;
+        }
+        return ownedUnits[index];
     }
 
     // 진형 설정 함수

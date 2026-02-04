@@ -17,13 +17,13 @@ public class Tester : MonoBehaviour
         switch (pick)
         {
             case 0:
-                testID = "Item_Wood";
+                testID = "101";
                 break;
             case 1:
-                testID = "Item_Oil";
+                testID = "102";
                 break;
             default:
-                testID = "Item_Wood";
+                testID = "101";
                 break;
         }
 

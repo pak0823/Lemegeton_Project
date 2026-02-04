@@ -74,12 +74,12 @@ public class GoogleSheetImporter
 
             // 데이터 갱신
             so.DisplayName = alias;
-            int.TryParse(cols[2], out so.baseSTR);
-            int.TryParse(cols[3], out so.baseCLV);
-            int.TryParse(cols[4], out so.baseAGI);
-            int.TryParse(cols[5], out so.baseBDY);
-            int.TryParse(cols[6], out so.baseMND);
-            int.TryParse(cols[7], out so.baseINS);
+            int.TryParse(cols[3], out so.baseSTR);
+            int.TryParse(cols[4], out so.baseCLV);
+            int.TryParse(cols[5], out so.baseAGI);
+            int.TryParse(cols[6], out so.baseBDY);
+            int.TryParse(cols[7], out so.baseMND);
+            int.TryParse(cols[8], out so.baseINS);
 
             EditorUtility.SetDirty(so);
         }

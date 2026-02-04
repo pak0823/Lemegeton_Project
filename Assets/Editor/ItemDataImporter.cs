@@ -58,12 +58,12 @@ public class ItemDataImporter
             }
 
             // 데이터 갱신 (열 번호는 본인 시트 순서에 맞게 조정)
-            so.itemName = cols[1].Trim();         // B열: 이름
-            if (Enum.TryParse(cols[2].Trim(), true, out ItemType type)) so.itemType = type; // C열: 타입
-            int.TryParse(cols[3], out so.maxStack); // D열: 최대중첩
-            so.itemDescription = cols[4].Trim();   // E열: 설명
-            so.atlasAddress = cols[5].Trim();      // F열: Atlas 주소
-            so.spriteName = cols[6].Trim();        // G열: Sprite 이름
+            so.itemName = cols[2].Trim();         // C열: 이름
+            if (Enum.TryParse(cols[3].Trim(), true, out ItemType type)) so.itemType = type; // C열: 타입
+            int.TryParse(cols[5], out so.maxStack); // D열: 최대중첩
+            so.itemDescription = cols[7].Trim();   // H열: 설명
+            so.atlasAddress = cols[8].Trim();      // F열: Atlas 주소
+            so.spriteName = cols[9].Trim();        // G열: Sprite 이름
 
             EditorUtility.SetDirty(so);
         }

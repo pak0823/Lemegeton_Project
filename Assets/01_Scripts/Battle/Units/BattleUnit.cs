@@ -53,16 +53,7 @@ public class BattleUnit : MonoBehaviour
     public float MaxATB { get; private set; } = 100f;
     public float Overfill { get; private set; } = 0f; // 턴 초과분 (우선권 결정용)
 
-    // 설정할 수 있는 턴 소요 시간 제한 (초 단위)
-    [Header("Turn Speed Constraints")]
-    [Tooltip("AGI가 아무리 높아도 이 시간보다 빨리 턴이 올 순 없음")]
-    [SerializeField] private float minTurnTime = 0.5f;
-
-    [Tooltip("AGI가 아무리 낮아도 이 시간 안에는 턴이 옴")]
-    [SerializeField] private float maxTurnTime = 8.0f;
-
-    [Tooltip("AGI가 몇일 때 1초에 턴이 오는지 기준값 (예: 50이면 AGI 50일 때 2초, 100일 때 1초)")]
-    [SerializeField] private float agiToSpeedConstant = 100f;
+    [SerializeField] private float speedMultiplier = 1.0f;  // 속도 계수
 
     // ATB 계산 프로퍼티
     public bool IsTurnReady => ATB >= MaxATB;
@@ -71,23 +62,14 @@ public class BattleUnit : MonoBehaviour
     {
         get
         {
-            float currentAgi = EffectiveAGI;
+            // 현재 AGI 가져오기 (0 방지)
+            float currentAgi = Mathf.Max(0.1f, EffectiveAGI);
 
-            // AGI가 0 이하일 경우 턴이 영원히 안 오는 것을 방지하기 위해 최소값 보정
-            if (currentAgi <= 0.1f) currentAgi = 0.1f;
+            // 최종 속도 계산 (선형 비례)
+            float finalSpeed = currentAgi * speedMultiplier;
 
-            // 1. 순수 AGI에 따른 예상 소요 시간 계산 (반비례 관계: AGI 높음 -> 시간 짧음)
-            // 공식: (MaxATB * 기준상수) / AGI
-            // 예: MaxATB(100) / (AGI(50) * 0.1(계수)) 같은 방식 등으로 커스텀 가능
-            // 여기서는 단순하게: "AGI가 높을수록 시간이 줄어든다"는 로직 구현
-            // 기준: EffectiveAGI가 agiToSpeedConstant와 같으면 1초 걸림
-            float rawTurnTime = agiToSpeedConstant / currentAgi;
-
-            // 2. 기획자가 정한 최소/최대 시간으로 자르기 (Clamping)
-            float clampedTime = Mathf.Clamp(rawTurnTime, minTurnTime, maxTurnTime);
-
-            // 3. 시간을 다시 속도(채우는 양)로 변환 (속도 = 거리 / 시간)
-            return MaxATB / clampedTime;
+            // 너무 빨라서 게임이 고장나는 것만 방지 (최소 0.1, 최대 5000 등 넉넉하게)
+            return Mathf.Clamp(finalSpeed, 1f, 10000f);
         }
     }
 

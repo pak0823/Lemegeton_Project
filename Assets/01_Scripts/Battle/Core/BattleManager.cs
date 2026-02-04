@@ -340,7 +340,11 @@ public class BattleManager : MonoBehaviour
 
     private void RebindAllUnitsAndInitATB()
     {
-        var battleUnit = FindObjectsOfType<BattleUnit>(true).ToList();
+        var battleUnit = FindObjectsOfType<BattleUnit>()
+                        .Where(u => u.gameObject.activeInHierarchy && !u.IsDead)
+                        .ToList();
+
+        if (battleUnit.Count == 0) return;
 
         float minAGI = battleUnit.Min(unit => unit.EffectiveAGI);
         float maxAGI = battleUnit.Max(unit => unit.EffectiveAGI);
