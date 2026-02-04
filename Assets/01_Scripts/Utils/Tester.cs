@@ -1,38 +1,38 @@
-using UnityEngine;
-
-public class Tester : MonoBehaviour
-{
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.Space))
-            Test_AddRandomItem();
-    }
-
-    public void Test_AddRandomItem()
-    {
-        string testID;
-        int testAmount = 1;
-        int pick = Random.Range(0, 2);
-
-        switch (pick)
-        {
-            case 0:
-                testID = "101";
-                break;
-            case 1:
-                testID = "102";
-                break;
-            default:
-                testID = "101";
-                break;
-        }
-
-        
-
-        InventoryManager.Instance.AddItem(testID, testAmount);
-        Debug.Log($"[Test] {testID} ¾ÆÀÌÅÛ 1°³ È¹µæ");
-
-        // ¾ÆÀÌÅÛ È¹µæ ÈÄ Áï½Ã ÀúÀå
-        PlayerDataManager.Instance.SaveGame();
-    }
-}
+using UnityEngine;
+
+public class Tester : MonoBehaviour
+{
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Space))
+            Test_AddRandomItem();
+    }
+
+    public void Test_AddRandomItem()
+    {
+        string testID;
+        int testAmount = 1;
+        int pick = Random.Range(0, 2);
+
+        switch (pick)
+        {
+            case 0:
+                testID = "101";
+                break;
+            case 1:
+                testID = "102";
+                break;
+            default:
+                testID = "101";
+                break;
+        }
+
+        
+
+        InventoryManager.Instance.AddItem(testID, testAmount);
+        Debug.Log($"[Test] {testID} ì•„ì´í…œ 1ê°œ íšë“");
+
+        // ì•„ì´í…œ íšë“ í›„ ì¦‰ì‹œ ì €ì¥
+        PlayerDataManager.Instance.SaveGame();
+    }
+}

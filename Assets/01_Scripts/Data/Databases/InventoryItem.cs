@@ -1,16 +1,16 @@
-using System;
-
-[System.Serializable]
-public class InventoryItem
-{
-    public string itemID; // ItemDataÀÇ itemID¿Í ¸ÅÄª
-    public int count;
-    public int slotIndex; //ÀÎº¥Åä¸® ½½·Ô ¹øÈ£
-
-    public InventoryItem(string id, int count, int index)
-    {
-        this.itemID = id;
-        this.count = count;
-        this.slotIndex = index;
-    }
+using System;
+
+[System.Serializable]
+public class InventoryItem
+{
+    public string itemID; // ItemDataì˜ itemIDì™€ ë§¤ì¹­
+    public int count;
+    public int slotIndex; //ì¸ë²¤í† ë¦¬ ìŠ¬ë¡¯ ë²ˆí˜¸
+
+    public InventoryItem(string id, int count, int index)
+    {
+        this.itemID = id;
+        this.count = count;
+        this.slotIndex = index;
+    }
 }

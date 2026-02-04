@@ -5,7 +5,7 @@ using UnityEngine;
 [CanEditMultipleObjects]
 public class ParametricDamageSkillEditor : Editor
 {
-    // === SkillAsset(ºÎ¸ğ) °øÅë ÇÊµå ===
+    // === SkillAsset(ë¶€ëª¨) ê³µí†µ í•„ë“œ ===
     SerializedProperty displayNameProp;
     SerializedProperty descriptionImageProp;
     SerializedProperty descriptionProp;
@@ -18,7 +18,7 @@ public class ParametricDamageSkillEditor : Editor
     SerializedProperty animTriggerOverrideProp;
     SerializedProperty targetAlignmentProp;
 
-    // ParametricDamage °íÀ¯ + ·¡ÇÎ ÇÊµå
+    // ParametricDamage ê³ ìœ  + ë˜í•‘ í•„ë“œ
     SerializedProperty priorityMode;
     SerializedProperty preferredStatus;
     SerializedProperty areaPreset;
@@ -30,22 +30,22 @@ public class ParametricDamageSkillEditor : Editor
     SerializedProperty diagUseNEAxis;
     SerializedProperty applyStatusOnHitProp;
 
-    // Å¸ÀÏ º¯°æ °ü·Ã ÇÊµå (½Å±Ô Ãß°¡)
+    // íƒ€ì¼ ë³€ê²½ ê´€ë ¨ í•„ë“œ (ì‹ ê·œ ì¶”ê°€)
     SerializedProperty changeTileToProp;
     SerializedProperty tileChangeDurationProp;
     SerializedProperty zoneStatusIdProp;
     SerializedProperty zoneStatusStackProp;
     SerializedProperty zoneStatusDurationProp;
 
-    // »óÅÂ ¼Òºñ ÇÁ·ÎÆÛÆ¼
+    // ìƒíƒœ ì†Œë¹„ í”„ë¡œí¼í‹°
     SerializedProperty consumeStateOnCast;
     SerializedProperty statesToConsume;
 
-    // Åõ»çÃ¼ °ü·Ã ÇÊµå
+    // íˆ¬ì‚¬ì²´ ê´€ë ¨ í•„ë“œ
     SerializedProperty projectilePrefab;
     SerializedProperty projectileSpeed;
 
-    // Training °ü·Ã
+    // Training ê´€ë ¨
     SerializedProperty trainingUseAreaOverride;
     SerializedProperty routeForAreaOverride;
     SerializedProperty trainingAreaPreset;
@@ -117,7 +117,7 @@ public class ParametricDamageSkillEditor : Editor
 
     void OnEnable()
     {
-        // === ºÎ¸ğ(SkillAsset) ÂÊ ÇÊµå ===
+        // === ë¶€ëª¨(SkillAsset) ìª½ í•„ë“œ ===
         displayNameProp = serializedObject.FindProperty("displayName");
         descriptionImageProp = serializedObject.FindProperty("descriptionImage");
         descriptionProp = serializedObject.FindProperty("description");
@@ -131,7 +131,7 @@ public class ParametricDamageSkillEditor : Editor
         priorityMode = serializedObject.FindProperty("priorityMode");
         targetAlignmentProp = serializedObject.FindProperty("targetAlignment");
 
-        // === ParametricDamageSkill °íÀ¯ ÇÊµå ===
+        // === ParametricDamageSkill ê³ ìœ  í•„ë“œ ===
         priorityMode = serializedObject.FindProperty("priorityMode");
         preferredStatus = serializedObject.FindProperty("preferredStatus");
         areaPreset = serializedObject.FindProperty("areaPreset");
@@ -141,20 +141,20 @@ public class ParametricDamageSkillEditor : Editor
         conditionalMultipliers = serializedObject.FindProperty("conditionalMultipliers");
         selectionMode = serializedObject.FindProperty("selectionMode");
         diagUseNEAxis = serializedObject.FindProperty("diagUseNEAxis");
-        applyStatusOnHitProp = serializedObject.FindProperty("applyStatusOnHit");
-
-        // Å¸ÀÏ º¯°æ °ü·Ã ÇÁ·ÎÆÛÆ¼ ¿¬°á
+        applyStatusOnHitProp = serializedObject.FindProperty("applyStatusOnHit");
+
+        // íƒ€ì¼ ë³€ê²½ ê´€ë ¨ í”„ë¡œí¼í‹° ì—°ê²°
         changeTileToProp = serializedObject.FindProperty("changeTileTo");
         tileChangeDurationProp = serializedObject.FindProperty("tileChangeDuration");
         zoneStatusIdProp = serializedObject.FindProperty("zoneStatusId");
         zoneStatusStackProp = serializedObject.FindProperty("zoneStatusStack");
         zoneStatusDurationProp = serializedObject.FindProperty("zoneStatusDuration");
 
-        // »óÅÂ ¼Òºñ ÇÁ·ÎÆÛÆ¼ ¿¬°á
+        // ìƒíƒœ ì†Œë¹„ í”„ë¡œí¼í‹° ì—°ê²°
         consumeStateOnCast = serializedObject.FindProperty("consumeStateOnCast");
         statesToConsume = serializedObject.FindProperty("statesToConsume");
 
-        // Åõ»çÃ¼ ÇÁ·ÎÆÛÆ¼ ¿¬°á
+        // íˆ¬ì‚¬ì²´ í”„ë¡œí¼í‹° ì—°ê²°
         projectilePrefab = serializedObject.FindProperty("projectilePrefab");
         projectileSpeed = serializedObject.FindProperty("projectileSpeed");
 
@@ -233,7 +233,7 @@ public class ParametricDamageSkillEditor : Editor
     {
         serializedObject.Update();
 
-        // === Base Skill (SkillAsset °øÅë) ===
+        // === Base Skill (SkillAsset ê³µí†µ) ===
         EditorGUILayout.LabelField("Base Skill", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(displayNameProp);
         EditorGUILayout.PropertyField(descriptionImageProp);
@@ -243,21 +243,21 @@ public class ParametricDamageSkillEditor : Editor
         EditorGUILayout.PropertyField(useGapCloseJumpProp, new GUIContent("Use Gap Close Jump"));
         EditorGUILayout.PropertyField(legacyIdProp, new GUIContent("Legacy Id"));
 
-        // Targeting Rules Ç¥½Ã
+        // Targeting Rules í‘œì‹œ
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("Targeting Rules (¾Æ±º/Àû±º ±¸ºĞ)", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Targeting Rules (ì•„êµ°/ì êµ° êµ¬ë¶„)", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(targetAlignmentProp);
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.Space();
 
-        // === Animation ¼³Á¤ Ç¥½Ã ===
+        // === Animation ì„¤ì • í‘œì‹œ ===
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Animation", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(animKindProp, new GUIContent("Anim Kind"));
         EditorGUILayout.PropertyField(animTriggerOverrideProp, new GUIContent("Anim Trigger Override"));
 
-        // Åõ»çÃ¼ ¼³Á¤
+        // íˆ¬ì‚¬ì²´ ì„¤ì •
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Projectile Settings (Ranged Only)", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(projectilePrefab, new GUIContent("Projectile Prefab"));
@@ -266,7 +266,7 @@ public class ParametricDamageSkillEditor : Editor
         EditorGUILayout.Space();
         EditorGUILayout.PropertyField(trainingRoutesProp, true);
 
-        // »óÅÂ ¼Òºñ ¼½¼Ç
+        // ìƒíƒœ ì†Œë¹„ ì„¹ì…˜
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("State Consumption", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(consumeStateOnCast, new GUIContent("Consume State?"));
@@ -277,7 +277,7 @@ public class ParametricDamageSkillEditor : Editor
             EditorGUI.indentLevel--;
         }
 
-        // === ParametricDamage °íÀ¯ ¼³Á¤ ===
+        // === ParametricDamage ê³ ìœ  ì„¤ì • ===
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Targeting", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(priorityMode);
@@ -299,10 +299,10 @@ public class ParametricDamageSkillEditor : Editor
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Training Effects", EditorStyles.boldLabel);
 
-        // === ¹üÀ§ º¯°æ ===
+        // === ë²”ìœ„ ë³€ê²½ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("¹üÀ§ º¯°æ", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingUseAreaOverride, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ë²”ìœ„ ë³€ê²½", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingUseAreaOverride, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingUseAreaOverride.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -313,19 +313,19 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === Á¦¾Ğ ºÎ¿© ===
+        // === ì œì•• ë¶€ì—¬ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("Á¦¾Ğ ºÎ¿© ¼³Á¤", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("ì œì•• ë¶€ì—¬ ì„¤ì •", EditorStyles.boldLabel);
         EditorGUI.indentLevel++;
         EditorGUILayout.PropertyField(routeForSuppression);
         EditorGUILayout.PropertyField(trainingSuppressionOnHit);
         EditorGUI.indentLevel--;
         EditorGUILayout.EndVertical();
 
-        // === ÃâÇ÷ ºÎ¿© ===
+        // === ì¶œí˜ˆ ë¶€ì—¬ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("ÃâÇ÷ ºÎ¿© ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingApplyBleed, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ì¶œí˜ˆ ë¶€ì—¬ ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingApplyBleed, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingApplyBleed.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -336,10 +336,10 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === ¹æ¾î ÁßÃ¸ ¹öÇÁ ===
+        // === ë°©ì–´ ì¤‘ì²© ë²„í”„ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("¹æ¾î ÁßÃ¸ ¹öÇÁ", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingApplyDefenseStacks, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ë°©ì–´ ì¤‘ì²© ë²„í”„", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingApplyDefenseStacks, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingApplyDefenseStacks.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -351,10 +351,10 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === ³Ë¹é ===
+        // === ë„‰ë°± ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("³Ë¹é ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingUseKnockback, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ë„‰ë°± ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingUseKnockback, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingUseKnockback.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -363,10 +363,10 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === Ãß°¡ ÀÌµ¿ ===
+        // === ì¶”ê°€ ì´ë™ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("Ãß°¡ ÀÌµ¿ ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingUsePostMove, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ì¶”ê°€ ì´ë™ ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingUsePostMove, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingUsePostMove.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -376,10 +376,10 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === ÀüÃ¼ °ø°İ ===
+        // === ì „ì²´ ê³µê²© ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("ÀüÃ¼ °ø°İ ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingHitAllEnemies, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ì „ì²´ ê³µê²© ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingHitAllEnemies, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingHitAllEnemies.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -388,10 +388,10 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === ¸ÖÆ¼ È÷Æ® ===
+        // === ë©€í‹° íˆíŠ¸ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("¸ÖÆ¼ È÷Æ® ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingUseMultiHit, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ë©€í‹° íˆíŠ¸ ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingUseMultiHit, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingUseMultiHit.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -400,10 +400,10 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === ÀÚ±â ¹°¸® ´ë¹ÌÁö ¹öÇÁ ===
+        // === ìê¸° ë¬¼ë¦¬ ëŒ€ë¯¸ì§€ ë²„í”„ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("¹°¸® ´ë¹ÌÁö ¹öÇÁ ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingUseSelfAtkBuff, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ë¬¼ë¦¬ ëŒ€ë¯¸ì§€ ë²„í”„ ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingUseSelfAtkBuff, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingUseSelfAtkBuff.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -414,10 +414,10 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === Å¸°Ù ¹ÎÃ¸ ¾àÈ­ ===
+        // === íƒ€ê²Ÿ ë¯¼ì²© ì•½í™” ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("Å¸°Ù ¹ÎÃ¸ ¾àÈ­ Àû¿ë ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingApplyAgiDebuff, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("íƒ€ê²Ÿ ë¯¼ì²© ì•½í™” ì ìš© ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingApplyAgiDebuff, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingApplyAgiDebuff.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -428,23 +428,23 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === °øÆ÷ »óÅÂ ºÎ¿© ===
+        // === ê³µí¬ ìƒíƒœ ë¶€ì—¬ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("°øÆ÷ »óÅÂ ºÎ¿© ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingApplyFear, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ê³µí¬ ìƒíƒœ ë¶€ì—¬ ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingApplyFear, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingApplyFear.boolValue)
         {
             EditorGUI.indentLevel++;
             EditorGUILayout.PropertyField(routeForFear);
-            EditorGUILayout.PropertyField(fearDurationTurns, new GUIContent("Áö¼Ó ÅÏ ¼ö"));
+            EditorGUILayout.PropertyField(fearDurationTurns, new GUIContent("ì§€ì† í„´ ìˆ˜"));
             EditorGUI.indentLevel--;
         }
         EditorGUILayout.EndVertical();
 
-        // === ÀÚ¿ø ¹İÈ¯ ===
+        // === ìì› ë°˜í™˜ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("ÀÚ¿ø ¹İÈ¯ ¼³Á¤", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingRefundOnKill, new GUIContent("ÈÆ·Ã »ç¿ë"));
+        EditorGUILayout.LabelField("ìì› ë°˜í™˜ ì„¤ì •", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingRefundOnKill, new GUIContent("í›ˆë ¨ ì‚¬ìš©"));
         if (trainingRefundOnKill.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -453,28 +453,28 @@ public class ParametricDamageSkillEditor : Editor
         }
         EditorGUILayout.EndVertical();
 
-        // === ÀûÀÇ °¨¼Ò ===
+        // === ì ì˜ ê°ì†Œ ===
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("ÀûÀÇ(Hostility) ÈÆ·Ã", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingReduceHostility, new GUIContent("ÀûÀÇ »ı¼º °¨¼Ò »ç¿ë"));
+        EditorGUILayout.LabelField("ì ì˜(Hostility) í›ˆë ¨", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingReduceHostility, new GUIContent("ì ì˜ ìƒì„± ê°ì†Œ ì‚¬ìš©"));
         if (trainingReduceHostility.boolValue)
         {
             EditorGUI.indentLevel++;
-            EditorGUILayout.PropertyField(routeForReduceHostility, new GUIContent("È°¼º ·çÆ®"));
-            EditorGUILayout.PropertyField(trainingHostilityMultiplier, new GUIContent("ÀûÀÇ »ı¼º ¹èÀ²(0.5=¹İ°¨)"));
+            EditorGUILayout.PropertyField(routeForReduceHostility, new GUIContent("í™œì„± ë£¨íŠ¸"));
+            EditorGUILayout.PropertyField(trainingHostilityMultiplier, new GUIContent("ì ì˜ ìƒì„± ë°°ìœ¨(0.5=ë°˜ê°)"));
             EditorGUI.indentLevel--;
         }
         EditorGUILayout.EndVertical();
 
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("ÃÑ¸í °­È­ ÈÆ·Ã", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(trainingApplyClarityBuff, new GUIContent("ÃÑ¸í(Magic) °­È­"));
+        EditorGUILayout.LabelField("ì´ëª… ê°•í™” í›ˆë ¨", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(trainingApplyClarityBuff, new GUIContent("ì´ëª…(Magic) ê°•í™”"));
         if (trainingApplyClarityBuff.boolValue)
         {
             EditorGUI.indentLevel++;
-            EditorGUILayout.PropertyField(routeForClarityBuff, new GUIContent("È°¼º ·çÆ®"));
-            EditorGUILayout.PropertyField(trainingClarityBuffId, new GUIContent("¹öÇÁ ID"));
-            EditorGUILayout.PropertyField(trainingClarityDuration, new GUIContent("Áö¼Ó ÅÏ(1)"));
+            EditorGUILayout.PropertyField(routeForClarityBuff, new GUIContent("í™œì„± ë£¨íŠ¸"));
+            EditorGUILayout.PropertyField(trainingClarityBuffId, new GUIContent("ë²„í”„ ID"));
+            EditorGUILayout.PropertyField(trainingClarityDuration, new GUIContent("ì§€ì† í„´(1)"));
             EditorGUI.indentLevel--;
         }
         EditorGUILayout.EndVertical();
@@ -482,7 +482,7 @@ public class ParametricDamageSkillEditor : Editor
         // === Frontline Bonus ===
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Frontline Bonus", EditorStyles.boldLabel);
-        EditorGUILayout.PropertyField(useFrontlineBonus, new GUIContent("»ç¿ë"));
+        EditorGUILayout.PropertyField(useFrontlineBonus, new GUIContent("ì‚¬ìš©"));
         if (useFrontlineBonus.boolValue)
         {
             EditorGUI.indentLevel++;
@@ -500,18 +500,18 @@ public class ParametricDamageSkillEditor : Editor
 
         EditorGUILayout.Space();
         EditorGUILayout.BeginVertical("box");
-        EditorGUILayout.LabelField("Hit Effects & Tile (È®Àå)", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Hit Effects & Tile (í™•ì¥)", EditorStyles.boldLabel);
 
-        EditorGUILayout.PropertyField(applyStatusOnHitProp, new GUIContent("Hit Status Effects"), true);
-
+        EditorGUILayout.PropertyField(applyStatusOnHitProp, new GUIContent("Hit Status Effects"), true);
+
         EditorGUILayout.PropertyField(changeTileToProp, new GUIContent("Change Tile To"));
         if (changeTileToProp.objectReferenceValue != null)
         {
             EditorGUI.indentLevel++;
             EditorGUILayout.PropertyField(tileChangeDurationProp, new GUIContent("Tile Duration (Turns)"));
             EditorGUILayout.PropertyField(zoneStatusIdProp, new GUIContent("Zone Status (On Turn End)"));
-            // »óÅÂ°¡ NoneÀÌ ¾Æ´Ò ¶§¸¸ ½ºÅÃ/Áö¼Ó½Ã°£ Ç¥½Ã
-            if (zoneStatusIdProp.enumValueIndex != 0)
+            // ìƒíƒœê°€ Noneì´ ì•„ë‹ ë•Œë§Œ ìŠ¤íƒ/ì§€ì†ì‹œê°„ í‘œì‹œ
+            if (zoneStatusIdProp.enumValueIndex != 0)
             {
                 EditorGUILayout.PropertyField(zoneStatusStackProp, new GUIContent("Status Stack"));
                 EditorGUILayout.PropertyField(zoneStatusDurationProp, new GUIContent("Status Duration"));

@@ -1,622 +1,622 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class BattleSkillProcessor : MonoBehaviour
-{
-    [Header("References")]
-    [SerializeField] private BattleManager battleManager;
-    private IGridProvider grid;
-
-    // === ³»ºÎ »óÅÂ º¯¼ö ===
-    private bool _isResolvingSelfCast = false;
-    // ¿ÜºÎ(BM)¿¡¼­ ÀĞÀ» ¼ö ÀÖ°Ô ÇÁ·ÎÆÛÆ¼ Ãß°¡
-    public bool IsResolvingSelfCast => _isResolvingSelfCast;
-
-    // ³Ë¹é °ü·Ã »óÅÂ
-    private ParametricDamageSkill _pendingKnockbackSkill;
-    private BattleUnit _pendingKnockbackTarget;
-    private Vector3Int _pendingKnockbackDest;
-
-    public void Initialize(BattleManager _battleManager, IGridProvider _grid) // ÀÎÀÚ Ãß°¡
-    {
-        battleManager = _battleManager;
-        grid = _grid;
-    }
-
-    #region Damage Calculation
-    public int GetFinalSkillDamage(BattleUnit caster, BattleUnit target, SkillAsset source, float baseDamage)
-    {
-        // ... BattleManager¿¡ ÀÖ´ø ·ÎÁ÷ ±×´ë·Î º¹»ç ...
-        float finalBase = Mathf.Max(0f, baseDamage);
-
-        if (target == null || source == null)
-            return Mathf.Max(0, Mathf.FloorToInt(finalBase));
-
-        // Àü¹æ º¸³Ê½º Ã¼Å©
-        if (source is ParametricDamageSkill pds && pds.UseFrontlineBonus && pds.CheckFrontline(target))
-        {
-            finalBase *= pds.FrontlineMultiplier;
-        }
-
-        var stateDb = target.stateStatDB;
-        var usc = target.GetComponent<UnitStateController>();
-        var sc = target.GetComponent<StatusController>();
-
-        float mul = 1f;
-        if (stateDb != null)
-            mul *= stateDb.GetDamageTakenMultiplier(usc, source.school);
-
-        if (sc != null)
-        {
-            if (source.school == DamageSchool.Physical)
-            {
-                mul *= Mathf.Pow(1.20f, sc.GetStacks(StatusId.Exhaustion));
-                mul *= Mathf.Pow(0.80f, sc.GetStacks(StatusId.Defense));
-            }
-            else if (source.school == DamageSchool.Magical)
-            {
-                mul *= Mathf.Pow(1.20f, sc.GetStacks(StatusId.Weakness));
-                mul *= Mathf.Pow(0.80f, sc.GetStacks(StatusId.Resistance));
-            }
-        }
-
-        // Rage º¸Á¤
-        float rageMult = 1f;
-        if (caster != null && caster.Rage > 0f)
-        {
-            rageMult += 0.01f * caster.Rage;
-        }
-
-        float raw = finalBase * rageMult * mul;
-        return Mathf.Max(0, Mathf.FloorToInt(raw));
-    }
-    #endregion
-
-    #region Effect Execution
-    // ³Ë¹é ¿¹¾à ¼³Á¤
-    public void SetPendingKnockback(ParametricDamageSkill skill, BattleUnit target, Vector3Int dest)
-    {
-        _pendingKnockbackSkill = skill;
-        _pendingKnockbackTarget = target;
-        _pendingKnockbackDest = dest;
-    }
-
-    public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
-    {
-        if (caster == null || source == null) return;
-        bool killRefundDone = false; // È¯±Ş Áßº¹ ¹æÁö ÇÃ·¡±×
-
-        foreach (var v in victims)
-        {
-            if (v == null) continue;
-            if (v.data.team == caster.data.team) continue;
-
-            var ctx = new SkillRuntime
-            {
-                map = map,
-                originCell = originCell,
-                casterCell = caster.Cell,
-                targetCell = v.Cell
-            };
-
-            float baseDamage = source.ComputeDamage(caster, v, ctx);
-            int damage = GetFinalSkillDamage(caster, v, source, baseDamage);
-
-            // === °æ°è(Guard) Ã³¸® ===
-            var usc = v.GetComponent<UnitStateController>();
-            if (usc != null && usc.Has(UnitStateId.Guard) && source.school == DamageSchool.Physical)
-            {
-                // (ÅëÂû ¾àÈ­ ·ÎÁ÷ »ı·« - ÇÊ¿ä½Ã ¿©±â¿¡ º¹±¸ÇÏ°Å³ª º°µµ ÇÔ¼ö ºĞ¸®)
-                Debug.Log($"[Vigilance] {v.name} ¹æ¾î: {damage} -> 0");
-                damage = 0;
-                usc.Remove(UnitStateId.Guard);
-            }
-
-            // ÇÇÇØ Àû¿ë
-            float hpBefore = v.HP;
-            v.PlayHit();
-            v.TakeDamage(damage);
-            bool diedNow = (hpBefore > 0f && v.IsDead);
-
-            // [¼öÁ¤] Àâ´ÙÇÑ È¿°ú Ã³¸®´Â ÀüºÎ ¿©±â·Î À§ÀÓ! (Áßº¹ ÄÚµå »èÁ¦µÊ)
-            if (source is ParametricDamageSkill dmgSkill)
-            {
-                ProcessParametricEffects(caster, v, dmgSkill, map, diedNow, ref killRefundDone);
-            }
-
-            // Àû´ë°¨ Ã³¸®
-            float hostilityGained = HostilityRules.FromDamage(damage, caster, v);
-            caster.AddHostility(hostilityGained);
-            caster.NotifyDealtDamage(v, damage, source);
-        }
-    }
-
-    // ParametricDamageSkillÀÇ Àâ´ÙÇÑ È¿°úµé ºĞ¸® (°¡µ¶¼º À§ÇØ)
-    private void ProcessParametricEffects(BattleUnit caster, BattleUnit v, ParametricDamageSkill dmgSkill, Tilemap map, bool diedNow, ref bool killRefundDone)
-    {
-        if (caster == null || v == null || dmgSkill == null) return;
-        int route = caster.GetTrainingRouteIndex(dmgSkill);
-
-        // 1. Á¦¾Ğ Ãß°¡ °¨¼Ò
-        if (dmgSkill.trainingSuppressionOnHit > 0 &&
-            dmgSkill.routeForSuppression >= 0 &&
-            route == dmgSkill.routeForSuppression)
-        {
-            var cast = v.GetComponent<EnemyCastState>();
-            if (cast != null) cast.TryReduceSuppression(dmgSkill.trainingSuppressionOnHit);
-        }
-
-        // 2. ÃâÇ÷ ºÎ¿©
-        if (dmgSkill.trainingApplyBleed &&
-            dmgSkill.routeForBleed >= 0 &&
-            route == dmgSkill.routeForBleed)
-        {
-            var sc = v.GetComponent<StatusController>();
-            if (sc != null)
-            {
-                sc.ApplyWithTurnContext(
-                    StatusId.Bleeding,
-                    Mathf.Max(1, dmgSkill.trainingBleedStacks),
-                    Mathf.Max(1, dmgSkill.trainingBleedDurationTurns)
-                );
-            }
-        }
-
-        // 3. ¹ÎÃ¸ ¾àÈ­
-        if (dmgSkill.trainingApplyAgiDebuff &&
-            dmgSkill.routeForAgiDebuff >= 0 &&
-            route == dmgSkill.routeForAgiDebuff &&
-            dmgSkill.targetAgiDebuffId != UnitStateBuffId.None)
-        {
-            var uscTarget = v.GetComponent<UnitStateController>();
-            if (uscTarget != null)
-            {
-                uscTarget.ApplyBuffForTurns(dmgSkill.targetAgiDebuffId, Mathf.Max(1, dmgSkill.targetAgiDebuffDurationTurns));
-            }
-        }
-
-        // 4. °øÆ÷ ºÎ¿©
-        if (dmgSkill.trainingApplyFear &&
-            dmgSkill.routeForFear >= 0 &&
-            route == dmgSkill.routeForFear &&
-            !v.IsDead)
-        {
-            var uscFear = v.GetComponent<UnitStateController>();
-            if (uscFear != null)
-            {
-                uscFear.ApplyForTurns(UnitStateId.Fear, Mathf.Max(1, dmgSkill.fearDurationTurns));
-            }
-        }
-
-        // 5. Ã³Ä¡ ½Ã ÀÚ¿ø È¯±Ş
-        if (diedNow && !killRefundDone &&
-            dmgSkill.trainingRefundOnKill &&
-            dmgSkill.routeForRefundOnKill >= 0 &&
-            route == dmgSkill.routeForRefundOnKill)
-        {
-            int cost = dmgSkill.GetEffectiveCost(caster);
-            if (cost > 0)
-            {
-                caster.GainMP(cost);
-                Debug.Log($"[Refund] {caster.name} Kill Bonus: MP +{cost}");
-            }
-            killRefundDone = true;
-        }
-
-        // 6. ³Ë¹é Ã³¸® (Pending È®ÀÎ)
-        if (_pendingKnockbackSkill == dmgSkill &&
-            _pendingKnockbackTarget == v &&
-            !v.IsDead &&
-            v.CurrentMap == map)
-        {
-            var dest = _pendingKnockbackDest;
-            bool canMove = map.HasTile(dest);
-
-            // »óÅÂÀÌ»ó(ÀÌµ¿ ºÒ°¡) Ã¼Å©
-            var sc = v.GetComponent<StatusController>();
-            if (sc != null && sc.Has(StatusId.Fixing)) canMove = false;
-
-            // Á¡À¯ Ã¼Å© (BM ±×¸®µå »ç¿ë)
-            if (canMove && grid != null && (grid.IsOccupied(Team.Player, dest) || grid.IsOccupied(Team.Enemy, dest)))
-            {
-                canMove = false;
-            }
-
-            if (canMove)
-            {
-                if (grid != null) grid.SetOccupied(v.data.team, v.Cell, false);
-                v.MoveTo(map, dest);
-                if (grid != null) grid.SetOccupied(v.data.team, v.Cell, true);
-            }
-
-            // »ç¿ëµÈ Pending ÃÊ±âÈ­
-            _pendingKnockbackSkill = null;
-            _pendingKnockbackTarget = null;
-        }
-    }
-    public void ResolveSkillAtCell(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
-        var victims = grid.GetUnitsInArea(map, area);
-
-        // ¿©±â¼­ ExecuteSkillDamage È£ÃâÇÏ°í ½ÍÁö¸¸, 
-        // SkillDefinition ±¸Á¶Ã¼¿¡´Â SkillAsset Á¤º¸°¡ ¾ø¾î¼­ ´ë¹ÌÁö Ã³¸®°¡ ¾Ö¸ÅÇÔ.
-        // ±âÁ¸ ÄÚµå¿¡¼­µµ ResolveSkillAtCellÀº Enemy AI µî¿¡¼­ Á¦ÇÑÀûÀ¸·Î ¾²¿´À½.
-        // ÇÊ¿äÇÏ´Ù¸é ±¸Çö.
-    }
-    #endregion
-
-    #region Flows (Unit / Tile / Self)
-    // Ç¥ÁØ À¯´Ö ½ºÅ³ Èå¸§
-    public IEnumerator PerformStandardUnitSkillFlow(SkillAsset _skill, BattleUnit _caster, BattleUnit _target)
-    {
-        bool doGapClose = _skill.ShouldGapCloseToTarget(_caster, _target);
-
-        // BM¿¡ ÀÖ´ø Co_GapCloseThenResolveOnTargetSO ·ÎÁ÷ ÀÌµ¿
-        var originalW = _caster.transform.position;
-
-        if (doGapClose && TryGetFrontCellOfTarget(_caster, _target, out var frontCell))
-        {
-            var mapForJump = _target.CurrentMap; // ?? provider...
-                                                // À§Ä¡ °è»ê ·ÎÁ÷
-            yield return _caster.AnimateJumpToWorld(GetCellRightEdgeWorld(mapForJump, frontCell), 0.08f, null, 0.2f);
-        }
-
-        bool resolved = false;
-        System.Action OnImpact = () => {
-            resolved = true;
-            StartCoroutine(_skill.ResolveOnUnit(battleManager, _caster, _target));
-        };
-
-        _caster.OnAttackImpact += OnImpact;
-        string trigger = _caster.GetAnimTriggerForSkill(_skill);
-        yield return _caster.AnimateAttack(_target, trigger);
-        _caster.OnAttackImpact -= OnImpact;
-
-        if (!resolved) yield return _skill.ResolveOnUnit(battleManager, _caster, _target);
-
-        _caster.ApplyCooldown(_skill);
-        battleManager.FinishActionAfterSkill(); // BM¿¡°Ô "³¡³µ´Ù"°í º¸°í
-
-        _caster.transform.position = originalW;
-    }
-
-    public IEnumerator PerformStandardTileSkillFlow(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
-    {
-        // 1. Åõ»çÃ¼ ½ºÅ³ÀÎ °æ¿ì (IProjectileTileSkill ÀÎÅÍÆäÀÌ½º ±¸Çö ¿©ºÎ È®ÀÎ)
-        if (skill is IProjectileTileSkill projSkill)
-        {
-            bool castEnded = false;
-            bool projEnded = false;
-            bool fired = false;
-            bool aborted = false;
-            GameObject liveProjectile = null;
-
-            int cost = skill.GetEffectiveCost(caster);
-
-            // 1-1) Åõ»çÃ¼ ÇÁ¸®ÆÕ È®º¸
-            ProjectileController projPrefab = projSkill.GetProjectilePrefab(caster);
-            float projSpeed = projSkill.GetProjectileSpeed(caster);
-            if (projSpeed <= 0f) projSpeed = 3f;
-
-            // fallback: ½ºÅ³¿¡ ¾øÀ¸¸é À¯´Ö ±âº»°ª
-            if (projPrefab == null && caster != null)
-                projPrefab = caster.defaultProjectilePrefab;
-
-            // 1-2) ÁøÂ¥ Åõ»çÃ¼°¡ ¾ø´Â °æ¿ì -> Áï¹ß·Î Ã³¸®ÇÒÁö, Ãë¼ÒÇÒÁö °áÁ¤
-            if (projPrefab == null)
-            {
-                Debug.LogWarning($"[Projectile] ÇÁ¸®ÆÕ ¾øÀ½. Áï¹ß Ã³¸®·Î ÀüÈ¯: {skill.name}");
-                if (!caster.TryConsumeResource(skill.costResource, cost))
-                {
-                    battleManager.UnlockSkillConfirm();
-                    yield break;
-                }
-                yield return skill.ResolveOnTile(battleManager, map, cell, caster);
-                caster.ApplyCooldown(skill);
-                battleManager.FinishActionAfterSkill();
-                yield break;
-            }
-
-            // 1-3) ÀÌº¥Æ® ¿¬°á (Cast End)
-            System.Action onCastEnd = null;
-            onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
-            caster.OnAttackEnded += onCastEnd;
-
-            // 1-4) ÀÌº¥Æ® ¿¬°á (Impact -> ¹ß»ç)
-            System.Action onFire = null;
-            onFire = () =>
-            {
-                caster.OnAttackImpact -= onFire;
-                fired = true;
-
-                if (!caster.TryConsumeResource(skill.costResource, cost))
-                {
-                    battleManager.UnlockSkillConfirm();
-                    projEnded = true;
-                    return;
-                }
-                if (aborted) { projEnded = true; return; }
-
-                Vector3 startW = caster.transform.position;
-                Vector3 targetW = map.GetCellCenterWorld(cell);
-
-                // Åõ»çÃ¼ »ı¼º
-                liveProjectile = Instantiate(projPrefab.gameObject, startW, Quaternion.identity);
-                var pc = liveProjectile.GetComponent<ProjectileController>();
-
-                System.Action onArrive = () =>
-                {
-                    if (aborted) return;
-                    StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
-                    {
-                        caster.ApplyCooldown(skill);
-                        projEnded = true;
-                    }));
-                };
-
-                if (pc != null) pc.Init(startW, targetW, onArrive, speedUnitsPerSec: projSpeed);
-                else
-                {
-                    // ÄÁÆ®·Ñ·¯ ¾øÀ¸¸é ´ëÃæ ½Ã°£ ¶¼¿ì°í µµÂø Ã³¸®
-                    StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, onArrive));
-                }
-            };
-            caster.OnAttackImpact += onFire;
-
-            // 1-5) ¾Ö´Ï¸ŞÀÌ¼Ç ½ÇÇà
-            string trigger = caster.GetAnimTriggerForSkill(skill);
-            if (skill.animKind == SkillAnimKind.Ranged)
-                yield return caster.AnimateRanged(trigger);
-            else
-                yield return caster.AnimateAttack(null, trigger);
-
-            // 1-6) ¾ÈÀüÀåÄ¡: ¾Ö´Ï¸ŞÀÌ¼Ç ³¡³¯ ¶§±îÁö ÀÓÆÑÆ® ¾È ¿ÔÀ¸¸é °­Á¦ ¹ß»ç
-            if (!fired && !projEnded)
-            {
-                onFire?.Invoke();
-            }
-
-            // 1-7) ´ë±â (ÃÖ´ë 5ÃÊ Å¸ÀÓ¾Æ¿ô)
-            float timeout = 5f;
-            while (!(castEnded && projEnded) && timeout > 0f)
-            {
-                timeout -= Time.deltaTime;
-                yield return null;
-            }
-
-            // 1-8) Å¸ÀÓ¾Æ¿ô/Áß´Ü ½Ã Á¤¸®
-            if (!(castEnded && projEnded))
-            {
-                aborted = true;
-                if (liveProjectile != null) Destroy(liveProjectile);
-            }
-
-            battleManager.FinishActionAfterSkill();
-        }
-        // 2. Áï¹ß(Instant) ½ºÅ³ÀÎ °æ¿ì (¶Ç´Â ±× ¿Ü)
-        else
-        {
-            // === ±âÁ¸ Áï¹ß Ã³¸® ·ÎÁ÷ ===
-            bool resolved = false;
-            int cost = skill.GetEffectiveCost(caster);
-
-            System.Action onImpact = () =>
-            {
-                if (!caster.TryConsumeResource(skill.costResource, cost))
-                {
-                    battleManager.UnlockSkillConfirm();
-                    resolved = true;
-                    return;
-                }
-                StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
-                {
-                    caster.ApplyCooldown(skill);
-                    resolved = true;
-                }));
-            };
-
-            caster.OnAttackImpact += onImpact; // ±¸µ¶
-
-            string trigger = caster.GetAnimTriggerForSkill(skill);
-            yield return caster.AnimateAttack(null, trigger);
-
-            caster.OnAttackImpact -= onImpact; // ÇØÁ¦
-
-            if (!resolved) // ÀÌº¥Æ® ¸ø ¹Ş¾ÒÀ¸¸é °­Á¦ ½ÇÇà
-            {
-                if (caster.TryConsumeResource(skill.costResource, cost))
-                {
-                    yield return skill.ResolveOnTile(battleManager, map, cell, caster);
-                    caster.ApplyCooldown(skill);
-                }
-                else
-                {
-                    battleManager.UnlockSkillConfirm();
-                }
-            }
-
-            battleManager.FinishActionAfterSkill();
-        }
-    }
-
-    public IEnumerator PerformSelfCastFlow(SkillAsset _skill, BattleUnit _caster, bool _freeAction)
-    {
-        if (_skill == null || _caster == null)
-        {
-            _isResolvingSelfCast = false;
-            yield break;
-        }
-
-        // ¿©±â¼­ »óÅÂ Àá±İ ½ÃÀÛ
-        _isResolvingSelfCast = true;
-
-        try
-        {
-            string trigger = _caster.GetAnimTriggerForSkill(_skill);
-            yield return _caster.AnimateAttack(null, trigger);
-
-            yield return _skill.ResolveOnUnit(battleManager, _caster, _caster);
-
-            _caster.ApplyCooldown(_skill);
-
-            if (!_freeAction)
-            {
-                battleManager.FinishActionAfterSkill();
-            }
-            else
-            {
-                battleManager.ResetSkillSelectionState();
-            }
-        }
-        finally
-        {
-            _isResolvingSelfCast = false;
-        }
-    }
-
-    public IEnumerator Co_ReactiveAttackFlow(SkillAsset skill, BattleUnit caster, BattleUnit target, bool doGapClose)
-    {
-        if (skill == null || caster == null || target == null) yield break;
-
-        var originalW = caster.transform.position;
-
-        if (doGapClose && TryGetFrontCellOfTarget(caster, target, out var frontCell))
-        {
-            var mapForJump = target.CurrentMap; // (provider Á¢±Ù ´ë½Å Á÷Á¢ ÂüÁ¶ ±ÇÀå)
-            var frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
-            yield return caster.AnimateJumpToWorld(frontW, 0.08f, null, 0.2f); // Á¡ÇÁ ½Ã°£ »ó¼ö´Â ÆÄ¶ó¹ÌÅÍ³ª const·Î
-        }
-
-        bool resolved = false;
-        System.Action OnImpact = () =>
-        {
-            // ¶÷´Ù ¾È¿¡¼­ ÀÌº¥Æ® ÇØÁ¦ ÁÖÀÇ (¸Ş¼­µå·Î ºĞ¸®ÇÏ°Å³ª Á¶½ÉÇØ¼­ »ç¿ë)
-            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => resolved = true));
-        };
-
-        caster.OnAttackImpact += OnImpact;
-        string trigger = caster.GetAnimTriggerForSkill(skill);
-        yield return caster.AnimateAttack(target, trigger);
-        caster.OnAttackImpact -= OnImpact;
-
-        if (!resolved)
-            yield return skill.ResolveOnUnit(battleManager, caster, target);
-
-        caster.transform.position = originalW;
-    }
-    #endregion
-
-    // === ÇïÆÛ ÇÔ¼öµé (BM¿¡¼­ º¹»çÇØ¿À°Å³ª BM²¨ È£Ãâ) ===
-    private bool TryGetFrontCellOfTarget(BattleUnit caster, BattleUnit target, out Vector3Int frontCell)
-    {
-        {
-            frontCell = target != null ? target.Cell : default;
-            if (target == null || caster == null) return false;
-
-            var targetMap = target.CurrentMap;
-            var casterMap = caster.CurrentMap ?? targetMap;
-
-            // --- 1) ÁÂ¿ì ¿ì¼± ±ÔÄ¢ ---
-            var baseCell = target.Cell;
-            int dx = caster.Cell.x - target.Cell.x;
-
-            if (dx < 0)
-            {
-                // Ä³½ºÅÍ°¡ Å¸±êÀÇ '¿ŞÂÊ'¿¡ ÀÖÀ½ ¡æ ¼­ÂÊ ÀÌ¿ô °íÁ¤
-                frontCell = new Vector3Int(baseCell.x - 1, baseCell.y, baseCell.z);
-                return true;
-            }
-            else if (dx > 0)
-            {
-                // Ä³½ºÅÍ°¡ Å¸±êÀÇ '¿À¸¥ÂÊ'¿¡ ÀÖÀ½ ¡æ µ¿ÂÊ ÀÌ¿ô °íÁ¤
-                frontCell = new Vector3Int(baseCell.x + 1, baseCell.y, baseCell.z);
-                return true;
-            }
-
-            // --- 2) °°Àº ÄÃ·³(¼öÁ÷ Á¤·Ä)ÀÏ ¶§¸¸ ±âÁ¸ °¢µµ ±â¹İ ¼±ÅÃ Æú¹é ---
-            // Å¸°Ù¡æ½ÃÀüÀÚ ¿ùµå ¹æÇâ
-            Vector3 targetW = targetMap.GetCellCenterWorld(target.Cell);
-            Vector3 casterW = casterMap.GetCellCenterWorld(caster.Cell);
-            Vector2 aimDir = (Vector2)(casterW - targetW);
-            if (aimDir.sqrMagnitude < 1e-6f) return false;
-            aimDir.Normalize();
-
-            bool oddCol = SkillLibrary.IsOddColumn(baseCell);
-
-            // odd-q ÀÌ¿ô ÁıÇÕ(ÇÁ·ÎÁ§Æ®¿¡¼­ ¾²´Â Ã¼°è ±×´ë·Î)
-            Vector3Int[] neighOffsetsEven = {
-        new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
-        new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
-        new Vector3Int(-1,-1, 0), new Vector3Int( 0,-1,0)
-    };
-            Vector3Int[] neighOffsetsOdd = {
-        new Vector3Int(+1, 0, 0), new Vector3Int(+1,+1,0),
-        new Vector3Int( 0,+1, 0), new Vector3Int(-1, 0,0),
-        new Vector3Int( 0,-1, 0), new Vector3Int(+1,-1,0)
-    };
-            var candidates = oddCol ? neighOffsetsOdd : neighOffsetsEven;
-
-            float bestDot = float.NegativeInfinity;
-            float bestDist2 = float.PositiveInfinity;
-            const float EPS = 1e-5f;
-            Vector3Int best = baseCell;
-
-            foreach (var off in candidates)
-            {
-                var neigh = new Vector3Int(baseCell.x + off.x, baseCell.y + off.y, baseCell.z);
-                var neighW = targetMap.GetCellCenterWorld(neigh);
-
-                Vector2 dir = (Vector2)(neighW - targetW);
-                if (dir.sqrMagnitude < 1e-6f) continue;
-                dir.Normalize();
-
-                float d = Vector2.Dot(aimDir, dir);
-                float dist2 = ((Vector2)(neighW - casterW)).sqrMagnitude;
-
-                if (d > bestDot + EPS || (Mathf.Abs(d - bestDot) <= EPS && dist2 < bestDist2))
-                {
-                    bestDot = d;
-                    bestDist2 = dist2;
-                    best = neigh;
-                }
-            }
-
-            frontCell = best;
-            return true;
-        }
-    }
-    private Vector3 GetCellRightEdgeWorld(Tilemap map, Vector3Int cell, float margin = 0.02f) 
-    {
-        if (map == null) return Vector3.zero;
-        // BM ·ÎÁ÷ ±×´ë·Î º¹ºÙ
-        var center = map.GetCellCenterWorld(cell);
-        var grid = map.layoutGrid != null ? map.layoutGrid : map.GetComponentInParent<Grid>();
-        var cellSize = (grid != null) ? grid.cellSize : Vector3.one;
-        Vector3 rightDir = (grid != null) ? grid.transform.right : Vector3.right;
-
-        return center + rightDir * (cellSize.x * 0.5f - margin);
-    }
-
-    IEnumerator Co_ResolveUnitThenFlag(SkillAsset skill, BattleUnit caster, BattleUnit target, System.Action done)
-    {
-        yield return skill.ResolveOnUnit(battleManager, caster, target);
-        done?.Invoke();
-    }
-
-    IEnumerator Co_ResolveTileThenFlag(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster, System.Action done)
-    {
-        yield return skill.ResolveOnTile(battleManager, map, cell, caster);
-        done?.Invoke();
-    }
-
-    IEnumerator FallbackProjectile(Vector3 start, Vector3 end, float time, System.Action done)
-    {
-        float t = 0f;
-        while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); yield return null; }
-        done?.Invoke();
-    }
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class BattleSkillProcessor : MonoBehaviour
+{
+    [Header("References")]
+    [SerializeField] private BattleManager battleManager;
+    private IGridProvider grid;
+
+    // === ë‚´ë¶€ ìƒíƒœ ë³€ìˆ˜ ===
+    private bool _isResolvingSelfCast = false;
+    // ì™¸ë¶€(BM)ì—ì„œ ì½ì„ ìˆ˜ ìˆê²Œ í”„ë¡œí¼í‹° ì¶”ê°€
+    public bool IsResolvingSelfCast => _isResolvingSelfCast;
+
+    // ë„‰ë°± ê´€ë ¨ ìƒíƒœ
+    private ParametricDamageSkill _pendingKnockbackSkill;
+    private BattleUnit _pendingKnockbackTarget;
+    private Vector3Int _pendingKnockbackDest;
+
+    public void Initialize(BattleManager _battleManager, IGridProvider _grid) // ì¸ì ì¶”ê°€
+    {
+        battleManager = _battleManager;
+        grid = _grid;
+    }
+
+    #region Damage Calculation
+    public int GetFinalSkillDamage(BattleUnit caster, BattleUnit target, SkillAsset source, float baseDamage)
+    {
+        // ... BattleManagerì— ìˆë˜ ë¡œì§ ê·¸ëŒ€ë¡œ ë³µì‚¬ ...
+        float finalBase = Mathf.Max(0f, baseDamage);
+
+        if (target == null || source == null)
+            return Mathf.Max(0, Mathf.FloorToInt(finalBase));
+
+        // ì „ë°© ë³´ë„ˆìŠ¤ ì²´í¬
+        if (source is ParametricDamageSkill pds && pds.UseFrontlineBonus && pds.CheckFrontline(target))
+        {
+            finalBase *= pds.FrontlineMultiplier;
+        }
+
+        var stateDb = target.stateStatDB;
+        var usc = target.GetComponent<UnitStateController>();
+        var sc = target.GetComponent<StatusController>();
+
+        float mul = 1f;
+        if (stateDb != null)
+            mul *= stateDb.GetDamageTakenMultiplier(usc, source.school);
+
+        if (sc != null)
+        {
+            if (source.school == DamageSchool.Physical)
+            {
+                mul *= Mathf.Pow(1.20f, sc.GetStacks(StatusId.Exhaustion));
+                mul *= Mathf.Pow(0.80f, sc.GetStacks(StatusId.Defense));
+            }
+            else if (source.school == DamageSchool.Magical)
+            {
+                mul *= Mathf.Pow(1.20f, sc.GetStacks(StatusId.Weakness));
+                mul *= Mathf.Pow(0.80f, sc.GetStacks(StatusId.Resistance));
+            }
+        }
+
+        // Rage ë³´ì •
+        float rageMult = 1f;
+        if (caster != null && caster.Rage > 0f)
+        {
+            rageMult += 0.01f * caster.Rage;
+        }
+
+        float raw = finalBase * rageMult * mul;
+        return Mathf.Max(0, Mathf.FloorToInt(raw));
+    }
+    #endregion
+
+    #region Effect Execution
+    // ë„‰ë°± ì˜ˆì•½ ì„¤ì •
+    public void SetPendingKnockback(ParametricDamageSkill skill, BattleUnit target, Vector3Int dest)
+    {
+        _pendingKnockbackSkill = skill;
+        _pendingKnockbackTarget = target;
+        _pendingKnockbackDest = dest;
+    }
+
+    public void ExecuteSkillDamage(BattleUnit caster, IEnumerable<BattleUnit> victims, SkillAsset source, Tilemap map, Vector3Int originCell)
+    {
+        if (caster == null || source == null) return;
+        bool killRefundDone = false; // í™˜ê¸‰ ì¤‘ë³µ ë°©ì§€ í”Œë˜ê·¸
+
+        foreach (var v in victims)
+        {
+            if (v == null) continue;
+            if (v.data.team == caster.data.team) continue;
+
+            var ctx = new SkillRuntime
+            {
+                map = map,
+                originCell = originCell,
+                casterCell = caster.Cell,
+                targetCell = v.Cell
+            };
+
+            float baseDamage = source.ComputeDamage(caster, v, ctx);
+            int damage = GetFinalSkillDamage(caster, v, source, baseDamage);
+
+            // === ê²½ê³„(Guard) ì²˜ë¦¬ ===
+            var usc = v.GetComponent<UnitStateController>();
+            if (usc != null && usc.Has(UnitStateId.Guard) && source.school == DamageSchool.Physical)
+            {
+                // (í†µì°° ì•½í™” ë¡œì§ ìƒëµ - í•„ìš”ì‹œ ì—¬ê¸°ì— ë³µêµ¬í•˜ê±°ë‚˜ ë³„ë„ í•¨ìˆ˜ ë¶„ë¦¬)
+                Debug.Log($"[Vigilance] {v.name} ë°©ì–´: {damage} -> 0");
+                damage = 0;
+                usc.Remove(UnitStateId.Guard);
+            }
+
+            // í”¼í•´ ì ìš©
+            float hpBefore = v.HP;
+            v.PlayHit();
+            v.TakeDamage(damage);
+            bool diedNow = (hpBefore > 0f && v.IsDead);
+
+            // [ìˆ˜ì •] ì¡ë‹¤í•œ íš¨ê³¼ ì²˜ë¦¬ëŠ” ì „ë¶€ ì—¬ê¸°ë¡œ ìœ„ì„! (ì¤‘ë³µ ì½”ë“œ ì‚­ì œë¨)
+            if (source is ParametricDamageSkill dmgSkill)
+            {
+                ProcessParametricEffects(caster, v, dmgSkill, map, diedNow, ref killRefundDone);
+            }
+
+            // ì ëŒ€ê° ì²˜ë¦¬
+            float hostilityGained = HostilityRules.FromDamage(damage, caster, v);
+            caster.AddHostility(hostilityGained);
+            caster.NotifyDealtDamage(v, damage, source);
+        }
+    }
+
+    // ParametricDamageSkillì˜ ì¡ë‹¤í•œ íš¨ê³¼ë“¤ ë¶„ë¦¬ (ê°€ë…ì„± ìœ„í•´)
+    private void ProcessParametricEffects(BattleUnit caster, BattleUnit v, ParametricDamageSkill dmgSkill, Tilemap map, bool diedNow, ref bool killRefundDone)
+    {
+        if (caster == null || v == null || dmgSkill == null) return;
+        int route = caster.GetTrainingRouteIndex(dmgSkill);
+
+        // 1. ì œì•• ì¶”ê°€ ê°ì†Œ
+        if (dmgSkill.trainingSuppressionOnHit > 0 &&
+            dmgSkill.routeForSuppression >= 0 &&
+            route == dmgSkill.routeForSuppression)
+        {
+            var cast = v.GetComponent<EnemyCastState>();
+            if (cast != null) cast.TryReduceSuppression(dmgSkill.trainingSuppressionOnHit);
+        }
+
+        // 2. ì¶œí˜ˆ ë¶€ì—¬
+        if (dmgSkill.trainingApplyBleed &&
+            dmgSkill.routeForBleed >= 0 &&
+            route == dmgSkill.routeForBleed)
+        {
+            var sc = v.GetComponent<StatusController>();
+            if (sc != null)
+            {
+                sc.ApplyWithTurnContext(
+                    StatusId.Bleeding,
+                    Mathf.Max(1, dmgSkill.trainingBleedStacks),
+                    Mathf.Max(1, dmgSkill.trainingBleedDurationTurns)
+                );
+            }
+        }
+
+        // 3. ë¯¼ì²© ì•½í™”
+        if (dmgSkill.trainingApplyAgiDebuff &&
+            dmgSkill.routeForAgiDebuff >= 0 &&
+            route == dmgSkill.routeForAgiDebuff &&
+            dmgSkill.targetAgiDebuffId != UnitStateBuffId.None)
+        {
+            var uscTarget = v.GetComponent<UnitStateController>();
+            if (uscTarget != null)
+            {
+                uscTarget.ApplyBuffForTurns(dmgSkill.targetAgiDebuffId, Mathf.Max(1, dmgSkill.targetAgiDebuffDurationTurns));
+            }
+        }
+
+        // 4. ê³µí¬ ë¶€ì—¬
+        if (dmgSkill.trainingApplyFear &&
+            dmgSkill.routeForFear >= 0 &&
+            route == dmgSkill.routeForFear &&
+            !v.IsDead)
+        {
+            var uscFear = v.GetComponent<UnitStateController>();
+            if (uscFear != null)
+            {
+                uscFear.ApplyForTurns(UnitStateId.Fear, Mathf.Max(1, dmgSkill.fearDurationTurns));
+            }
+        }
+
+        // 5. ì²˜ì¹˜ ì‹œ ìì› í™˜ê¸‰
+        if (diedNow && !killRefundDone &&
+            dmgSkill.trainingRefundOnKill &&
+            dmgSkill.routeForRefundOnKill >= 0 &&
+            route == dmgSkill.routeForRefundOnKill)
+        {
+            int cost = dmgSkill.GetEffectiveCost(caster);
+            if (cost > 0)
+            {
+                caster.GainMP(cost);
+                Debug.Log($"[Refund] {caster.name} Kill Bonus: MP +{cost}");
+            }
+            killRefundDone = true;
+        }
+
+        // 6. ë„‰ë°± ì²˜ë¦¬ (Pending í™•ì¸)
+        if (_pendingKnockbackSkill == dmgSkill &&
+            _pendingKnockbackTarget == v &&
+            !v.IsDead &&
+            v.CurrentMap == map)
+        {
+            var dest = _pendingKnockbackDest;
+            bool canMove = map.HasTile(dest);
+
+            // ìƒíƒœì´ìƒ(ì´ë™ ë¶ˆê°€) ì²´í¬
+            var sc = v.GetComponent<StatusController>();
+            if (sc != null && sc.Has(StatusId.Fixing)) canMove = false;
+
+            // ì ìœ  ì²´í¬ (BM ê·¸ë¦¬ë“œ ì‚¬ìš©)
+            if (canMove && grid != null && (grid.IsOccupied(Team.Player, dest) || grid.IsOccupied(Team.Enemy, dest)))
+            {
+                canMove = false;
+            }
+
+            if (canMove)
+            {
+                if (grid != null) grid.SetOccupied(v.data.team, v.Cell, false);
+                v.MoveTo(map, dest);
+                if (grid != null) grid.SetOccupied(v.data.team, v.Cell, true);
+            }
+
+            // ì‚¬ìš©ëœ Pending ì´ˆê¸°í™”
+            _pendingKnockbackSkill = null;
+            _pendingKnockbackTarget = null;
+        }
+    }
+    public void ResolveSkillAtCell(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
+        var victims = grid.GetUnitsInArea(map, area);
+
+        // ì—¬ê¸°ì„œ ExecuteSkillDamage í˜¸ì¶œí•˜ê³  ì‹¶ì§€ë§Œ, 
+        // SkillDefinition êµ¬ì¡°ì²´ì—ëŠ” SkillAsset ì •ë³´ê°€ ì—†ì–´ì„œ ëŒ€ë¯¸ì§€ ì²˜ë¦¬ê°€ ì• ë§¤í•¨.
+        // ê¸°ì¡´ ì½”ë“œì—ì„œë„ ResolveSkillAtCellì€ Enemy AI ë“±ì—ì„œ ì œí•œì ìœ¼ë¡œ ì“°ì˜€ìŒ.
+        // í•„ìš”í•˜ë‹¤ë©´ êµ¬í˜„.
+    }
+    #endregion
+
+    #region Flows (Unit / Tile / Self)
+    // í‘œì¤€ ìœ ë‹› ìŠ¤í‚¬ íë¦„
+    public IEnumerator PerformStandardUnitSkillFlow(SkillAsset _skill, BattleUnit _caster, BattleUnit _target)
+    {
+        bool doGapClose = _skill.ShouldGapCloseToTarget(_caster, _target);
+
+        // BMì— ìˆë˜ Co_GapCloseThenResolveOnTargetSO ë¡œì§ ì´ë™
+        var originalW = _caster.transform.position;
+
+        if (doGapClose && TryGetFrontCellOfTarget(_caster, _target, out var frontCell))
+        {
+            var mapForJump = _target.CurrentMap; // ?? provider...
+                                                // ìœ„ì¹˜ ê³„ì‚° ë¡œì§
+            yield return _caster.AnimateJumpToWorld(GetCellRightEdgeWorld(mapForJump, frontCell), 0.08f, null, 0.2f);
+        }
+
+        bool resolved = false;
+        System.Action OnImpact = () => {
+            resolved = true;
+            StartCoroutine(_skill.ResolveOnUnit(battleManager, _caster, _target));
+        };
+
+        _caster.OnAttackImpact += OnImpact;
+        string trigger = _caster.GetAnimTriggerForSkill(_skill);
+        yield return _caster.AnimateAttack(_target, trigger);
+        _caster.OnAttackImpact -= OnImpact;
+
+        if (!resolved) yield return _skill.ResolveOnUnit(battleManager, _caster, _target);
+
+        _caster.ApplyCooldown(_skill);
+        battleManager.FinishActionAfterSkill(); // BMì—ê²Œ "ëë‚¬ë‹¤"ê³  ë³´ê³ 
+
+        _caster.transform.position = originalW;
+    }
+
+    public IEnumerator PerformStandardTileSkillFlow(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
+    {
+        // 1. íˆ¬ì‚¬ì²´ ìŠ¤í‚¬ì¸ ê²½ìš° (IProjectileTileSkill ì¸í„°í˜ì´ìŠ¤ êµ¬í˜„ ì—¬ë¶€ í™•ì¸)
+        if (skill is IProjectileTileSkill projSkill)
+        {
+            bool castEnded = false;
+            bool projEnded = false;
+            bool fired = false;
+            bool aborted = false;
+            GameObject liveProjectile = null;
+
+            int cost = skill.GetEffectiveCost(caster);
+
+            // 1-1) íˆ¬ì‚¬ì²´ í”„ë¦¬íŒ¹ í™•ë³´
+            ProjectileController projPrefab = projSkill.GetProjectilePrefab(caster);
+            float projSpeed = projSkill.GetProjectileSpeed(caster);
+            if (projSpeed <= 0f) projSpeed = 3f;
+
+            // fallback: ìŠ¤í‚¬ì— ì—†ìœ¼ë©´ ìœ ë‹› ê¸°ë³¸ê°’
+            if (projPrefab == null && caster != null)
+                projPrefab = caster.defaultProjectilePrefab;
+
+            // 1-2) ì§„ì§œ íˆ¬ì‚¬ì²´ê°€ ì—†ëŠ” ê²½ìš° -> ì¦‰ë°œë¡œ ì²˜ë¦¬í• ì§€, ì·¨ì†Œí• ì§€ ê²°ì •
+            if (projPrefab == null)
+            {
+                Debug.LogWarning($"[Projectile] í”„ë¦¬íŒ¹ ì—†ìŒ. ì¦‰ë°œ ì²˜ë¦¬ë¡œ ì „í™˜: {skill.name}");
+                if (!caster.TryConsumeResource(skill.costResource, cost))
+                {
+                    battleManager.UnlockSkillConfirm();
+                    yield break;
+                }
+                yield return skill.ResolveOnTile(battleManager, map, cell, caster);
+                caster.ApplyCooldown(skill);
+                battleManager.FinishActionAfterSkill();
+                yield break;
+            }
+
+            // 1-3) ì´ë²¤íŠ¸ ì—°ê²° (Cast End)
+            System.Action onCastEnd = null;
+            onCastEnd = () => { caster.OnAttackEnded -= onCastEnd; castEnded = true; };
+            caster.OnAttackEnded += onCastEnd;
+
+            // 1-4) ì´ë²¤íŠ¸ ì—°ê²° (Impact -> ë°œì‚¬)
+            System.Action onFire = null;
+            onFire = () =>
+            {
+                caster.OnAttackImpact -= onFire;
+                fired = true;
+
+                if (!caster.TryConsumeResource(skill.costResource, cost))
+                {
+                    battleManager.UnlockSkillConfirm();
+                    projEnded = true;
+                    return;
+                }
+                if (aborted) { projEnded = true; return; }
+
+                Vector3 startW = caster.transform.position;
+                Vector3 targetW = map.GetCellCenterWorld(cell);
+
+                // íˆ¬ì‚¬ì²´ ìƒì„±
+                liveProjectile = Instantiate(projPrefab.gameObject, startW, Quaternion.identity);
+                var pc = liveProjectile.GetComponent<ProjectileController>();
+
+                System.Action onArrive = () =>
+                {
+                    if (aborted) return;
+                    StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+                    {
+                        caster.ApplyCooldown(skill);
+                        projEnded = true;
+                    }));
+                };
+
+                if (pc != null) pc.Init(startW, targetW, onArrive, speedUnitsPerSec: projSpeed);
+                else
+                {
+                    // ì»¨íŠ¸ë¡¤ëŸ¬ ì—†ìœ¼ë©´ ëŒ€ì¶© ì‹œê°„ ë–¼ìš°ê³  ë„ì°© ì²˜ë¦¬
+                    StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, onArrive));
+                }
+            };
+            caster.OnAttackImpact += onFire;
+
+            // 1-5) ì• ë‹ˆë©”ì´ì…˜ ì‹¤í–‰
+            string trigger = caster.GetAnimTriggerForSkill(skill);
+            if (skill.animKind == SkillAnimKind.Ranged)
+                yield return caster.AnimateRanged(trigger);
+            else
+                yield return caster.AnimateAttack(null, trigger);
+
+            // 1-6) ì•ˆì „ì¥ì¹˜: ì• ë‹ˆë©”ì´ì…˜ ëë‚  ë•Œê¹Œì§€ ì„íŒ©íŠ¸ ì•ˆ ì™”ìœ¼ë©´ ê°•ì œ ë°œì‚¬
+            if (!fired && !projEnded)
+            {
+                onFire?.Invoke();
+            }
+
+            // 1-7) ëŒ€ê¸° (ìµœëŒ€ 5ì´ˆ íƒ€ì„ì•„ì›ƒ)
+            float timeout = 5f;
+            while (!(castEnded && projEnded) && timeout > 0f)
+            {
+                timeout -= Time.deltaTime;
+                yield return null;
+            }
+
+            // 1-8) íƒ€ì„ì•„ì›ƒ/ì¤‘ë‹¨ ì‹œ ì •ë¦¬
+            if (!(castEnded && projEnded))
+            {
+                aborted = true;
+                if (liveProjectile != null) Destroy(liveProjectile);
+            }
+
+            battleManager.FinishActionAfterSkill();
+        }
+        // 2. ì¦‰ë°œ(Instant) ìŠ¤í‚¬ì¸ ê²½ìš° (ë˜ëŠ” ê·¸ ì™¸)
+        else
+        {
+            // === ê¸°ì¡´ ì¦‰ë°œ ì²˜ë¦¬ ë¡œì§ ===
+            bool resolved = false;
+            int cost = skill.GetEffectiveCost(caster);
+
+            System.Action onImpact = () =>
+            {
+                if (!caster.TryConsumeResource(skill.costResource, cost))
+                {
+                    battleManager.UnlockSkillConfirm();
+                    resolved = true;
+                    return;
+                }
+                StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+                {
+                    caster.ApplyCooldown(skill);
+                    resolved = true;
+                }));
+            };
+
+            caster.OnAttackImpact += onImpact; // êµ¬ë…
+
+            string trigger = caster.GetAnimTriggerForSkill(skill);
+            yield return caster.AnimateAttack(null, trigger);
+
+            caster.OnAttackImpact -= onImpact; // í•´ì œ
+
+            if (!resolved) // ì´ë²¤íŠ¸ ëª» ë°›ì•˜ìœ¼ë©´ ê°•ì œ ì‹¤í–‰
+            {
+                if (caster.TryConsumeResource(skill.costResource, cost))
+                {
+                    yield return skill.ResolveOnTile(battleManager, map, cell, caster);
+                    caster.ApplyCooldown(skill);
+                }
+                else
+                {
+                    battleManager.UnlockSkillConfirm();
+                }
+            }
+
+            battleManager.FinishActionAfterSkill();
+        }
+    }
+
+    public IEnumerator PerformSelfCastFlow(SkillAsset _skill, BattleUnit _caster, bool _freeAction)
+    {
+        if (_skill == null || _caster == null)
+        {
+            _isResolvingSelfCast = false;
+            yield break;
+        }
+
+        // ì—¬ê¸°ì„œ ìƒíƒœ ì ê¸ˆ ì‹œì‘
+        _isResolvingSelfCast = true;
+
+        try
+        {
+            string trigger = _caster.GetAnimTriggerForSkill(_skill);
+            yield return _caster.AnimateAttack(null, trigger);
+
+            yield return _skill.ResolveOnUnit(battleManager, _caster, _caster);
+
+            _caster.ApplyCooldown(_skill);
+
+            if (!_freeAction)
+            {
+                battleManager.FinishActionAfterSkill();
+            }
+            else
+            {
+                battleManager.ResetSkillSelectionState();
+            }
+        }
+        finally
+        {
+            _isResolvingSelfCast = false;
+        }
+    }
+
+    public IEnumerator Co_ReactiveAttackFlow(SkillAsset skill, BattleUnit caster, BattleUnit target, bool doGapClose)
+    {
+        if (skill == null || caster == null || target == null) yield break;
+
+        var originalW = caster.transform.position;
+
+        if (doGapClose && TryGetFrontCellOfTarget(caster, target, out var frontCell))
+        {
+            var mapForJump = target.CurrentMap; // (provider ì ‘ê·¼ ëŒ€ì‹  ì§ì ‘ ì°¸ì¡° ê¶Œì¥)
+            var frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
+            yield return caster.AnimateJumpToWorld(frontW, 0.08f, null, 0.2f); // ì í”„ ì‹œê°„ ìƒìˆ˜ëŠ” íŒŒë¼ë¯¸í„°ë‚˜ constë¡œ
+        }
+
+        bool resolved = false;
+        System.Action OnImpact = () =>
+        {
+            // ëŒë‹¤ ì•ˆì—ì„œ ì´ë²¤íŠ¸ í•´ì œ ì£¼ì˜ (ë©”ì„œë“œë¡œ ë¶„ë¦¬í•˜ê±°ë‚˜ ì¡°ì‹¬í•´ì„œ ì‚¬ìš©)
+            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => resolved = true));
+        };
+
+        caster.OnAttackImpact += OnImpact;
+        string trigger = caster.GetAnimTriggerForSkill(skill);
+        yield return caster.AnimateAttack(target, trigger);
+        caster.OnAttackImpact -= OnImpact;
+
+        if (!resolved)
+            yield return skill.ResolveOnUnit(battleManager, caster, target);
+
+        caster.transform.position = originalW;
+    }
+    #endregion
+
+    // === í—¬í¼ í•¨ìˆ˜ë“¤ (BMì—ì„œ ë³µì‚¬í•´ì˜¤ê±°ë‚˜ BMêº¼ í˜¸ì¶œ) ===
+    private bool TryGetFrontCellOfTarget(BattleUnit caster, BattleUnit target, out Vector3Int frontCell)
+    {
+        {
+            frontCell = target != null ? target.Cell : default;
+            if (target == null || caster == null) return false;
+
+            var targetMap = target.CurrentMap;
+            var casterMap = caster.CurrentMap ?? targetMap;
+
+            // --- 1) ì¢Œìš° ìš°ì„  ê·œì¹™ ---
+            var baseCell = target.Cell;
+            int dx = caster.Cell.x - target.Cell.x;
+
+            if (dx < 0)
+            {
+                // ìºìŠ¤í„°ê°€ íƒ€ê¹ƒì˜ 'ì™¼ìª½'ì— ìˆìŒ â†’ ì„œìª½ ì´ì›ƒ ê³ ì •
+                frontCell = new Vector3Int(baseCell.x - 1, baseCell.y, baseCell.z);
+                return true;
+            }
+            else if (dx > 0)
+            {
+                // ìºìŠ¤í„°ê°€ íƒ€ê¹ƒì˜ 'ì˜¤ë¥¸ìª½'ì— ìˆìŒ â†’ ë™ìª½ ì´ì›ƒ ê³ ì •
+                frontCell = new Vector3Int(baseCell.x + 1, baseCell.y, baseCell.z);
+                return true;
+            }
+
+            // --- 2) ê°™ì€ ì»¬ëŸ¼(ìˆ˜ì§ ì •ë ¬)ì¼ ë•Œë§Œ ê¸°ì¡´ ê°ë„ ê¸°ë°˜ ì„ íƒ í´ë°± ---
+            // íƒ€ê²Ÿâ†’ì‹œì „ì ì›”ë“œ ë°©í–¥
+            Vector3 targetW = targetMap.GetCellCenterWorld(target.Cell);
+            Vector3 casterW = casterMap.GetCellCenterWorld(caster.Cell);
+            Vector2 aimDir = (Vector2)(casterW - targetW);
+            if (aimDir.sqrMagnitude < 1e-6f) return false;
+            aimDir.Normalize();
+
+            bool oddCol = SkillLibrary.IsOddColumn(baseCell);
+
+            // odd-q ì´ì›ƒ ì§‘í•©(í”„ë¡œì íŠ¸ì—ì„œ ì“°ëŠ” ì²´ê³„ ê·¸ëŒ€ë¡œ)
+            Vector3Int[] neighOffsetsEven = {
+        new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
+        new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int(-1,-1, 0), new Vector3Int( 0,-1,0)
+    };
+            Vector3Int[] neighOffsetsOdd = {
+        new Vector3Int(+1, 0, 0), new Vector3Int(+1,+1,0),
+        new Vector3Int( 0,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int( 0,-1, 0), new Vector3Int(+1,-1,0)
+    };
+            var candidates = oddCol ? neighOffsetsOdd : neighOffsetsEven;
+
+            float bestDot = float.NegativeInfinity;
+            float bestDist2 = float.PositiveInfinity;
+            const float EPS = 1e-5f;
+            Vector3Int best = baseCell;
+
+            foreach (var off in candidates)
+            {
+                var neigh = new Vector3Int(baseCell.x + off.x, baseCell.y + off.y, baseCell.z);
+                var neighW = targetMap.GetCellCenterWorld(neigh);
+
+                Vector2 dir = (Vector2)(neighW - targetW);
+                if (dir.sqrMagnitude < 1e-6f) continue;
+                dir.Normalize();
+
+                float d = Vector2.Dot(aimDir, dir);
+                float dist2 = ((Vector2)(neighW - casterW)).sqrMagnitude;
+
+                if (d > bestDot + EPS || (Mathf.Abs(d - bestDot) <= EPS && dist2 < bestDist2))
+                {
+                    bestDot = d;
+                    bestDist2 = dist2;
+                    best = neigh;
+                }
+            }
+
+            frontCell = best;
+            return true;
+        }
+    }
+    private Vector3 GetCellRightEdgeWorld(Tilemap map, Vector3Int cell, float margin = 0.02f) 
+    {
+        if (map == null) return Vector3.zero;
+        // BM ë¡œì§ ê·¸ëŒ€ë¡œ ë³µë¶™
+        var center = map.GetCellCenterWorld(cell);
+        var grid = map.layoutGrid != null ? map.layoutGrid : map.GetComponentInParent<Grid>();
+        var cellSize = (grid != null) ? grid.cellSize : Vector3.one;
+        Vector3 rightDir = (grid != null) ? grid.transform.right : Vector3.right;
+
+        return center + rightDir * (cellSize.x * 0.5f - margin);
+    }
+
+    IEnumerator Co_ResolveUnitThenFlag(SkillAsset skill, BattleUnit caster, BattleUnit target, System.Action done)
+    {
+        yield return skill.ResolveOnUnit(battleManager, caster, target);
+        done?.Invoke();
+    }
+
+    IEnumerator Co_ResolveTileThenFlag(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster, System.Action done)
+    {
+        yield return skill.ResolveOnTile(battleManager, map, cell, caster);
+        done?.Invoke();
+    }
+
+    IEnumerator FallbackProjectile(Vector3 start, Vector3 end, float time, System.Action done)
+    {
+        float t = 0f;
+        while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); yield return null; }
+        done?.Invoke();
+    }
 }

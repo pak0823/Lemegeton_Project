@@ -15,17 +15,17 @@ public class BattleInputHandler : MonoBehaviour
     public Highlighter moveHighlighter;
     public Highlighter skillHighlighter;
 
-    // Å¸°Ù ¼øÈ¯ °ü¸®
+    // íƒ€ê²Ÿ ìˆœí™˜ ê´€ë¦¬
     private List<BattleUnit> _targetCycle = new();
     private int _targetIndex = -1;
     private BattleUnit _selectedTarget;
 
-    // ³»ºÎ »óÅÂ
+    // ë‚´ë¶€ ìƒíƒœ
     private int _skillPreviewHold = 0;
     private Tilemap _customPreviewMap;
     private HashSet<Vector3Int> _customPreviewCells;
 
-    // ³Ë¹é/ÀÌµ¿ ¼±ÅÃ Äİ¹é¿ë
+    // ë„‰ë°±/ì´ë™ ì„ íƒ ì½œë°±ìš©
     private System.Action<Vector3Int?> _onCellSelectedCallback;
     private Tilemap _selectionMap;
     private List<Vector3Int> _selectionCandidates;
@@ -71,7 +71,7 @@ public class BattleInputHandler : MonoBehaviour
                 if (battleManager.IsValidSkillTarget(unit))
                     battleManager.ConfirmSkillOnUnit(unit);
                 else
-                    Debug.Log("À¯È¿ÇÏÁö ¾ÊÀº ´ë»óÀÔ´Ï´Ù.");
+                    Debug.Log("ìœ íš¨í•˜ì§€ ì•Šì€ ëŒ€ìƒì…ë‹ˆë‹¤.");
                 return;
             }
             else if (battleManager.CurrentSkillSO.targetMode == SkillTargetMode.Tile)
@@ -154,12 +154,12 @@ public class BattleInputHandler : MonoBehaviour
             else if (skill.targetAlignment == SkillTargetAlignment.Any) isMapValid = true;
 
             if (isMapValid) PreviewSkillAreaOnTile(map, cell);
-            else skillHighlighter?.ClearTransient(); // ClearTransient -> Clear·Î ¾ÈÀüÇÏ°Ô º¯°æ
+            else skillHighlighter?.ClearTransient(); // ClearTransient -> Clearë¡œ ì•ˆì „í•˜ê²Œ ë³€ê²½
         }
     }
     private void OnEscapeAction()
     {
-        // BattleManager¿¡ ÀÌ¹Ì ±¸ÇöµÈ µµÁÖ ·ÎÁ÷ È£Ãâ
+        // BattleManagerì— ì´ë¯¸ êµ¬í˜„ëœ ë„ì£¼ ë¡œì§ í˜¸ì¶œ
         battleManager.OnClickEscape();
     }
 
@@ -186,7 +186,7 @@ public class BattleInputHandler : MonoBehaviour
         skillHighlighter?.ShowCells(map, cells);
     }
 
-    // BMÀÌ È£ÃâÇÏ´Â ÇÁ¸®ºä È¦µå ¸Ş¼­µå
+    // BMì´ í˜¸ì¶œí•˜ëŠ” í”„ë¦¬ë·° í™€ë“œ ë©”ì„œë“œ
     public void HoldSkillPreview() => _skillPreviewHold++;
     public void ReleaseSkillPreview() => _skillPreviewHold = Mathf.Max(0, _skillPreviewHold - 1);
 
@@ -194,8 +194,8 @@ public class BattleInputHandler : MonoBehaviour
     {
         if (_skillPreviewHold == 0)
         {
-            skillHighlighter?.ClearTransient(); // ¸Ê ÇÏÀÌ¶óÀÌÆ® ²ô±â (Highlighter API¿¡ µû¶ó Clear() ¶Ç´Â ClearTransient())
-            battleManager.ClearStatusPanelHighlights(); // [Ãß°¡] UI ÇÏÀÌ¶óÀÌÆ® ²ô±â
+            skillHighlighter?.ClearTransient(); // ë§µ í•˜ì´ë¼ì´íŠ¸ ë„ê¸° (Highlighter APIì— ë”°ë¼ Clear() ë˜ëŠ” ClearTransient())
+            battleManager.ClearStatusPanelHighlights(); // [ì¶”ê°€] UI í•˜ì´ë¼ì´íŠ¸ ë„ê¸°
         }
     }
 
@@ -303,6 +303,12 @@ public class BattleInputHandler : MonoBehaviour
     public void PrepareSkillTargeting(SkillAsset skill, BattleUnit caster)
     {
         ClearAllPreviews();
+
+        if (skill is ISkillCustomPreview customPreview)
+        {
+            var cells = customPreview.GetPreviewCells(battleManager, caster);
+            ShowSkillPreview(caster.CurrentMap, cells);
+        }
 
         if (skill.targetMode == SkillTargetMode.Unit)
         {

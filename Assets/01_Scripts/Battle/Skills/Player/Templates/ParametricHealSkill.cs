@@ -1,239 +1,239 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Heal", fileName = "ParametricHealSkill")]
-public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTileSkill
-{
-    // ±âÁ¸ Damage¿Í µ¿ÀÏÇÑ ÇÁ¸®¼ÂÀ» ±×´ë·Î »ç¿ëÇØ Àç»ç¿ë¼º È®º¸
-    public AreaPreset areaPreset = AreaPreset.Single;
-
-    [Header("Targeting")]
-    public SkillTargetMode selectionMode = SkillTargetMode.Tile; // º¸Åë RingÀº Å¸ÀÏ Áö¸ñÀÌ ÆíÇÔ
-    public bool useProvidedUnitTarget = true;   // Unit Å¸°ÙÆÃÀÏ ¶§ Å¬¸¯ÇÑ À¯´ÖÀ» ¼¾ÅÍ·Î »ç¿ë
-
-    [Header("Heal")]
-    public float powerOverride = 1f;            // Èú ¹è¼ö µ¤¾î¾²±â(¿É¼Ç, ¾øÀ¸¸é SkillAsset.power »ç¿ë)
-
-    // Åõ»çÃ¼ ¼³Á¤
-    [Header("Projectile Settings")]
-    public ProjectileController projectilePrefab;
-    public float projectileSpeed = 4f;
-
-    // ½ÃÀü ÈÄ »óÅÂ Á¦°Å ¿É¼Ç
-    [Header("State Consumption(»óÅÂ Á¦°Å ¼³Á¤)")]
-    public bool consumeStateOnCast = false;
-    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
-
-    [Header("Training")]
-    [Header("¹üÀ§ È®´ë ÈÆ·Ã")]
-    public bool trainingUseAreaOverride = false;
-    [Range(-1, 2)] public int routeForAreaOverride = -1;
-    public AreaPreset trainingAreaPreset = AreaPreset.Single;
-    public bool trainingDiagUseNEAxis = true;
-
-    [Header("ÀûÀÇ °¨¼Ò ÈÆ·Ã")]
-    [Tooltip("ÈÆ·Ã ½Ã ÀûÀÇ »ı¼º·®À» °¨¼Ò½ÃÅ³Áö ¿©ºÎ")]
-    public bool trainingReduceHostility = false;
-    [Tooltip("ÀûÀÇ °¨¼Ò¸¦ È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)] public int routeForReduceHostility = -1;
-    [Tooltip("Àû¿ëµÉ ÀûÀÇ »ı¼º ¹èÀ² (¿¹: 0.5 = 50%¸¸ »ı¼º)")]
-    public float trainingHostilityMultiplier = 0.5f;
-
-    [Header("ÀÚ¿ø Àı¾à ÈÆ·Ã")]
-    [Tooltip("¼Ò¸ğ ºñ¿ë µ¤¾î¾²±â È°¼ºÈ­")]
-    public bool trainingUseCostOverride = false;
-    [Range(-1, 2)] public int routeForCostOverride = -1; // À¯¿¬ÇÑ ·çÆ® ÁöÁ¤
-    public int trainingCostOverride = -1;
-
-    [Header("ÃÑ¸í °­È­ ÈÆ·Ã")]
-    [Tooltip("ÃÑ¸í(Magic Damage) °­È­ ¹öÇÁ ºÎ¿© È°¼ºÈ­")]
-    public bool trainingApplyClarityBuff = false;
-    [Range(-1, 2)] public int routeForClarityBuff = -1;
-    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
-    [Min(1)] public int trainingClarityDuration = 1;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = selectionMode; }
-#endif
-    void OnEnable()
-    {
-        if (powerOverride > 0f) power = powerOverride;
-        targetMode = selectionMode;
-    }
-    public ProjectileController GetProjectilePrefab(BattleUnit caster)
-    {
-        return projectilePrefab;
-    }
-
-    void ConsumeStates(BattleUnit caster)
-    {
-        if (!consumeStateOnCast || statesToConsume == null) return;
-        var usc = caster.GetComponent<UnitStateController>();
-        if (usc == null) return;
-
-        foreach (var s in statesToConsume)
-        {
-            if (s != UnitStateId.None)
-                usc.Remove(s);
-        }
-    }
-    int GetRoute(BattleUnit _caster)
-    {
-        if (_caster == null) return -1;
-        return _caster.GetTrainingRouteIndex(this);
-    }
-
-    public float GetProjectileSpeed(BattleUnit caster)
-    {
-        return projectileSpeed;
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
-    {
-        // ÇöÀç ÅÏÀÇ ½ÃÀüÀÚ(ÇÃ·¹ÀÌ¾îµç ÀûÀÌµç)
-        var bm = BattleManager.Instance;
-        BattleUnit caster = bm != null ? bm.ActingUnit : null;
-
-        int route = GetRoute(caster);
-        bool useOverride = trainingUseAreaOverride
-                   && routeForAreaOverride >= 0
-                   && route == routeForAreaOverride;
-
-        // ±âº»/ÈÆ·Ã ÇÁ¸®¼Â ¼±ÅÃ
-        var preset = useOverride ? trainingAreaPreset : areaPreset;
-        // HealSkill¿¡´Â diagUseNEAxis ÇÊµå°¡ ¾ø¾úÀ¸¹Ç·Î ±âº»°ª false È¤Àº training º¯¼ö »ç¿ë
-        // ¿©±â¼­´Â trainingDiagUseNEAxis È¤Àº ±âº» ·ÎÁ÷(false/true)À» µû¶ó¾ß ÇÔ.
-        // ParametricHealSkill¿¡ diagUseNEAxis ÇÊµå°¡ ¾ø´Ù¸é false·Î °¡Á¤ÇÏ°Å³ª Ãß°¡ÇØ¾ß ÇÔ.
-        // *ÆíÀÇ»ó overrideÀÏ ¶§¸¸ trainingDiagUseNEAxis¸¦ ¾²°í, ¾Æ´Ò ¶© false(±âº») Ã³¸®
-        bool useDiag = useOverride ? trainingDiagUseNEAxis : false;
-
-        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
-            yield return c;
-    }
-
-    // ¹Ì¸®º¸±â/Áö¸ñ Å¸ÀÏ ¸Ê: ¾Æ±º ÇÃ·Î¾î¸¦ ¹İÈ¯
-    public Tilemap GetTargetMap(BattleManager _battlemanager, BattleUnit _caster)
-    {
-        var prov = BattleMapManager.Instance; // ÇÁ·ÎÁ§Æ®¿¡¼­ ¾²´Â ¸Ê ÇÁ·Î¹ÙÀÌ´õ(°°Àº Á¢±Ù ¹æ½Ä »ç¿ë)
-        if (prov == null) return null;
-        // ÇÃ·¹ÀÌ¾î¸é PlayerFloor, ÀûÀÌ¸é EnemyFloor(= "±× À¯´ÖÀÇ ¾Æ±º ¸Ê")
-        return (_caster != null && _caster.data.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
-    }
-
-    int CalcHealAmount(BattleUnit _caster, BattleUnit _target)
-    {
-        // ¸¶¹ı°ø°İ·Â * ¹è¼ö. ÇÊ¿äÇÏ¸é ¶ó¿ìÅÍ/»óÅÂ/Àåºñ¿¡ µû¸¥ º¸Á¤µµ Ãß°¡ °¡´É
-        float baseStat = Mathf.Max(1, _caster.CLV);
-        float mult = Mathf.Max(0f, power);
-        return Mathf.Max(1, Mathf.FloorToInt(baseStat * mult));
-    }
-
-    void HealArea(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
-    {
-        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
-        var friends = _battlemanager.Grid.GetUnitsInArea(_map, area)
-                        .Where(u => u != null && !u.IsDead && u.data.team == _caster.data.team)
-                        .ToList();
-
-        int route = GetRoute(_caster);
-
-        foreach (var u in friends)
-        {
-            int amount = CalcHealAmount(_caster, u);
-            u.Heal(amount);
-
-            // ÃÖÁ¾ Àû´ë°¨ »ı¼º·® °è»ê
-            float hostilityGained = HostilityRules.FromHeal(amount, _caster);
-
-            // ÀûÀÇ °¨¼Ò Àû¿ë
-            if (trainingReduceHostility && routeForReduceHostility >= 0 && route == routeForReduceHostility)
-            {
-                hostilityGained *= trainingHostilityMultiplier;
-                Debug.Log($"[Training] Heal Hostility Reduced: {hostilityGained} (x{trainingHostilityMultiplier})");
-            }
-
-            // Ä³½ºÅÍ(ÇÃ·¹ÀÌ¾î)ÀÇ Àû´ë°¨ Áõ°¡
-            _caster.AddHostility(hostilityGained);
-        }
-
-        // ÃÑ¸í(Clarity) °­È­ ¹öÇÁ Àû¿ë
-        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
-        {
-            var usc = _caster.GetComponent<UnitStateController>();
-            if (usc != null)
-            {
-                // ÇöÀç ÅÏ ¼Ò¸ğ º¸Á¤À» À§ÇØ +1
-                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1);
-                Debug.Log($"[ParametricHeal] Clarity Enhanced: {_caster.name}, Duration={trainingClarityDuration}");
-            }
-        }
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (!_battlemanager || !_caster) yield break;
-
-        var center = (useProvidedUnitTarget && _target && !_target.IsDead) ? _target : _caster;
-
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        HealArea(_battlemanager, _caster, center.CurrentMap, center.Cell);
-        ConsumeStates(_caster);
-
-        yield break;
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-    {
-        if (!_battlemanager || !_caster || !_map) yield break;
-
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        HealArea(_battlemanager, _caster, _map, _originCell);
-        ConsumeStates(_caster);
-
-        yield break;
-
-
-    }
-
-    public override int GetEffectiveCost(BattleUnit caster)
-    {
-        int finalCost = base.GetEffectiveCost(caster);
-
-        if (caster == null) return finalCost;
-
-        int route = caster.GetTrainingRouteIndex(this);
-
-        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
-        {
-            finalCost -= trainingCostOverride;
-            finalCost = Mathf.Max(0, finalCost);
-        }
-
-        return finalCost;
-    }
-
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Heal", fileName = "ParametricHealSkill")]
+public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTileSkill
+{
+    // ê¸°ì¡´ Damageì™€ ë™ì¼í•œ í”„ë¦¬ì…‹ì„ ê·¸ëŒ€ë¡œ ì‚¬ìš©í•´ ì¬ì‚¬ìš©ì„± í™•ë³´
+    public AreaPreset areaPreset = AreaPreset.Single;
+
+    [Header("Targeting")]
+    public SkillTargetMode selectionMode = SkillTargetMode.Tile; // ë³´í†µ Ringì€ íƒ€ì¼ ì§€ëª©ì´ í¸í•¨
+    public bool useProvidedUnitTarget = true;   // Unit íƒ€ê²ŸíŒ…ì¼ ë•Œ í´ë¦­í•œ ìœ ë‹›ì„ ì„¼í„°ë¡œ ì‚¬ìš©
+
+    [Header("Heal")]
+    public float powerOverride = 1f;            // í ë°°ìˆ˜ ë®ì–´ì“°ê¸°(ì˜µì…˜, ì—†ìœ¼ë©´ SkillAsset.power ì‚¬ìš©)
+
+    // íˆ¬ì‚¬ì²´ ì„¤ì •
+    [Header("Projectile Settings")]
+    public ProjectileController projectilePrefab;
+    public float projectileSpeed = 4f;
+
+    // ì‹œì „ í›„ ìƒíƒœ ì œê±° ì˜µì…˜
+    [Header("State Consumption(ìƒíƒœ ì œê±° ì„¤ì •)")]
+    public bool consumeStateOnCast = false;
+    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
+
+    [Header("Training")]
+    [Header("ë²”ìœ„ í™•ëŒ€ í›ˆë ¨")]
+    public bool trainingUseAreaOverride = false;
+    [Range(-1, 2)] public int routeForAreaOverride = -1;
+    public AreaPreset trainingAreaPreset = AreaPreset.Single;
+    public bool trainingDiagUseNEAxis = true;
+
+    [Header("ì ì˜ ê°ì†Œ í›ˆë ¨")]
+    [Tooltip("í›ˆë ¨ ì‹œ ì ì˜ ìƒì„±ëŸ‰ì„ ê°ì†Œì‹œí‚¬ì§€ ì—¬ë¶€")]
+    public bool trainingReduceHostility = false;
+    [Tooltip("ì ì˜ ê°ì†Œë¥¼ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)] public int routeForReduceHostility = -1;
+    [Tooltip("ì ìš©ë  ì ì˜ ìƒì„± ë°°ìœ¨ (ì˜ˆ: 0.5 = 50%ë§Œ ìƒì„±)")]
+    public float trainingHostilityMultiplier = 0.5f;
+
+    [Header("ìì› ì ˆì•½ í›ˆë ¨")]
+    [Tooltip("ì†Œëª¨ ë¹„ìš© ë®ì–´ì“°ê¸° í™œì„±í™”")]
+    public bool trainingUseCostOverride = false;
+    [Range(-1, 2)] public int routeForCostOverride = -1; // ìœ ì—°í•œ ë£¨íŠ¸ ì§€ì •
+    public int trainingCostOverride = -1;
+
+    [Header("ì´ëª… ê°•í™” í›ˆë ¨")]
+    [Tooltip("ì´ëª…(Magic Damage) ê°•í™” ë²„í”„ ë¶€ì—¬ í™œì„±í™”")]
+    public bool trainingApplyClarityBuff = false;
+    [Range(-1, 2)] public int routeForClarityBuff = -1;
+    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+    [Min(1)] public int trainingClarityDuration = 1;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = selectionMode; }
+#endif
+    void OnEnable()
+    {
+        if (powerOverride > 0f) power = powerOverride;
+        targetMode = selectionMode;
+    }
+    public ProjectileController GetProjectilePrefab(BattleUnit caster)
+    {
+        return projectilePrefab;
+    }
+
+    void ConsumeStates(BattleUnit caster)
+    {
+        if (!consumeStateOnCast || statesToConsume == null) return;
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null) return;
+
+        foreach (var s in statesToConsume)
+        {
+            if (s != UnitStateId.None)
+                usc.Remove(s);
+        }
+    }
+    int GetRoute(BattleUnit _caster)
+    {
+        if (_caster == null) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
+    public float GetProjectileSpeed(BattleUnit caster)
+    {
+        return projectileSpeed;
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
+    {
+        // í˜„ì¬ í„´ì˜ ì‹œì „ì(í”Œë ˆì´ì–´ë“  ì ì´ë“ )
+        var bm = BattleManager.Instance;
+        BattleUnit caster = bm != null ? bm.ActingUnit : null;
+
+        int route = GetRoute(caster);
+        bool useOverride = trainingUseAreaOverride
+                   && routeForAreaOverride >= 0
+                   && route == routeForAreaOverride;
+
+        // ê¸°ë³¸/í›ˆë ¨ í”„ë¦¬ì…‹ ì„ íƒ
+        var preset = useOverride ? trainingAreaPreset : areaPreset;
+        // HealSkillì—ëŠ” diagUseNEAxis í•„ë“œê°€ ì—†ì—ˆìœ¼ë¯€ë¡œ ê¸°ë³¸ê°’ false í˜¹ì€ training ë³€ìˆ˜ ì‚¬ìš©
+        // ì—¬ê¸°ì„œëŠ” trainingDiagUseNEAxis í˜¹ì€ ê¸°ë³¸ ë¡œì§(false/true)ì„ ë”°ë¼ì•¼ í•¨.
+        // ParametricHealSkillì— diagUseNEAxis í•„ë“œê°€ ì—†ë‹¤ë©´ falseë¡œ ê°€ì •í•˜ê±°ë‚˜ ì¶”ê°€í•´ì•¼ í•¨.
+        // *í¸ì˜ìƒ overrideì¼ ë•Œë§Œ trainingDiagUseNEAxisë¥¼ ì“°ê³ , ì•„ë‹ ë• false(ê¸°ë³¸) ì²˜ë¦¬
+        bool useDiag = useOverride ? trainingDiagUseNEAxis : false;
+
+        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
+            yield return c;
+    }
+
+    // ë¯¸ë¦¬ë³´ê¸°/ì§€ëª© íƒ€ì¼ ë§µ: ì•„êµ° í”Œë¡œì–´ë¥¼ ë°˜í™˜
+    public Tilemap GetTargetMap(BattleManager _battlemanager, BattleUnit _caster)
+    {
+        var prov = BattleMapManager.Instance; // í”„ë¡œì íŠ¸ì—ì„œ ì“°ëŠ” ë§µ í”„ë¡œë°”ì´ë”(ê°™ì€ ì ‘ê·¼ ë°©ì‹ ì‚¬ìš©)
+        if (prov == null) return null;
+        // í”Œë ˆì´ì–´ë©´ PlayerFloor, ì ì´ë©´ EnemyFloor(= "ê·¸ ìœ ë‹›ì˜ ì•„êµ° ë§µ")
+        return (_caster != null && _caster.data.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
+    }
+
+    int CalcHealAmount(BattleUnit _caster, BattleUnit _target)
+    {
+        // ë§ˆë²•ê³µê²©ë ¥ * ë°°ìˆ˜. í•„ìš”í•˜ë©´ ë¼ìš°í„°/ìƒíƒœ/ì¥ë¹„ì— ë”°ë¥¸ ë³´ì •ë„ ì¶”ê°€ ê°€ëŠ¥
+        float baseStat = Mathf.Max(1, _caster.CLV);
+        float mult = Mathf.Max(0f, power);
+        return Mathf.Max(1, Mathf.FloorToInt(baseStat * mult));
+    }
+
+    void HealArea(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
+    {
+        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
+        var friends = _battlemanager.Grid.GetUnitsInArea(_map, area)
+                        .Where(u => u != null && !u.IsDead && u.data.team == _caster.data.team)
+                        .ToList();
+
+        int route = GetRoute(_caster);
+
+        foreach (var u in friends)
+        {
+            int amount = CalcHealAmount(_caster, u);
+            u.Heal(amount);
+
+            // ìµœì¢… ì ëŒ€ê° ìƒì„±ëŸ‰ ê³„ì‚°
+            float hostilityGained = HostilityRules.FromHeal(amount, _caster);
+
+            // ì ì˜ ê°ì†Œ ì ìš©
+            if (trainingReduceHostility && routeForReduceHostility >= 0 && route == routeForReduceHostility)
+            {
+                hostilityGained *= trainingHostilityMultiplier;
+                Debug.Log($"[Training] Heal Hostility Reduced: {hostilityGained} (x{trainingHostilityMultiplier})");
+            }
+
+            // ìºìŠ¤í„°(í”Œë ˆì´ì–´)ì˜ ì ëŒ€ê° ì¦ê°€
+            _caster.AddHostility(hostilityGained);
+        }
+
+        // ì´ëª…(Clarity) ê°•í™” ë²„í”„ ì ìš©
+        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        {
+            var usc = _caster.GetComponent<UnitStateController>();
+            if (usc != null)
+            {
+                // í˜„ì¬ í„´ ì†Œëª¨ ë³´ì •ì„ ìœ„í•´ +1
+                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1);
+                Debug.Log($"[ParametricHeal] Clarity Enhanced: {_caster.name}, Duration={trainingClarityDuration}");
+            }
+        }
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (!_battlemanager || !_caster) yield break;
+
+        var center = (useProvidedUnitTarget && _target && !_target.IsDead) ? _target : _caster;
+
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        HealArea(_battlemanager, _caster, center.CurrentMap, center.Cell);
+        ConsumeStates(_caster);
+
+        yield break;
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    {
+        if (!_battlemanager || !_caster || !_map) yield break;
+
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        HealArea(_battlemanager, _caster, _map, _originCell);
+        ConsumeStates(_caster);
+
+        yield break;
+
+
+    }
+
+    public override int GetEffectiveCost(BattleUnit caster)
+    {
+        int finalCost = base.GetEffectiveCost(caster);
+
+        if (caster == null) return finalCost;
+
+        int route = caster.GetTrainingRouteIndex(this);
+
+        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+        {
+            finalCost -= trainingCostOverride;
+            finalCost = Mathf.Max(0, finalCost);
+        }
+
+        return finalCost;
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

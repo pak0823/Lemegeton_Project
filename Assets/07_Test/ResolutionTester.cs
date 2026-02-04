@@ -1,60 +1,60 @@
-using UnityEngine;
-using System.Collections.Generic;
-
-public class ResolutionTester : MonoBehaviour
-{
-    [System.Serializable]
-    public struct ResolutionSet
-    {
-        public string label; // ¿¡µğÅÍ ½Äº°¿ë (¿¹: FHD)
-        public int width;
-        public int height;
-    }
-
-    [Header("Å×½ºÆ®ÇÒ ÇØ»óµµ ¸ñ·Ï")]
-    public List<ResolutionSet> resolutions = new List<ResolutionSet>()
-    {
-        // ÀÚÁÖ ¾²´Â °Å ¹Ì¸® ³Ö¾îµÒ (ÀÎ½ºÆåÅÍ¿¡¼­ ¼öÁ¤ °¡´É)
-        new ResolutionSet { label = "FHD", width = 1920, height = 1080 },
-        new ResolutionSet { label = "HD+", width = 1600, height = 900 },
-        new ResolutionSet { label = "HD", width = 1280, height = 720 }
-    };
-
-    [Header("¼³Á¤")]
-    public bool isFullScreen = true;
-
-    // UI ¹öÆ°ÀÇ OnClick ÀÌº¥Æ®¿¡ ¿¬°áÇÒ ÇÔ¼ö
-    public void SetResolutionByIndex(int index)
-    {
-        if (index < 0 || index >= resolutions.Count)
-        {
-            Debug.LogError($"[Resolution] Àß¸øµÈ ÀÎµ¦½º´Ù: {index}");
-            return;
-        }
-
-        ResolutionSet target = resolutions[index];
-
-        // ½ÇÁ¦ ÇØ»óµµ º¯°æ ·ÎÁ÷
-        Screen.SetResolution(target.width, target.height, isFullScreen);
-
-        Debug.Log($"[Resolution] ÇØ»óµµ º¯°æµÊ: {target.width} x {target.height} (ÀüÃ¼È­¸é: {isFullScreen})");
-    }
-
-    public void SetFullScreen(bool isFull)
-    {
-        isFullScreen = isFull;
-
-        if (isFull)
-        {
-            // Å×µÎ¸® ¾ø´Â ÀüÃ¼È­¸é
-            Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
-        }
-        else
-        {
-            // ÀÏ¹İ Ã¢¸ğµå
-            Screen.fullScreenMode = FullScreenMode.Windowed;
-        }
-
-        Debug.Log($"[Resolution] ¸ğµå º¯°æ: {Screen.fullScreenMode}");
-    }
+using UnityEngine;
+using System.Collections.Generic;
+
+public class ResolutionTester : MonoBehaviour
+{
+    [System.Serializable]
+    public struct ResolutionSet
+    {
+        public string label; // ì—ë””í„° ì‹ë³„ìš© (ì˜ˆ: FHD)
+        public int width;
+        public int height;
+    }
+
+    [Header("í…ŒìŠ¤íŠ¸í•  í•´ìƒë„ ëª©ë¡")]
+    public List<ResolutionSet> resolutions = new List<ResolutionSet>()
+    {
+        // ìì£¼ ì“°ëŠ” ê±° ë¯¸ë¦¬ ë„£ì–´ë‘  (ì¸ìŠ¤í™í„°ì—ì„œ ìˆ˜ì • ê°€ëŠ¥)
+        new ResolutionSet { label = "FHD", width = 1920, height = 1080 },
+        new ResolutionSet { label = "HD+", width = 1600, height = 900 },
+        new ResolutionSet { label = "HD", width = 1280, height = 720 }
+    };
+
+    [Header("ì„¤ì •")]
+    public bool isFullScreen = true;
+
+    // UI ë²„íŠ¼ì˜ OnClick ì´ë²¤íŠ¸ì— ì—°ê²°í•  í•¨ìˆ˜
+    public void SetResolutionByIndex(int index)
+    {
+        if (index < 0 || index >= resolutions.Count)
+        {
+            Debug.LogError($"[Resolution] ì˜ëª»ëœ ì¸ë±ìŠ¤ë‹¤: {index}");
+            return;
+        }
+
+        ResolutionSet target = resolutions[index];
+
+        // ì‹¤ì œ í•´ìƒë„ ë³€ê²½ ë¡œì§
+        Screen.SetResolution(target.width, target.height, isFullScreen);
+
+        Debug.Log($"[Resolution] í•´ìƒë„ ë³€ê²½ë¨: {target.width} x {target.height} (ì „ì²´í™”ë©´: {isFullScreen})");
+    }
+
+    public void SetFullScreen(bool isFull)
+    {
+        isFullScreen = isFull;
+
+        if (isFull)
+        {
+            // í…Œë‘ë¦¬ ì—†ëŠ” ì „ì²´í™”ë©´
+            Screen.fullScreenMode = FullScreenMode.FullScreenWindow;
+        }
+        else
+        {
+            // ì¼ë°˜ ì°½ëª¨ë“œ
+            Screen.fullScreenMode = FullScreenMode.Windowed;
+        }
+
+        Debug.Log($"[Resolution] ëª¨ë“œ ë³€ê²½: {Screen.fullScreenMode}");
+    }
 }

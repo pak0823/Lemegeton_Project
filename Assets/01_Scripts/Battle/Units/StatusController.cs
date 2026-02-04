@@ -1,305 +1,305 @@
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-
-/*
- 1 - 20: ½ºÅ³ ÁßÃ¸
- 21 - 40: ÇÇÇØ ÁßÃ¸
- 50 - 55: Áö¼Óµô ÁßÃ¸
- */
-public enum StatusId 
-{ 
-    None = 0 ,  // ¾øÀ½
-    Shooting = 1, // ·°Å°½Ä½º »ç°İ ÁßÃ¸
-    Action = 2, // ±â°£Æ® ´ëÀÀ ÁßÃ¸
-    Fixing = 3, // ÀÌµ¿ ÀúÇ× »óÅÂ(ÇöÀç´Â ½ºÅÃ ±¸Çö¿¡ ÀÖ´Âµ¥ »óÅÂ·Î º¯°æÇØ¾ßÇÔ)
-    Overwork = 4, //¶ó½ºÆ®º¸¸£ °ú·Î ÁßÃ¸
-    Research = 5, //¶ó½ºÆ®º¸¸£ ¿¬±¸ ÁßÃ¸
-
-    Defense = 21, // ¹æ¾î ÁßÃ¸
-    Resistance = 22,  // ÀúÇ× ÁßÃ¸
-    Weakness = 23, // ³ª¾à ÁßÃ¸
-    Exhaustion = 24, // Å»Áø ÁßÃ¸
-    Slow = 25 , // ¹ÎÃ¸ °¨¼Ò ÁßÃ¸
-    Suppression = 26, //Á¦¾Ğ ÁßÃ¸
-
-
-    Bleeding = 50, // ÃâÇ÷ ÁßÃ¸
-    Poisoning = 51, // Áßµ¶ ÁßÃ¸
-    Ignition = 52 // ¹ßÈ­ ÁßÃ¸
-}
-
-public static class DebuffTuning
-{
-    // index = ½ºÅÃ ¼ö (0~6)
-    public static readonly float[] Mult =
-    {
-        1.0f,  // 0½ºÅÃ: 100% ÇÇÇØ
-        0.8f,  // 1½ºÅÃ
-        0.6f,  // 2½ºÅÃ
-        0.4f,  // 3½ºÅÃ
-        0.3f,  // 4½ºÅÃ
-        0.2f,  // 5½ºÅÃ
-        0.1f   // 6½ºÅÃ: 10% ÇÇÇØ
-    };
-    public const int MaxStacks = 6;
-    // ÃâÇ÷ ½ºÅÃ´ç Ã¼·Â ºñÀ²(1% = 0.01f), ÃÖ´ë 6½ºÅÃ µ¿ÀÏ »óÇÑ »ç¿ë
-    public const float BleedPercentPerStack = 0.02f;    // ½ºÅÃ´ç ÃÖ´ë Ã¼·ÂÀÇ 1%
-    public const float PoisonPercentPerStack = 0.03f;   // ½ºÅÃ´ç ÃÖ´ë Ã¼·ÂÀÇ 3%
-    public const float IgnitionPercentPerStack = 0.03f; // ½ºÅÃ´ç ÃÖ´ë Ã¼·ÂÀÇ 3%
-
-    public const float GuardPerStackMult = 0.9f; // ¹æ¾î ÁßÃ¸ 1½ºÅÃ´ç 0.9¹è
-}
-
-[Serializable]
-public class StatusEntry
-{
-    public StatusId id;
-    public int stacks;
-    public int remainingTurns;
-
-    public StatusEntry(StatusId id, int stacks, int duration)
-    {
-        this.id = id;
-        this.stacks = stacks;
-        this.remainingTurns = duration;
-    }
-}
-
-public class StatusController : MonoBehaviour
-{
-    readonly Dictionary<StatusId, StatusEntry> _map = new Dictionary<StatusId, StatusEntry>();
-    public event Action OnStatusChanged;
-
-    // »óÅÂº° ÀúÇ×·ÂÀ» ÀúÀåÇÒ µñ¼Å³Ê¸®
-    private Dictionary<StatusId, float> _resistances = new Dictionary<StatusId, float>();
-
-    // ÀúÇ×·Â ¼³Á¤ ÇÔ¼ö (ÆĞ½Ãºê¿¡¼­ È£Ãâ)
-    public void SetResistance(StatusId id, float value)
-    {
-        if (_resistances.ContainsKey(id))
-            _resistances[id] = value;
-        else
-            _resistances.Add(id, value);
-    }
-
-    BattleUnit _owner;
-
-    public struct StatusView
-    {
-        public StatusId id;
-        public int stacks;
-        public int remainingTurns;
-
-        public StatusView(StatusId id, int stacks, int remaining)
-        {
-            this.id = id;
-            this.stacks = stacks;
-            this.remainingTurns = remaining;
-        }
-    }
-
-    void OnEnable()
-    {
-        _owner = GetComponent<BattleUnit>();
-        if (_owner != null) _owner.OnDied += OnOwnerDied;
-    }
-
-    void OnDisable()
-    {
-        if (_owner != null) _owner.OnDied -= OnOwnerDied;
-    }
-    void OnOwnerDied(BattleUnit dead)
-    {
-        ClearAllStatuses();           // ¸ğµç ¹öÇÁ/µğ¹öÇÁ Á¦°Å
-    }
-
-    public void ClearAllStatuses()
-    {
-        _map.Clear();                 // ³»ºÎ »óÅÂ »çÀü ºñ¿ì±â
-        OnStatusChanged?.Invoke();    // UI/ATB µî °»½Å Æ®¸®°Å
-    }
-
-    public void SetStacks(StatusId id, int stacks, int durationTurns = 0)
-    {
-        if (stacks <= 0)
-        {
-            if (_map.Remove(id))
-                OnStatusChanged?.Invoke();
-            return;
-        }
-
-        int maxStacks = GetMaxStacks(id);
-        int clampedStacks = Mathf.Min(stacks, maxStacks);
-
-        if (_map.TryGetValue(id, out var e))
-        {
-            e.stacks = clampedStacks;
-            // 0ÀÌ µé¾î¿À¸é ±âÁ¸ ÅÏ À¯Áö, ¾Æ´Ï¸é °»½Å
-            if (durationTurns > 0) e.remainingTurns = durationTurns;
-        }
-        else
-        {
-            _map[id] = new StatusEntry(id, clampedStacks, durationTurns);
-        }
-
-        OnStatusChanged?.Invoke();
-    }
-
-    public void ApplyWithTurnContext(StatusId id, int stacks, int durationTurns)
-    {
-        int maxStacks = GetMaxStacks(id);
-
-        if (_map.TryGetValue(id, out var e))
-        {
-            // ½ºÅÃ Áõ°¡ + »óÅÂº° ÃÖ´ë ÁßÃ¸ Ä¸
-            e.stacks = Mathf.Min(e.stacks + stacks, maxStacks);
-
-            // Áö¼Ó½Ã°£Àº '»õ·Î ºÎ¿©µÈ »óÅÂ' ±âÁØÀ¸·Î ¸®¼Â
-            e.remainingTurns = Mathf.Max(e.remainingTurns, durationTurns);
-        }
-        else
-        {
-            // »õ·Î ºÎ¿©µÈ »óÅÂ¸¦ Ãß°¡
-            int clampedStacks = Mathf.Min(stacks, maxStacks);
-            _map[id] = new StatusEntry(id, clampedStacks, durationTurns);
-        }
-
-        OnStatusChanged?.Invoke();
-    }
-
-    public void Clear(StatusId id)
-    {
-        if (_map.Remove(id)) OnStatusChanged?.Invoke();
-    }
-
-    public bool Has(StatusId id) => _map.ContainsKey(id);
-    public int GetStacks(StatusId id) => _map.TryGetValue(id, out var e) ? e.stacks : 0;
-
-    //»óÅÂº° ÃÖ´ë ÁßÃ¸ ¼ö¸¦ ¹İÈ¯ÇÑ´Ù.
-    // GuardStack / WeakStack / Exhaust / Resist : 9ÁßÃ¸
-    // ³ª¸ÓÁö 6ÁßÃ¸
-    int GetMaxStacks(StatusId id)
-    {
-        switch (id)
-        {
-            case StatusId.Defense:
-            case StatusId.Weakness:
-            case StatusId.Exhaustion:
-            case StatusId.Resistance:
-                return 9;
-
-            default:
-                return DebuffTuning.MaxStacks; // Slow, Bleed µîÀº ±âÁ¸ »óÇÑ À¯Áö
-        }
-    }
-
-    public float GetAgilityMultiplier() //¹ÎÃ¸ ¹èÀ² °è»ê
-    {
-        int s = GetStacks(StatusId.Slow);
-        s = Mathf.Clamp(s, 0, DebuffTuning.MaxStacks);
-        return DebuffTuning.Mult[s];
-    }
-
-    // ÆíÀÇ¿ë ¹ÎÃ¸ ¹èÀ² °è»ê
-    public float ApplyAgilityModifier(float baseAgility)
-        => baseAgility * GetAgilityMultiplier();
-
-    // ÀúÇ× °ªÀ» °¡Á®¿À´Â ÇïÆÛ
-    public float GetResistance(StatusId id)
-    {
-        // µñ¼Å³Ê¸®¿¡ ¼³Á¤µÈ °ªÀÌ ÀÖÀ¸¸é ¹İÈ¯, ¾øÀ¸¸é ±âº»°ª 1.0f
-        if (_resistances.TryGetValue(id, out float val))
-            return val;
-
-        return 1.0f;
-    }
-
-    /// <summary>ÀÌ À¯´ÖÀÇ ÅÏ ½ÃÀÛ ½Ã Áö¼Ó½Ã°£ °¨¼Ò/Á¤¸®.</summary>
-    public void OnTurnStart()
-    {
-        if (_owner == null || _owner.IsDead) return;
-
-        // ÃâÇ÷(Bleeding)
-        // °ø½Ä: max{ S, MaxHP * 0.02 * S } * R
-        int bleedStacks = GetStacks(StatusId.Bleeding);
-        if (bleedStacks > 0)
-        {
-            float resistance = GetResistance(StatusId.Bleeding);
-            float baseDmg = _owner.MaxHP * DebuffTuning.BleedPercentPerStack * bleedStacks;
-
-            // S¿Í °ø½Ä Áß Å« °ª ¼±ÅÃ
-            float rawDmg = Mathf.Max(bleedStacks, baseDmg);
-
-            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
-            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
-            // Debug.Log($"[Bleed] Stacks={bleedStacks}, Dmg={finalDmg}");
-        }
-
-        // Áßµ¶(Poisoning)
-        // °ø½Ä: max{ S, (MaxHP - HP) * 0.03 * S } * R  (ÀÒÀº Ã¼·Â ºñ·Ê)
-        int poisonStacks = GetStacks(StatusId.Poisoning);
-        if (poisonStacks > 0 && !_owner.IsDead)
-        {
-            float resistance = GetResistance(StatusId.Poisoning);
-            float missingHP = _owner.MaxHP - _owner.HP;
-            float baseDmg = missingHP * DebuffTuning.PoisonPercentPerStack * poisonStacks;
-
-            // S¿Í °ø½Ä Áß Å« °ª ¼±ÅÃ
-            float rawDmg = Mathf.Max(poisonStacks, baseDmg);
-
-            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
-            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
-            // Debug.Log($"[Poison] Stacks={poisonStacks}, MissingHP={missingHP}, Dmg={finalDmg}");
-        }
-
-        // ¹ßÈ­(Ignition)
-        // °ø½Ä: max{ S, HP * 0.03 * S } * R (ÇöÀç Ã¼·Â ºñ·Ê)
-        int ignitionStacks = GetStacks(StatusId.Ignition);
-        if (ignitionStacks > 0 && !_owner.IsDead)
-        {
-            float resistance = GetResistance(StatusId.Ignition);
-            float currentHP = _owner.HP;
-            float baseDmg = currentHP * DebuffTuning.IgnitionPercentPerStack * ignitionStacks;
-
-            // S¿Í °ø½Ä Áß Å« °ª ¼±ÅÃ
-            float rawDmg = Mathf.Max(ignitionStacks, baseDmg);
-
-            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
-            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
-            // Debug.Log($"[Ignition] Stacks={ignitionStacks}, CurHP={currentHP}, Dmg={finalDmg}");
-        }
-
-        bool changed = false;
-        var toRemove = new List<StatusId>();
-        foreach (var kv in _map)
-        {
-            var e = kv.Value;
-            if (e.remainingTurns > 0)
-            {
-                e.remainingTurns--;
-                // ÅÏ ´Ù µÊ -> »èÁ¦ ¸ñ·Ï Ãß°¡
-                if (e.remainingTurns <= 0) toRemove.Add(kv.Key);
-                changed = true;
-            }
-        }
-        foreach (var id in toRemove)
-        {
-            _map.Remove(id);
-            // Debug.Log($"[Status] {_owner.name}'s {id} expired.");
-        }
-        if (changed || toRemove.Count > 0) OnStatusChanged?.Invoke();
-    }
-
-    public StatusView[] GetStatusViews()
-    {
-        var list = new List<StatusView>();
-        foreach (var kv in _map)
-        {
-            var e = kv.Value;
-            list.Add(new StatusView(kv.Key, e.stacks, e.remainingTurns));
-        }
-        return list.ToArray();
-    }
-}
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+
+/*
+ 1 - 20: ìŠ¤í‚¬ ì¤‘ì²©
+ 21 - 40: í”¼í•´ ì¤‘ì²©
+ 50 - 55: ì§€ì†ë”œ ì¤‘ì²©
+ */
+public enum StatusId 
+{ 
+    None = 0 ,  // ì—†ìŒ
+    Shooting = 1, // ëŸ­í‚¤ì‹ìŠ¤ ì‚¬ê²© ì¤‘ì²©
+    Action = 2, // ê¸°ê°„íŠ¸ ëŒ€ì‘ ì¤‘ì²©
+    Fixing = 3, // ì´ë™ ì €í•­ ìƒíƒœ(í˜„ì¬ëŠ” ìŠ¤íƒ êµ¬í˜„ì— ìˆëŠ”ë° ìƒíƒœë¡œ ë³€ê²½í•´ì•¼í•¨)
+    Overwork = 4, //ë¼ìŠ¤íŠ¸ë³´ë¥´ ê³¼ë¡œ ì¤‘ì²©
+    Research = 5, //ë¼ìŠ¤íŠ¸ë³´ë¥´ ì—°êµ¬ ì¤‘ì²©
+
+    Defense = 21, // ë°©ì–´ ì¤‘ì²©
+    Resistance = 22,  // ì €í•­ ì¤‘ì²©
+    Weakness = 23, // ë‚˜ì•½ ì¤‘ì²©
+    Exhaustion = 24, // íƒˆì§„ ì¤‘ì²©
+    Slow = 25 , // ë¯¼ì²© ê°ì†Œ ì¤‘ì²©
+    Suppression = 26, //ì œì•• ì¤‘ì²©
+
+
+    Bleeding = 50, // ì¶œí˜ˆ ì¤‘ì²©
+    Poisoning = 51, // ì¤‘ë… ì¤‘ì²©
+    Ignition = 52 // ë°œí™” ì¤‘ì²©
+}
+
+public static class DebuffTuning
+{
+    // index = ìŠ¤íƒ ìˆ˜ (0~6)
+    public static readonly float[] Mult =
+    {
+        1.0f,  // 0ìŠ¤íƒ: 100% í”¼í•´
+        0.8f,  // 1ìŠ¤íƒ
+        0.6f,  // 2ìŠ¤íƒ
+        0.4f,  // 3ìŠ¤íƒ
+        0.3f,  // 4ìŠ¤íƒ
+        0.2f,  // 5ìŠ¤íƒ
+        0.1f   // 6ìŠ¤íƒ: 10% í”¼í•´
+    };
+    public const int MaxStacks = 6;
+    // ì¶œí˜ˆ ìŠ¤íƒë‹¹ ì²´ë ¥ ë¹„ìœ¨(1% = 0.01f), ìµœëŒ€ 6ìŠ¤íƒ ë™ì¼ ìƒí•œ ì‚¬ìš©
+    public const float BleedPercentPerStack = 0.02f;    // ìŠ¤íƒë‹¹ ìµœëŒ€ ì²´ë ¥ì˜ 1%
+    public const float PoisonPercentPerStack = 0.03f;   // ìŠ¤íƒë‹¹ ìµœëŒ€ ì²´ë ¥ì˜ 3%
+    public const float IgnitionPercentPerStack = 0.03f; // ìŠ¤íƒë‹¹ ìµœëŒ€ ì²´ë ¥ì˜ 3%
+
+    public const float GuardPerStackMult = 0.9f; // ë°©ì–´ ì¤‘ì²© 1ìŠ¤íƒë‹¹ 0.9ë°°
+}
+
+[Serializable]
+public class StatusEntry
+{
+    public StatusId id;
+    public int stacks;
+    public int remainingTurns;
+
+    public StatusEntry(StatusId id, int stacks, int duration)
+    {
+        this.id = id;
+        this.stacks = stacks;
+        this.remainingTurns = duration;
+    }
+}
+
+public class StatusController : MonoBehaviour
+{
+    readonly Dictionary<StatusId, StatusEntry> _map = new Dictionary<StatusId, StatusEntry>();
+    public event Action OnStatusChanged;
+
+    // ìƒíƒœë³„ ì €í•­ë ¥ì„ ì €ì¥í•  ë”•ì…”ë„ˆë¦¬
+    private Dictionary<StatusId, float> _resistances = new Dictionary<StatusId, float>();
+
+    // ì €í•­ë ¥ ì„¤ì • í•¨ìˆ˜ (íŒ¨ì‹œë¸Œì—ì„œ í˜¸ì¶œ)
+    public void SetResistance(StatusId id, float value)
+    {
+        if (_resistances.ContainsKey(id))
+            _resistances[id] = value;
+        else
+            _resistances.Add(id, value);
+    }
+
+    BattleUnit _owner;
+
+    public struct StatusView
+    {
+        public StatusId id;
+        public int stacks;
+        public int remainingTurns;
+
+        public StatusView(StatusId id, int stacks, int remaining)
+        {
+            this.id = id;
+            this.stacks = stacks;
+            this.remainingTurns = remaining;
+        }
+    }
+
+    void OnEnable()
+    {
+        _owner = GetComponent<BattleUnit>();
+        if (_owner != null) _owner.OnDied += OnOwnerDied;
+    }
+
+    void OnDisable()
+    {
+        if (_owner != null) _owner.OnDied -= OnOwnerDied;
+    }
+    void OnOwnerDied(BattleUnit dead)
+    {
+        ClearAllStatuses();           // ëª¨ë“  ë²„í”„/ë””ë²„í”„ ì œê±°
+    }
+
+    public void ClearAllStatuses()
+    {
+        _map.Clear();                 // ë‚´ë¶€ ìƒíƒœ ì‚¬ì „ ë¹„ìš°ê¸°
+        OnStatusChanged?.Invoke();    // UI/ATB ë“± ê°±ì‹  íŠ¸ë¦¬ê±°
+    }
+
+    public void SetStacks(StatusId id, int stacks, int durationTurns = 0)
+    {
+        if (stacks <= 0)
+        {
+            if (_map.Remove(id))
+                OnStatusChanged?.Invoke();
+            return;
+        }
+
+        int maxStacks = GetMaxStacks(id);
+        int clampedStacks = Mathf.Min(stacks, maxStacks);
+
+        if (_map.TryGetValue(id, out var e))
+        {
+            e.stacks = clampedStacks;
+            // 0ì´ ë“¤ì–´ì˜¤ë©´ ê¸°ì¡´ í„´ ìœ ì§€, ì•„ë‹ˆë©´ ê°±ì‹ 
+            if (durationTurns > 0) e.remainingTurns = durationTurns;
+        }
+        else
+        {
+            _map[id] = new StatusEntry(id, clampedStacks, durationTurns);
+        }
+
+        OnStatusChanged?.Invoke();
+    }
+
+    public void ApplyWithTurnContext(StatusId id, int stacks, int durationTurns)
+    {
+        int maxStacks = GetMaxStacks(id);
+
+        if (_map.TryGetValue(id, out var e))
+        {
+            // ìŠ¤íƒ ì¦ê°€ + ìƒíƒœë³„ ìµœëŒ€ ì¤‘ì²© ìº¡
+            e.stacks = Mathf.Min(e.stacks + stacks, maxStacks);
+
+            // ì§€ì†ì‹œê°„ì€ 'ìƒˆë¡œ ë¶€ì—¬ëœ ìƒíƒœ' ê¸°ì¤€ìœ¼ë¡œ ë¦¬ì…‹
+            e.remainingTurns = Mathf.Max(e.remainingTurns, durationTurns);
+        }
+        else
+        {
+            // ìƒˆë¡œ ë¶€ì—¬ëœ ìƒíƒœë¥¼ ì¶”ê°€
+            int clampedStacks = Mathf.Min(stacks, maxStacks);
+            _map[id] = new StatusEntry(id, clampedStacks, durationTurns);
+        }
+
+        OnStatusChanged?.Invoke();
+    }
+
+    public void Clear(StatusId id)
+    {
+        if (_map.Remove(id)) OnStatusChanged?.Invoke();
+    }
+
+    public bool Has(StatusId id) => _map.ContainsKey(id);
+    public int GetStacks(StatusId id) => _map.TryGetValue(id, out var e) ? e.stacks : 0;
+
+    //ìƒíƒœë³„ ìµœëŒ€ ì¤‘ì²© ìˆ˜ë¥¼ ë°˜í™˜í•œë‹¤.
+    // GuardStack / WeakStack / Exhaust / Resist : 9ì¤‘ì²©
+    // ë‚˜ë¨¸ì§€ 6ì¤‘ì²©
+    int GetMaxStacks(StatusId id)
+    {
+        switch (id)
+        {
+            case StatusId.Defense:
+            case StatusId.Weakness:
+            case StatusId.Exhaustion:
+            case StatusId.Resistance:
+                return 9;
+
+            default:
+                return DebuffTuning.MaxStacks; // Slow, Bleed ë“±ì€ ê¸°ì¡´ ìƒí•œ ìœ ì§€
+        }
+    }
+
+    public float GetAgilityMultiplier() //ë¯¼ì²© ë°°ìœ¨ ê³„ì‚°
+    {
+        int s = GetStacks(StatusId.Slow);
+        s = Mathf.Clamp(s, 0, DebuffTuning.MaxStacks);
+        return DebuffTuning.Mult[s];
+    }
+
+    // í¸ì˜ìš© ë¯¼ì²© ë°°ìœ¨ ê³„ì‚°
+    public float ApplyAgilityModifier(float baseAgility)
+        => baseAgility * GetAgilityMultiplier();
+
+    // ì €í•­ ê°’ì„ ê°€ì ¸ì˜¤ëŠ” í—¬í¼
+    public float GetResistance(StatusId id)
+    {
+        // ë”•ì…”ë„ˆë¦¬ì— ì„¤ì •ëœ ê°’ì´ ìˆìœ¼ë©´ ë°˜í™˜, ì—†ìœ¼ë©´ ê¸°ë³¸ê°’ 1.0f
+        if (_resistances.TryGetValue(id, out float val))
+            return val;
+
+        return 1.0f;
+    }
+
+    /// <summary>ì´ ìœ ë‹›ì˜ í„´ ì‹œì‘ ì‹œ ì§€ì†ì‹œê°„ ê°ì†Œ/ì •ë¦¬.</summary>
+    public void OnTurnStart()
+    {
+        if (_owner == null || _owner.IsDead) return;
+
+        // ì¶œí˜ˆ(Bleeding)
+        // ê³µì‹: max{ S, MaxHP * 0.02 * S } * R
+        int bleedStacks = GetStacks(StatusId.Bleeding);
+        if (bleedStacks > 0)
+        {
+            float resistance = GetResistance(StatusId.Bleeding);
+            float baseDmg = _owner.MaxHP * DebuffTuning.BleedPercentPerStack * bleedStacks;
+
+            // Sì™€ ê³µì‹ ì¤‘ í° ê°’ ì„ íƒ
+            float rawDmg = Mathf.Max(bleedStacks, baseDmg);
+
+            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
+            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
+            // Debug.Log($"[Bleed] Stacks={bleedStacks}, Dmg={finalDmg}");
+        }
+
+        // ì¤‘ë…(Poisoning)
+        // ê³µì‹: max{ S, (MaxHP - HP) * 0.03 * S } * R  (ìƒì€ ì²´ë ¥ ë¹„ë¡€)
+        int poisonStacks = GetStacks(StatusId.Poisoning);
+        if (poisonStacks > 0 && !_owner.IsDead)
+        {
+            float resistance = GetResistance(StatusId.Poisoning);
+            float missingHP = _owner.MaxHP - _owner.HP;
+            float baseDmg = missingHP * DebuffTuning.PoisonPercentPerStack * poisonStacks;
+
+            // Sì™€ ê³µì‹ ì¤‘ í° ê°’ ì„ íƒ
+            float rawDmg = Mathf.Max(poisonStacks, baseDmg);
+
+            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
+            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
+            // Debug.Log($"[Poison] Stacks={poisonStacks}, MissingHP={missingHP}, Dmg={finalDmg}");
+        }
+
+        // ë°œí™”(Ignition)
+        // ê³µì‹: max{ S, HP * 0.03 * S } * R (í˜„ì¬ ì²´ë ¥ ë¹„ë¡€)
+        int ignitionStacks = GetStacks(StatusId.Ignition);
+        if (ignitionStacks > 0 && !_owner.IsDead)
+        {
+            float resistance = GetResistance(StatusId.Ignition);
+            float currentHP = _owner.HP;
+            float baseDmg = currentHP * DebuffTuning.IgnitionPercentPerStack * ignitionStacks;
+
+            // Sì™€ ê³µì‹ ì¤‘ í° ê°’ ì„ íƒ
+            float rawDmg = Mathf.Max(ignitionStacks, baseDmg);
+
+            int finalDmg = Mathf.CeilToInt(rawDmg * resistance);
+            if (finalDmg > 0) _owner.TakeDamage(finalDmg);
+            // Debug.Log($"[Ignition] Stacks={ignitionStacks}, CurHP={currentHP}, Dmg={finalDmg}");
+        }
+
+        bool changed = false;
+        var toRemove = new List<StatusId>();
+        foreach (var kv in _map)
+        {
+            var e = kv.Value;
+            if (e.remainingTurns > 0)
+            {
+                e.remainingTurns--;
+                // í„´ ë‹¤ ë¨ -> ì‚­ì œ ëª©ë¡ ì¶”ê°€
+                if (e.remainingTurns <= 0) toRemove.Add(kv.Key);
+                changed = true;
+            }
+        }
+        foreach (var id in toRemove)
+        {
+            _map.Remove(id);
+            // Debug.Log($"[Status] {_owner.name}'s {id} expired.");
+        }
+        if (changed || toRemove.Count > 0) OnStatusChanged?.Invoke();
+    }
+
+    public StatusView[] GetStatusViews()
+    {
+        var list = new List<StatusView>();
+        foreach (var kv in _map)
+        {
+            var e = kv.Value;
+            list.Add(new StatusView(kv.Key, e.stacks, e.remainingTurns));
+        }
+        return list.ToArray();
+    }
+}

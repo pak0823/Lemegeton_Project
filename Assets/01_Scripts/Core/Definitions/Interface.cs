@@ -1,15 +1,15 @@
-public interface IResettable
-{
-    void ResetState();
-}
-public interface ITrainableSkill
-{
-    public struct TrainingOption
-    {
-        public string title;
-        public string description;
-    }
-
-    // UI¿¡ 3°¡Áö ·çÆ®ÀÇ Á¦¸ñ/¼³¸íÀ» Á¦°ø (±æÀÌ 3 °íÁ¤ ±ÇÀå)
-    TrainingOption[] GetTrainingOptions();
+public interface IResettable
+{
+    void ResetState();
+}
+public interface ITrainableSkill
+{
+    public struct TrainingOption
+    {
+        public string title;
+        public string description;
+    }
+
+    // UIì— 3ê°€ì§€ ë£¨íŠ¸ì˜ ì œëª©/ì„¤ëª…ì„ ì œê³µ (ê¸¸ì´ 3 ê³ ì • ê¶Œì¥)
+    TrainingOption[] GetTrainingOptions();
 }

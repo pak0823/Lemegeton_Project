@@ -1,11 +1,11 @@
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/TraitAsset", fileName = "Trait_New")]
-public class TraitAsset : ScriptableObject
-{
-    [Header("Display")]
-    public string displayName; // ¼º°İ ÀÌ¸§ (¿¹: ´ÙÇ÷Áú)
-    [TextArea] public string description; // ¼º°İ ¼³¸í
-
-    // ÃßÈÄ ¼º°İ È¿°ú(½ºÅÈ º¸Á¤ µî) ·ÎÁ÷ÀÌ ÇÊ¿äÇÏ¸é ¿©±â¿¡ Ãß°¡
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/TraitAsset", fileName = "Trait_New")]
+public class TraitAsset : ScriptableObject
+{
+    [Header("Display")]
+    public string displayName; // ì„±ê²© ì´ë¦„ (ì˜ˆ: ë‹¤í˜ˆì§ˆ)
+    [TextArea] public string description; // ì„±ê²© ì„¤ëª…
+
+    // ì¶”í›„ ì„±ê²© íš¨ê³¼(ìŠ¤íƒ¯ ë³´ì • ë“±) ë¡œì§ì´ í•„ìš”í•˜ë©´ ì—¬ê¸°ì— ì¶”ê°€
 }

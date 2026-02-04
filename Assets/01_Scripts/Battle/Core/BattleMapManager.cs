@@ -1,96 +1,96 @@
-using Unity.VisualScripting;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class BattleMapManager : MonoBehaviour, IBattleMapProvider
-{
-    public static BattleMapManager Instance {  get; private set; }
-
-    [Header("¿¸≈ı ≈∏¿œ∏ ")]
-    public Tilemap playerFloor;
-    public Tilemap enemyFloor;
-
-    [Header("ø¿πˆ∑π¿Ã(º±≈√)")]
-    public Tilemap playerOverlay;
-    public Tilemap enemyOverlay;
-
-    public Tilemap PlayerFloor => playerFloor;
-    public Tilemap EnemyFloor => enemyFloor;
-    public Tilemap AllyOverlay => playerOverlay;
-    public Tilemap EnemyOverlay => enemyOverlay;
-
-    public event System.Action OnMapsReady;
-
-    void Awake()
-    {
-        if(Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-        if (playerFloor == null) playerFloor = FindByName("Player_Tilemap");
-        if (enemyFloor == null) enemyFloor = FindByName("Enemy_Tilemap");
-        if (SceneTransitionManager.Instance == null)
-            Debug.LogWarning("[BattleMapManager] SceneTransitionManager æ¯¿Ω(¿¸≈ı¥‹µ∂≈◊Ω∫∆Æ∂Û∏È πÆ¡¶æ¯¿Ω).");
-    }
-    void Start()
-    {
-        if (playerFloor != null && enemyFloor != null)
-            OnMapsReady?.Invoke(); // ø©±‚º≠ »£√‚
-    }
-
-    public void UseEnemyFloor(Tilemap newEnemyFloor, Tilemap newEnemyOverlay = null)
-    {
-        enemyFloor = newEnemyFloor;
-        if (newEnemyOverlay != null) enemyOverlay = newEnemyOverlay;
-    }
-
-    Tilemap FindByName(string contains)
-    {
-        foreach (var tm in FindObjectsOfType<Tilemap>())
-            if (tm.name.ToLower().Contains(contains.ToLower())) return tm;
-        return null;
-    }
-
-    // ¡¯«¸ ¿Œµ¶Ω∫∏¶ Ω«¡¶ «ÌªÁ ≈∏¿œ ¡¬«•∑Œ ∫Ø»Ø
-    // ±‚¡ÿ¡°(center)¿ª (0,0,0)¿∏∑Œ ∞°¡§«œ∞Ì ªÛ¥Î ¡¬«•∏¶ π›»Ø
-    public Vector3Int GetFormationSpawnPoint(int index)
-    {
-        // 3-4-5-4-3 ±∏¡∂ (UIøÕ µø¿œ«— πËƒ°)
-        // ¬¶ºˆ/»¶ºˆ «‡(y)ø° µ˚∂Û x ¡¬«• ∫∏¡§¿Ã « ø‰«“ ºˆ ¿÷Ω¿¥œ¥Ÿ. (Flat-top vs Pointy-top)
-        // æ∆∑°¥¬ ¿œπ›¿˚¿Œ Pointy-top «ÌªÁ ±‚¡ÿ øπΩ√ ¡¬«•¿‘¥œ¥Ÿ.
-        // Ω«¡¶ ∞‘¿” ∏ ¿« ±◊∏ÆµÂ º≥¡§ø° µ˚∂Û x, y ∞™¿ª ¡∂±›æø ºˆ¡§«ÿæﬂ «“ ºˆ ¿÷Ω¿¥œ¥Ÿ.
-
-        switch (index)
-        {
-            // Row 1 (Top, 3∞≥)
-            case 0: return new Vector3Int(-3, 2, 0);
-            case 1: return new Vector3Int(-2, 2, 0);
-            case 2: return new Vector3Int(-1, 2, 0);
-
-            // Row 2 (4∞≥)
-            case 3: return new Vector3Int(-4, 1, 0); // »§¿∫ -2, 1
-            case 4: return new Vector3Int(-3, 1, 0);  // »§¿∫ -1, 1
-            case 5: return new Vector3Int(-2, 1, 0);
-            case 6: return new Vector3Int(-1, 1, 0);
-
-            // Row 3 (Center, 5∞≥) -> y=0
-            case 7: return new Vector3Int(-4, 0, 0);
-            case 8: return new Vector3Int(-3, 0, 0);
-            case 9: return new Vector3Int(-2, 0, 0); // ¡ﬂæ”
-            case 10: return new Vector3Int(-1, 0, 0);
-            case 11: return new Vector3Int(0, 0, 0);
-
-            // Row 4 (4∞≥)
-            case 12: return new Vector3Int(-4, -1, 0);
-            case 13: return new Vector3Int(-3, -1, 0);
-            case 14: return new Vector3Int(-2, -1, 0);
-            case 15: return new Vector3Int(-1, -1, 0);
-
-            // Row 5 (Bottom, 3∞≥)
-            case 16: return new Vector3Int(-3, -2, 0);
-            case 17: return new Vector3Int(-2, -2, 0);
-            case 18: return new Vector3Int(-1, -2, 0);
-
-            default: return Vector3Int.zero;
-        }
-    }
-}
+using Unity.VisualScripting;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class BattleMapManager : MonoBehaviour, IBattleMapProvider
+{
+    public static BattleMapManager Instance {  get; private set; }
+
+    [Header("Ï†ÑÌà¨ ÌÉÄÏùºÎßµ")]
+    public Tilemap playerFloor;
+    public Tilemap enemyFloor;
+
+    [Header("Ïò§Î≤ÑÎ†àÏù¥(ÏÑ†ÌÉù)")]
+    public Tilemap playerOverlay;
+    public Tilemap enemyOverlay;
+
+    public Tilemap PlayerFloor => playerFloor;
+    public Tilemap EnemyFloor => enemyFloor;
+    public Tilemap AllyOverlay => playerOverlay;
+    public Tilemap EnemyOverlay => enemyOverlay;
+
+    public event System.Action OnMapsReady;
+
+    void Awake()
+    {
+        if(Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        if (playerFloor == null) playerFloor = FindByName("Player_Tilemap");
+        if (enemyFloor == null) enemyFloor = FindByName("Enemy_Tilemap");
+        if (SceneTransitionManager.Instance == null)
+            Debug.LogWarning("[BattleMapManager] SceneTransitionManager ÏóÜÏùå(Ï†ÑÌà¨Îã®ÎèÖÌÖåÏä§Ìä∏ÎùºÎ©¥ Î¨∏Ï†úÏóÜÏùå).");
+    }
+    void Start()
+    {
+        if (playerFloor != null && enemyFloor != null)
+            OnMapsReady?.Invoke(); // Ïó¨Í∏∞ÏÑú Ìò∏Ï∂ú
+    }
+
+    public void UseEnemyFloor(Tilemap newEnemyFloor, Tilemap newEnemyOverlay = null)
+    {
+        enemyFloor = newEnemyFloor;
+        if (newEnemyOverlay != null) enemyOverlay = newEnemyOverlay;
+    }
+
+    Tilemap FindByName(string contains)
+    {
+        foreach (var tm in FindObjectsOfType<Tilemap>())
+            if (tm.name.ToLower().Contains(contains.ToLower())) return tm;
+        return null;
+    }
+
+    // ÏßÑÌòï Ïù∏Îç±Ïä§Î•º Ïã§Ï†ú Ìó•ÏÇ¨ ÌÉÄÏùº Ï¢åÌëúÎ°ú Î≥ÄÌôò
+    // Í∏∞Ï§ÄÏ†ê(center)ÏùÑ (0,0,0)ÏúºÎ°ú Í∞ÄÏ†ïÌïòÍ≥† ÏÉÅÎåÄ Ï¢åÌëúÎ•º Î∞òÌôò
+    public Vector3Int GetFormationSpawnPoint(int index)
+    {
+        // 3-4-5-4-3 Íµ¨Ï°∞ (UIÏôÄ ÎèôÏùºÌïú Î∞∞Ïπò)
+        // ÏßùÏàò/ÌôÄÏàò Ìñâ(y)Ïóê Îî∞Îùº x Ï¢åÌëú Î≥¥Ï†ïÏù¥ ÌïÑÏöîÌï† Ïàò ÏûàÏäµÎãàÎã§. (Flat-top vs Pointy-top)
+        // ÏïÑÎûòÎäî ÏùºÎ∞òÏ†ÅÏù∏ Pointy-top Ìó•ÏÇ¨ Í∏∞Ï§Ä ÏòàÏãú Ï¢åÌëúÏûÖÎãàÎã§.
+        // Ïã§Ï†ú Í≤åÏûÑ ÎßµÏùò Í∑∏Î¶¨Îìú ÏÑ§Ï†ïÏóê Îî∞Îùº x, y Í∞íÏùÑ Ï°∞Í∏àÏî© ÏàòÏ†ïÌï¥Ïïº Ìï† Ïàò ÏûàÏäµÎãàÎã§.
+
+        switch (index)
+        {
+            // Row 1 (Top, 3Í∞ú)
+            case 0: return new Vector3Int(-3, 2, 0);
+            case 1: return new Vector3Int(-2, 2, 0);
+            case 2: return new Vector3Int(-1, 2, 0);
+
+            // Row 2 (4Í∞ú)
+            case 3: return new Vector3Int(-4, 1, 0); // ÌòπÏùÄ -2, 1
+            case 4: return new Vector3Int(-3, 1, 0);  // ÌòπÏùÄ -1, 1
+            case 5: return new Vector3Int(-2, 1, 0);
+            case 6: return new Vector3Int(-1, 1, 0);
+
+            // Row 3 (Center, 5Í∞ú) -> y=0
+            case 7: return new Vector3Int(-4, 0, 0);
+            case 8: return new Vector3Int(-3, 0, 0);
+            case 9: return new Vector3Int(-2, 0, 0); // Ï§ëÏïô
+            case 10: return new Vector3Int(-1, 0, 0);
+            case 11: return new Vector3Int(0, 0, 0);
+
+            // Row 4 (4Í∞ú)
+            case 12: return new Vector3Int(-4, -1, 0);
+            case 13: return new Vector3Int(-3, -1, 0);
+            case 14: return new Vector3Int(-2, -1, 0);
+            case 15: return new Vector3Int(-1, -1, 0);
+
+            // Row 5 (Bottom, 3Í∞ú)
+            case 16: return new Vector3Int(-3, -2, 0);
+            case 17: return new Vector3Int(-2, -2, 0);
+            case 18: return new Vector3Int(-1, -2, 0);
+
+            default: return Vector3Int.zero;
+        }
+    }
+}

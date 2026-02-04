@@ -1,260 +1,260 @@
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-public enum UnitStateId 
-{ 
-    // 1 - 50: À¯´Ö ½ºÅ³ »óÅÂ
-    None = 0,
-    Support = 1, // ÇÃ·çÀÌµå Áö¿ø »óÅÂ
-    Steam = 2,  // ·°Å°½Ä½º Áõ±â »óÅÂ
-    Isolation = 3,   //±â°£Æ® ¼â±¹ »óÅÂ
-    Guard = 4,   //±â°£Æ® °æ°è »óÅÂ
-    Ambush = 5,    //Àáº¹ »óÅÂ
-    Explosion = 6,    // È­ÇĞ Æø¹ß »óÅÂ
-    Disturbance = 7,  // Çö»ó ±³¶õ »óÅÂ
-    Sleep = 8,  //¼ö¸é »óÅÂ
-    Hidden = 9, //Àº½Å »óÅÂ
-
-
-    // 51 - 100: °øÅë »óÅÂ
-    Moribundity = 51, //ºó»ç »óÅÂ
-    Confusion = 52, // È¥¶õ »óÅÂ
-    Fury = 53, // °İ¾ç »óÅÂ
-    Fear = 54,   //°øÆ÷ »óÅÂ
-}
-public enum UnitStateBuffId
-{
-    None = 0,
-    Smoke_AgiUp = 1,  //¹ÎÃ¸ °­È­
-    Smoke_MagicUp = 2, //ÃÑ¸í °­È­
-    InsightDown = 3, //ÅëÂû ¾àÈ­
-    Target_AgiDown = 4, // ¹ÎÃ¸ µğ¹öÇÁ
-    Self_AtkUp = 5,     // ¹°¸® ´ë¹ÌÁö ¹öÇÁ
-    ClarityUp = 6,  // ÃÑ¸í °­È­ ¹öÇÁ
-
-
-    SmokeHidden = 99,   //¿¬¸· Àº½Å È¿°ú
-    AmbushAgiCancel = 100   //Àáº¹ AGI Æä³ÎÆ¼ »ó¼â¿ë
-}
-
-/// <summary>
-/// ºñ-½ºÅÃ/ºñ-CC, ¹«±âÇÑ À¯ÁöÇü »óÅÂ °ü¸®.
-/// - °°Àº »óÅÂ Àç½ÃÀü ½Ã 'À¯Áö(µ¤¾î¾²±â °³³äÀÌÁö¸¸ Áö¼Ó½Ã°£ÀÌ ¾øÀ¸¹Ç·Î º¯È­ ¾øÀ½)'.
-/// - ÅÏÆ½/¸¸·á °³³ä ¾øÀ½. ¿ÀÁ÷ ½ºÅ³/ÄÚµå·Î Remove.
-/// - ´ë¹ÌÁö/½ºÅÈ ¹è¼ö´Â ¿©±â¼­ °è»êÇÏÁö ¾ÊÀ½(½ºÅ³¿¡¼­ Á¶È¸ÇÏ¿© Ã³¸®).
-/// </summary>
-[DisallowMultipleComponent]
-public class UnitStateController : MonoBehaviour
-{
-    private readonly HashSet<UnitStateId> _active = new();        // º»·¡ »óÅÂ
-    private readonly HashSet<UnitStateBuffId> _buffs = new();     // ¹öÇÁ »óÅÂ
-    readonly Dictionary<UnitStateId, int> _durations = new();   //ÅÏÀÌ Áö³ª¸é »ç¶óÁö´Â »óÅÂ¿ë duration Å×ÀÌºí
-    readonly Dictionary<UnitStateBuffId, int> _buffDurations = new();
-
-    public event Action OnStatesChanged;
-    public event Action OnBuffsChanged;
-
-    private BattleUnit _owner;
-
-    int _forcedMoveImmuneTurns;
-
-    public struct BuffView
-    {
-        public UnitStateBuffId id;
-        public int remainingTurns;
-
-        public BuffView(UnitStateBuffId id, int remaining)
-        {
-            this.id = id;
-            this.remainingTurns = remaining;
-        }
-    }
-
-    void OnEnable()
-    {
-        _owner = GetComponent<BattleUnit>();
-        if (_owner != null) _owner.OnDied += OnOwnerDied;
-    }
-
-    void OnDisable()
-    {
-        if (_owner != null) _owner.OnDied -= OnOwnerDied;
-    }
-
-    private void OnOwnerDied(BattleUnit dead)
-    {
-        RemoveAll();
-        RemoveAllBuffs();
-    }
-
-    /// <summary>»óÅÂ ºÎ¿©(ÀÌ¹Ì ÀÖÀ¸¸é ±×´ë·Î À¯Áö)</summary>
-    public bool Apply(UnitStateId id)
-    {
-        bool added = _active.Add(id);
-        if (added) OnStatesChanged?.Invoke();
-        return added;
-    }
-
-    /// <summary>´ÜÀÏ »óÅÂ Á¦°Å</summary>
-    public bool Remove(UnitStateId id)
-    {
-        bool removed = _active.Remove(id);
-        _durations.Remove(id);
-        if (removed) OnStatesChanged?.Invoke();
-        return removed;
-    }
-
-    /// <summary>¸ğµç »óÅÂ Á¦°Å</summary>
-    public void RemoveAll()
-    {
-        if (_active.Count == 0) return;
-        _active.Clear();
-        _durations.Clear();
-        OnStatesChanged?.Invoke();
-    }
-
-    /// <summary>Æ¯Á¤ »óÅÂ º¸À¯ ¿©ºÎ</summary>
-    public bool Has(UnitStateId id) => _active.Contains(id);
-
-    // ===== ¹öÇÁ(Buff) API =====
-    public bool ApplyBuff(UnitStateBuffId id)
-    {
-        bool added = _buffs.Add(id);
-
-        _buffDurations.Remove(id);
-
-        if (added) OnBuffsChanged?.Invoke();
-        return added;
-    }
-    // turnCount µ¿¾È À¯ÁöµÇ´Â »óÅÂ ºÎ¿©.
-    // turnCount <= 0 ÀÌ¸é ±×³É Apply¿Í µ¿ÀÏÇÏ°Ô Ãë±Ş(¹«±âÇÑ).
-    // ÀÌ¹Ì °°Àº »óÅÂ°¡ ÀÖÀ¸¸é durationÀ» »õ °ªÀ¸·Î °»½Å.
-    public bool ApplyForTurns(UnitStateId id, int turnCount)
-    {
-        if (turnCount <= 0)
-        {
-            // ¹«±âÇÑÀ¸·Î ±×³É µî·Ï
-            return Apply(id);
-        }
-
-        bool added = _active.Add(id);
-        _durations[id] = turnCount;
-        OnStatesChanged?.Invoke();
-        return added;
-    }
-    public bool ApplyBuffForTurns(UnitStateBuffId id, int turnCount)
-    {
-        if (turnCount <= 0)
-        {
-            // 0ÀÌÇÏ¸é ¹«±âÇÑ Ã³¸®
-            return ApplyBuff(id);
-        }
-
-        bool added = _buffs.Add(id);
-        _buffDurations[id] = turnCount;
-        OnBuffsChanged?.Invoke();
-        return added;
-    }
-    public bool RemoveBuff(UnitStateBuffId id)
-    {
-        bool removed = _buffs.Remove(id);
-        _buffDurations.Remove(id);
-        if (removed) OnBuffsChanged?.Invoke();
-        return removed;
-    }
-    public void RemoveAllBuffs()
-    {
-        if (_buffs.Count == 0) return;
-        _buffs.Clear();
-        _buffDurations.Clear();
-        OnBuffsChanged?.Invoke();
-    }
-
-    public void ApplyForcedMoveImmunityForTurns(int turns)
-    {
-        _forcedMoveImmuneTurns = Mathf.Max(_forcedMoveImmuneTurns, turns);
-    }
-
-    public bool IsForcedMoveImmune => _forcedMoveImmuneTurns > 0;
-
-    public int GetRemainingTurns(UnitStateId id)
-    {
-        if (_durations.TryGetValue(id, out var turns))
-            return turns;
-        return -1; // -1ÀÌ¸é ¡°¹«±âÇÑ¡±À¸·Î Ãë±Ş
-    }
-    public int GetRemainingBuffTurns(UnitStateBuffId id)
-    {
-        if (_buffDurations.TryGetValue(id, out var turns))
-            return turns;
-        return -1; // -1ÀÌ¸é ¹«±âÇÑ
-    }
-
-    // ÀÌ À¯´ÖÀÇ ÅÏÀÌ ½ÃÀÛµÉ ¶§ È£Ãâ.
-    // durationÀÌ ºÙÀº »óÅÂµéÀÇ ³²Àº ÅÏ ¼ö¸¦ 1¾¿ °¨¼Ò½ÃÅ°°í 0 ÀÌÇÏÀÌ¸é Á¦°Å.
-    public void OnTurnStart()
-    {
-        if (_durations.Count > 0)
-        {
-            bool changed = false;
-            var toRemove = new List<UnitStateId>();
-
-            var keys = new List<UnitStateId>(_durations.Keys);
-            foreach (var id in keys)
-            {
-                int remain = _durations[id] - 1;
-                if (remain <= 0)
-                {
-                    _durations.Remove(id);
-                    if (_active.Remove(id))
-                        changed = true;
-                }
-                else
-                {
-                    _durations[id] = remain;
-                }
-            }
-
-            if (changed)
-                OnStatesChanged?.Invoke();
-        }
-
-        // ¹öÇÁ(UnitStateBuffId) ÂÊ Ã³¸® Ãß°¡
-        if (_buffDurations.Count > 0)
-        {
-            bool changedBuff = false;
-            var buffKeys = new List<UnitStateBuffId>(_buffDurations.Keys);
-
-            foreach (var id in buffKeys)
-            {
-                int remain = _buffDurations[id] - 1;
-                if (remain <= 0)
-                {
-                    _buffDurations.Remove(id);
-                    if (_buffs.Remove(id))
-                        changedBuff = true;
-                }
-                else
-                {
-                    _buffDurations[id] = remain;
-                }
-            }
-
-            if (changedBuff)
-                OnBuffsChanged?.Invoke();
-        }
-    }
-
-    public bool HasBuff(UnitStateBuffId id) => _buffs.Contains(id);
-    public IReadOnlyCollection<UnitStateBuffId> GetAllBuffs() => _buffs;
-
-    /// <summary>È°¼º »óÅÂ ¿­¶÷</summary>
-    public IReadOnlyCollection<UnitStateId> GetAll() => _active;
-
-    /// <summary>UI µî °£´Ü ÅÂ±× ¹®ÀÚ¿­</summary>
-    public IEnumerable<string> GetActiveTags()
-    {
-        foreach (var s in _active) yield return s.ToString();
-    }
-}
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public enum UnitStateId 
+{ 
+    // 1 - 50: ìœ ë‹› ìŠ¤í‚¬ ìƒíƒœ
+    None = 0,
+    Support = 1, // í”Œë£¨ì´ë“œ ì§€ì› ìƒíƒœ
+    Steam = 2,  // ëŸ­í‚¤ì‹ìŠ¤ ì¦ê¸° ìƒíƒœ
+    Isolation = 3,   //ê¸°ê°„íŠ¸ ì‡„êµ­ ìƒíƒœ
+    Guard = 4,   //ê¸°ê°„íŠ¸ ê²½ê³„ ìƒíƒœ
+    Ambush = 5,    //ì ë³µ ìƒíƒœ
+    Explosion = 6,    // í™”í•™ í­ë°œ ìƒíƒœ
+    Disturbance = 7,  // í˜„ìƒ êµë€ ìƒíƒœ
+    Sleep = 8,  //ìˆ˜ë©´ ìƒíƒœ
+    Hidden = 9, //ì€ì‹  ìƒíƒœ
+
+
+    // 51 - 100: ê³µí†µ ìƒíƒœ
+    Moribundity = 51, //ë¹ˆì‚¬ ìƒíƒœ
+    Confusion = 52, // í˜¼ë€ ìƒíƒœ
+    Fury = 53, // ê²©ì–‘ ìƒíƒœ
+    Fear = 54,   //ê³µí¬ ìƒíƒœ
+}
+public enum UnitStateBuffId
+{
+    None = 0,
+    Smoke_AgiUp = 1,  //ë¯¼ì²© ê°•í™”
+    Smoke_MagicUp = 2, //ì´ëª… ê°•í™”
+    InsightDown = 3, //í†µì°° ì•½í™”
+    Target_AgiDown = 4, // ë¯¼ì²© ë””ë²„í”„
+    Self_AtkUp = 5,     // ë¬¼ë¦¬ ëŒ€ë¯¸ì§€ ë²„í”„
+    ClarityUp = 6,  // ì´ëª… ê°•í™” ë²„í”„
+
+
+    SmokeHidden = 99,   //ì—°ë§‰ ì€ì‹  íš¨ê³¼
+    AmbushAgiCancel = 100   //ì ë³µ AGI í˜ë„í‹° ìƒì‡„ìš©
+}
+
+/// <summary>
+/// ë¹„-ìŠ¤íƒ/ë¹„-CC, ë¬´ê¸°í•œ ìœ ì§€í˜• ìƒíƒœ ê´€ë¦¬.
+/// - ê°™ì€ ìƒíƒœ ì¬ì‹œì „ ì‹œ 'ìœ ì§€(ë®ì–´ì“°ê¸° ê°œë…ì´ì§€ë§Œ ì§€ì†ì‹œê°„ì´ ì—†ìœ¼ë¯€ë¡œ ë³€í™” ì—†ìŒ)'.
+/// - í„´í‹±/ë§Œë£Œ ê°œë… ì—†ìŒ. ì˜¤ì§ ìŠ¤í‚¬/ì½”ë“œë¡œ Remove.
+/// - ëŒ€ë¯¸ì§€/ìŠ¤íƒ¯ ë°°ìˆ˜ëŠ” ì—¬ê¸°ì„œ ê³„ì‚°í•˜ì§€ ì•ŠìŒ(ìŠ¤í‚¬ì—ì„œ ì¡°íšŒí•˜ì—¬ ì²˜ë¦¬).
+/// </summary>
+[DisallowMultipleComponent]
+public class UnitStateController : MonoBehaviour
+{
+    private readonly HashSet<UnitStateId> _active = new();        // ë³¸ë˜ ìƒíƒœ
+    private readonly HashSet<UnitStateBuffId> _buffs = new();     // ë²„í”„ ìƒíƒœ
+    readonly Dictionary<UnitStateId, int> _durations = new();   //í„´ì´ ì§€ë‚˜ë©´ ì‚¬ë¼ì§€ëŠ” ìƒíƒœìš© duration í…Œì´ë¸”
+    readonly Dictionary<UnitStateBuffId, int> _buffDurations = new();
+
+    public event Action OnStatesChanged;
+    public event Action OnBuffsChanged;
+
+    private BattleUnit _owner;
+
+    int _forcedMoveImmuneTurns;
+
+    public struct BuffView
+    {
+        public UnitStateBuffId id;
+        public int remainingTurns;
+
+        public BuffView(UnitStateBuffId id, int remaining)
+        {
+            this.id = id;
+            this.remainingTurns = remaining;
+        }
+    }
+
+    void OnEnable()
+    {
+        _owner = GetComponent<BattleUnit>();
+        if (_owner != null) _owner.OnDied += OnOwnerDied;
+    }
+
+    void OnDisable()
+    {
+        if (_owner != null) _owner.OnDied -= OnOwnerDied;
+    }
+
+    private void OnOwnerDied(BattleUnit dead)
+    {
+        RemoveAll();
+        RemoveAllBuffs();
+    }
+
+    /// <summary>ìƒíƒœ ë¶€ì—¬(ì´ë¯¸ ìˆìœ¼ë©´ ê·¸ëŒ€ë¡œ ìœ ì§€)</summary>
+    public bool Apply(UnitStateId id)
+    {
+        bool added = _active.Add(id);
+        if (added) OnStatesChanged?.Invoke();
+        return added;
+    }
+
+    /// <summary>ë‹¨ì¼ ìƒíƒœ ì œê±°</summary>
+    public bool Remove(UnitStateId id)
+    {
+        bool removed = _active.Remove(id);
+        _durations.Remove(id);
+        if (removed) OnStatesChanged?.Invoke();
+        return removed;
+    }
+
+    /// <summary>ëª¨ë“  ìƒíƒœ ì œê±°</summary>
+    public void RemoveAll()
+    {
+        if (_active.Count == 0) return;
+        _active.Clear();
+        _durations.Clear();
+        OnStatesChanged?.Invoke();
+    }
+
+    /// <summary>íŠ¹ì • ìƒíƒœ ë³´ìœ  ì—¬ë¶€</summary>
+    public bool Has(UnitStateId id) => _active.Contains(id);
+
+    // ===== ë²„í”„(Buff) API =====
+    public bool ApplyBuff(UnitStateBuffId id)
+    {
+        bool added = _buffs.Add(id);
+
+        _buffDurations.Remove(id);
+
+        if (added) OnBuffsChanged?.Invoke();
+        return added;
+    }
+    // turnCount ë™ì•ˆ ìœ ì§€ë˜ëŠ” ìƒíƒœ ë¶€ì—¬.
+    // turnCount <= 0 ì´ë©´ ê·¸ëƒ¥ Applyì™€ ë™ì¼í•˜ê²Œ ì·¨ê¸‰(ë¬´ê¸°í•œ).
+    // ì´ë¯¸ ê°™ì€ ìƒíƒœê°€ ìˆìœ¼ë©´ durationì„ ìƒˆ ê°’ìœ¼ë¡œ ê°±ì‹ .
+    public bool ApplyForTurns(UnitStateId id, int turnCount)
+    {
+        if (turnCount <= 0)
+        {
+            // ë¬´ê¸°í•œìœ¼ë¡œ ê·¸ëƒ¥ ë“±ë¡
+            return Apply(id);
+        }
+
+        bool added = _active.Add(id);
+        _durations[id] = turnCount;
+        OnStatesChanged?.Invoke();
+        return added;
+    }
+    public bool ApplyBuffForTurns(UnitStateBuffId id, int turnCount)
+    {
+        if (turnCount <= 0)
+        {
+            // 0ì´í•˜ë©´ ë¬´ê¸°í•œ ì²˜ë¦¬
+            return ApplyBuff(id);
+        }
+
+        bool added = _buffs.Add(id);
+        _buffDurations[id] = turnCount;
+        OnBuffsChanged?.Invoke();
+        return added;
+    }
+    public bool RemoveBuff(UnitStateBuffId id)
+    {
+        bool removed = _buffs.Remove(id);
+        _buffDurations.Remove(id);
+        if (removed) OnBuffsChanged?.Invoke();
+        return removed;
+    }
+    public void RemoveAllBuffs()
+    {
+        if (_buffs.Count == 0) return;
+        _buffs.Clear();
+        _buffDurations.Clear();
+        OnBuffsChanged?.Invoke();
+    }
+
+    public void ApplyForcedMoveImmunityForTurns(int turns)
+    {
+        _forcedMoveImmuneTurns = Mathf.Max(_forcedMoveImmuneTurns, turns);
+    }
+
+    public bool IsForcedMoveImmune => _forcedMoveImmuneTurns > 0;
+
+    public int GetRemainingTurns(UnitStateId id)
+    {
+        if (_durations.TryGetValue(id, out var turns))
+            return turns;
+        return -1; // -1ì´ë©´ â€œë¬´ê¸°í•œâ€ìœ¼ë¡œ ì·¨ê¸‰
+    }
+    public int GetRemainingBuffTurns(UnitStateBuffId id)
+    {
+        if (_buffDurations.TryGetValue(id, out var turns))
+            return turns;
+        return -1; // -1ì´ë©´ ë¬´ê¸°í•œ
+    }
+
+    // ì´ ìœ ë‹›ì˜ í„´ì´ ì‹œì‘ë  ë•Œ í˜¸ì¶œ.
+    // durationì´ ë¶™ì€ ìƒíƒœë“¤ì˜ ë‚¨ì€ í„´ ìˆ˜ë¥¼ 1ì”© ê°ì†Œì‹œí‚¤ê³  0 ì´í•˜ì´ë©´ ì œê±°.
+    public void OnTurnStart()
+    {
+        if (_durations.Count > 0)
+        {
+            bool changed = false;
+            var toRemove = new List<UnitStateId>();
+
+            var keys = new List<UnitStateId>(_durations.Keys);
+            foreach (var id in keys)
+            {
+                int remain = _durations[id] - 1;
+                if (remain <= 0)
+                {
+                    _durations.Remove(id);
+                    if (_active.Remove(id))
+                        changed = true;
+                }
+                else
+                {
+                    _durations[id] = remain;
+                }
+            }
+
+            if (changed)
+                OnStatesChanged?.Invoke();
+        }
+
+        // ë²„í”„(UnitStateBuffId) ìª½ ì²˜ë¦¬ ì¶”ê°€
+        if (_buffDurations.Count > 0)
+        {
+            bool changedBuff = false;
+            var buffKeys = new List<UnitStateBuffId>(_buffDurations.Keys);
+
+            foreach (var id in buffKeys)
+            {
+                int remain = _buffDurations[id] - 1;
+                if (remain <= 0)
+                {
+                    _buffDurations.Remove(id);
+                    if (_buffs.Remove(id))
+                        changedBuff = true;
+                }
+                else
+                {
+                    _buffDurations[id] = remain;
+                }
+            }
+
+            if (changedBuff)
+                OnBuffsChanged?.Invoke();
+        }
+    }
+
+    public bool HasBuff(UnitStateBuffId id) => _buffs.Contains(id);
+    public IReadOnlyCollection<UnitStateBuffId> GetAllBuffs() => _buffs;
+
+    /// <summary>í™œì„± ìƒíƒœ ì—´ëŒ</summary>
+    public IReadOnlyCollection<UnitStateId> GetAll() => _active;
+
+    /// <summary>UI ë“± ê°„ë‹¨ íƒœê·¸ ë¬¸ìì—´</summary>
+    public IEnumerable<string> GetActiveTags()
+    {
+        foreach (var s in _active) yield return s.ToString();
+    }
+}

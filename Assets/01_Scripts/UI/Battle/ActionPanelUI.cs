@@ -1,129 +1,129 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public class ActionPanelUI : MonoBehaviour
-{
-    [Header("Refs")]
-    public BattleManager battleManager;     // BattleManager ÇÒ´ç
-    public GameObject actionPanel;   // Move/Attack/EndTurn ÆĞ³Î GO
-
-    [Header("Behavior")]
-    [SerializeField] bool disableInteractWhenSkillOpen = true; // ½ºÅ³Ã¢ ¿­¸®¸é ÀÔ·Â¸¸ Â÷´Ü
-
-    // ³»ºÎ »óÅÂ
-    bool _skillPanelOpen;
-    bool _lastIsPlayerTurn;
-
-    CanvasGroup _canvasGroup;
-
-    void Awake()
-    {
-        // CanvasGroup È®º¸(¾øÀ¸¸é ºÙÀÓ)
-        if (actionPanel != null)
-        {
-            _canvasGroup = actionPanel.GetComponent<CanvasGroup>();
-            if (_canvasGroup == null) _canvasGroup = actionPanel.AddComponent<CanvasGroup>();
-            _canvasGroup.alpha = 1f; // Ç×»ó º¸ÀÌ°Ô
-        }
-
-        // ÃÊ±â Ç¥½Ã: ÇÃ·¹ÀÌ¾î ÅÏÀÌ¸é ÄÑ°í, ¾Æ´Ï¸é ²ô±â
-        _lastIsPlayerTurn = (battleManager != null && battleManager.IsPlayerTurn);
-        ApplyVisibility();
-    }
-
-    void Start()
-    {
-        if (battleManager == null)
-            battleManager = BattleManager.Instance;
-
-        // ½ºÅ³ ÆĞ³Î ¿­¸²/´İÈû ¾Ë¸²
-        if (battleManager != null)
-        {
-            battleManager.OnSkillPanelToggled += HandleSkillPanelToggled;
-        }
-    }
-
-    void OnDestroy()
-    {
-        if (battleManager != null)
-            battleManager.OnSkillPanelToggled -= HandleSkillPanelToggled;
-    }
-
-    void Update()
-    {
-        // ÅÏ ¼ÒÀ¯±Ç º¯°æ °¨Áö(ÇÃ·¹ÀÌ¾î ÅÏ ¡ê Àû ÅÏ)
-        bool nowPlayerTurn = (battleManager != null && battleManager.IsPlayerTurn);
-        if (nowPlayerTurn != _lastIsPlayerTurn)
-        {
-            _lastIsPlayerTurn = nowPlayerTurn;
-            ApplyVisibility();
-        }
-
-        // ¾ÈÀü¸Á: isSelectingSkill º¯È­ ÃßÀû
-        if (battleManager != null && _skillPanelOpen != battleManager.isSelectingSkill)
-        {
-            _skillPanelOpen = battleManager.isSelectingSkill;
-            ApplyVisibility();
-        }
-
-        // [µğ¹ö±ë¿ë] »óÅÂ°¡ ¹Ù²ğ ¶§¸¸ ·Î±× Ãâ·Â
-        if (nowPlayerTurn != _lastIsPlayerTurn)
-        {
-            Debug.Log($"[UI] ÅÏ »óÅÂ º¯°æ °¨Áö! ÇÃ·¹ÀÌ¾î ÅÏÀÎ°¡¿ä? {nowPlayerTurn}"); // <--- ÀÌ ·Î±× È®ÀÎ!
-
-            _lastIsPlayerTurn = nowPlayerTurn;
-            ApplyVisibility();
-        }
-    }
-
-    void HandleSkillPanelToggled(bool open)
-    {
-        _skillPanelOpen = open;
-        ApplyVisibility();
-    }
-
-    void ApplyVisibility()
-    {
-        // ÇöÀç ³» ÅÏÀÎÁö È®ÀÎ
-        bool isPlayerTurn = _lastIsPlayerTurn;
-
-        // ´ë½Å CanvasGroupÀ¸·Î Åõ¸íµµ Á¶Àı
-        if (_canvasGroup != null)
-        {
-            if (isPlayerTurn)
-            {
-                // [³» ÅÏÀÏ ¶§]
-                if (disableInteractWhenSkillOpen && _skillPanelOpen)
-                {
-                    // ½ºÅ³Ã¢ ¿­¸²: º¸ÀÌ±ä ÇÏµÇ(Alpha 1), Å¬¸¯¸¸ ¸·À½
-                    _canvasGroup.alpha = 1f;
-                    _canvasGroup.interactable = false;
-                    _canvasGroup.blocksRaycasts = false;
-                }
-                else
-                {
-                    // ±âº» »óÅÂ: º¸ÀÌ°í Å¬¸¯ °¡´É
-                    _canvasGroup.alpha = 1f;
-                    _canvasGroup.interactable = true;
-                    _canvasGroup.blocksRaycasts = true;
-                }
-            }
-            else
-            {
-                // [Àû ÅÏÀÏ ¶§]
-                // ²ôÁö ¸»°í(SetActive false ±İÁö), Åõ¸íÇÏ°Ô¸¸ ¸¸µê
-                _canvasGroup.alpha = 0f;          // Åõ¸íµµ 0 (¿ÏÀü Åõ¸í)
-                _canvasGroup.interactable = false; // Å¬¸¯ ºÒ°¡
-                _canvasGroup.blocksRaycasts = false; // ·¹ÀÌÄ³½ºÆ® Â÷´Ü
-            }
-        }
-        else
-        {
-            // CanvasGroupÀÌ ¾ø´Â ºñ»ó »óÈ²¿ë (±âÁ¸ ÄÚµå À¯ÁöÇÏµÇ ÁÖÀÇ ÇÊ¿ä)
-            // ¸¸¾à actionPanelÀÌ ÀÌ ½ºÅ©¸³Æ®°¡ ºÙÀº ¿ÀºêÁ§Æ®¶ó¸é ¿©±â¼­ ¹®Á¦°¡ »ı±é´Ï´Ù.
-            // ¹İµå½Ã ÀÎ½ºÆåÅÍ¿¡¼­ ActionPanel ¿ÀºêÁ§Æ®¿¡ CanvasGroup ÄÄÆ÷³ÍÆ®¸¦ Ãß°¡ÇØÁÖ¼¼¿ä.
-            if (actionPanel != null)
-                actionPanel.SetActive(isPlayerTurn);
-        }
-    }
-}
+using UnityEngine;
+using UnityEngine.UI;
+
+public class ActionPanelUI : MonoBehaviour
+{
+    [Header("Refs")]
+    public BattleManager battleManager;     // BattleManager í• ë‹¹
+    public GameObject actionPanel;   // Move/Attack/EndTurn íŒ¨ë„ GO
+
+    [Header("Behavior")]
+    [SerializeField] bool disableInteractWhenSkillOpen = true; // ìŠ¤í‚¬ì°½ ì—´ë¦¬ë©´ ì…ë ¥ë§Œ ì°¨ë‹¨
+
+    // ë‚´ë¶€ ìƒíƒœ
+    bool _skillPanelOpen;
+    bool _lastIsPlayerTurn;
+
+    CanvasGroup _canvasGroup;
+
+    void Awake()
+    {
+        // CanvasGroup í™•ë³´(ì—†ìœ¼ë©´ ë¶™ì„)
+        if (actionPanel != null)
+        {
+            _canvasGroup = actionPanel.GetComponent<CanvasGroup>();
+            if (_canvasGroup == null) _canvasGroup = actionPanel.AddComponent<CanvasGroup>();
+            _canvasGroup.alpha = 1f; // í•­ìƒ ë³´ì´ê²Œ
+        }
+
+        // ì´ˆê¸° í‘œì‹œ: í”Œë ˆì´ì–´ í„´ì´ë©´ ì¼œê³ , ì•„ë‹ˆë©´ ë„ê¸°
+        _lastIsPlayerTurn = (battleManager != null && battleManager.IsPlayerTurn);
+        ApplyVisibility();
+    }
+
+    void Start()
+    {
+        if (battleManager == null)
+            battleManager = BattleManager.Instance;
+
+        // ìŠ¤í‚¬ íŒ¨ë„ ì—´ë¦¼/ë‹«í˜ ì•Œë¦¼
+        if (battleManager != null)
+        {
+            battleManager.OnSkillPanelToggled += HandleSkillPanelToggled;
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (battleManager != null)
+            battleManager.OnSkillPanelToggled -= HandleSkillPanelToggled;
+    }
+
+    void Update()
+    {
+        // í„´ ì†Œìœ ê¶Œ ë³€ê²½ ê°ì§€(í”Œë ˆì´ì–´ í„´ â†” ì  í„´)
+        bool nowPlayerTurn = (battleManager != null && battleManager.IsPlayerTurn);
+        if (nowPlayerTurn != _lastIsPlayerTurn)
+        {
+            _lastIsPlayerTurn = nowPlayerTurn;
+            ApplyVisibility();
+        }
+
+        // ì•ˆì „ë§: isSelectingSkill ë³€í™” ì¶”ì 
+        if (battleManager != null && _skillPanelOpen != battleManager.isSelectingSkill)
+        {
+            _skillPanelOpen = battleManager.isSelectingSkill;
+            ApplyVisibility();
+        }
+
+        // [ë””ë²„ê¹…ìš©] ìƒíƒœê°€ ë°”ë€” ë•Œë§Œ ë¡œê·¸ ì¶œë ¥
+        if (nowPlayerTurn != _lastIsPlayerTurn)
+        {
+            Debug.Log($"[UI] í„´ ìƒíƒœ ë³€ê²½ ê°ì§€! í”Œë ˆì´ì–´ í„´ì¸ê°€ìš”? {nowPlayerTurn}"); // <--- ì´ ë¡œê·¸ í™•ì¸!
+
+            _lastIsPlayerTurn = nowPlayerTurn;
+            ApplyVisibility();
+        }
+    }
+
+    void HandleSkillPanelToggled(bool open)
+    {
+        _skillPanelOpen = open;
+        ApplyVisibility();
+    }
+
+    void ApplyVisibility()
+    {
+        // í˜„ì¬ ë‚´ í„´ì¸ì§€ í™•ì¸
+        bool isPlayerTurn = _lastIsPlayerTurn;
+
+        // ëŒ€ì‹  CanvasGroupìœ¼ë¡œ íˆ¬ëª…ë„ ì¡°ì ˆ
+        if (_canvasGroup != null)
+        {
+            if (isPlayerTurn)
+            {
+                // [ë‚´ í„´ì¼ ë•Œ]
+                if (disableInteractWhenSkillOpen && _skillPanelOpen)
+                {
+                    // ìŠ¤í‚¬ì°½ ì—´ë¦¼: ë³´ì´ê¸´ í•˜ë˜(Alpha 1), í´ë¦­ë§Œ ë§‰ìŒ
+                    _canvasGroup.alpha = 1f;
+                    _canvasGroup.interactable = false;
+                    _canvasGroup.blocksRaycasts = false;
+                }
+                else
+                {
+                    // ê¸°ë³¸ ìƒíƒœ: ë³´ì´ê³  í´ë¦­ ê°€ëŠ¥
+                    _canvasGroup.alpha = 1f;
+                    _canvasGroup.interactable = true;
+                    _canvasGroup.blocksRaycasts = true;
+                }
+            }
+            else
+            {
+                // [ì  í„´ì¼ ë•Œ]
+                // ë„ì§€ ë§ê³ (SetActive false ê¸ˆì§€), íˆ¬ëª…í•˜ê²Œë§Œ ë§Œë“¦
+                _canvasGroup.alpha = 0f;          // íˆ¬ëª…ë„ 0 (ì™„ì „ íˆ¬ëª…)
+                _canvasGroup.interactable = false; // í´ë¦­ ë¶ˆê°€
+                _canvasGroup.blocksRaycasts = false; // ë ˆì´ìºìŠ¤íŠ¸ ì°¨ë‹¨
+            }
+        }
+        else
+        {
+            // CanvasGroupì´ ì—†ëŠ” ë¹„ìƒ ìƒí™©ìš© (ê¸°ì¡´ ì½”ë“œ ìœ ì§€í•˜ë˜ ì£¼ì˜ í•„ìš”)
+            // ë§Œì•½ actionPanelì´ ì´ ìŠ¤í¬ë¦½íŠ¸ê°€ ë¶™ì€ ì˜¤ë¸Œì íŠ¸ë¼ë©´ ì—¬ê¸°ì„œ ë¬¸ì œê°€ ìƒê¹ë‹ˆë‹¤.
+            // ë°˜ë“œì‹œ ì¸ìŠ¤í™í„°ì—ì„œ ActionPanel ì˜¤ë¸Œì íŠ¸ì— CanvasGroup ì»´í¬ë„ŒíŠ¸ë¥¼ ì¶”ê°€í•´ì£¼ì„¸ìš”.
+            if (actionPanel != null)
+                actionPanel.SetActive(isPlayerTurn);
+        }
+    }
+}

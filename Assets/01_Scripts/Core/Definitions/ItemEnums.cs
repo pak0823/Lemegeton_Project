@@ -1,6 +1,6 @@
-public enum ItemType
-{
-    Material,   // Á¦ÀÛ Àç·á (ÆÇÀÚ, Ã¶±« µî)
-    Consumable, // ¼Òºñ ¾ÆÀÌÅÛ (Æ÷¼Ç, ºØ´ë µî)
-    Equipment   // Àåºñ ¾ÆÀÌÅÛ (°Ë, °©¿Ê µî)
-}
+public enum ItemType
+{
+    Material,   // ì œì‘ ì¬ë£Œ (íŒì, ì² ê´´ ë“±)
+    Consumable, // ì†Œë¹„ ì•„ì´í…œ (í¬ì…˜, ë¶•ëŒ€ ë“±)
+    Equipment   // ì¥ë¹„ ì•„ì´í…œ (ê²€, ê°‘ì˜· ë“±)
+}

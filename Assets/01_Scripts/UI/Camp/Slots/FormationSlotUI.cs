@@ -1,150 +1,150 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems; // Å¬¸¯ ÀÌº¥Æ®¿ë
-
-public class FormationSlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
-{
-    [Header("Settings")]
-    public int slotIndex; // 0 ~ 18 (°¢ ½½·Ô¸¶´Ù ´Ù¸£°Ô ¼³Á¤ÇØ¾ß ÇÔ)
-                          // ¸Ç ¿ŞÂÊ À§¿¡¼­ºÎÅÍ 0, 1, 2 ¼øÀ¸·Î ¹èÄ¡
-    public Image unitImage; // Ä³¸¯ÅÍ ÀÌ¹ÌÁö (ÀÚ½Ä ¿ÀºêÁ§Æ®)
-
-    private UnitData currentUnit;
-    private CanvasGroup canvasGroup;
-
-    void Awake()
-    {
-        if (unitImage == null)
-        {
-            // ÀÌ¹ÌÁö Ã£´Â ·ÎÁ÷ À¯Áö
-            if (unitImage == null && transform.childCount > 0)
-                unitImage = transform.GetChild(0).GetComponent<Image>();
-
-            // CanvasGroup ¾øÀ¸¸é Ãß°¡ (µå·¡±× Áß ¹İÅõ¸í È¿°ú¿ë)
-            canvasGroup = GetComponent<CanvasGroup>();
-            if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
-        }
-    }
-
-    void Start()
-    {
-        // ½ÃÀÛÇÒ ¶§ ÀúÀåµÈ Á¤º¸ ºÒ·¯¿À±â
-        RefreshUI();
-
-        // ¸Å´ÏÀúÀÇ µ¥ÀÌÅÍ º¯°æ ÀÌº¥Æ® ±¸µ¶
-        if (PlayerDataManager.Instance != null)
-            PlayerDataManager.Instance.OnFormationChanged += RefreshUI;
-    }
-
-    void OnDestroy()
-    {
-        // ÀÌº¥Æ® ±¸µ¶ ÇØÁ¦
-        if (PlayerDataManager.Instance != null)
-            PlayerDataManager.Instance.OnFormationChanged -= RefreshUI;
-    }
-
-    // UI °»½Å
-    public void RefreshUI()
-    {
-        if (PlayerDataManager.Instance == null) return;
-
-        currentUnit = PlayerDataManager.Instance.GetUnitAt(slotIndex);
-
-        if (currentUnit != null)
-        {
-            unitImage.sprite = currentUnit.UnitStandImage; // UnitData¿¡ ÀÖ´Â ÀÌ¹ÌÁö »ç¿ë
-            unitImage.enabled = true;
-            unitImage.color = Color.white;
-        }
-        else
-        {
-            unitImage.sprite = null;
-            unitImage.enabled = false; // ¾øÀ¸¸é ¼û±è
-        }
-    }
-
-    // ½½·Ô Å¬¸¯ ½Ã ½ÇÇà
-    public void OnPointerClick(PointerEventData eventData)
-    {
-        // µå·¡±× ÁßÀÌ¾ú´Ù¸é Å¬¸¯ ÀÌº¥Æ® ¹«½Ã
-        if (eventData.dragging) return;
-        if (eventData.button != PointerEventData.InputButton.Left) return;
-
-        // ¹èÄ¡ ¸ğµå(»ó´Ü Åä±Û ¼±ÅÃ »óÅÂ)¶ó¸é ¹èÄ¡ ¼öÇà
-        if (CampUIManager.Instance != null && CampUIManager.Instance.selectedUnit != null)
-        {
-            UnitData targetUnit = CampUIManager.Instance.selectedUnit;
-            PlayerDataManager.Instance.SetFormation(slotIndex, targetUnit);
-        }
-
-        // ¹èÄ¡ ¸ğµå°¡ ¾Æ´Ï°í À¯´ÖÀÌ ÀÖÀ¸¸é? -> (¼±ÅÃÀûÀ¸·Î) Å¬¸¯ÇØ¼­ Á¤º¸ º¸¿©ÁÖ±â³ª ÇØÁ¦ ·ÎÁ÷ µî Ãß°¡ °¡´É
-
-
-        //// µ¥ÀÌÅÍ ¸Å´ÏÀú¿¡ "ÀÌ ÀÚ¸®¿¡ ÀÌ À¯´Ö ¹èÄ¡ÇØ" ¸í·É
-        //// (SetFormation ³»ºÎ¿¡¼­ Áßº¹ ¹èÄ¡ Ã³¸®±îÁö µÇ¾î ÀÖÀ½)
-        //PlayerDataManager.Instance.SetFormation(slotIndex, targetUnit);
-
-        //// UI °»½Å (¸ğµç ½½·ÔÀ» °»½ÅÇØ¾ß Áßº¹µÈ À¯´ÖÀÌ »ç¶óÁö´Â °Ô º¸ÀÓ)
-        //// ºñÈ¿À²ÀûÀÌÁö¸¸ Áö±İÀº °¡Àå È®½ÇÇÑ ¹æ¹ı: ¸ğµç ½½·ÔÀ» Ã£¾Æ¼­ Refresh ¶§¸®±â
-        //var allSlots = transform.parent.GetComponentsInChildren<FormationSlotUI>();
-        //foreach (var slot in allSlots)
-        //{
-        //    slot.RefreshUI();
-        //}
-
-        //Debug.Log($"{slotIndex}¹ø ½½·Ô¿¡ {targetUnit.DisplayName} ¹èÄ¡ ¿Ï·á!");
-    }
-
-    // --- µå·¡±× & µå·Ó ±¸Çö ---
-
-    // µå·¡±× ½ÃÀÛ
-    public void OnBeginDrag(PointerEventData eventData)
-    {
-        // ºó ½½·ÔÀº µå·¡±× ¸ø ÇÔ
-        if (currentUnit == null) return;
-
-        // ¸Å´ÏÀú¿¡°Ô °í½ºÆ® ÀÌ¹ÌÁö ¶ç¿ì¶ó°í ¿äÃ»
-        if (CampUIManager.Instance != null)
-            CampUIManager.Instance.StartDrag(unitImage.sprite);
-
-        // ³» ÀÌ¹ÌÁö´Â »ìÂ¦ Åõ¸íÇÏ°Ô
-        canvasGroup.alpha = 0.6f;
-        // ·¹ÀÌÄ³½ºÆ®¸¦ ²¨¼­ µå·Ó ÀÌº¥Æ®°¡ ³» ¾Æ·¡(È¤Àº ´Ù¸¥ ½½·Ô)·Î Åë°úµÇ°Ô ÇÔ (ÇÊ¼ö ¾Æ´Ô, »óÈ²µû¶ó)
-        canvasGroup.blocksRaycasts = false;
-    }
-
-    // µå·¡±× Áß (¸Å ÇÁ·¹ÀÓ)
-    public void OnDrag(PointerEventData eventData)
-    {
-        if (currentUnit == null) return;
-        if (CampUIManager.Instance != null)
-            CampUIManager.Instance.UpdateDragPosition(eventData.position);
-    }
-
-    // µå·¡±× ³¡ (¸¶¿ì½º ¶ÃÀ» ¶§)
-    public void OnEndDrag(PointerEventData eventData)
-    {
-        if (CampUIManager.Instance != null)
-            CampUIManager.Instance.EndDrag();
-
-        canvasGroup.alpha = 1f;
-        canvasGroup.blocksRaycasts = true; // ´Ù½Ã ÄÑÁà¾ß Å¬¸¯ µÊ
-    }
-
-    // µå·Ó ¹ŞÀ½ (³»°¡ µµÂøÁöÁ¡ÀÏ ¶§)
-    public void OnDrop(PointerEventData eventData)
-    {
-        // µå·¡±×ÇØ¿Â ¹°Ã¼(pointerDrag)°¡ FormationSlotUIÀÎÁö È®ÀÎ
-        FormationSlotUI sourceSlot = eventData.pointerDrag.GetComponent<FormationSlotUI>();
-
-        if (sourceSlot != null && sourceSlot.currentUnit != null)
-        {
-            // "ÀúÂÊ ½½·Ô(source)¿¡ ÀÖ´ø À¯´ÖÀ» ³» ÀÚ¸®(this.slotIndex)·Î ¿Å°Ü¶ó"
-            // SetFormation ³»ºÎ ·ÎÁ÷ÀÌ ÀÌ¹Ì ½º¿ÒÀ» Áö¿øÇÏ¹Ç·Î ÀÌ°Å ÇÑ ¹æÀÌ¸é µÊ.
-            PlayerDataManager.Instance.SetFormation(this.slotIndex, sourceSlot.currentUnit);
-
-            // µ¥ÀÌÅÍ ¸Å´ÏÀú°¡ OnFormationChanged ÀÌº¥Æ®¸¦ ½î¸é,
-            // ³ª¶û ÀúÂÊ ½½·Ô µÑ ´Ù RefreshUI°¡ ÀÚµ¿À¸·Î ½ÇÇàµÊ.
-        }
-    }
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems; // í´ë¦­ ì´ë²¤íŠ¸ìš©
+
+public class FormationSlotUI : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+{
+    [Header("Settings")]
+    public int slotIndex; // 0 ~ 18 (ê° ìŠ¬ë¡¯ë§ˆë‹¤ ë‹¤ë¥´ê²Œ ì„¤ì •í•´ì•¼ í•¨)
+                          // ë§¨ ì™¼ìª½ ìœ„ì—ì„œë¶€í„° 0, 1, 2 ìˆœìœ¼ë¡œ ë°°ì¹˜
+    public Image unitImage; // ìºë¦­í„° ì´ë¯¸ì§€ (ìì‹ ì˜¤ë¸Œì íŠ¸)
+
+    private UnitData currentUnit;
+    private CanvasGroup canvasGroup;
+
+    void Awake()
+    {
+        if (unitImage == null)
+        {
+            // ì´ë¯¸ì§€ ì°¾ëŠ” ë¡œì§ ìœ ì§€
+            if (unitImage == null && transform.childCount > 0)
+                unitImage = transform.GetChild(0).GetComponent<Image>();
+
+            // CanvasGroup ì—†ìœ¼ë©´ ì¶”ê°€ (ë“œë˜ê·¸ ì¤‘ ë°˜íˆ¬ëª… íš¨ê³¼ìš©)
+            canvasGroup = GetComponent<CanvasGroup>();
+            if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
+        }
+    }
+
+    void Start()
+    {
+        // ì‹œì‘í•  ë•Œ ì €ì¥ëœ ì •ë³´ ë¶ˆëŸ¬ì˜¤ê¸°
+        RefreshUI();
+
+        // ë§¤ë‹ˆì €ì˜ ë°ì´í„° ë³€ê²½ ì´ë²¤íŠ¸ êµ¬ë…
+        if (PlayerDataManager.Instance != null)
+            PlayerDataManager.Instance.OnFormationChanged += RefreshUI;
+    }
+
+    void OnDestroy()
+    {
+        // ì´ë²¤íŠ¸ êµ¬ë… í•´ì œ
+        if (PlayerDataManager.Instance != null)
+            PlayerDataManager.Instance.OnFormationChanged -= RefreshUI;
+    }
+
+    // UI ê°±ì‹ 
+    public void RefreshUI()
+    {
+        if (PlayerDataManager.Instance == null) return;
+
+        currentUnit = PlayerDataManager.Instance.GetUnitAt(slotIndex);
+
+        if (currentUnit != null)
+        {
+            unitImage.sprite = currentUnit.UnitStandImage; // UnitDataì— ìˆëŠ” ì´ë¯¸ì§€ ì‚¬ìš©
+            unitImage.enabled = true;
+            unitImage.color = Color.white;
+        }
+        else
+        {
+            unitImage.sprite = null;
+            unitImage.enabled = false; // ì—†ìœ¼ë©´ ìˆ¨ê¹€
+        }
+    }
+
+    // ìŠ¬ë¡¯ í´ë¦­ ì‹œ ì‹¤í–‰
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        // ë“œë˜ê·¸ ì¤‘ì´ì—ˆë‹¤ë©´ í´ë¦­ ì´ë²¤íŠ¸ ë¬´ì‹œ
+        if (eventData.dragging) return;
+        if (eventData.button != PointerEventData.InputButton.Left) return;
+
+        // ë°°ì¹˜ ëª¨ë“œ(ìƒë‹¨ í† ê¸€ ì„ íƒ ìƒíƒœ)ë¼ë©´ ë°°ì¹˜ ìˆ˜í–‰
+        if (CampUIManager.Instance != null && CampUIManager.Instance.selectedUnit != null)
+        {
+            UnitData targetUnit = CampUIManager.Instance.selectedUnit;
+            PlayerDataManager.Instance.SetFormation(slotIndex, targetUnit);
+        }
+
+        // ë°°ì¹˜ ëª¨ë“œê°€ ì•„ë‹ˆê³  ìœ ë‹›ì´ ìˆìœ¼ë©´? -> (ì„ íƒì ìœ¼ë¡œ) í´ë¦­í•´ì„œ ì •ë³´ ë³´ì—¬ì£¼ê¸°ë‚˜ í•´ì œ ë¡œì§ ë“± ì¶”ê°€ ê°€ëŠ¥
+
+
+        //// ë°ì´í„° ë§¤ë‹ˆì €ì— "ì´ ìë¦¬ì— ì´ ìœ ë‹› ë°°ì¹˜í•´" ëª…ë ¹
+        //// (SetFormation ë‚´ë¶€ì—ì„œ ì¤‘ë³µ ë°°ì¹˜ ì²˜ë¦¬ê¹Œì§€ ë˜ì–´ ìˆìŒ)
+        //PlayerDataManager.Instance.SetFormation(slotIndex, targetUnit);
+
+        //// UI ê°±ì‹  (ëª¨ë“  ìŠ¬ë¡¯ì„ ê°±ì‹ í•´ì•¼ ì¤‘ë³µëœ ìœ ë‹›ì´ ì‚¬ë¼ì§€ëŠ” ê²Œ ë³´ì„)
+        //// ë¹„íš¨ìœ¨ì ì´ì§€ë§Œ ì§€ê¸ˆì€ ê°€ì¥ í™•ì‹¤í•œ ë°©ë²•: ëª¨ë“  ìŠ¬ë¡¯ì„ ì°¾ì•„ì„œ Refresh ë•Œë¦¬ê¸°
+        //var allSlots = transform.parent.GetComponentsInChildren<FormationSlotUI>();
+        //foreach (var slot in allSlots)
+        //{
+        //    slot.RefreshUI();
+        //}
+
+        //Debug.Log($"{slotIndex}ë²ˆ ìŠ¬ë¡¯ì— {targetUnit.DisplayName} ë°°ì¹˜ ì™„ë£Œ!");
+    }
+
+    // --- ë“œë˜ê·¸ & ë“œë¡­ êµ¬í˜„ ---
+
+    // ë“œë˜ê·¸ ì‹œì‘
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        // ë¹ˆ ìŠ¬ë¡¯ì€ ë“œë˜ê·¸ ëª» í•¨
+        if (currentUnit == null) return;
+
+        // ë§¤ë‹ˆì €ì—ê²Œ ê³ ìŠ¤íŠ¸ ì´ë¯¸ì§€ ë„ìš°ë¼ê³  ìš”ì²­
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.StartDrag(unitImage.sprite);
+
+        // ë‚´ ì´ë¯¸ì§€ëŠ” ì‚´ì§ íˆ¬ëª…í•˜ê²Œ
+        canvasGroup.alpha = 0.6f;
+        // ë ˆì´ìºìŠ¤íŠ¸ë¥¼ êº¼ì„œ ë“œë¡­ ì´ë²¤íŠ¸ê°€ ë‚´ ì•„ë˜(í˜¹ì€ ë‹¤ë¥¸ ìŠ¬ë¡¯)ë¡œ í†µê³¼ë˜ê²Œ í•¨ (í•„ìˆ˜ ì•„ë‹˜, ìƒí™©ë”°ë¼)
+        canvasGroup.blocksRaycasts = false;
+    }
+
+    // ë“œë˜ê·¸ ì¤‘ (ë§¤ í”„ë ˆì„)
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (currentUnit == null) return;
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.UpdateDragPosition(eventData.position);
+    }
+
+    // ë“œë˜ê·¸ ë (ë§ˆìš°ìŠ¤ ë—ì„ ë•Œ)
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.EndDrag();
+
+        canvasGroup.alpha = 1f;
+        canvasGroup.blocksRaycasts = true; // ë‹¤ì‹œ ì¼œì¤˜ì•¼ í´ë¦­ ë¨
+    }
+
+    // ë“œë¡­ ë°›ìŒ (ë‚´ê°€ ë„ì°©ì§€ì ì¼ ë•Œ)
+    public void OnDrop(PointerEventData eventData)
+    {
+        // ë“œë˜ê·¸í•´ì˜¨ ë¬¼ì²´(pointerDrag)ê°€ FormationSlotUIì¸ì§€ í™•ì¸
+        FormationSlotUI sourceSlot = eventData.pointerDrag.GetComponent<FormationSlotUI>();
+
+        if (sourceSlot != null && sourceSlot.currentUnit != null)
+        {
+            // "ì €ìª½ ìŠ¬ë¡¯(source)ì— ìˆë˜ ìœ ë‹›ì„ ë‚´ ìë¦¬(this.slotIndex)ë¡œ ì˜®ê²¨ë¼"
+            // SetFormation ë‚´ë¶€ ë¡œì§ì´ ì´ë¯¸ ìŠ¤ì™‘ì„ ì§€ì›í•˜ë¯€ë¡œ ì´ê±° í•œ ë°©ì´ë©´ ë¨.
+            PlayerDataManager.Instance.SetFormation(this.slotIndex, sourceSlot.currentUnit);
+
+            // ë°ì´í„° ë§¤ë‹ˆì €ê°€ OnFormationChanged ì´ë²¤íŠ¸ë¥¼ ì˜ë©´,
+            // ë‚˜ë‘ ì €ìª½ ìŠ¬ë¡¯ ë‘˜ ë‹¤ RefreshUIê°€ ìë™ìœ¼ë¡œ ì‹¤í–‰ë¨.
+        }
+    }
 }

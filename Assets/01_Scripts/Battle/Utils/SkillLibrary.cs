@@ -1,253 +1,253 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-
-[Serializable]
-public struct SkillDefinition
-{
-    public SkillId id;
-    public string name;
-    public SkillTargetMode targetMode;
-
-    // ±âÁØ ¼¿(origin)°ú 'ÄÃ·³ È¦Â¦'À» ¹Ş¾Æ ¹üÀ§ ¼¿ ÄÃ·º¼Ç ¹İÈ¯
-    public Func<Vector3Int, bool, IEnumerable<Vector3Int>> GetAreaCells;
-}
-
-public static class SkillLibrary
-{
-    public static Vector2Int ToAxial(Vector3Int cell) => OffsetToAxial(cell);
-    public static Vector3Int ToOffset(Vector2Int axial, int z = 0) => AxialToOffset(axial, z);
-
-    public static Vector2Int OffsetToAxial(Vector3Int cell)
-    {
-        int y = cell.y;
-        int q = cell.x - ((y - (y & 1)) / 2);
-        int r = y;
-        return new Vector2Int(q, r);
-    }
-
-    public static Vector3Int AxialToOffset(Vector2Int axial, int z = 0)
-    {
-        int q = axial.x;
-        int r = axial.y;
-        int x = q + ((r - (r & 1)) / 2);
-        int y = r;
-        return new Vector3Int(x, y, z);
-    }
-
-    // ¿ÜºÎ ÄÚµå È£È¯À» À§ÇØ ³²°ÜµÒ(ÀÌ¸§Àº columnÀÌÁö¸¸ ½ÇÁ¦·Ğ row È¦Â¦À» ¾´´Ù)
-    public static bool IsOddColumn(Vector3Int cell)
-    {
-        // Çà(y) È¦Â¦À¸·Î ÆÇ´Ü (odd-r)
-        return (cell.y & 1) != 0;
-    }
-    static IEnumerable<Vector3Int> ToOffsetCells(Vector3Int originOffset, IEnumerable<Vector2Int> axialOffsets)
-    {
-        var originAx = OffsetToAxial(originOffset);
-        foreach (var d in axialOffsets)
-        {
-            var ax = new Vector2Int(originAx.x + d.x, originAx.y + d.y);
-            yield return AxialToOffset(ax);
-        }
-    }
-
-    static IEnumerable<Vector3Int> Unique(IEnumerable<Vector3Int> cells)
-        => cells.Distinct();
-
-    // =========================
-    // 2) ½ºÅ³º° ¹üÀ§ (axial ±âÁØ)
-    //
-    // Pointed-Top ±âÁØ 6¹æÇâ(ÃàÁÂÇ¥) ¸Ş¸ğ:
-    //  E (1, 0), NE (1,-1), NW (0,-1), W (-1,0), SW (-1,1), SE (0,1)
-    // =========================
-
-    // axial ±âÁØ 6¹æÇâ(ÀÌ¿ô) - 5¹ø µµ³Ó ½ºÅ³
-    static readonly Vector2Int[] AXIAL_NEIGHBORS = new[]
-    {
-        new Vector2Int( 1, 0),  // E
-        new Vector2Int( 1,-1),  // NE
-        new Vector2Int( 0,-1),  // NW
-        new Vector2Int(-1, 0),  // W
-        new Vector2Int(-1, 1),  // SW
-        new Vector2Int( 0, 1),  // SE
-    };
-    // Áß½É Æ÷ÇÔ R=1 (Áß½É + ÁÖº¯ 6Ä­)
-    static readonly Vector2Int[] AXIAL_RADIUS1_WITH_CENTER = new[]
-    {
-        new Vector2Int( 0, 0),  // Center
-        new Vector2Int( 1, 0),  // E
-        new Vector2Int( 1,-1),  // NE
-        new Vector2Int( 0,-1),  // NW
-        new Vector2Int(-1, 0),  // W
-        new Vector2Int(-1, 1),  // SW
-        new Vector2Int( 0, 1)  // SE
-    };
-
-    // ¹æÇâ ÀÎµ¦½º(0..5) ¡æ axial(q,r) ¿ÀÇÁ¼Â
-    public static Vector2Int DirIndexToAxial(int idx)
-    {
-        idx = ((idx % 6) + 6) % 6;
-        return AXIAL_NEIGHBORS[idx];
-    }
-    // µÎ ¿ÀÇÁ¼Â ¼¿ »çÀÌÀÇ '°¡Àå °¡±î¿î 6¹æÇâ' ÀÎµ¦½º(0..5)
-    public static int NearestDirectionIndex(Vector3Int fromOffset, Vector3Int toOffset)
-    {
-        var a = OffsetToAxial(fromOffset);
-        var b = OffsetToAxial(toOffset);
-        var d = new Vector2Int(b.x - a.x, b.y - a.y);
-        if (d.x == 0 && d.y == 0) return 0; // °°À¸¸é ÀÓÀÇ 0
-
-        int best = 0; int bestDot = int.MinValue;
-        for (int i = 0; i < 6; i++)
-        {
-            var v = AXIAL_NEIGHBORS[i];
-            int dot = d.x * v.x + d.y * v.y; // ±Ù»ç ¹æÇâ ºñ±³
-            if (dot > bestDot) { bestDot = dot; best = i; }
-        }
-        return best;
-    }
-
-    // °¡·Î3
-    public static IEnumerable<Vector3Int> GetAreaHorizontal3(Vector3Int originCell)
-    {
-        // ±âÁ¸ Á÷Á¢ °è»ê ¡æ AreaShapes À§ÀÓ
-        return AreaShapes.GetCells(originCell, AreaPreset.LineHorizontal, false);
-    }
-
-    // ¼¼·Î3
-    public static IEnumerable<Vector3Int> GetAreaVertical3(Vector3Int originCell)
-    {
-        return AreaShapes.LineVertical3(originCell);
-    }
-
-    // ¿øÇü(¹İ°æ1, Áß½É Æ÷ÇÔ)
-    public static IEnumerable<Vector3Int> GetAreaRing1(Vector3Int originCell)
-    {
-        return AreaShapes.GetCells(originCell, AreaPreset.Ring, false);
-    }
-
-    // µµ³Ó(¹İ°æ1, Áß½É Á¦¿Ü)
-    public static IEnumerable<Vector3Int> GetAreaDonut1(Vector3Int originCell)
-    {
-        return AreaShapes.DonutRadius1(originCell);
-    }
-
-    // ºÎÃ¤²Ã(¹İ°æ1, Àü¹æ 3Ä­)
-    //  - ±âÁ¸ ÄÚµå°¡ Á¤¸éÀ» À¯´Ö ¿¡ÀÌ¹ÖÀÌ³ª 'caster¡ætarget'À¸·Î Á¤Çß´Ù¸é,
-    //    °Å±â¼­ axial Á¤¸é º¤ÅÍ¸¦ ¸¸µé¾î ÀÌ ÇÔ¼ö¿¡ ³Ñ°ÜÁà.
-    public static IEnumerable<Vector3Int> GetAreaFanForwardR1(Vector3Int originCell, Vector3 casterWorld, Vector3 targetWorld)
-    {
-        // ¿ùµå Á¤¸é ¡æ Ãà ÁÂÇ¥ Á¤¸é ±Ù»ç
-        Vector2 aim = (targetWorld - casterWorld);
-        if (aim.sqrMagnitude < 1e-6f) aim = Vector2.right;
-        aim.Normalize();
-
-        // ¿ùµå->axial 6¹æÇâ Áß °¡Àå °¡±î¿î Ãà ¼±ÅÃ
-        var axialDirs = new[]
-        {
-        new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
-        new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
-    };
-
-        // Ãà º¤ÅÍ¸¦ ¿ùµå·Î Åõ¿µÇØ °¡Àå Å« dotÀ» Á¤¸éÀ¸·Î ¼±ÅÃ
-        Vector3 right = Vector3.right, up = Vector3.up; // ÇÊ¿ä½Ã Grid º¯È¯ ÃàÀ» »ç¿ëÇÏµµ·Ï °³¼±
-        int best = 0; float bestDot = float.NegativeInfinity;
-        for (int i = 0; i < axialDirs.Length; i++)
-        {
-            // °£´ÜÈ÷: (ax.x * right + ax.y * up) ·Î ±Ù»ç (ÇÁ·ÎÁ§Æ® ÁÂÇ¥°è¿¡ ¸Â°Ô ±³Ã¼ °¡´É)
-            Vector2 dirW = axialDirs[i].x * (Vector2)right + axialDirs[i].y * (Vector2)up;
-            float d = Vector2.Dot(aim, dirW.normalized);
-            if (d > bestDot) { bestDot = d; best = i; }
-        }
-
-        return AreaShapes.FanForwardR1(originCell, axialDirs[best]);
-    }
-
-    //public static SkillDefinition Get(SkillId id)
-    //{
-
-    //    switch (id)
-    //    {
-    //        // a) ´ë»ó Áö¸ñ °¡·Î¿­: {W, SELF, E}
-    //        case SkillId.Skill1:
-    //            return new SkillDefinition
-    //            {
-    //                id = id,
-    //                name = "Skill 1: °¡·Î¿­(Unit)",
-    //                targetMode = SkillTargetMode.Unit,
-    //                GetAreaCells = (origin, _) =>
-    //                    Unique(ToOffsetCells(origin, new[]
-    //                    {
-    //                        new Vector2Int(-1, 0), // W
-    //                        new Vector2Int( 0, 0), // SELF
-    //                        new Vector2Int( 1, 0), // E
-    //                    }))
-    //            };
-
-    //        // b) ´ë»ó Áö¸ñ ¼¼·Î¿­: {NW, SELF, SE}  ¡æ axial {(0,-1),(0,0),(0,1)}
-    //        case SkillId.Skill2:
-    //            return new SkillDefinition
-    //            {
-    //                id = id,
-    //                name = "Skill 2: ¼¼·Î¿­(Unit)",
-    //                targetMode = SkillTargetMode.Unit,
-    //                GetAreaCells = (origin, _) =>
-    //                    Unique(ToOffsetCells(origin, new[]
-    //                    {
-    //                        new Vector2Int( 0,-1), // NW
-    //                        new Vector2Int( 0, 0), // SELF
-    //                        new Vector2Int( 0, 1), // SE
-    //                    }))
-    //            };
-
-    //        // c) ´ë»ó Áö¸ñ ºÎÃ¤²Ã(´ë»ó Æ÷ÇÔ, '¿ŞÂÊ-À§ ¹æÇâ'À¸·Î ÆîÄ¡´Â 3Ä­)
-    //        //    ¿äÃ»ÀÇ ¿¹½Ã {(0,0),(-1,0),(-1,-1)}´Â odd-q ±âÁØÀÌ¾ú´Ù°í º¸ÀÌÁö¸¸,
-    //        //    axial·Î µ¿ÀÏ ÀÇµµ¸¦ ¹İ¿µ: {SELF, W(-1,0), NW(0,-1)}
-    //        case SkillId.Skill3:
-    //            return new SkillDefinition
-    //            {
-    //                id = id,
-    //                name = "Skill 3: ºÎÃ¤²Ã(Unit)",
-    //                targetMode = SkillTargetMode.Unit,
-    //                GetAreaCells = (origin, _) =>
-    //                    Unique(ToOffsetCells(origin, new[]
-    //                    {
-    //                        new Vector2Int( 0, 0), // SELF
-    //                        new Vector2Int(-1, 0), // W
-    //                        new Vector2Int( 0,-1), // NW
-    //                    }))
-    //            };
-
-    //        // d) Å¸ÀÏ Áö¸ñ: Áß½É Æ÷ÇÔ R=1 (Áß½É + ÁÖº¯ 6Ä­)
-    //        case SkillId.Skill4:
-    //            return new SkillDefinition
-    //            {
-    //                id = id,
-    //                name = "Skill 4: ¿øÇü(Tile)",
-    //                targetMode = SkillTargetMode.Tile,
-    //                GetAreaCells = (origin, _) =>
-    //                    Unique(ToOffsetCells(origin, AXIAL_RADIUS1_WITH_CENTER))
-    //            };
-    //        // d) Å¸ÀÏ Áö¸ñ µµ³ÓÇü6 - ¼öÁ¤ ÇÊ¿ä
-    //        case SkillId.Skill5:
-    //            return new SkillDefinition
-    //            {
-    //                id = id,
-    //                name = "Skill 5: µµ³ÓÇü(Tile)",
-    //                targetMode = SkillTargetMode.Tile,
-    //                GetAreaCells = (origin, _) =>
-    //                    Unique(ToOffsetCells(origin, AXIAL_NEIGHBORS))
-    //            };
-
-    //        default:
-    //            return new SkillDefinition
-    //            {
-    //                id = id,
-    //                name = id.ToString(),
-    //                targetMode = SkillTargetMode.Unit,
-    //                GetAreaCells = (origin, _) => new[] { origin }
-    //            };
-    //    }
-    //}
-}
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+[Serializable]
+public struct SkillDefinition
+{
+    public SkillId id;
+    public string name;
+    public SkillTargetMode targetMode;
+
+    // ê¸°ì¤€ ì…€(origin)ê³¼ 'ì»¬ëŸ¼ í™€ì§'ì„ ë°›ì•„ ë²”ìœ„ ì…€ ì»¬ë ‰ì…˜ ë°˜í™˜
+    public Func<Vector3Int, bool, IEnumerable<Vector3Int>> GetAreaCells;
+}
+
+public static class SkillLibrary
+{
+    public static Vector2Int ToAxial(Vector3Int cell) => OffsetToAxial(cell);
+    public static Vector3Int ToOffset(Vector2Int axial, int z = 0) => AxialToOffset(axial, z);
+
+    public static Vector2Int OffsetToAxial(Vector3Int cell)
+    {
+        int y = cell.y;
+        int q = cell.x - ((y - (y & 1)) / 2);
+        int r = y;
+        return new Vector2Int(q, r);
+    }
+
+    public static Vector3Int AxialToOffset(Vector2Int axial, int z = 0)
+    {
+        int q = axial.x;
+        int r = axial.y;
+        int x = q + ((r - (r & 1)) / 2);
+        int y = r;
+        return new Vector3Int(x, y, z);
+    }
+
+    // ì™¸ë¶€ ì½”ë“œ í˜¸í™˜ì„ ìœ„í•´ ë‚¨ê²¨ë‘ (ì´ë¦„ì€ columnì´ì§€ë§Œ ì‹¤ì œë¡  row í™€ì§ì„ ì“´ë‹¤)
+    public static bool IsOddColumn(Vector3Int cell)
+    {
+        // í–‰(y) í™€ì§ìœ¼ë¡œ íŒë‹¨ (odd-r)
+        return (cell.y & 1) != 0;
+    }
+    static IEnumerable<Vector3Int> ToOffsetCells(Vector3Int originOffset, IEnumerable<Vector2Int> axialOffsets)
+    {
+        var originAx = OffsetToAxial(originOffset);
+        foreach (var d in axialOffsets)
+        {
+            var ax = new Vector2Int(originAx.x + d.x, originAx.y + d.y);
+            yield return AxialToOffset(ax);
+        }
+    }
+
+    static IEnumerable<Vector3Int> Unique(IEnumerable<Vector3Int> cells)
+        => cells.Distinct();
+
+    // =========================
+    // 2) ìŠ¤í‚¬ë³„ ë²”ìœ„ (axial ê¸°ì¤€)
+    //
+    // Pointed-Top ê¸°ì¤€ 6ë°©í–¥(ì¶•ì¢Œí‘œ) ë©”ëª¨:
+    //  E (1, 0), NE (1,-1), NW (0,-1), W (-1,0), SW (-1,1), SE (0,1)
+    // =========================
+
+    // axial ê¸°ì¤€ 6ë°©í–¥(ì´ì›ƒ) - 5ë²ˆ ë„ë„› ìŠ¤í‚¬
+    static readonly Vector2Int[] AXIAL_NEIGHBORS = new[]
+    {
+        new Vector2Int( 1, 0),  // E
+        new Vector2Int( 1,-1),  // NE
+        new Vector2Int( 0,-1),  // NW
+        new Vector2Int(-1, 0),  // W
+        new Vector2Int(-1, 1),  // SW
+        new Vector2Int( 0, 1),  // SE
+    };
+    // ì¤‘ì‹¬ í¬í•¨ R=1 (ì¤‘ì‹¬ + ì£¼ë³€ 6ì¹¸)
+    static readonly Vector2Int[] AXIAL_RADIUS1_WITH_CENTER = new[]
+    {
+        new Vector2Int( 0, 0),  // Center
+        new Vector2Int( 1, 0),  // E
+        new Vector2Int( 1,-1),  // NE
+        new Vector2Int( 0,-1),  // NW
+        new Vector2Int(-1, 0),  // W
+        new Vector2Int(-1, 1),  // SW
+        new Vector2Int( 0, 1)  // SE
+    };
+
+    // ë°©í–¥ ì¸ë±ìŠ¤(0..5) â†’ axial(q,r) ì˜¤í”„ì…‹
+    public static Vector2Int DirIndexToAxial(int idx)
+    {
+        idx = ((idx % 6) + 6) % 6;
+        return AXIAL_NEIGHBORS[idx];
+    }
+    // ë‘ ì˜¤í”„ì…‹ ì…€ ì‚¬ì´ì˜ 'ê°€ì¥ ê°€ê¹Œìš´ 6ë°©í–¥' ì¸ë±ìŠ¤(0..5)
+    public static int NearestDirectionIndex(Vector3Int fromOffset, Vector3Int toOffset)
+    {
+        var a = OffsetToAxial(fromOffset);
+        var b = OffsetToAxial(toOffset);
+        var d = new Vector2Int(b.x - a.x, b.y - a.y);
+        if (d.x == 0 && d.y == 0) return 0; // ê°™ìœ¼ë©´ ì„ì˜ 0
+
+        int best = 0; int bestDot = int.MinValue;
+        for (int i = 0; i < 6; i++)
+        {
+            var v = AXIAL_NEIGHBORS[i];
+            int dot = d.x * v.x + d.y * v.y; // ê·¼ì‚¬ ë°©í–¥ ë¹„êµ
+            if (dot > bestDot) { bestDot = dot; best = i; }
+        }
+        return best;
+    }
+
+    // ê°€ë¡œ3
+    public static IEnumerable<Vector3Int> GetAreaHorizontal3(Vector3Int originCell)
+    {
+        // ê¸°ì¡´ ì§ì ‘ ê³„ì‚° â†’ AreaShapes ìœ„ì„
+        return AreaShapes.GetCells(originCell, AreaPreset.LineHorizontal, false);
+    }
+
+    // ì„¸ë¡œ3
+    public static IEnumerable<Vector3Int> GetAreaVertical3(Vector3Int originCell)
+    {
+        return AreaShapes.LineVertical3(originCell);
+    }
+
+    // ì›í˜•(ë°˜ê²½1, ì¤‘ì‹¬ í¬í•¨)
+    public static IEnumerable<Vector3Int> GetAreaRing1(Vector3Int originCell)
+    {
+        return AreaShapes.GetCells(originCell, AreaPreset.Ring, false);
+    }
+
+    // ë„ë„›(ë°˜ê²½1, ì¤‘ì‹¬ ì œì™¸)
+    public static IEnumerable<Vector3Int> GetAreaDonut1(Vector3Int originCell)
+    {
+        return AreaShapes.DonutRadius1(originCell);
+    }
+
+    // ë¶€ì±„ê¼´(ë°˜ê²½1, ì „ë°© 3ì¹¸)
+    //  - ê¸°ì¡´ ì½”ë“œê°€ ì •ë©´ì„ ìœ ë‹› ì—ì´ë°ì´ë‚˜ 'casterâ†’target'ìœ¼ë¡œ ì •í–ˆë‹¤ë©´,
+    //    ê±°ê¸°ì„œ axial ì •ë©´ ë²¡í„°ë¥¼ ë§Œë“¤ì–´ ì´ í•¨ìˆ˜ì— ë„˜ê²¨ì¤˜.
+    public static IEnumerable<Vector3Int> GetAreaFanForwardR1(Vector3Int originCell, Vector3 casterWorld, Vector3 targetWorld)
+    {
+        // ì›”ë“œ ì •ë©´ â†’ ì¶• ì¢Œí‘œ ì •ë©´ ê·¼ì‚¬
+        Vector2 aim = (targetWorld - casterWorld);
+        if (aim.sqrMagnitude < 1e-6f) aim = Vector2.right;
+        aim.Normalize();
+
+        // ì›”ë“œ->axial 6ë°©í–¥ ì¤‘ ê°€ì¥ ê°€ê¹Œìš´ ì¶• ì„ íƒ
+        var axialDirs = new[]
+        {
+        new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
+        new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
+    };
+
+        // ì¶• ë²¡í„°ë¥¼ ì›”ë“œë¡œ íˆ¬ì˜í•´ ê°€ì¥ í° dotì„ ì •ë©´ìœ¼ë¡œ ì„ íƒ
+        Vector3 right = Vector3.right, up = Vector3.up; // í•„ìš”ì‹œ Grid ë³€í™˜ ì¶•ì„ ì‚¬ìš©í•˜ë„ë¡ ê°œì„ 
+        int best = 0; float bestDot = float.NegativeInfinity;
+        for (int i = 0; i < axialDirs.Length; i++)
+        {
+            // ê°„ë‹¨íˆ: (ax.x * right + ax.y * up) ë¡œ ê·¼ì‚¬ (í”„ë¡œì íŠ¸ ì¢Œí‘œê³„ì— ë§ê²Œ êµì²´ ê°€ëŠ¥)
+            Vector2 dirW = axialDirs[i].x * (Vector2)right + axialDirs[i].y * (Vector2)up;
+            float d = Vector2.Dot(aim, dirW.normalized);
+            if (d > bestDot) { bestDot = d; best = i; }
+        }
+
+        return AreaShapes.FanForwardR1(originCell, axialDirs[best]);
+    }
+
+    //public static SkillDefinition Get(SkillId id)
+    //{
+
+    //    switch (id)
+    //    {
+    //        // a) ëŒ€ìƒ ì§€ëª© ê°€ë¡œì—´: {W, SELF, E}
+    //        case SkillId.Skill1:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 1: ê°€ë¡œì—´(Unit)",
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, new[]
+    //                    {
+    //                        new Vector2Int(-1, 0), // W
+    //                        new Vector2Int( 0, 0), // SELF
+    //                        new Vector2Int( 1, 0), // E
+    //                    }))
+    //            };
+
+    //        // b) ëŒ€ìƒ ì§€ëª© ì„¸ë¡œì—´: {NW, SELF, SE}  â†’ axial {(0,-1),(0,0),(0,1)}
+    //        case SkillId.Skill2:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 2: ì„¸ë¡œì—´(Unit)",
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, new[]
+    //                    {
+    //                        new Vector2Int( 0,-1), // NW
+    //                        new Vector2Int( 0, 0), // SELF
+    //                        new Vector2Int( 0, 1), // SE
+    //                    }))
+    //            };
+
+    //        // c) ëŒ€ìƒ ì§€ëª© ë¶€ì±„ê¼´(ëŒ€ìƒ í¬í•¨, 'ì™¼ìª½-ìœ„ ë°©í–¥'ìœ¼ë¡œ í¼ì¹˜ëŠ” 3ì¹¸)
+    //        //    ìš”ì²­ì˜ ì˜ˆì‹œ {(0,0),(-1,0),(-1,-1)}ëŠ” odd-q ê¸°ì¤€ì´ì—ˆë‹¤ê³  ë³´ì´ì§€ë§Œ,
+    //        //    axialë¡œ ë™ì¼ ì˜ë„ë¥¼ ë°˜ì˜: {SELF, W(-1,0), NW(0,-1)}
+    //        case SkillId.Skill3:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 3: ë¶€ì±„ê¼´(Unit)",
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, new[]
+    //                    {
+    //                        new Vector2Int( 0, 0), // SELF
+    //                        new Vector2Int(-1, 0), // W
+    //                        new Vector2Int( 0,-1), // NW
+    //                    }))
+    //            };
+
+    //        // d) íƒ€ì¼ ì§€ëª©: ì¤‘ì‹¬ í¬í•¨ R=1 (ì¤‘ì‹¬ + ì£¼ë³€ 6ì¹¸)
+    //        case SkillId.Skill4:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 4: ì›í˜•(Tile)",
+    //                targetMode = SkillTargetMode.Tile,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, AXIAL_RADIUS1_WITH_CENTER))
+    //            };
+    //        // d) íƒ€ì¼ ì§€ëª© ë„ë„›í˜•6 - ìˆ˜ì • í•„ìš”
+    //        case SkillId.Skill5:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = "Skill 5: ë„ë„›í˜•(Tile)",
+    //                targetMode = SkillTargetMode.Tile,
+    //                GetAreaCells = (origin, _) =>
+    //                    Unique(ToOffsetCells(origin, AXIAL_NEIGHBORS))
+    //            };
+
+    //        default:
+    //            return new SkillDefinition
+    //            {
+    //                id = id,
+    //                name = id.ToString(),
+    //                targetMode = SkillTargetMode.Unit,
+    //                GetAreaCells = (origin, _) => new[] { origin }
+    //            };
+    //    }
+    //}
+}

@@ -1,6 +1,6 @@
-using UnityEngine;
-
-public class IgnorePauseUI : MonoBehaviour
-{
-    //½ºÅ©¸³Æ® À¯¹« È®ÀÎ¿ë
-}
+using UnityEngine;
+
+public class IgnorePauseUI : MonoBehaviour
+{
+    //ìŠ¤í¬ë¦½íŠ¸ ìœ ë¬´ í™•ì¸ìš©
+}

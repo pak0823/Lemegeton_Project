@@ -1,157 +1,157 @@
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class MapToggleManager : MonoBehaviour
-{
-    public static MapToggleManager Instance;
-
-    [Header("¸Ê ÂüÁ¶")]
-    public Transform gridParent;
-    public GameObject mainMap;
-    [SerializeField] private Transform playerTransform;
-
-    [Header("StageData")]
-    public StageDatabase stageDB;
-    public int currentStage = 1;
-
-    private GameObject activeQuizMap;
-
-    void Awake()
-    {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-    }
-
-    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
-    {
-        List<Tilemap> floors = new List<Tilemap>();
-        List<Tilemap> obstacles = new List<Tilemap>(); // Àå¾Ö¹° ¸®½ºÆ®
-        List<Tilemap> walls = new List<Tilemap>();
-
-        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
-        {
-            // º® (Wall)
-            if (tm.CompareTag("Wall"))
-            {
-                walls.Add(tm);
-            }
-            // Àå¾Ö¹° (Obstacle)
-            else if (tm.CompareTag("Obstacle"))
-            {
-                obstacles.Add(tm);
-            }
-            // ¹Ù´Ú (Floor)
-            else if (tm.CompareTag("Floor"))
-            {
-                floors.Add(tm);
-            }
-            // ÅÂ±×°¡ ¾ø´Â °æ¿ì(Untagged)¿¡ ´ëÇÑ Ã³¸®
-            else
-            {
-                Debug.LogWarning($"[MapManager] Tag°¡ ¼³Á¤µÇÁö ¾ÊÀº Å¸ÀÏ¸Ê ¹ß°ß: {tm.name}");
-            }
-        }
-        return (floors, obstacles, walls);
-    }
-    public void EnterQuizMap()
-    {
-        Input.ResetInputAxes();
-        PuzzleManager.Instance.IsPuzzleActive = true;
-
-        if (mainMap != null) mainMap.SetActive(false);
-
-        if (activeQuizMap != null)
-            Destroy(activeQuizMap);
-
-        GameObject quizMapPrefab = GetRandomQuizMapPrefab();
-        if (quizMapPrefab == null)
-        {
-            Debug.LogWarning($"Stage {currentStage}ÀÇ ÄûÁî¸ÊÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù.");
-            return;
-        }
-
-        activeQuizMap = Instantiate(quizMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
-        SetupQuizMap(activeQuizMap);
-    }
-
-    public void ExitQuizMap()
-    {
-        if (activeQuizMap != null)
-        {
-            Destroy(activeQuizMap);
-            activeQuizMap = null;
-        }
-
-        if (mainMap != null)
-        {
-            mainMap.SetActive(true);
-            MovePlayerToSpawnPoint(mainMap);
-        }
-    }
-
-    GameObject GetRandomQuizMapPrefab()
-    {
-        // stageDB°¡ nullÀÌ°Å³ª ÄûÁî µ¥ÀÌÅÍ°¡ ¾ø´Â °æ¿ì ¾ÈÀü Ã³¸®
-        if (stageDB == null || stageDB.quizStages == null) return null;
-
-        var stageData = stageDB.quizStages.FirstOrDefault(s => s.stageNumber == currentStage);
-        if (stageData == null || stageData.quizMapPrefabs == null || stageData.quizMapPrefabs.Length == 0)
-            return null;
-
-        int index = Random.Range(0, stageData.quizMapPrefabs.Length);
-        return stageData.quizMapPrefabs[index];
-    }
-
-    void SetupQuizMap(GameObject quizMap)
-    {
-        // Àå¾Ö¹° ¸®½ºÆ®µµ ÇÔ²² ¹Ş¾Æ¿È
-        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(quizMap);
-
-        if (floorMaps.Count == 0)
-        {
-            Debug.LogError("QuizMap Floor ¸ø Ã£À½");
-            return;
-        }
-
-        if (PlayerMovement.Instance != null)
-        {
-            // SetTilemaps¿¡ obstacleMapsµµ Àü´Ş
-            PlayerMovement.Instance.SetTilemaps(floorMaps, obstacleMaps, wallMaps);
-            PlayerMovement.Instance.ClearPath();
-        }
-
-        // ÆÛÁñ ¸Å´ÏÀú´Â º¸Åë ¹Ù´Ú À§ÁÖ·Î µ¿ÀÛÇÏ¹Ç·Î ±âÁ¸ À¯Áö (ÇÊ¿ä½Ã ¼öÁ¤)
-        // (´Ü, PuzzleManager°¡ obstacles¸¦ ¿ä±¸ÇÏµµ·Ï º¯°æµÇÁö ¾Ê¾Ò´Ù´Â °¡Á¤ÇÏ¿¡)
-        PuzzleManager.Instance?.SetMaps(floorMaps[0], wallMaps);
-
-        MovePlayerToSpawnPoint(quizMap);
-    }
-    void MovePlayerToSpawnPoint(GameObject map)
-    {
-        var spawn = map.transform.Find("PlayerStart");
-        if (spawn != null)
-        {
-            Vector3 targetPos = spawn.position;
-            targetPos.z = 0f;
-
-            playerTransform.position = targetPos;
-            PuzzleManager.Instance?.CacheInitialPlayerPosition(targetPos);
-        }
-        else
-        {
-            Debug.LogWarning("¸Ê¿¡ 'PlayerStart' ¿ÀºêÁ§Æ®°¡ ¾ø½À´Ï´Ù.");
-        }
-    }
-
-    public Vector3 GetPlayerStartPosition()
-    {
-        return playerTransform.position;
-    }
-    public void SetPlayerStartPosition(Transform _playerPos)
-    {
-         playerTransform = _playerPos;
-    }
-}
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class MapToggleManager : MonoBehaviour
+{
+    public static MapToggleManager Instance;
+
+    [Header("ë§µ ì°¸ì¡°")]
+    public Transform gridParent;
+    public GameObject mainMap;
+    [SerializeField] private Transform playerTransform;
+
+    [Header("StageData")]
+    public StageDatabase stageDB;
+    public int currentStage = 1;
+
+    private GameObject activeQuizMap;
+
+    void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+    }
+
+    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
+    {
+        List<Tilemap> floors = new List<Tilemap>();
+        List<Tilemap> obstacles = new List<Tilemap>(); // ì¥ì• ë¬¼ ë¦¬ìŠ¤íŠ¸
+        List<Tilemap> walls = new List<Tilemap>();
+
+        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
+        {
+            // ë²½ (Wall)
+            if (tm.CompareTag("Wall"))
+            {
+                walls.Add(tm);
+            }
+            // ì¥ì• ë¬¼ (Obstacle)
+            else if (tm.CompareTag("Obstacle"))
+            {
+                obstacles.Add(tm);
+            }
+            // ë°”ë‹¥ (Floor)
+            else if (tm.CompareTag("Floor"))
+            {
+                floors.Add(tm);
+            }
+            // íƒœê·¸ê°€ ì—†ëŠ” ê²½ìš°(Untagged)ì— ëŒ€í•œ ì²˜ë¦¬
+            else
+            {
+                Debug.LogWarning($"[MapManager] Tagê°€ ì„¤ì •ë˜ì§€ ì•Šì€ íƒ€ì¼ë§µ ë°œê²¬: {tm.name}");
+            }
+        }
+        return (floors, obstacles, walls);
+    }
+    public void EnterQuizMap()
+    {
+        Input.ResetInputAxes();
+        PuzzleManager.Instance.IsPuzzleActive = true;
+
+        if (mainMap != null) mainMap.SetActive(false);
+
+        if (activeQuizMap != null)
+            Destroy(activeQuizMap);
+
+        GameObject quizMapPrefab = GetRandomQuizMapPrefab();
+        if (quizMapPrefab == null)
+        {
+            Debug.LogWarning($"Stage {currentStage}ì˜ í€´ì¦ˆë§µì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
+            return;
+        }
+
+        activeQuizMap = Instantiate(quizMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
+        SetupQuizMap(activeQuizMap);
+    }
+
+    public void ExitQuizMap()
+    {
+        if (activeQuizMap != null)
+        {
+            Destroy(activeQuizMap);
+            activeQuizMap = null;
+        }
+
+        if (mainMap != null)
+        {
+            mainMap.SetActive(true);
+            MovePlayerToSpawnPoint(mainMap);
+        }
+    }
+
+    GameObject GetRandomQuizMapPrefab()
+    {
+        // stageDBê°€ nullì´ê±°ë‚˜ í€´ì¦ˆ ë°ì´í„°ê°€ ì—†ëŠ” ê²½ìš° ì•ˆì „ ì²˜ë¦¬
+        if (stageDB == null || stageDB.quizStages == null) return null;
+
+        var stageData = stageDB.quizStages.FirstOrDefault(s => s.stageNumber == currentStage);
+        if (stageData == null || stageData.quizMapPrefabs == null || stageData.quizMapPrefabs.Length == 0)
+            return null;
+
+        int index = Random.Range(0, stageData.quizMapPrefabs.Length);
+        return stageData.quizMapPrefabs[index];
+    }
+
+    void SetupQuizMap(GameObject quizMap)
+    {
+        // ì¥ì• ë¬¼ ë¦¬ìŠ¤íŠ¸ë„ í•¨ê»˜ ë°›ì•„ì˜´
+        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(quizMap);
+
+        if (floorMaps.Count == 0)
+        {
+            Debug.LogError("QuizMap Floor ëª» ì°¾ìŒ");
+            return;
+        }
+
+        if (PlayerMovement.Instance != null)
+        {
+            // SetTilemapsì— obstacleMapsë„ ì „ë‹¬
+            PlayerMovement.Instance.SetTilemaps(floorMaps, obstacleMaps, wallMaps);
+            PlayerMovement.Instance.ClearPath();
+        }
+
+        // í¼ì¦ ë§¤ë‹ˆì €ëŠ” ë³´í†µ ë°”ë‹¥ ìœ„ì£¼ë¡œ ë™ì‘í•˜ë¯€ë¡œ ê¸°ì¡´ ìœ ì§€ (í•„ìš”ì‹œ ìˆ˜ì •)
+        // (ë‹¨, PuzzleManagerê°€ obstaclesë¥¼ ìš”êµ¬í•˜ë„ë¡ ë³€ê²½ë˜ì§€ ì•Šì•˜ë‹¤ëŠ” ê°€ì •í•˜ì—)
+        PuzzleManager.Instance?.SetMaps(floorMaps[0], wallMaps);
+
+        MovePlayerToSpawnPoint(quizMap);
+    }
+    void MovePlayerToSpawnPoint(GameObject map)
+    {
+        var spawn = map.transform.Find("PlayerStart");
+        if (spawn != null)
+        {
+            Vector3 targetPos = spawn.position;
+            targetPos.z = 0f;
+
+            playerTransform.position = targetPos;
+            PuzzleManager.Instance?.CacheInitialPlayerPosition(targetPos);
+        }
+        else
+        {
+            Debug.LogWarning("ë§µì— 'PlayerStart' ì˜¤ë¸Œì íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤.");
+        }
+    }
+
+    public Vector3 GetPlayerStartPosition()
+    {
+        return playerTransform.position;
+    }
+    public void SetPlayerStartPosition(Transform _playerPos)
+    {
+         playerTransform = _playerPos;
+    }
+}

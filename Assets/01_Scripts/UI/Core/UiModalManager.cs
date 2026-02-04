@@ -1,128 +1,128 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-public interface IModalWindow
-{
-    bool IsOpen { get; }
-    void Show();
-    void Hide();
-    GameObject Root { get; } // ¹èÄ¡/Á¤·Ä¿ë
-    int Priority { get; }    // ¿ì¼±¼øÀ§(¿øÇÏ¸é »ç¿ë)
-}
-
-public class UiModalManager : MonoBehaviour
-{
-    public static UiModalManager Instance { get; private set; }
-
-    // (¿É¼Ç) ½ºÅÃ ±â´ÉÀ» ÄÑ¸é »õ Ã¢ ¶ç¿ï ¶§ ±âÁ¸Àº ³²±â°í °¡¸² ¡æ ´İÀ¸¸é Á÷Àü Ã¢ º¹±Í
-    [SerializeField] bool useStack = false;
-
-    readonly Stack<IModalWindow> stack = new();
-    IModalWindow current; // useStack=falseÀÏ ¶§¸¸ »ç¿ë
-
-    void Awake()
-    {
-        if (Instance && Instance != this) { Destroy(gameObject); return; }
-        Instance = this;
-    }
-
-    public void Toggle(IModalWindow w)
-    {
-        if (w == null) return;
-        if (w.IsOpen) Close(w);
-        else Open(w);
-    }
-
-    public void Open(IModalWindow w)
-    {
-        if (w == null) return;
-
-        if (useStack)
-        {
-            // ÀÌ¹Ì °°Àº Ã¢ÀÌ¸é ¹«½Ã
-            if (stack.Count > 0 && ReferenceEquals(stack.Peek(), w)) return;
-            // ÃÖ»ó´Ü¸¸ º¸ÀÌ°Ô: ±âÁ¸ ÃÖ»ó´ÜÀÌ ¿­·ÁÀÖ´Ù¸é °¡·ÁµÎ±â(ÇÊ¿ä½Ã Hide È£Ãâ)
-            if (stack.Count > 0 && stack.Peek().IsOpen) stack.Peek().Hide();
-            stack.Push(w);
-            w.Show();
-        }
-        else
-        {
-            // ÇÏ³ª¸¸ Çã¿ë: ¿­·ÁÀÖ´Â Ã¢ ÀüºÎ ´İ±â
-            if (current != null && current.IsOpen) current.Hide();
-            current = w;
-            w.Show();
-        }
-    }
-
-    public void Close(IModalWindow w)
-    {
-        if (w == null) return;
-
-        if (useStack)
-        {
-            if (stack.Count == 0) return;
-            // ÃÖ»ó´Ü¸¸ ´İÀ» ¼ö ÀÖ°Ô(¾ÈÀü)
-            if (!ReferenceEquals(stack.Peek(), w))
-            {
-                // ÃÖ»ó´ÜÀÌ ¾Æ´Ï¸é ¸ğµÎ ´İ°í ÃÊ±âÈ­(´Ü¼øÈ­)
-                foreach (var x in stack) { if (x.IsOpen) x.Hide(); }
-                stack.Clear();
-                return;
-            }
-            w.Hide();
-            stack.Pop();
-            // ÀÌÀü Ã¢ º¹±Í
-            if (stack.Count > 0) stack.Peek().Show();
-        }
-        else
-        {
-            if (ReferenceEquals(current, w))
-            {
-                w.Hide();
-                current = null;
-            }
-            else
-            {
-                // ´Ù¸¥ Ã¢ÀÌ ´İÈ÷·Á´Â °æ¿ìµµ ¾ÈÀüÇÏ°Ô Ã³¸®
-                if (w.IsOpen) w.Hide();
-            }
-        }
-    }
-
-    // ÆíÀÇ ¸Ş¼­µå
-    public void CloseAll()
-    {
-        if (useStack)
-        {
-            while (stack.Count > 0) { var x = stack.Pop(); if (x.IsOpen) x.Hide(); }
-        }
-        else
-        {
-            if (current != null && current.IsOpen) current.Hide();
-            current = null;
-        }
-    }
-
-    // ESC ±ÔÄ¢: ¹º°¡ ¿­·Á ÀÖÀ¸¸é ±× Ã¢¸¸ ´İ±â, ¾Æ¹« °Íµµ ¾øÀ¸¸é options ¿­±â
-    public void OnEscape(IModalWindow optionsPreferred)
-    {
-        if (useStack)
-        {
-            if (stack.Count > 0)
-            {
-                Close(stack.Peek());
-                return;
-            }
-        }
-        else
-        {
-            if (current != null)
-            {
-                Close(current);
-                return;
-            }
-        }
-        if (optionsPreferred != null) Open(optionsPreferred);
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+
+public interface IModalWindow
+{
+    bool IsOpen { get; }
+    void Show();
+    void Hide();
+    GameObject Root { get; } // ë°°ì¹˜/ì •ë ¬ìš©
+    int Priority { get; }    // ìš°ì„ ìˆœìœ„(ì›í•˜ë©´ ì‚¬ìš©)
+}
+
+public class UiModalManager : MonoBehaviour
+{
+    public static UiModalManager Instance { get; private set; }
+
+    // (ì˜µì…˜) ìŠ¤íƒ ê¸°ëŠ¥ì„ ì¼œë©´ ìƒˆ ì°½ ë„ìš¸ ë•Œ ê¸°ì¡´ì€ ë‚¨ê¸°ê³  ê°€ë¦¼ â†’ ë‹«ìœ¼ë©´ ì§ì „ ì°½ ë³µê·€
+    [SerializeField] bool useStack = false;
+
+    readonly Stack<IModalWindow> stack = new();
+    IModalWindow current; // useStack=falseì¼ ë•Œë§Œ ì‚¬ìš©
+
+    void Awake()
+    {
+        if (Instance && Instance != this) { Destroy(gameObject); return; }
+        Instance = this;
+    }
+
+    public void Toggle(IModalWindow w)
+    {
+        if (w == null) return;
+        if (w.IsOpen) Close(w);
+        else Open(w);
+    }
+
+    public void Open(IModalWindow w)
+    {
+        if (w == null) return;
+
+        if (useStack)
+        {
+            // ì´ë¯¸ ê°™ì€ ì°½ì´ë©´ ë¬´ì‹œ
+            if (stack.Count > 0 && ReferenceEquals(stack.Peek(), w)) return;
+            // ìµœìƒë‹¨ë§Œ ë³´ì´ê²Œ: ê¸°ì¡´ ìµœìƒë‹¨ì´ ì—´ë ¤ìˆë‹¤ë©´ ê°€ë ¤ë‘ê¸°(í•„ìš”ì‹œ Hide í˜¸ì¶œ)
+            if (stack.Count > 0 && stack.Peek().IsOpen) stack.Peek().Hide();
+            stack.Push(w);
+            w.Show();
+        }
+        else
+        {
+            // í•˜ë‚˜ë§Œ í—ˆìš©: ì—´ë ¤ìˆëŠ” ì°½ ì „ë¶€ ë‹«ê¸°
+            if (current != null && current.IsOpen) current.Hide();
+            current = w;
+            w.Show();
+        }
+    }
+
+    public void Close(IModalWindow w)
+    {
+        if (w == null) return;
+
+        if (useStack)
+        {
+            if (stack.Count == 0) return;
+            // ìµœìƒë‹¨ë§Œ ë‹«ì„ ìˆ˜ ìˆê²Œ(ì•ˆì „)
+            if (!ReferenceEquals(stack.Peek(), w))
+            {
+                // ìµœìƒë‹¨ì´ ì•„ë‹ˆë©´ ëª¨ë‘ ë‹«ê³  ì´ˆê¸°í™”(ë‹¨ìˆœí™”)
+                foreach (var x in stack) { if (x.IsOpen) x.Hide(); }
+                stack.Clear();
+                return;
+            }
+            w.Hide();
+            stack.Pop();
+            // ì´ì „ ì°½ ë³µê·€
+            if (stack.Count > 0) stack.Peek().Show();
+        }
+        else
+        {
+            if (ReferenceEquals(current, w))
+            {
+                w.Hide();
+                current = null;
+            }
+            else
+            {
+                // ë‹¤ë¥¸ ì°½ì´ ë‹«íˆë ¤ëŠ” ê²½ìš°ë„ ì•ˆì „í•˜ê²Œ ì²˜ë¦¬
+                if (w.IsOpen) w.Hide();
+            }
+        }
+    }
+
+    // í¸ì˜ ë©”ì„œë“œ
+    public void CloseAll()
+    {
+        if (useStack)
+        {
+            while (stack.Count > 0) { var x = stack.Pop(); if (x.IsOpen) x.Hide(); }
+        }
+        else
+        {
+            if (current != null && current.IsOpen) current.Hide();
+            current = null;
+        }
+    }
+
+    // ESC ê·œì¹™: ë­”ê°€ ì—´ë ¤ ìˆìœ¼ë©´ ê·¸ ì°½ë§Œ ë‹«ê¸°, ì•„ë¬´ ê²ƒë„ ì—†ìœ¼ë©´ options ì—´ê¸°
+    public void OnEscape(IModalWindow optionsPreferred)
+    {
+        if (useStack)
+        {
+            if (stack.Count > 0)
+            {
+                Close(stack.Peek());
+                return;
+            }
+        }
+        else
+        {
+            if (current != null)
+            {
+                Close(current);
+                return;
+            }
+        }
+        if (optionsPreferred != null) Open(optionsPreferred);
+    }
+}

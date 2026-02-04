@@ -1,136 +1,136 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-public static class AreaShapes
-{
-    // Pointed-top axial ring (center ∆˜«‘)
-    private static readonly Vector2Int[] AXIAL_RING_WITH_CENTER = new[]
-    {
-        new Vector2Int( 0, 0),  // Center
-        new Vector2Int( 1, 0),  // E
-        new Vector2Int( 1,-1),  // NE
-        new Vector2Int( 0,-1),  // NW
-        new Vector2Int(-1, 0),  // W
-        new Vector2Int(-1, 1),  // SW
-        new Vector2Int( 0, 1),  // SE
-    };
-
-    /// <summary>
-    /// ParametricDamageSkill.AreaPreset ±‚π› π¸¿ß π›»Ø.
-    /// ¡ˆø¯: Single / LineHorizontal(3) / LineDiagU3 / LineDiagU7 / Ring(π›∞Ê1, center ∆˜«‘)
-    /// </summary>
-    public static IEnumerable<Vector3Int> GetCells(Vector3Int originCell, AreaPreset preset, bool diagUseNEAxis)
-    {
-        if (preset == AreaPreset.Single)
-        {
-            yield return originCell;
-            yield break;
-        }
-
-        var ax = SkillLibrary.OffsetToAxial(originCell);
-
-        if (preset == AreaPreset.LineHorizontal)
-        {
-            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x - 1, ax.y));
-            yield return originCell;
-            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + 1, ax.y));
-            yield break;
-        }
-
-        if (preset == AreaPreset.LineDiagU3 ||
-            preset == AreaPreset.LineDiagU7)
-        {
-            // ¥Î∞¢º± √‡: (1,-1)=NE√‡ ∂«¥¬ (0,-1)=NW√‡
-            var dir = diagUseNEAxis ? new Vector2Int(1, -1) : new Vector2Int(0, -1);
-            int radius = (preset == AreaPreset.LineDiagU3) ? 1 : 3;
-            for (int i = -radius; i <= radius; i++)
-            {
-                var p = new Vector2Int(ax.x + dir.x * i, ax.y + dir.y * i);
-                yield return SkillLibrary.AxialToOffset(p);
-            }
-            yield break;
-        }
-
-        if (preset == AreaPreset.Ring)
-        {
-            foreach (var d in AXIAL_RING_WITH_CENTER)
-                yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
-            yield break;
-        }
-
-        // Fallback
-        yield return originCell;
-    }
-
-    // 1) ¥Î∞¢º± 3ƒ≠ (Vertical line of 3)
-    public static IEnumerable<Vector3Int> LineVertical3(Vector3Int originCell)
-    {
-        var ax = SkillLibrary.OffsetToAxial(originCell);
-        // axial (0,-1), (0,0), (0,1)
-        yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x, ax.y - 1));
-        yield return originCell;
-        yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x, ax.y + 1));
-    }
-
-    // 2) µµ≥”(π›∞Ê 1, ¡ﬂΩ… ¡¶ø‹ = ¿ÃøÙ 6ƒ≠)
-    public static IEnumerable<Vector3Int> DonutRadius1(Vector3Int originCell)
-    {
-        var ax = SkillLibrary.OffsetToAxial(originCell);
-        // ¿ÃøÙ 6πÊ«‚(¡ﬂΩ… ¡¶ø‹)
-        // E(1,0), NE(1,-1), NW(0,-1), W(-1,0), SW(-1,1), SE(0,1)
-        var N6 = new[]
-        {
-        new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
-        new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
-    };
-        foreach (var d in N6)
-            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
-    }
-
-    // 3) ¿¸πÊ ∫Œ√§≤√(π›∞Ê1, ¡§∏È+¡¬øÏ 3ƒ≠)
-    //  - facingDirAxial: ¡§∏È πÊ«‚(√‡ ¡¬«•ªÛ¿« 6πÊ ¡ﬂ «œ≥™) øπ: (1,0) / (1,-1) / (0,-1) / (-1,0) / (-1,1) / (0,1)
-    public static IEnumerable<Vector3Int> FanForwardR1(Vector3Int originCell, Vector2Int facingDirAxial)
-    {
-        // 6πÊ πËø≠∑Œ ¿Œ¡¢ ¡¬øÏ ¿Œµ¶Ω∫∏¶ ±∏«ÿ 3ƒ≠ ∫Œ√§≤√ ±∏º∫
-        var dirs = new[]
-        {
-        new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
-        new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
-    };
-
-        int idx = -1;
-        for (int i = 0; i < dirs.Length; i++)
-            if (dirs[i] == facingDirAxial) { idx = i; break; }
-
-        if (idx < 0) // ¿ﬂ∏¯µ» ¿‘∑¬ Ω√ ¡ﬂΩ…∏∏
-        {
-            yield return originCell;
-            yield break;
-        }
-
-        int left = (idx + 5) % 6;   // ¡¬√¯ ¿ÃøÙ
-        int right = (idx + 1) % 6;  // øÏ√¯ ¿ÃøÙ
-
-        var ax = SkillLibrary.OffsetToAxial(originCell);
-        foreach (var d in new[] { dirs[left], dirs[idx], dirs[right] })
-            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
-    }
-
-    public static IEnumerable<Vector3Int> BeastDomainArea(Vector3Int originCell, int radius)
-    {
-        var originAx = SkillLibrary.OffsetToAxial(originCell);
-
-        for (int dq = -radius; dq <= radius; dq++)
-        {
-            for (int dr = -radius; dr <= radius; dr++)
-            {
-                int ds = -dq - dr;
-                if (Mathf.Abs(dq) > radius || Mathf.Abs(dr) > radius || Mathf.Abs(ds) > radius)
-                    continue;
-
-                var axial = new Vector2Int(originAx.x + dq, originAx.y + dr);
-                yield return SkillLibrary.AxialToOffset(axial);
-            }
-        }
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+
+public static class AreaShapes
+{
+    // Pointed-top axial ring (center Ìè¨Ìï®)
+    private static readonly Vector2Int[] AXIAL_RING_WITH_CENTER = new[]
+    {
+        new Vector2Int( 0, 0),  // Center
+        new Vector2Int( 1, 0),  // E
+        new Vector2Int( 1,-1),  // NE
+        new Vector2Int( 0,-1),  // NW
+        new Vector2Int(-1, 0),  // W
+        new Vector2Int(-1, 1),  // SW
+        new Vector2Int( 0, 1),  // SE
+    };
+
+    /// <summary>
+    /// ParametricDamageSkill.AreaPreset Í∏∞Î∞ò Î≤îÏúÑ Î∞òÌôò.
+    /// ÏßÄÏõê: Single / LineHorizontal(3) / LineDiagU3 / LineDiagU7 / Ring(Î∞òÍ≤Ω1, center Ìè¨Ìï®)
+    /// </summary>
+    public static IEnumerable<Vector3Int> GetCells(Vector3Int originCell, AreaPreset preset, bool diagUseNEAxis)
+    {
+        if (preset == AreaPreset.Single)
+        {
+            yield return originCell;
+            yield break;
+        }
+
+        var ax = SkillLibrary.OffsetToAxial(originCell);
+
+        if (preset == AreaPreset.LineHorizontal)
+        {
+            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x - 1, ax.y));
+            yield return originCell;
+            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + 1, ax.y));
+            yield break;
+        }
+
+        if (preset == AreaPreset.LineDiagU3 ||
+            preset == AreaPreset.LineDiagU7)
+        {
+            // ÎåÄÍ∞ÅÏÑ† Ï∂ï: (1,-1)=NEÏ∂ï ÎòêÎäî (0,-1)=NWÏ∂ï
+            var dir = diagUseNEAxis ? new Vector2Int(1, -1) : new Vector2Int(0, -1);
+            int radius = (preset == AreaPreset.LineDiagU3) ? 1 : 3;
+            for (int i = -radius; i <= radius; i++)
+            {
+                var p = new Vector2Int(ax.x + dir.x * i, ax.y + dir.y * i);
+                yield return SkillLibrary.AxialToOffset(p);
+            }
+            yield break;
+        }
+
+        if (preset == AreaPreset.Ring)
+        {
+            foreach (var d in AXIAL_RING_WITH_CENTER)
+                yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
+            yield break;
+        }
+
+        // Fallback
+        yield return originCell;
+    }
+
+    // 1) ÎåÄÍ∞ÅÏÑ† 3Ïπ∏ (Vertical line of 3)
+    public static IEnumerable<Vector3Int> LineVertical3(Vector3Int originCell)
+    {
+        var ax = SkillLibrary.OffsetToAxial(originCell);
+        // axial (0,-1), (0,0), (0,1)
+        yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x, ax.y - 1));
+        yield return originCell;
+        yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x, ax.y + 1));
+    }
+
+    // 2) ÎèÑÎÑõ(Î∞òÍ≤Ω 1, Ï§ëÏã¨ Ï†úÏô∏ = Ïù¥ÏõÉ 6Ïπ∏)
+    public static IEnumerable<Vector3Int> DonutRadius1(Vector3Int originCell)
+    {
+        var ax = SkillLibrary.OffsetToAxial(originCell);
+        // Ïù¥ÏõÉ 6Î∞©Ìñ•(Ï§ëÏã¨ Ï†úÏô∏)
+        // E(1,0), NE(1,-1), NW(0,-1), W(-1,0), SW(-1,1), SE(0,1)
+        var N6 = new[]
+        {
+        new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
+        new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
+    };
+        foreach (var d in N6)
+            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
+    }
+
+    // 3) Ï†ÑÎ∞© Î∂ÄÏ±ÑÍº¥(Î∞òÍ≤Ω1, Ï†ïÎ©¥+Ï¢åÏö∞ 3Ïπ∏)
+    //  - facingDirAxial: Ï†ïÎ©¥ Î∞©Ìñ•(Ï∂ï Ï¢åÌëúÏÉÅÏùò 6Î∞© Ï§ë ÌïòÎÇò) Ïòà: (1,0) / (1,-1) / (0,-1) / (-1,0) / (-1,1) / (0,1)
+    public static IEnumerable<Vector3Int> FanForwardR1(Vector3Int originCell, Vector2Int facingDirAxial)
+    {
+        // 6Î∞© Î∞∞Ïó¥Î°ú Ïù∏Ï†ë Ï¢åÏö∞ Ïù∏Îç±Ïä§Î•º Íµ¨Ìï¥ 3Ïπ∏ Î∂ÄÏ±ÑÍº¥ Íµ¨ÏÑ±
+        var dirs = new[]
+        {
+        new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
+        new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
+    };
+
+        int idx = -1;
+        for (int i = 0; i < dirs.Length; i++)
+            if (dirs[i] == facingDirAxial) { idx = i; break; }
+
+        if (idx < 0) // ÏûòÎ™ªÎêú ÏûÖÎ†• Ïãú Ï§ëÏã¨Îßå
+        {
+            yield return originCell;
+            yield break;
+        }
+
+        int left = (idx + 5) % 6;   // Ï¢åÏ∏° Ïù¥ÏõÉ
+        int right = (idx + 1) % 6;  // Ïö∞Ï∏° Ïù¥ÏõÉ
+
+        var ax = SkillLibrary.OffsetToAxial(originCell);
+        foreach (var d in new[] { dirs[left], dirs[idx], dirs[right] })
+            yield return SkillLibrary.AxialToOffset(new Vector2Int(ax.x + d.x, ax.y + d.y));
+    }
+
+    public static IEnumerable<Vector3Int> BeastDomainArea(Vector3Int originCell, int radius)
+    {
+        var originAx = SkillLibrary.OffsetToAxial(originCell);
+
+        for (int dq = -radius; dq <= radius; dq++)
+        {
+            for (int dr = -radius; dr <= radius; dr++)
+            {
+                int ds = -dq - dr;
+                if (Mathf.Abs(dq) > radius || Mathf.Abs(dr) > radius || Mathf.Abs(ds) > radius)
+                    continue;
+
+                var axial = new Vector2Int(originAx.x + dq, originAx.y + dr);
+                yield return SkillLibrary.AxialToOffset(axial);
+            }
+        }
+    }
+}

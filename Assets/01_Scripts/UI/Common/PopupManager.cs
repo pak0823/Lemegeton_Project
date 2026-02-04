@@ -1,156 +1,156 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
-using UnityEngine.UIElements;
-
-public class PopupManager : MonoBehaviour
-{
-    public static PopupManager Instance { get; private set; }
-    [SerializeField] private Canvas popupCanvas; // ¾ÀÀÇ °ø¿ë Canvas¸¦ µå·¡±×ÇØµÑ ¼ö ÀÖÀ½
-    [SerializeField] private RectTransform popupChildParent; // Canvas ¾Æ·¡ Àü¿ë ·¹ÀÌ¾î(ÀÚ½Ä)¿¡ ºÙÀÏ °æ¿ì ÁöÁ¤
-    [SerializeField] private RetreatConfirmPopup retreatPrefab;
-    [SerializeField] private ConfirmationPopup confirmationPrefab;
-
-
-    public static int ModalDepth { get; private set; } // ¸ğ´Ş ÁßÃ¸
-    public static bool IsModalOpen => ModalDepth > 0;   // ¸ğ´Ş ¿©ºÎ
-    readonly Queue<(string msg,string ok, string cancel,
-                    TaskCompletionSource<bool> tcs)> queue
-        = new Queue<(string, string, string, TaskCompletionSource<bool>)>();
-
-    ConfirmationPopup _active;
-    bool _showing;
-
-    void Awake()
-    {
-        if (Instance != null) { Destroy(gameObject); return; }
-        Instance = this;
-        DontDestroyOnLoad(gameObject);
-
-        EnsureEventSystem();
-        EnsureCanvas(); // popupCanvas¸¦ º¸Àå
-    }
-
-    public Task<bool> ConfirmAsync(string message, string ok = "È®ÀÎ", string cancel = "Ãë¼Ò")
-    {
-        var tcs = new TaskCompletionSource<bool>();
-        queue.Enqueue((message, ok, cancel, tcs));
-        _ = TryDequeueAndShow();
-        return tcs.Task;
-    }
-    void EnsureEventSystem()
-    {
-        if (FindObjectOfType<EventSystem>() == null)
-        {
-            var es = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-            DontDestroyOnLoad(es);
-        }
-    }
-
-    void EnsureCanvas()
-    {
-        // ÀÌ¹Ì ¹èÁ¤µÇ¾î ÀÖÀ¸¸é ÃÖ»ó´Ü Overlay·Î º¸Á¤ÇÏ°í, ÀÚ½Ä ·¹ÀÌ¾î°¡ ¾øÀ¸¸é ¸¸µç´Ù.
-        if (popupCanvas != null)
-        {
-            if (popupCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
-                popupCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            if (popupCanvas.sortingOrder < 5000)
-                popupCanvas.sortingOrder = 5000;
-
-            if (popupChildParent == null)
-            {
-                var layer = new GameObject("PopupLayer", typeof(RectTransform));
-                layer.transform.SetParent(popupCanvas.transform, false);
-                popupChildParent = layer.GetComponent<RectTransform>();
-                popupChildParent.anchorMin = Vector2.zero;
-                popupChildParent.anchorMax = Vector2.one;
-                popupChildParent.offsetMin = Vector2.zero;
-                popupChildParent.offsetMax = Vector2.zero;
-            }
-            return;
-        }
-
-        // Àü¿ë Overlay Canvas¸¦ »ı¼º(DDOL)
-        var go = new GameObject("PopupCanvas(DDOL)");
-        DontDestroyOnLoad(go);
-        popupCanvas = go.AddComponent<Canvas>();
-        popupCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        popupCanvas.sortingOrder = 5000; // ÃÖ»óÀ§
-
-        var scaler = go.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-
-        go.AddComponent<GraphicRaycaster>();
-
-        // Àü¿ë ÀÚ½Ä ·¹ÀÌ¾î »ı¼º
-        var childLayer = new GameObject("PopupLayer", typeof(RectTransform));
-        childLayer.transform.SetParent(popupCanvas.transform, false);
-        popupChildParent = childLayer.GetComponent<RectTransform>();
-        popupChildParent.anchorMin = Vector2.zero;
-        popupChildParent.anchorMax = Vector2.one;
-        popupChildParent.offsetMin = Vector2.zero;
-        popupChildParent.offsetMax = Vector2.zero;
-    }
-
-    async Task TryDequeueAndShow()
-    {
-        if (_showing) return;
-        _showing = true;
-
-        while (queue.Count > 0)
-        {
-            var (msg, ok, cancel, tcs) = queue.Dequeue();
-
-            if (_active == null)
-            {
-                // ºÎ¸ğ È®º¸(Àü¿ë ·¹ÀÌ¾î°¡ ÀÖÀ¸¸é ±× ¾Æ·¡, ¾øÀ¸¸é Canvas ·çÆ®)
-                EnsureCanvas();
-                var parent = (popupChildParent != null)
-                                    ? popupChildParent
-                                    : (popupCanvas.transform as RectTransform);
-                
-                _active = Instantiate(confirmationPrefab, parent); // Àü¿ë ·¹ÀÌ¾î/Canvas ¾Æ·¡¿¡ »ı¼º
-                (_active.transform as RectTransform).SetAsLastSibling(); // Ç×»ó ¸Ç À§·Î
-                
-                                // ¹æ¾îÀû È°¼ºÈ­ ¹× Á¤·Ä º¸Àå
-                                if (!_active.gameObject.activeInHierarchy)
-                    _active.gameObject.SetActive(true);
-                var c = _active.GetComponentInParent<Canvas>();
-                                if (c != null && c.sortingOrder < 5000)
-                    c.sortingOrder = 5000;
-            }
-
-            bool showCancel = !string.IsNullOrEmpty(cancel);  // cancelÀÌ ºñ¸é OK-only
-            // ¸ğ´Ş ÁøÀÔ/ÇØÁ¦
-            ModalDepth++;
-            bool result = await _active.Show(msg, ok, cancel, showCancel); // ÆË¾÷ Á¾·á±îÁö ´ë±â
-            ModalDepth--;
-            tcs.TrySetResult(result);
-        }
-
-        _showing = false;
-    }
-
-    public async Task<bool> ConfirmRetreatAsync(string message, float successChance01)    //Å»Ãâ Àü¿ë ÆË¾÷
-    {
-        EnsureCanvas();
-        var parent = (popupChildParent != null)
-                   ? popupChildParent
-                   : (popupCanvas.transform as RectTransform);
-
-        var inst = Instantiate(retreatPrefab, parent);
-        (inst.transform as RectTransform).SetAsLastSibling();
-        if (!inst.gameObject.activeInHierarchy) inst.gameObject.SetActive(true);
-
-        // ¸ğ´Ş ÁøÀÔ/ÇØÁ¦
-        ModalDepth++;
-        bool ok = await inst.ShowAsync(message, successChance01);
-        ModalDepth--;
-        Destroy(inst.gameObject);
-        return ok;
-    }
-}
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using UnityEngine.UIElements;
+
+public class PopupManager : MonoBehaviour
+{
+    public static PopupManager Instance { get; private set; }
+    [SerializeField] private Canvas popupCanvas; // ì”¬ì˜ ê³µìš© Canvasë¥¼ ë“œë˜ê·¸í•´ë‘˜ ìˆ˜ ìˆìŒ
+    [SerializeField] private RectTransform popupChildParent; // Canvas ì•„ë˜ ì „ìš© ë ˆì´ì–´(ìì‹)ì— ë¶™ì¼ ê²½ìš° ì§€ì •
+    [SerializeField] private RetreatConfirmPopup retreatPrefab;
+    [SerializeField] private ConfirmationPopup confirmationPrefab;
+
+
+    public static int ModalDepth { get; private set; } // ëª¨ë‹¬ ì¤‘ì²©
+    public static bool IsModalOpen => ModalDepth > 0;   // ëª¨ë‹¬ ì—¬ë¶€
+    readonly Queue<(string msg,string ok, string cancel,
+                    TaskCompletionSource<bool> tcs)> queue
+        = new Queue<(string, string, string, TaskCompletionSource<bool>)>();
+
+    ConfirmationPopup _active;
+    bool _showing;
+
+    void Awake()
+    {
+        if (Instance != null) { Destroy(gameObject); return; }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+
+        EnsureEventSystem();
+        EnsureCanvas(); // popupCanvasë¥¼ ë³´ì¥
+    }
+
+    public Task<bool> ConfirmAsync(string message, string ok = "í™•ì¸", string cancel = "ì·¨ì†Œ")
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        queue.Enqueue((message, ok, cancel, tcs));
+        _ = TryDequeueAndShow();
+        return tcs.Task;
+    }
+    void EnsureEventSystem()
+    {
+        if (FindObjectOfType<EventSystem>() == null)
+        {
+            var es = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+            DontDestroyOnLoad(es);
+        }
+    }
+
+    void EnsureCanvas()
+    {
+        // ì´ë¯¸ ë°°ì •ë˜ì–´ ìˆìœ¼ë©´ ìµœìƒë‹¨ Overlayë¡œ ë³´ì •í•˜ê³ , ìì‹ ë ˆì´ì–´ê°€ ì—†ìœ¼ë©´ ë§Œë“ ë‹¤.
+        if (popupCanvas != null)
+        {
+            if (popupCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+                popupCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            if (popupCanvas.sortingOrder < 5000)
+                popupCanvas.sortingOrder = 5000;
+
+            if (popupChildParent == null)
+            {
+                var layer = new GameObject("PopupLayer", typeof(RectTransform));
+                layer.transform.SetParent(popupCanvas.transform, false);
+                popupChildParent = layer.GetComponent<RectTransform>();
+                popupChildParent.anchorMin = Vector2.zero;
+                popupChildParent.anchorMax = Vector2.one;
+                popupChildParent.offsetMin = Vector2.zero;
+                popupChildParent.offsetMax = Vector2.zero;
+            }
+            return;
+        }
+
+        // ì „ìš© Overlay Canvasë¥¼ ìƒì„±(DDOL)
+        var go = new GameObject("PopupCanvas(DDOL)");
+        DontDestroyOnLoad(go);
+        popupCanvas = go.AddComponent<Canvas>();
+        popupCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        popupCanvas.sortingOrder = 5000; // ìµœìƒìœ„
+
+        var scaler = go.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = 0.5f;
+
+        go.AddComponent<GraphicRaycaster>();
+
+        // ì „ìš© ìì‹ ë ˆì´ì–´ ìƒì„±
+        var childLayer = new GameObject("PopupLayer", typeof(RectTransform));
+        childLayer.transform.SetParent(popupCanvas.transform, false);
+        popupChildParent = childLayer.GetComponent<RectTransform>();
+        popupChildParent.anchorMin = Vector2.zero;
+        popupChildParent.anchorMax = Vector2.one;
+        popupChildParent.offsetMin = Vector2.zero;
+        popupChildParent.offsetMax = Vector2.zero;
+    }
+
+    async Task TryDequeueAndShow()
+    {
+        if (_showing) return;
+        _showing = true;
+
+        while (queue.Count > 0)
+        {
+            var (msg, ok, cancel, tcs) = queue.Dequeue();
+
+            if (_active == null)
+            {
+                // ë¶€ëª¨ í™•ë³´(ì „ìš© ë ˆì´ì–´ê°€ ìˆìœ¼ë©´ ê·¸ ì•„ë˜, ì—†ìœ¼ë©´ Canvas ë£¨íŠ¸)
+                EnsureCanvas();
+                var parent = (popupChildParent != null)
+                                    ? popupChildParent
+                                    : (popupCanvas.transform as RectTransform);
+                
+                _active = Instantiate(confirmationPrefab, parent); // ì „ìš© ë ˆì´ì–´/Canvas ì•„ë˜ì— ìƒì„±
+                (_active.transform as RectTransform).SetAsLastSibling(); // í•­ìƒ ë§¨ ìœ„ë¡œ
+                
+                                // ë°©ì–´ì  í™œì„±í™” ë° ì •ë ¬ ë³´ì¥
+                                if (!_active.gameObject.activeInHierarchy)
+                    _active.gameObject.SetActive(true);
+                var c = _active.GetComponentInParent<Canvas>();
+                                if (c != null && c.sortingOrder < 5000)
+                    c.sortingOrder = 5000;
+            }
+
+            bool showCancel = !string.IsNullOrEmpty(cancel);  // cancelì´ ë¹„ë©´ OK-only
+            // ëª¨ë‹¬ ì§„ì…/í•´ì œ
+            ModalDepth++;
+            bool result = await _active.Show(msg, ok, cancel, showCancel); // íŒì—… ì¢…ë£Œê¹Œì§€ ëŒ€ê¸°
+            ModalDepth--;
+            tcs.TrySetResult(result);
+        }
+
+        _showing = false;
+    }
+
+    public async Task<bool> ConfirmRetreatAsync(string message, float successChance01)    //íƒˆì¶œ ì „ìš© íŒì—…
+    {
+        EnsureCanvas();
+        var parent = (popupChildParent != null)
+                   ? popupChildParent
+                   : (popupCanvas.transform as RectTransform);
+
+        var inst = Instantiate(retreatPrefab, parent);
+        (inst.transform as RectTransform).SetAsLastSibling();
+        if (!inst.gameObject.activeInHierarchy) inst.gameObject.SetActive(true);
+
+        // ëª¨ë‹¬ ì§„ì…/í•´ì œ
+        ModalDepth++;
+        bool ok = await inst.ShowAsync(message, successChance01);
+        ModalDepth--;
+        Destroy(inst.gameObject);
+        return ok;
+    }
+}

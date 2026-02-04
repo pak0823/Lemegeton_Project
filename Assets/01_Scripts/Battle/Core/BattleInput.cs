@@ -1,339 +1,339 @@
-using Project.UI;
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.Tilemaps;
-using System;
-
-public class BattleInput : MonoBehaviour
-{
-    public BattleManager battleManager;
-    private IGridProvider grid; // ÇÊµå Ãß°¡
-    private IBattleMapProvider mapProvider; // Ãß°¡
-
-    // Inspector
-    public Camera cam;
-    public LayerMask unitMask;
-
-    public GameSpeedController speedCtrl; // GameSpeedController ÇÒ´ç
-    public HudController hudCtrl;   //HUD ÄÁÆ®·Ñ·¯ ÇÒ´ç
-    public OptionsMenuUI optionsMenuUI; //¿É¼ÇÃ¢ ÇÒ´ç
-
-    // Events (¸Å´ÏÀú°¡ ±¸µ¶)
-
-    public event Action<Tilemap, Vector3Int> OnTileClick;
-    public event Action<Tilemap, Vector3Int> OnTileHover;
-
-    public event Action<BattleUnit> OnUnitClick;
-    public event Action<BattleUnit> OnUnitHover;
-    public event Action OnCancelKeyPress;
-    public event Action OnConfirmKeyPress;
-    public event Action OnEscapeKeyPress;
-
-    // ³»ºÎ º¯¼ö
-    private Vector3Int _lastHoverCell = new Vector3Int(int.MaxValue, int.MaxValue, 0);
-    private BattleUnit _lastHoverUnit = null;
-
-    // Å° ¹ÙÀÎµù
-    readonly (KeyCode key, int idx)[] speedBinds = new (KeyCode, int)[] {
-        (KeyCode.Alpha1, 0), (KeyCode.Alpha2, 1), (KeyCode.Alpha3, 2), (KeyCode.BackQuote, 3)
-    };
-    [SerializeField] private KeyCode battle_CancelKey = KeyCode.Q;
-    [SerializeField] private KeyCode battle_CurrentKey = KeyCode.E;
-    [SerializeField] private KeyCode battle_HudKey = KeyCode.Tab;
-    [SerializeField] private KeyCode battle_Escape = KeyCode.F1;    //µµÁÖ Å°
-
-    private int _rebindTries = 0; //Àç¹ÙÀÎµù ½Ãµµ Ä«¿îÅÍ(µğ¹ö±×¿ë)
-
-    #region Internal References
-    IBattleMapProvider provider;
-    #endregion
-
-    #region Unity Callbacks
-    void Awake()
-    {
-        if (cam == null) cam = Camera.main;
-
-    }
-
-    public void Initialize(BattleManager _battleManager, IGridProvider _grid, IBattleMapProvider _mapProvider)
-    {
-        this.battleManager = _battleManager;
-        this.grid = _grid;
-        this.mapProvider = _mapProvider;
-    }
-
-    void Update()
-    {
-        // Å°º¸µå ÀÔ·Â °¨Áö
-        HandleHotkeys();
-
-        // ¸¶¿ì½º À§Ä¡ °è»ê
-        Vector3 worldPos = cam.ScreenToWorldPoint(Input.mousePosition);
-        worldPos.z = 0;
-
-        // È£¹ö¸µ(Hover) °¨Áö ¹× ÀÌº¥Æ® ¹ß¼Û
-        HandleHover(worldPos);
-
-        // Å¬¸¯(Click) °¨Áö
-        HandleClick(worldPos);
-    }
-    #endregion
-
-    // ÁÂÇ¥ º¯È¯ ÇïÆÛ ÇÔ¼ö
-    // BattleGridManager -> Tilemap -> WorldToCell ¼ø¼­·Î Á¢±Ù
-    private bool TryGetMapAndCell(Vector3 worldPos, out Tilemap outMap, out Vector3Int outCell)
-    {
-        outMap = null;
-        outCell = default;
-
-        if (grid == null) return false;
-
-        // 1. ÇÃ·¹ÀÌ¾î ¸Ê ¸ÕÀú Ã¼Å©
-        Tilemap pMap = grid.GetMap(Team.Player);
-        if (pMap != null)
-        {
-            Vector3Int c = pMap.WorldToCell(worldPos);
-            if (pMap.HasTile(c))
-            {
-                outMap = pMap;
-                outCell = c;
-                return true;
-            }
-        }
-
-        // 2. Àû ¸Ê Ã¼Å© (ÇÃ·¹ÀÌ¾î ¸Ê¿¡ ¾øÀ¸¸é)
-        Tilemap eMap = grid.GetMap(Team.Enemy);
-        if (eMap != null)
-        {
-            Vector3Int c = eMap.WorldToCell(worldPos);
-            if (eMap.HasTile(c))
-            {
-                outMap = eMap;
-                outCell = c;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    void HandleHover(Vector3 worldPos)
-    {
-        // À¯´Ö È£¹ö Ã¼Å©
-        var hit = Physics2D.OverlapCircle(worldPos, 0.1f, unitMask);
-        BattleUnit unit = hit ? hit.GetComponentInParent<BattleUnit>() : null;
-
-        if (unit != _lastHoverUnit)
-        {
-            _lastHoverUnit = unit;
-            OnUnitHover?.Invoke(unit); // À¯´Ö È£¹ö ÀÌº¥Æ® ¹ß»ç
-        }
-
-        // ¸Ê Á¤º¸±îÁö ÇÔ²² È£¹ö¸µ Ã¼Å©
-        if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
-        {
-            if (cell != _lastHoverCell) // ¸ÊÀÌ ¹Ù²î´Â °æ¿ì´Â µå¹«´Ï ¼¿ º¯°æ¸¸ Ã¼Å©ÇØµµ ÃæºĞ
-            {
-                _lastHoverCell = cell;
-                OnTileHover?.Invoke(map, cell); // ¡Ú Map Àü´Ş
-            }
-        }
-    }
-
-    void HandleClick(Vector3 worldPos)
-    {
-        // ÁÂÅ¬¸¯ (0¹ø ¹öÆ°)
-        if (Input.GetMouseButtonDown(0))
-        {
-            // 1. À¯´Ö Å¬¸¯ ¿ì¼± ÆÇÁ¤
-            if (_lastHoverUnit != null)
-            {
-                OnUnitClick?.Invoke(_lastHoverUnit);
-                return; // À¯´Ö Å¬¸¯ÇßÀ¸¸é Å¸ÀÏ Å¬¸¯Àº ¹«½Ã
-            }
-
-            // 2. Å¸ÀÏ Å¬¸¯ ÆÇÁ¤
-            if (grid != null)
-            {
-                if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
-                {
-                    OnTileClick?.Invoke(map, cell); // Map Àü´Ş
-                }
-            }
-        }
-
-        // ¿ìÅ¬¸¯ (Ãë¼Ò)
-        if (Input.GetMouseButtonDown(1))
-        {
-            OnCancelKeyPress?.Invoke();
-        }
-    }
-
-    void HandleHotkeys()
-    {
-        // Ãë¼Ò Å°
-        if (Input.GetKeyDown(battle_CancelKey) || Input.GetKeyDown(KeyCode.Escape))
-        {
-            OnCancelKeyPress?.Invoke();
-        }
-
-        // È®Á¤ Å°
-        if (Input.GetKeyDown(battle_CurrentKey) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
-        {
-            OnConfirmKeyPress?.Invoke();
-        }
-        // µµÁÖ Å°
-        if (Input.GetKeyDown(battle_Escape))
-        {
-            OnEscapeKeyPress?.Invoke();
-        }
-
-        // ÅÇ Å° (HUD Åä±Û) - ÀÌ°Ç ¿©±â¼­ Ã³¸®ÇØµµ ¹«¹æ
-        if (Input.GetKeyDown(KeyCode.Tab))
-        {
-            hudCtrl?.Toggle();
-        }
-
-        // ¼ıÀÚ Å° (¹è¼Ó)
-        for (int i = 0; i < speedBinds.Length; i++)
-        {
-            if (Input.GetKeyDown(speedBinds[i].key))
-            {
-                speedCtrl.SetSpeedIndex(speedBinds[i].idx);
-            }
-        }
-    }
-
-
-    bool EnsureProviders()
-    {
-        // provider + ±×°¡ Á¦°øÇÏ´Â Floor Å¸ÀÏ¸Ê + Ä«¸Ş¶ó°¡ ÁØºñµÆ´ÂÁö È®ÀÎ
-        bool ok = (provider != null
-                           && provider.PlayerFloor != null
-                           && provider.EnemyFloor != null
-                           && cam != null);
-        if (ok) return true;
-
-        // provider ÀçÈ¹µæ (ÇöÀç ±¸Á¶¿Í µ¿ÀÏÇÑ °æ·Î·Î)
-        if (provider == null)
-            provider = BattleMapManager.Instance as IBattleMapProvider
-                                   ?? FindObjectOfType<BattleMapManager>(true);
-
-        // Ä«¸Ş¶ó ÀçÈ¹µæ
-        if (cam == null) cam = Camera.main;
-
-        _rebindTries++;
-        if (_rebindTries == 1 || _rebindTries % 60 == 0)
-        {
-            var pf = provider != null ? provider.PlayerFloor != null : false;
-            var ef = provider != null ? provider.EnemyFloor != null : false;
-            Debug.Log($"[BattleInput] Rebind #{_rebindTries} -> provider:{provider != null}, PF:{pf}, EF:{ef}, cam:{cam != null}");
-        }
-
-        return (provider != null
-                && provider.PlayerFloor != null
-                && provider.EnemyFloor != null
-                && cam != null);
-    }
-
-    public void RebindProviders()
-    {
-        _rebindTries = 0;     // ·Î±× ½ºÆÔ ¹æÁö
-        EnsureProviders();    // Áï½Ã 1È¸ Àç¹ÙÀÎµù ½Ãµµ
-    }
-
-    #region Input Handlers
-    void HandleGameSpeedToggle()
-    {
-        // ¸ğ´Ş ÁßÀÌ¸é ¼Óµµ Åä±Ûµµ ºñÈ°¼º
-        if (PopupManager.IsModalOpen) return;
-        for (int i = 0; i < speedBinds.Length; i++)
-        {
-            var (key, idx) = speedBinds[i];
-            if (Input.GetKeyDown(key))
-            {
-                speedCtrl?.SetSpeedIndex(idx);
-                break;
-            }
-        }
-    }
-
-    //void HandleMouseInput()
-    //{
-    //    if (PopupManager.IsModalOpen) return;
-        
-    //    if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-    //        return;
-
-    //    if (!Input.GetMouseButtonDown(0)) return;
-
-    //    hudCtrl?.Show();    //HUD°¡ ²¨Áø »óÅÂ¿¡¼­ ¸¶¿ì½º Å¬¸¯ÀÌ È®ÀÎµÉ ½Ã ÄÑÁü
-
-    //    // ½ºÅ³ Å¸°ÙÆÃ(ÇÃ·¹ÀÌ¾î ÅÏ + Targeting + ½ºÅ³ ¼±ÅÃµÊ) ÁßÀÌ¸é ·¹°Å½Ã ¿ìÈ¸
-    //    bool canTargetSkill = (battle.IsPlayerTurn && battle.IsTargeting && battle.currentSkillSO != null);
-    //    if (canTargetSkill) return;
-
-    //    Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
-    //    world.z = 0f;
-
-    //    // 1) À¯´ÖºÎÅÍ Ã¼Å© (´ÜÀÏ ´ë»ó Å¬¸¯ ¿ì¼±)
-    //    var hit = Physics2D.OverlapCircle(world, 0.1f, unitMask);
-    //    if (hit?.TryGetComponent(out BattleUnit unit) ?? false)
-    //    {
-    //        battle?.OnUnitClicked(unit);
-    //        return;
-    //    }
-
-    //    // 2) Å¸ÀÏ Å¬¸¯ ¡æ ¿ì¼±¼øÀ§: Àû¸Ê(Å¸°ÔÆÃ) ¡æ ¾Æ±º¸Ê(ÀÌµ¿)
-    //    if (TryCell(provider.EnemyFloor, world, out var enemyCell))
-    //    {
-    //        battle?.OnTileClicked(provider.EnemyFloor, enemyCell);
-    //        return;
-    //    }
-
-    //    if (TryCell(provider.PlayerFloor, world, out var playerCell))
-    //    {
-    //        battle?.OnTileClicked(provider.PlayerFloor, playerCell);
-    //        return;
-    //    }
-    //}
-    #endregion
-
-    bool HandleHudToggleEarly()
-    {
-        if (PopupManager.IsModalOpen) return true;
-
-        // Tab Å°·Î Åä±Û
-        if (Input.GetKeyDown(battle_HudKey))
-        {
-            hudCtrl?.Toggle();
-            return true; // °°Àº ÇÁ·¹ÀÓ¿¡ ´Ù¸¥ ÀÔ·Â ¼Òºñ ¹æÁö
-        }
-
-        // 2) HUD°¡ ²¨Á®ÀÖÀ» ¶§ ¾Æ¹« Å°/¸¶¿ì½º ¹öÆ° ÀÔ·ÂÀ¸·Î Áï½Ã º¹±Í
-        if (hudCtrl != null && !hudCtrl.IsVisible)
-        {
-            if (Input.GetKeyDown(battle_HudKey))
-            {
-                return true;
-            }
-            // anyKeyDownÀº Å° ¶Ç´Â ¸¶¿ì½º ¹öÆ° ´­¸²¿¡ ¹İÀÀ(½ºÅ©·Ñ/ÀÌµ¿ Á¦¿Ü)
-            if (Input.anyKeyDown)
-            {
-                hudCtrl.Show();
-                return true; // °°Àº ÇÁ·¹ÀÓ ´Ù¸¥ ÀÔ·Â ¸·À½
-            }
-
-        }
-
-        return false;
-    }
-
-    #region Helper
-    bool TryCell(Tilemap map, Vector3 world, out Vector3Int cell)
-    {
-        cell = map.WorldToCell(world);
-        return map.cellBounds.Contains(cell) && map.HasTile(cell);
-    }
-    #endregion
-}
+using Project.UI;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.Tilemaps;
+using System;
+
+public class BattleInput : MonoBehaviour
+{
+    public BattleManager battleManager;
+    private IGridProvider grid; // í•„ë“œ ì¶”ê°€
+    private IBattleMapProvider mapProvider; // ì¶”ê°€
+
+    // Inspector
+    public Camera cam;
+    public LayerMask unitMask;
+
+    public GameSpeedController speedCtrl; // GameSpeedController í• ë‹¹
+    public HudController hudCtrl;   //HUD ì»¨íŠ¸ë¡¤ëŸ¬ í• ë‹¹
+    public OptionsMenuUI optionsMenuUI; //ì˜µì…˜ì°½ í• ë‹¹
+
+    // Events (ë§¤ë‹ˆì €ê°€ êµ¬ë…)
+
+    public event Action<Tilemap, Vector3Int> OnTileClick;
+    public event Action<Tilemap, Vector3Int> OnTileHover;
+
+    public event Action<BattleUnit> OnUnitClick;
+    public event Action<BattleUnit> OnUnitHover;
+    public event Action OnCancelKeyPress;
+    public event Action OnConfirmKeyPress;
+    public event Action OnEscapeKeyPress;
+
+    // ë‚´ë¶€ ë³€ìˆ˜
+    private Vector3Int _lastHoverCell = new Vector3Int(int.MaxValue, int.MaxValue, 0);
+    private BattleUnit _lastHoverUnit = null;
+
+    // í‚¤ ë°”ì¸ë”©
+    readonly (KeyCode key, int idx)[] speedBinds = new (KeyCode, int)[] {
+        (KeyCode.Alpha1, 0), (KeyCode.Alpha2, 1), (KeyCode.Alpha3, 2), (KeyCode.BackQuote, 3)
+    };
+    [SerializeField] private KeyCode battle_CancelKey = KeyCode.Q;
+    [SerializeField] private KeyCode battle_CurrentKey = KeyCode.E;
+    [SerializeField] private KeyCode battle_HudKey = KeyCode.Tab;
+    [SerializeField] private KeyCode battle_Escape = KeyCode.F1;    //ë„ì£¼ í‚¤
+
+    private int _rebindTries = 0; //ì¬ë°”ì¸ë”© ì‹œë„ ì¹´ìš´í„°(ë””ë²„ê·¸ìš©)
+
+    #region Internal References
+    IBattleMapProvider provider;
+    #endregion
+
+    #region Unity Callbacks
+    void Awake()
+    {
+        if (cam == null) cam = Camera.main;
+
+    }
+
+    public void Initialize(BattleManager _battleManager, IGridProvider _grid, IBattleMapProvider _mapProvider)
+    {
+        this.battleManager = _battleManager;
+        this.grid = _grid;
+        this.mapProvider = _mapProvider;
+    }
+
+    void Update()
+    {
+        // í‚¤ë³´ë“œ ì…ë ¥ ê°ì§€
+        HandleHotkeys();
+
+        // ë§ˆìš°ìŠ¤ ìœ„ì¹˜ ê³„ì‚°
+        Vector3 worldPos = cam.ScreenToWorldPoint(Input.mousePosition);
+        worldPos.z = 0;
+
+        // í˜¸ë²„ë§(Hover) ê°ì§€ ë° ì´ë²¤íŠ¸ ë°œì†¡
+        HandleHover(worldPos);
+
+        // í´ë¦­(Click) ê°ì§€
+        HandleClick(worldPos);
+    }
+    #endregion
+
+    // ì¢Œí‘œ ë³€í™˜ í—¬í¼ í•¨ìˆ˜
+    // BattleGridManager -> Tilemap -> WorldToCell ìˆœì„œë¡œ ì ‘ê·¼
+    private bool TryGetMapAndCell(Vector3 worldPos, out Tilemap outMap, out Vector3Int outCell)
+    {
+        outMap = null;
+        outCell = default;
+
+        if (grid == null) return false;
+
+        // 1. í”Œë ˆì´ì–´ ë§µ ë¨¼ì € ì²´í¬
+        Tilemap pMap = grid.GetMap(Team.Player);
+        if (pMap != null)
+        {
+            Vector3Int c = pMap.WorldToCell(worldPos);
+            if (pMap.HasTile(c))
+            {
+                outMap = pMap;
+                outCell = c;
+                return true;
+            }
+        }
+
+        // 2. ì  ë§µ ì²´í¬ (í”Œë ˆì´ì–´ ë§µì— ì—†ìœ¼ë©´)
+        Tilemap eMap = grid.GetMap(Team.Enemy);
+        if (eMap != null)
+        {
+            Vector3Int c = eMap.WorldToCell(worldPos);
+            if (eMap.HasTile(c))
+            {
+                outMap = eMap;
+                outCell = c;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void HandleHover(Vector3 worldPos)
+    {
+        // ìœ ë‹› í˜¸ë²„ ì²´í¬
+        var hit = Physics2D.OverlapCircle(worldPos, 0.1f, unitMask);
+        BattleUnit unit = hit ? hit.GetComponentInParent<BattleUnit>() : null;
+
+        if (unit != _lastHoverUnit)
+        {
+            _lastHoverUnit = unit;
+            OnUnitHover?.Invoke(unit); // ìœ ë‹› í˜¸ë²„ ì´ë²¤íŠ¸ ë°œì‚¬
+        }
+
+        // ë§µ ì •ë³´ê¹Œì§€ í•¨ê»˜ í˜¸ë²„ë§ ì²´í¬
+        if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
+        {
+            if (cell != _lastHoverCell) // ë§µì´ ë°”ë€ŒëŠ” ê²½ìš°ëŠ” ë“œë¬´ë‹ˆ ì…€ ë³€ê²½ë§Œ ì²´í¬í•´ë„ ì¶©ë¶„
+            {
+                _lastHoverCell = cell;
+                OnTileHover?.Invoke(map, cell); // â˜… Map ì „ë‹¬
+            }
+        }
+    }
+
+    void HandleClick(Vector3 worldPos)
+    {
+        // ì¢Œí´ë¦­ (0ë²ˆ ë²„íŠ¼)
+        if (Input.GetMouseButtonDown(0))
+        {
+            // 1. ìœ ë‹› í´ë¦­ ìš°ì„  íŒì •
+            if (_lastHoverUnit != null)
+            {
+                OnUnitClick?.Invoke(_lastHoverUnit);
+                return; // ìœ ë‹› í´ë¦­í–ˆìœ¼ë©´ íƒ€ì¼ í´ë¦­ì€ ë¬´ì‹œ
+            }
+
+            // 2. íƒ€ì¼ í´ë¦­ íŒì •
+            if (grid != null)
+            {
+                if (TryGetMapAndCell(worldPos, out Tilemap map, out Vector3Int cell))
+                {
+                    OnTileClick?.Invoke(map, cell); // Map ì „ë‹¬
+                }
+            }
+        }
+
+        // ìš°í´ë¦­ (ì·¨ì†Œ)
+        if (Input.GetMouseButtonDown(1))
+        {
+            OnCancelKeyPress?.Invoke();
+        }
+    }
+
+    void HandleHotkeys()
+    {
+        // ì·¨ì†Œ í‚¤
+        if (Input.GetKeyDown(battle_CancelKey) || Input.GetKeyDown(KeyCode.Escape))
+        {
+            OnCancelKeyPress?.Invoke();
+        }
+
+        // í™•ì • í‚¤
+        if (Input.GetKeyDown(battle_CurrentKey) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
+        {
+            OnConfirmKeyPress?.Invoke();
+        }
+        // ë„ì£¼ í‚¤
+        if (Input.GetKeyDown(battle_Escape))
+        {
+            OnEscapeKeyPress?.Invoke();
+        }
+
+        // íƒ­ í‚¤ (HUD í† ê¸€) - ì´ê±´ ì—¬ê¸°ì„œ ì²˜ë¦¬í•´ë„ ë¬´ë°©
+        if (Input.GetKeyDown(KeyCode.Tab))
+        {
+            hudCtrl?.Toggle();
+        }
+
+        // ìˆ«ì í‚¤ (ë°°ì†)
+        for (int i = 0; i < speedBinds.Length; i++)
+        {
+            if (Input.GetKeyDown(speedBinds[i].key))
+            {
+                speedCtrl.SetSpeedIndex(speedBinds[i].idx);
+            }
+        }
+    }
+
+
+    bool EnsureProviders()
+    {
+        // provider + ê·¸ê°€ ì œê³µí•˜ëŠ” Floor íƒ€ì¼ë§µ + ì¹´ë©”ë¼ê°€ ì¤€ë¹„ëëŠ”ì§€ í™•ì¸
+        bool ok = (provider != null
+                           && provider.PlayerFloor != null
+                           && provider.EnemyFloor != null
+                           && cam != null);
+        if (ok) return true;
+
+        // provider ì¬íšë“ (í˜„ì¬ êµ¬ì¡°ì™€ ë™ì¼í•œ ê²½ë¡œë¡œ)
+        if (provider == null)
+            provider = BattleMapManager.Instance as IBattleMapProvider
+                                   ?? FindObjectOfType<BattleMapManager>(true);
+
+        // ì¹´ë©”ë¼ ì¬íšë“
+        if (cam == null) cam = Camera.main;
+
+        _rebindTries++;
+        if (_rebindTries == 1 || _rebindTries % 60 == 0)
+        {
+            var pf = provider != null ? provider.PlayerFloor != null : false;
+            var ef = provider != null ? provider.EnemyFloor != null : false;
+            Debug.Log($"[BattleInput] Rebind #{_rebindTries} -> provider:{provider != null}, PF:{pf}, EF:{ef}, cam:{cam != null}");
+        }
+
+        return (provider != null
+                && provider.PlayerFloor != null
+                && provider.EnemyFloor != null
+                && cam != null);
+    }
+
+    public void RebindProviders()
+    {
+        _rebindTries = 0;     // ë¡œê·¸ ìŠ¤íŒ¸ ë°©ì§€
+        EnsureProviders();    // ì¦‰ì‹œ 1íšŒ ì¬ë°”ì¸ë”© ì‹œë„
+    }
+
+    #region Input Handlers
+    void HandleGameSpeedToggle()
+    {
+        // ëª¨ë‹¬ ì¤‘ì´ë©´ ì†ë„ í† ê¸€ë„ ë¹„í™œì„±
+        if (PopupManager.IsModalOpen) return;
+        for (int i = 0; i < speedBinds.Length; i++)
+        {
+            var (key, idx) = speedBinds[i];
+            if (Input.GetKeyDown(key))
+            {
+                speedCtrl?.SetSpeedIndex(idx);
+                break;
+            }
+        }
+    }
+
+    //void HandleMouseInput()
+    //{
+    //    if (PopupManager.IsModalOpen) return;
+        
+    //    if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+    //        return;
+
+    //    if (!Input.GetMouseButtonDown(0)) return;
+
+    //    hudCtrl?.Show();    //HUDê°€ êº¼ì§„ ìƒíƒœì—ì„œ ë§ˆìš°ìŠ¤ í´ë¦­ì´ í™•ì¸ë  ì‹œ ì¼œì§
+
+    //    // ìŠ¤í‚¬ íƒ€ê²ŸíŒ…(í”Œë ˆì´ì–´ í„´ + Targeting + ìŠ¤í‚¬ ì„ íƒë¨) ì¤‘ì´ë©´ ë ˆê±°ì‹œ ìš°íšŒ
+    //    bool canTargetSkill = (battle.IsPlayerTurn && battle.IsTargeting && battle.currentSkillSO != null);
+    //    if (canTargetSkill) return;
+
+    //    Vector3 world = cam.ScreenToWorldPoint(Input.mousePosition);
+    //    world.z = 0f;
+
+    //    // 1) ìœ ë‹›ë¶€í„° ì²´í¬ (ë‹¨ì¼ ëŒ€ìƒ í´ë¦­ ìš°ì„ )
+    //    var hit = Physics2D.OverlapCircle(world, 0.1f, unitMask);
+    //    if (hit?.TryGetComponent(out BattleUnit unit) ?? false)
+    //    {
+    //        battle?.OnUnitClicked(unit);
+    //        return;
+    //    }
+
+    //    // 2) íƒ€ì¼ í´ë¦­ â†’ ìš°ì„ ìˆœìœ„: ì ë§µ(íƒ€ê²ŒíŒ…) â†’ ì•„êµ°ë§µ(ì´ë™)
+    //    if (TryCell(provider.EnemyFloor, world, out var enemyCell))
+    //    {
+    //        battle?.OnTileClicked(provider.EnemyFloor, enemyCell);
+    //        return;
+    //    }
+
+    //    if (TryCell(provider.PlayerFloor, world, out var playerCell))
+    //    {
+    //        battle?.OnTileClicked(provider.PlayerFloor, playerCell);
+    //        return;
+    //    }
+    //}
+    #endregion
+
+    bool HandleHudToggleEarly()
+    {
+        if (PopupManager.IsModalOpen) return true;
+
+        // Tab í‚¤ë¡œ í† ê¸€
+        if (Input.GetKeyDown(battle_HudKey))
+        {
+            hudCtrl?.Toggle();
+            return true; // ê°™ì€ í”„ë ˆì„ì— ë‹¤ë¥¸ ì…ë ¥ ì†Œë¹„ ë°©ì§€
+        }
+
+        // 2) HUDê°€ êº¼ì ¸ìˆì„ ë•Œ ì•„ë¬´ í‚¤/ë§ˆìš°ìŠ¤ ë²„íŠ¼ ì…ë ¥ìœ¼ë¡œ ì¦‰ì‹œ ë³µê·€
+        if (hudCtrl != null && !hudCtrl.IsVisible)
+        {
+            if (Input.GetKeyDown(battle_HudKey))
+            {
+                return true;
+            }
+            // anyKeyDownì€ í‚¤ ë˜ëŠ” ë§ˆìš°ìŠ¤ ë²„íŠ¼ ëˆŒë¦¼ì— ë°˜ì‘(ìŠ¤í¬ë¡¤/ì´ë™ ì œì™¸)
+            if (Input.anyKeyDown)
+            {
+                hudCtrl.Show();
+                return true; // ê°™ì€ í”„ë ˆì„ ë‹¤ë¥¸ ì…ë ¥ ë§‰ìŒ
+            }
+
+        }
+
+        return false;
+    }
+
+    #region Helper
+    bool TryCell(Tilemap map, Vector3 world, out Vector3Int cell)
+    {
+        cell = map.WorldToCell(world);
+        return map.cellBounds.Contains(cell) && map.HasTile(cell);
+    }
+    #endregion
+}

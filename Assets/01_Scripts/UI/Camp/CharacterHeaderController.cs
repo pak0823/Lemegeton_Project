@@ -1,74 +1,74 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-using static CraftHeaderController;
-
-public class CharacterHeaderController : MonoBehaviour
-{
-    [Header("Buttons")]
-    [SerializeField] private Button arrowLeftButton;
-    [SerializeField] private Button arrowRightButton;
-
-    [Header("Character Selection")]
-    public List<Toggle> charToggles = new List<Toggle>();
-    private int currentCharIndex = 0;
-
-
-    private void Start()
-    {
-        // ≈◊Ω∫∆ÆøÎ: ∞≠¡¶∑Œ √ ±‚»≠ Ω««‡«ÿ∫∏±‚
-        Initialize((idx) => Debug.Log($"ƒ≥∏Ø≈Õ ∫Ø∞Êµ : {idx}"));
-    }
-    public void Initialize(System.Action<int> onCharChanged)
-    {
-        for (int i = 0; i < charToggles.Count; i++)
-        {
-            int index = i;
-
-            charToggles[i].onValueChanged.AddListener((isOn) => {
-                if (isOn)
-                {
-                    // ≈¨∏Ø Ω√ «ˆ¿Á ¿ßƒ° µø±‚»≠
-                    currentCharIndex = index;
-                    onCharChanged?.Invoke(index);
-                }
-            });
-        }
-
-        // √π π¯¬∞ ƒ≥∏Ø≈Õ ∞≠¡¶ º±≈√ ∑Œ¡˜
-        if (charToggles.Count > 0)
-        {
-            if (charToggles[0].isOn)
-            {
-                currentCharIndex = 0;
-                onCharChanged?.Invoke(0); // ∞≠¡¶ »£√‚
-            }
-            else
-            {
-                charToggles[0].isOn = true; // ≤®¡Æ ¿÷æ˙¥Ÿ∏È ƒ—¡ˆ∏Èº≠ ¿Ã∫•∆Æ πﬂª˝
-            }
-        }
-            
-
-        if (arrowLeftButton)
-        {
-            arrowLeftButton.onClick.AddListener(() => SelectNextCharacter(-1));
-        }
-
-        if (arrowRightButton)
-        {
-            arrowRightButton.onClick.AddListener(() => SelectNextCharacter(1));
-        }
-    }
-
-    public void SelectNextCharacter(int direction)
-    {
-        if (charToggles.Count == 0) return;
-
-        int nextIndex = Mathf.Clamp(currentCharIndex + direction, 0, charToggles.Count - 1);
-        if (nextIndex != currentCharIndex)
-        {
-            charToggles[nextIndex].isOn = true;
-        }
-    }
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using static CraftHeaderController;
+
+public class CharacterHeaderController : MonoBehaviour
+{
+    [Header("Buttons")]
+    [SerializeField] private Button arrowLeftButton;
+    [SerializeField] private Button arrowRightButton;
+
+    [Header("Character Selection")]
+    public List<Toggle> charToggles = new List<Toggle>();
+    private int currentCharIndex = 0;
+
+
+    private void Start()
+    {
+        // ÌÖåÏä§Ìä∏Ïö©: Í∞ïÏ†úÎ°ú Ï¥àÍ∏∞Ìôî Ïã§ÌñâÌï¥Î≥¥Í∏∞
+        Initialize((idx) => Debug.Log($"Ï∫êÎ¶≠ÌÑ∞ Î≥ÄÍ≤ΩÎê®: {idx}"));
+    }
+    public void Initialize(System.Action<int> onCharChanged)
+    {
+        for (int i = 0; i < charToggles.Count; i++)
+        {
+            int index = i;
+
+            charToggles[i].onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    // ÌÅ¥Î¶≠ Ïãú ÌòÑÏû¨ ÏúÑÏπò ÎèôÍ∏∞Ìôî
+                    currentCharIndex = index;
+                    onCharChanged?.Invoke(index);
+                }
+            });
+        }
+
+        // Ï≤´ Î≤àÏß∏ Ï∫êÎ¶≠ÌÑ∞ Í∞ïÏ†ú ÏÑ†ÌÉù Î°úÏßÅ
+        if (charToggles.Count > 0)
+        {
+            if (charToggles[0].isOn)
+            {
+                currentCharIndex = 0;
+                onCharChanged?.Invoke(0); // Í∞ïÏ†ú Ìò∏Ï∂ú
+            }
+            else
+            {
+                charToggles[0].isOn = true; // Í∫ºÏ†∏ ÏûàÏóàÎã§Î©¥ ÏºúÏßÄÎ©¥ÏÑú Ïù¥Î≤§Ìä∏ Î∞úÏÉù
+            }
+        }
+            
+
+        if (arrowLeftButton)
+        {
+            arrowLeftButton.onClick.AddListener(() => SelectNextCharacter(-1));
+        }
+
+        if (arrowRightButton)
+        {
+            arrowRightButton.onClick.AddListener(() => SelectNextCharacter(1));
+        }
+    }
+
+    public void SelectNextCharacter(int direction)
+    {
+        if (charToggles.Count == 0) return;
+
+        int nextIndex = Mathf.Clamp(currentCharIndex + direction, 0, charToggles.Count - 1);
+        if (nextIndex != currentCharIndex)
+        {
+            charToggles[nextIndex].isOn = true;
+        }
+    }
 }

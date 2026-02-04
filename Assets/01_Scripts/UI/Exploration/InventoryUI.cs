@@ -1,56 +1,56 @@
-using UnityEngine;
-
-public class InventoryUI : MonoBehaviour
-{
-    public static InventoryUI Instance;
-    public InventorySlotUI[] uiSlots; // 12°³ ½½·ÔÀ» µå·¡±×ÇØ¼­ ³Ö¾î¶ó
-    public ItemLibrary itemLibrary; // ¾ÆÀÌÅÛ DB (ItemData Ã£±â¿ë)
-
-    private void Awake()
-    {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-        // ÀÚ½Ä ¿ÀºêÁ§Æ®µé InventorySlotUI¸¦ ¸ğµÎ Ã£¾Æ¼­ ÀÚµ¿ ÇÒ´ç
-        uiSlots = GetComponentsInChildren<InventorySlotUI>(true);
-
-        // ½½·Ô ÀÎµ¦½º ¼ø¼­´ë·Î Á¤·Ä (ÀÎ½ºÆåÅÍ¿¡¼­ ¼³Á¤ÇÑ slotIndex ±âÁØ)
-        System.Array.Sort(uiSlots, (a, b) => a.slotIndex.CompareTo(b.slotIndex));
-
-
-    }
-
-    private void Start()
-    {
-        // ½½·Ô °³¼ö°¡ maxSlots¿Í ÀÏÄ¡ÇÏ´ÂÁö È®ÀÎ
-        if (uiSlots.Length != InventoryManager.Instance.maxSlots)
-        {
-            Debug.LogWarning($"½½·Ô °³¼ö ºÒÀÏÄ¡! UI: {uiSlots.Length}, Data: {InventoryManager.Instance.maxSlots}");
-        }
-
-        // ¶óÀÌºê·¯¸® ÃÊ±âÈ­ (µñ¼Å³Ê¸® ºôµå)
-        if (itemLibrary != null) itemLibrary.Init();
-
-        InventoryManager.Instance.OnInventoryChanged += Refresh;
-        Refresh();
-    }
-
-    public void Refresh()
-    {
-        for (int i = 0; i < uiSlots.Length; i++)
-        {
-            var itemDataInManager = InventoryManager.Instance.slots[i];
-
-            if (itemDataInManager != null && itemLibrary != null)
-            {
-                ItemData dataSO = itemLibrary.GetItem(itemDataInManager.itemID);
-                // ½½·Ô UI¿¡ ÃÖ½Å µ¥ÀÌÅÍ °´Ã¼¸¦ Àü´ŞÇÏ¿© ÅØ½ºÆ®/¾ÆÀÌÄÜ °­Á¦ °»½Å
-                uiSlots[i].UpdateSlot(itemDataInManager, dataSO);
-            }
-            else
-            {
-                uiSlots[i].UpdateSlot(null, null);
-            }
-        }
-    }
+using UnityEngine;
+
+public class InventoryUI : MonoBehaviour
+{
+    public static InventoryUI Instance;
+    public InventorySlotUI[] uiSlots; // 12ê°œ ìŠ¬ë¡¯ì„ ë“œë˜ê·¸í•´ì„œ ë„£ì–´ë¼
+    public ItemLibrary itemLibrary; // ì•„ì´í…œ DB (ItemData ì°¾ê¸°ìš©)
+
+    private void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        // ìì‹ ì˜¤ë¸Œì íŠ¸ë“¤ InventorySlotUIë¥¼ ëª¨ë‘ ì°¾ì•„ì„œ ìë™ í• ë‹¹
+        uiSlots = GetComponentsInChildren<InventorySlotUI>(true);
+
+        // ìŠ¬ë¡¯ ì¸ë±ìŠ¤ ìˆœì„œëŒ€ë¡œ ì •ë ¬ (ì¸ìŠ¤í™í„°ì—ì„œ ì„¤ì •í•œ slotIndex ê¸°ì¤€)
+        System.Array.Sort(uiSlots, (a, b) => a.slotIndex.CompareTo(b.slotIndex));
+
+
+    }
+
+    private void Start()
+    {
+        // ìŠ¬ë¡¯ ê°œìˆ˜ê°€ maxSlotsì™€ ì¼ì¹˜í•˜ëŠ”ì§€ í™•ì¸
+        if (uiSlots.Length != InventoryManager.Instance.maxSlots)
+        {
+            Debug.LogWarning($"ìŠ¬ë¡¯ ê°œìˆ˜ ë¶ˆì¼ì¹˜! UI: {uiSlots.Length}, Data: {InventoryManager.Instance.maxSlots}");
+        }
+
+        // ë¼ì´ë¸ŒëŸ¬ë¦¬ ì´ˆê¸°í™” (ë”•ì…”ë„ˆë¦¬ ë¹Œë“œ)
+        if (itemLibrary != null) itemLibrary.Init();
+
+        InventoryManager.Instance.OnInventoryChanged += Refresh;
+        Refresh();
+    }
+
+    public void Refresh()
+    {
+        for (int i = 0; i < uiSlots.Length; i++)
+        {
+            var itemDataInManager = InventoryManager.Instance.slots[i];
+
+            if (itemDataInManager != null && itemLibrary != null)
+            {
+                ItemData dataSO = itemLibrary.GetItem(itemDataInManager.itemID);
+                // ìŠ¬ë¡¯ UIì— ìµœì‹  ë°ì´í„° ê°ì²´ë¥¼ ì „ë‹¬í•˜ì—¬ í…ìŠ¤íŠ¸/ì•„ì´ì½˜ ê°•ì œ ê°±ì‹ 
+                uiSlots[i].UpdateSlot(itemDataInManager, dataSO);
+            }
+            else
+            {
+                uiSlots[i].UpdateSlot(null, null);
+            }
+        }
+    }
 }

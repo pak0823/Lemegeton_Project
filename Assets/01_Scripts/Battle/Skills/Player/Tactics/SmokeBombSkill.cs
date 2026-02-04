@@ -1,206 +1,206 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Smoke Bomb", fileName = "SmokeBombSkill")]
-public class SmokeBombSkill : SkillAsset, ITargetMapProvider
-{
-    // ±âÁ¸ HostilityVisibility / AgilityBuff À¯Áö(È£È¯ ¸ñÀû)
-    public enum SmokeEffectMode
-    {
-        SmokeHiddenBuff,        // ½Å±Ô: ¿¬¸· Àº½Å(Å¸°Ù ºÒ°¡) ¹öÇÁ ºÎ¿©
-        AgilityBuff             // (¿É¼Ç) AGI ¹öÇÁ
-    }
-
-    [Header("VFX")]
-    [Tooltip("¿¬¸· Å¸ÀÏ¿¡ Ç¥½ÃÇÒ VFX ÇÁ¸®ÆÕ (ÆÄÆ¼Å¬/½ºÇÁ¶óÀÌÆ® µî)")]
-    public GameObject smokeVfxPrefab;
-    [Tooltip("Å¸ÀÏ ¼¾ÅÍ¿¡¼­ Y ¿ÀÇÁ¼Â(Ä«¸Ş¶ó °¢µµ/°¡·ÁÁü º¸Á¤)")]
-    public float vfxYOffset = 0f;
-    [Tooltip("Á¤·Ä ·¹ÀÌ¾î (SpriteRenderer/ParticleSystemRenderer¿¡ Àû¿ë)")]
-    public string vfxSortingLayer = "Effects";
-    [Tooltip("Á¤·Ä ¼ø¼­")]
-    public int vfxSortingOrder = 0;
-
-    [Header("Area")]
-    public AreaPreset areaPreset = AreaPreset.Single;
-
-    [Header("Smoke Settings")]
-    [Tooltip("½ÃÀüÀÚÀÇ ÅÏ ½ÃÀÛ ±âÁØ Áö¼Ó")]
-    public int durationCasterTurns = 2;
-
-    [Header("Effect Mode")]
-    [Tooltip("±âº»°ª: SmokeHiddenBuff (¿¬¸· ¾È¿¡ ÀÖ´Â µ¿¾È Å¸°Ù ºÒ°¡)")]
-    public SmokeEffectMode effectMode = SmokeEffectMode.SmokeHiddenBuff;
-
-    [Header("Smoke Hidden (New)")]
-    [Tooltip("¿¬¸· ¾È¿¡ ÀÖ´Â µ¿¾È ºÎ¿©ÇÒ ¹öÇÁ(ÀûÀÌ Å¸°ÙÀ¸·Î ÁöÁ¤ ºÒ°¡)")]
-    public UnitStateBuffId smokeHiddenBuffState = UnitStateBuffId.SmokeHidden;
-
-    [Header("Agility Buff (Optional)")]
-    [Tooltip("¿¬¸· Å¸ÀÏ¿¡ ¼­ ÀÖ´Â µ¿¾È Àû¿ëÇÒ AGI ¹è¼ö(¿¹: 1.7)")]
-    public float agiMultiplier = 1.7f;
-    [Tooltip("AGI ¹öÇÁ¿¡ »ç¿ëÇÒ ¹öÇÁ ID (StateStatModifierDB¿¡ Á¤ÀÇ)")]
-    public UnitStateBuffId agiBuffState = UnitStateBuffId.Smoke_AgiUp;
-
-    [Header("Targeting")]
-    public SkillTargetMode selectionMode = SkillTargetMode.Tile;
-
-    [Header("Training")]
-    public bool trainingUseOverride = false;
-    [Range(-1, 2)] public int routeForOverride = 0;
-    public int trainingCostRoute = 0;
-
-    public bool trainingEnableMpRegen = true;
-    [Range(-1, 2)] public int routeForMpRegen = 1;
-    [Range(0f, 1f)] public float trainingMpRegenRatio = 0.3f;
-
-    public bool trainingUseZoneAreaOverride = true;
-    [Range(-1, 2)] public int routeForZoneAreaOverride = 2;
-    public AreaPreset trainingZoneAreaPreset = AreaPreset.Ring;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = selectionMode; }
-#endif
-
-    void OnEnable()
-    {
-        targetMode = selectionMode;
-        power = 0f;
-        school = DamageSchool.Physical;
-        costResource = SkillCostResource.MP;
-    }
-
-    int GetRoute(BattleUnit caster)
-    {
-        if (!caster) return -1;
-        return caster.GetTrainingRouteIndex(this);
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOdd)
-    {
-        foreach (var c in AreaShapes.GetCells(originCell, areaPreset, false))
-            yield return c;
-    }
-
-    public Tilemap GetTargetMap(BattleManager bm, BattleUnit caster)
-    {
-        var prov = BattleMapManager.Instance;
-        if (prov == null) return null;
-        return (caster != null && caster.data.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // Å¸°Ù ¸ÊÀÌ ¾øÀ¸¸é ½ÇÇà ºÒ°¡
-        if (targetMap == null) yield break;
-
-        // °øÅë Å¸ÀÏ ½ºÅ³ Èå¸§ (¾Ö´Ï¸ŞÀÌ¼Ç -> ResolveOnTile È£Ãâ -> Äğ´Ù¿î/ÅÏÁ¾·á)
-        yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        if (!bm || !caster || !map) yield break;
-
-        var cells = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell)).ToList();
-        if (cells.Count == 0) yield break;
-
-        CreateSmokeZoneRuntime(bm, map, cells, originCell, caster, durationCasterTurns);
-
-        yield break;
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
-    {
-        if (!bm || !caster || target == null) yield break;
-        var map = target.CurrentMap;
-        if (!map) yield break;
-        yield return ResolveOnTile(bm, map, target.Cell, caster);
-    }
-
-    void CreateSmokeZoneRuntime(
-        BattleManager bm,
-        Tilemap map,
-        List<Vector3Int> cells,
-        Vector3Int centerCell,
-        BattleUnit caster,
-        int durationTurns)
-    {
-        var go = new GameObject("SmokeZoneRuntime");
-        var comp = go.AddComponent<SmokeZoneRuntime>();
-        go.transform.SetParent(bm.transform, false);
-
-
-        comp.Initialize(bm, map, cells, caster, durationTurns);
-
-        int route = GetRoute(caster);
-
-        // --- MP È¸º¹ ¿É¼Ç (ÁöÁ¤ ·çÆ®) ---
-        if (trainingEnableMpRegen &&
-            routeForMpRegen >= 0 &&
-            route == routeForMpRegen)
-        {
-            comp.enableMpRegen = true;
-            comp.mpRegenRatio = trainingMpRegenRatio;
-        }
-        else
-        {
-            comp.enableMpRegen = false;
-            comp.mpRegenRatio = 0f;
-        }
-
-        // --- Á¸ ¹üÀ§ ¿À¹ö¶óÀÌµå (ÁöÁ¤ ·çÆ®) ---
-        if (trainingUseZoneAreaOverride &&
-            routeForZoneAreaOverride >= 0 &&
-            route == routeForZoneAreaOverride)
-        {
-            var ringCells = AreaShapes.GetCells(
-                centerCell,
-                trainingZoneAreaPreset,
-                diagUseNEAxis: true
-            );
-            comp.OverrideAreaCells(ringCells);
-        }
-
-        // È¿°ú ¸ğµå ¼³Á¤ (SmokeHidden / HostilityVisibility / AgilityBuff)
-        comp.SetEffectMode(effectMode, smokeHiddenBuffState, agiBuffState, agiMultiplier);
-
-        // VFX ¹èÄ¡
-        comp.AttachVfx(smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder, caster.data.team);
-    }
-
-    public override int GetEffectiveCost(BattleUnit _caster)
-    {
-        int cost = base.GetEffectiveCost(_caster);
-        if (_caster == null) return cost;
-
-        int route = GetRoute(_caster);
-        if (trainingUseOverride &&
-            routeForOverride >= 0 &&
-            route == routeForOverride)
-        {
-            cost = Mathf.Max(0, trainingCostRoute);
-        }
-
-        return cost;
-    }
-
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/Skills/Common/Smoke Bomb", fileName = "SmokeBombSkill")]
+public class SmokeBombSkill : SkillAsset, ITargetMapProvider
+{
+    // ê¸°ì¡´ HostilityVisibility / AgilityBuff ìœ ì§€(í˜¸í™˜ ëª©ì )
+    public enum SmokeEffectMode
+    {
+        SmokeHiddenBuff,        // ì‹ ê·œ: ì—°ë§‰ ì€ì‹ (íƒ€ê²Ÿ ë¶ˆê°€) ë²„í”„ ë¶€ì—¬
+        AgilityBuff             // (ì˜µì…˜) AGI ë²„í”„
+    }
+
+    [Header("VFX")]
+    [Tooltip("ì—°ë§‰ íƒ€ì¼ì— í‘œì‹œí•  VFX í”„ë¦¬íŒ¹ (íŒŒí‹°í´/ìŠ¤í”„ë¼ì´íŠ¸ ë“±)")]
+    public GameObject smokeVfxPrefab;
+    [Tooltip("íƒ€ì¼ ì„¼í„°ì—ì„œ Y ì˜¤í”„ì…‹(ì¹´ë©”ë¼ ê°ë„/ê°€ë ¤ì§ ë³´ì •)")]
+    public float vfxYOffset = 0f;
+    [Tooltip("ì •ë ¬ ë ˆì´ì–´ (SpriteRenderer/ParticleSystemRendererì— ì ìš©)")]
+    public string vfxSortingLayer = "Effects";
+    [Tooltip("ì •ë ¬ ìˆœì„œ")]
+    public int vfxSortingOrder = 0;
+
+    [Header("Area")]
+    public AreaPreset areaPreset = AreaPreset.Single;
+
+    [Header("Smoke Settings")]
+    [Tooltip("ì‹œì „ìì˜ í„´ ì‹œì‘ ê¸°ì¤€ ì§€ì†")]
+    public int durationCasterTurns = 2;
+
+    [Header("Effect Mode")]
+    [Tooltip("ê¸°ë³¸ê°’: SmokeHiddenBuff (ì—°ë§‰ ì•ˆì— ìˆëŠ” ë™ì•ˆ íƒ€ê²Ÿ ë¶ˆê°€)")]
+    public SmokeEffectMode effectMode = SmokeEffectMode.SmokeHiddenBuff;
+
+    [Header("Smoke Hidden (New)")]
+    [Tooltip("ì—°ë§‰ ì•ˆì— ìˆëŠ” ë™ì•ˆ ë¶€ì—¬í•  ë²„í”„(ì ì´ íƒ€ê²Ÿìœ¼ë¡œ ì§€ì • ë¶ˆê°€)")]
+    public UnitStateBuffId smokeHiddenBuffState = UnitStateBuffId.SmokeHidden;
+
+    [Header("Agility Buff (Optional)")]
+    [Tooltip("ì—°ë§‰ íƒ€ì¼ì— ì„œ ìˆëŠ” ë™ì•ˆ ì ìš©í•  AGI ë°°ìˆ˜(ì˜ˆ: 1.7)")]
+    public float agiMultiplier = 1.7f;
+    [Tooltip("AGI ë²„í”„ì— ì‚¬ìš©í•  ë²„í”„ ID (StateStatModifierDBì— ì •ì˜)")]
+    public UnitStateBuffId agiBuffState = UnitStateBuffId.Smoke_AgiUp;
+
+    [Header("Targeting")]
+    public SkillTargetMode selectionMode = SkillTargetMode.Tile;
+
+    [Header("Training")]
+    public bool trainingUseOverride = false;
+    [Range(-1, 2)] public int routeForOverride = 0;
+    public int trainingCostRoute = 0;
+
+    public bool trainingEnableMpRegen = true;
+    [Range(-1, 2)] public int routeForMpRegen = 1;
+    [Range(0f, 1f)] public float trainingMpRegenRatio = 0.3f;
+
+    public bool trainingUseZoneAreaOverride = true;
+    [Range(-1, 2)] public int routeForZoneAreaOverride = 2;
+    public AreaPreset trainingZoneAreaPreset = AreaPreset.Ring;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = selectionMode; }
+#endif
+
+    void OnEnable()
+    {
+        targetMode = selectionMode;
+        power = 0f;
+        school = DamageSchool.Physical;
+        costResource = SkillCostResource.MP;
+    }
+
+    int GetRoute(BattleUnit caster)
+    {
+        if (!caster) return -1;
+        return caster.GetTrainingRouteIndex(this);
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOdd)
+    {
+        foreach (var c in AreaShapes.GetCells(originCell, areaPreset, false))
+            yield return c;
+    }
+
+    public Tilemap GetTargetMap(BattleManager bm, BattleUnit caster)
+    {
+        var prov = BattleMapManager.Instance;
+        if (prov == null) return null;
+        return (caster != null && caster.data.team == Team.Player) ? prov.PlayerFloor : prov.EnemyFloor;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // íƒ€ê²Ÿ ë§µì´ ì—†ìœ¼ë©´ ì‹¤í–‰ ë¶ˆê°€
+        if (targetMap == null) yield break;
+
+        // ê³µí†µ íƒ€ì¼ ìŠ¤í‚¬ íë¦„ (ì• ë‹ˆë©”ì´ì…˜ -> ResolveOnTile í˜¸ì¶œ -> ì¿¨ë‹¤ìš´/í„´ì¢…ë£Œ)
+        yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        if (!bm || !caster || !map) yield break;
+
+        var cells = GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell)).ToList();
+        if (cells.Count == 0) yield break;
+
+        CreateSmokeZoneRuntime(bm, map, cells, originCell, caster, durationCasterTurns);
+
+        yield break;
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        if (!bm || !caster || target == null) yield break;
+        var map = target.CurrentMap;
+        if (!map) yield break;
+        yield return ResolveOnTile(bm, map, target.Cell, caster);
+    }
+
+    void CreateSmokeZoneRuntime(
+        BattleManager bm,
+        Tilemap map,
+        List<Vector3Int> cells,
+        Vector3Int centerCell,
+        BattleUnit caster,
+        int durationTurns)
+    {
+        var go = new GameObject("SmokeZoneRuntime");
+        var comp = go.AddComponent<SmokeZoneRuntime>();
+        go.transform.SetParent(bm.transform, false);
+
+
+        comp.Initialize(bm, map, cells, caster, durationTurns);
+
+        int route = GetRoute(caster);
+
+        // --- MP íšŒë³µ ì˜µì…˜ (ì§€ì • ë£¨íŠ¸) ---
+        if (trainingEnableMpRegen &&
+            routeForMpRegen >= 0 &&
+            route == routeForMpRegen)
+        {
+            comp.enableMpRegen = true;
+            comp.mpRegenRatio = trainingMpRegenRatio;
+        }
+        else
+        {
+            comp.enableMpRegen = false;
+            comp.mpRegenRatio = 0f;
+        }
+
+        // --- ì¡´ ë²”ìœ„ ì˜¤ë²„ë¼ì´ë“œ (ì§€ì • ë£¨íŠ¸) ---
+        if (trainingUseZoneAreaOverride &&
+            routeForZoneAreaOverride >= 0 &&
+            route == routeForZoneAreaOverride)
+        {
+            var ringCells = AreaShapes.GetCells(
+                centerCell,
+                trainingZoneAreaPreset,
+                diagUseNEAxis: true
+            );
+            comp.OverrideAreaCells(ringCells);
+        }
+
+        // íš¨ê³¼ ëª¨ë“œ ì„¤ì • (SmokeHidden / HostilityVisibility / AgilityBuff)
+        comp.SetEffectMode(effectMode, smokeHiddenBuffState, agiBuffState, agiMultiplier);
+
+        // VFX ë°°ì¹˜
+        comp.AttachVfx(smokeVfxPrefab, vfxYOffset, vfxSortingLayer, vfxSortingOrder, caster.data.team);
+    }
+
+    public override int GetEffectiveCost(BattleUnit _caster)
+    {
+        int cost = base.GetEffectiveCost(_caster);
+        if (_caster == null) return cost;
+
+        int route = GetRoute(_caster);
+        if (trainingUseOverride &&
+            routeForOverride >= 0 &&
+            route == routeForOverride)
+        {
+            cost = Mathf.Max(0, trainingCostRoute);
+        }
+
+        return cost;
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

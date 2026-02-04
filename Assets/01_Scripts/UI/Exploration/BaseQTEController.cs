@@ -1,22 +1,22 @@
-using System;
-using UnityEngine;
-
-// ¸ğµç QTE ÄÁÆ®·Ñ·¯´Â ÀÌ Å¬·¡½º¸¦ »ó¼Ó¹Ş¾Æ¾ß ÇÔ.
-// Áï, ³ªÁß¿¡ ´Ù¸¥ À¯Çü QTE ¸¸µé ¶§µµ ÀÌ°Í¸¸ »ó¼Ó¹ŞÀ¸¸é ¸Å´ÏÀú ÄÚµå ¼öÁ¤ ÇÊ¿ä ¾øÀ½
-
-// °á°ú »óÅÂ Á¤ÀÇ
-public enum QTEResult
-{
-    Fail,       // ½ÇÆĞ (-1)
-    Success,    // ÀÏ¹İ ¼º°ø (+1)
-    Perfect     // ´ë¼º°ø (+2)
-}
-
-public abstract class BaseQTEController : MonoBehaviour
-{
-    // ³»¿ëÀº ÀÚ½ÄµéÀÌ ¾Ë¾Æ¼­ ±¸Çö 
-    public abstract void StartQTE(Action<QTEResult> onResult);
-
-    // °øÅëÀûÀ¸·Î ÃÊ±âÈ­³ª Á¾·á ·ÎÁ÷ÀÌ ÇÊ¿äÇÏ¸é ¿©±â¿¡ °¡»ó ÇÔ¼ö(virtual) Ãß°¡ °¡´É
-    public virtual void Init() { }
+using System;
+using UnityEngine;
+
+// ëª¨ë“  QTE ì»¨íŠ¸ë¡¤ëŸ¬ëŠ” ì´ í´ë˜ìŠ¤ë¥¼ ìƒì†ë°›ì•„ì•¼ í•¨.
+// ì¦‰, ë‚˜ì¤‘ì— ë‹¤ë¥¸ ìœ í˜• QTE ë§Œë“¤ ë•Œë„ ì´ê²ƒë§Œ ìƒì†ë°›ìœ¼ë©´ ë§¤ë‹ˆì € ì½”ë“œ ìˆ˜ì • í•„ìš” ì—†ìŒ
+
+// ê²°ê³¼ ìƒíƒœ ì •ì˜
+public enum QTEResult
+{
+    Fail,       // ì‹¤íŒ¨ (-1)
+    Success,    // ì¼ë°˜ ì„±ê³µ (+1)
+    Perfect     // ëŒ€ì„±ê³µ (+2)
+}
+
+public abstract class BaseQTEController : MonoBehaviour
+{
+    // ë‚´ìš©ì€ ìì‹ë“¤ì´ ì•Œì•„ì„œ êµ¬í˜„ 
+    public abstract void StartQTE(Action<QTEResult> onResult);
+
+    // ê³µí†µì ìœ¼ë¡œ ì´ˆê¸°í™”ë‚˜ ì¢…ë£Œ ë¡œì§ì´ í•„ìš”í•˜ë©´ ì—¬ê¸°ì— ê°€ìƒ í•¨ìˆ˜(virtual) ì¶”ê°€ ê°€ëŠ¥
+    public virtual void Init() { }
 }

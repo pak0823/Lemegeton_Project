@@ -1,8 +1,8 @@
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Game/StageDatabase")]
-public class StageDatabase : ScriptableObject
-{
-    [Tooltip("ÄûÁî ¸Ê µ¥ÀÌÅÍ")] public StageQuizMapData[] quizStages;
-    [Tooltip("ÀÏ¹İ ¸Ê µ¥ÀÌÅÍ")] public StageNormalMapData[] normalStages;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Game/StageDatabase")]
+public class StageDatabase : ScriptableObject
+{
+    [Tooltip("í€´ì¦ˆ ë§µ ë°ì´í„°")] public StageQuizMapData[] quizStages;
+    [Tooltip("ì¼ë°˜ ë§µ ë°ì´í„°")] public StageNormalMapData[] normalStages;
 }

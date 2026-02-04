@@ -1,190 +1,190 @@
-using UnityEngine;
-using System.Collections.Generic;
-using System;
-using UnityEngine.AddressableAssets; // ¾îµå·¹¼­ºí ³×ÀÓ½ºÆäÀÌ½º
-using UnityEngine.ResourceManagement.AsyncOperations; // ºñµ¿±â ÇÚµé
-using System.Threading.Tasks; // async/await »ç¿ë ½Ã
-
-[System.Serializable]
-public class SaveData
-{
-    public List<InventoryItem> inventory;
-    public int gold;
-    // ¿©±â¿¡ º¸À¯ À¯´Ö(ownedUnits) Á¤º¸ µîµµ Æ÷ÇÔ½ÃÄÑ¶ó
-}
-
-public class PlayerDataManager : MonoBehaviour
-{
-    // ½Ì±ÛÅæ ÆĞÅÏ (¾îµğ¼­µç Á¢±Ù °¡´ÉÇÏ°Ô)
-    public static PlayerDataManager Instance;
-
-    [Header("1. [¼³Á¤¿ë] ½ÃÀÛ ½Ã º¸À¯ÇÒ À¯´Ö (ÁÖ¼Ò°ª)")]
-    // ±âÁ¸: public List<UnitData> ownedUnits; -> ÀÌ°Ç ÀÌÁ¦ ÀÎ½ºÆåÅÍ¿¡¼­ ¾È ¾¸
-    // º¯°æ: AssetReferenceT<UnitData>¸¦ ½á¼­ Æ¯Á¤ Å¸ÀÔ¸¸ ³Ö°Ô °­Á¦ÇÔ (½Ç¼ö ¹æÁö)
-    public List<AssetReferenceT<UnitData>> startingUnitRefs = new List<AssetReferenceT<UnitData>>();
-
-    [Header("2. [·±Å¸ÀÓ] ½ÇÁ¦ ·ÎµùµÈ À¯´Öµé")]
-    // °ÔÀÓ ·ÎÁ÷(UI, ¹èÆ² µî)Àº ¿©ÀüÈ÷ ÀÌ ¸®½ºÆ®¸¦ ¾¸. (±âÁ¸ ÄÚµå È£È¯¼º 100%)
-    public List<UnitData> ownedUnits = new List<UnitData>();
-
-    [Header("ÀüÅõ ÁøÇü")]
-    public UnitData[] formation = new UnitData[19];
-
-    public event Action OnFormationChanged;
-    public event Action OnUnitsLoaded; // ·Îµù ¿Ï·á ¾Ë¸² ÀÌº¥Æ® Ãß°¡
-
-    // ·Îµù »óÅÂ È®ÀÎ¿ë
-    public bool IsLoading { get; private set; } = true;
-
-    void Awake()
-    {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject); // ¾À ³Ñ¾î°¡µµ ÆÄ±« ¾È µÊ
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
-    }
-
-    private void Start()
-    {
-        // »ı¼ºµÇÀÚ¸¶ÀÚ ·Îµù ½ÃÀÛ
-        if(Instance == null)
-            LoadStartingUnitsByLabel();
-
-        // °ÔÀÓ ½ÃÀÛ ½Ã ÀÚµ¿À¸·Î ·Îµå ½Ãµµ
-        LoadGame();
-    }
-    // === ¾îµå·¹¼­ºí ·Îµù ·ÎÁ÷ ===
-    public async void LoadStartingUnitsByLabel()
-    {
-        // "StartingUnit" ¶óº§ÀÌ ºÙÀº ¸ğµç UnitData¸¦ °¡Á®¿Í¶ó!
-        var handle = Addressables.LoadAssetsAsync<UnitData>("StartingUnit", (loadedUnit) =>
-        {
-            // ÇÏ³ª¾¿ ·ÎµùµÉ ¶§¸¶´Ù ½ÇÇàµÊ
-            if (loadedUnit != null)
-            {
-                ownedUnits.Add(loadedUnit);
-                Debug.Log($"[¶óº§ ·Îµù] À¯´Ö È¹µæ: {loadedUnit.DisplayName}");
-            }
-        });
-
-        await handle.Task; // ´Ù ³¡³¯ ¶§±îÁö ´ë±â
-        IsLoading = false;
-        OnUnitsLoaded?.Invoke();
-        Debug.Log("ÃÊ±â À¯´Ö ·Îµù ¿Ï·á!");
-    }
-
-    // °ÔÀÓ µµÁß À¯´ÖÀ» È¹µæÇßÀ» ¶§ ·ÎµùÇÏ´Â ÇÔ¼ö
-    public async void AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
-    {
-        if (unitRef == null) return;
-
-        var handle = unitRef.LoadAssetAsync();
-        await handle.Task;
-
-        if (handle.Status == AsyncOperationStatus.Succeeded)
-        {
-            ownedUnits.Add(handle.Result);
-            Debug.Log($"[UnitGet] ½Å±Ô À¯´Ö È¹µæ: {handle.Result.DisplayName}");
-        }
-    }
-    public UnitData GetOwnedUnit(int index)
-    {
-        // ÀÎµ¦½º ¹üÀ§ Ã¼Å© (¿¡·¯ ¹æÁö¿ë)
-        if (index < 0 || index >= ownedUnits.Count)
-        {
-            Debug.LogWarning($"[PlayerData] ÀÎµ¦½º {index}¿¡ ÇØ´çÇÏ´Â À¯´ÖÀÌ ¾ø½À´Ï´Ù.");
-            return null;
-        }
-        return ownedUnits[index];
-    }
-
-    // ÁøÇü ¼³Á¤ ÇÔ¼ö
-    public void SetFormation(int targetIndex, UnitData incomingUnit)
-    {
-        // µé¾î¿À·Á´Â À¯´Ö(incomingUnit)ÀÌ ÀÌ¹Ì ÁøÇü ¾îµò°¡¿¡ ÀÖ´ÂÁö Ã£À½
-        int oldIndex = -1;
-        for (int i = 0; i < formation.Length; i++)
-        {
-            if (formation[i] == incomingUnit)
-            {
-                oldIndex = i;
-                break;
-            }
-        }
-
-        // ¸ñÇ¥ ÀÚ¸®(targetIndex)¿¡ ¿ø·¡ ÀÖ´ø À¯´ÖÀ» ±â¾ï (¾øÀ¸¸é null)
-        UnitData unitAtTarget = formation[targetIndex];
-
-        // ·ÎÁ÷ ºĞ±â
-        if (oldIndex != -1) // Case A: ÀÌ¹Ì ¹èÄ¡µÈ À¯´ÖÀÌ´Ù -> ½º¿Ò (Swap)
-        {
-            if (oldIndex == targetIndex) return; // Á¦ÀÚ¸® Å¬¸¯ÀÌ¸é ¹«½Ã
-
-            // ½º¿Ò ·ÎÁ÷
-            formation[targetIndex] = incomingUnit; // ¸ñÇ¥ ÀÚ¸®¿¡ ³» À¯´Ö
-            formation[oldIndex] = unitAtTarget;    // ³» ¿ø·¡ ÀÚ¸®¿¡ ÂÑ°Ü³­ À¯´Ö
-
-            Debug.Log($"[ÁøÇü º¯°æ] {incomingUnit.DisplayName}({oldIndex}) <-> {(unitAtTarget != null ? unitAtTarget.DisplayName : "ºóÄ­")}({targetIndex}) À§Ä¡ ±³Ã¼ ¿Ï·á.");
-        }
-        else // Case B: ÁøÇü¿¡ ¾ø´ø »õ À¯´ÖÀÌ´Ù -> µ¤¾î¾²±â (Overwrite)
-        {
-            formation[targetIndex] = incomingUnit;
-            // (unitAtTargetÀº °¥ °÷ÀÌ ¾øÀ¸¹Ç·Î ±×³É »ç¶óÁü - µ¤¾î¾²±â)
-
-            Debug.Log($"[ÁøÇü ¹èÄ¡] {targetIndex}¹ø¿¡ {incomingUnit.DisplayName} ½Å±Ô ¹èÄ¡µÊ.");
-        }
-
-        // º¯°æ »çÇ×ÀÌ »ı°åÀ¸´Ï ±¸µ¶ÀÚµé¿¡°Ô ¾Ë¸²
-        OnFormationChanged?.Invoke();
-    }
-
-    // ÇØ´ç ÀÎµ¦½º¿¡ ´©°¡ ÀÖ´ÂÁö È®ÀÎ
-    public UnitData GetUnitAt(int index)
-    {
-        if (index < 0 || index >= formation.Length) return null;
-        return formation[index];
-    }
-
-    public void SaveGame()
-    {
-        SaveData data = new SaveData();
-        data.inventory = InventoryManager.Instance.GetSaveData();
-        data.gold = CurrencyManager.Instance.gold;
-
-        string json = JsonUtility.ToJson(data);
-        PlayerPrefs.SetString("SaveSlot_1", json);
-        PlayerPrefs.Save();
-    }
-    public void LoadGame()
-    {
-        if (!PlayerPrefs.HasKey("SaveSlot_1")) return;
-
-        string json = PlayerPrefs.GetString("SaveSlot_1");
-        SaveData data = JsonUtility.FromJson<SaveData>(json);
-
-        // ÀÎº¥Åä¸® ¸Å´ÏÀú¿¡ µ¥ÀÌÅÍ ÁÖÀÔ
-        InventoryManager.Instance.LoadData(data.inventory);
-        CurrencyManager.Instance.gold = data.gold;
-
-        Debug.Log("µ¥ÀÌÅÍ ·Îµå ¿Ï·á.");
-    }
-    private void InitNewGame()
-    {
-        // Ã³À½ ½ÃÀÛÇÒ ¶§ ÇÊ¿äÇÑ ±âº»°ª ¼³Á¤
-        // ÀÎº¥Åä¸®´Â InventoryManagerÀÇ Dictionary°¡ »ı¼ºµÉ ¶§ ÀÌ¹Ì ºñ¾îÀÖÀ¸¹Ç·Î 
-        // Æ¯º°È÷ Ãß°¡ÇÒ °Ô ¾ø´Ù¸é ±×³É ³öµÎ¸é µÊ (ÀÚµ¿À¸·Î ¸ğµç Àç·á 0°³)
-
-        CurrencyManager.Instance.gold = 500; // ÃÊ±â ÀÚ±İ Á¤µµ¸¸ ¼³Á¤
-
-        // ÇÊ¿äÇÏ´Ù¸é ÃÊ±â Áö±Ş ¾ÆÀÌÅÛ Ãß°¡
-        // InventoryManager.Instance.AddItem("MAT_WOOD", 1); 
-
-        // ÃÊ±â »óÅÂ¸¦ ÇÑ ¹ø ÀúÀåÇØµÎ´Â °Íµµ ¹æ¹ı
-        SaveGame();
-    }
+using UnityEngine;
+using System.Collections.Generic;
+using System;
+using UnityEngine.AddressableAssets; // ì–´ë“œë ˆì„œë¸” ë„¤ì„ìŠ¤í˜ì´ìŠ¤
+using UnityEngine.ResourceManagement.AsyncOperations; // ë¹„ë™ê¸° í•¸ë“¤
+using System.Threading.Tasks; // async/await ì‚¬ìš© ì‹œ
+
+[System.Serializable]
+public class SaveData
+{
+    public List<InventoryItem> inventory;
+    public int gold;
+    // ì—¬ê¸°ì— ë³´ìœ  ìœ ë‹›(ownedUnits) ì •ë³´ ë“±ë„ í¬í•¨ì‹œì¼œë¼
+}
+
+public class PlayerDataManager : MonoBehaviour
+{
+    // ì‹±ê¸€í†¤ íŒ¨í„´ (ì–´ë””ì„œë“  ì ‘ê·¼ ê°€ëŠ¥í•˜ê²Œ)
+    public static PlayerDataManager Instance;
+
+    [Header("1. [ì„¤ì •ìš©] ì‹œì‘ ì‹œ ë³´ìœ í•  ìœ ë‹› (ì£¼ì†Œê°’)")]
+    // ê¸°ì¡´: public List<UnitData> ownedUnits; -> ì´ê±´ ì´ì œ ì¸ìŠ¤í™í„°ì—ì„œ ì•ˆ ì”€
+    // ë³€ê²½: AssetReferenceT<UnitData>ë¥¼ ì¨ì„œ íŠ¹ì • íƒ€ì…ë§Œ ë„£ê²Œ ê°•ì œí•¨ (ì‹¤ìˆ˜ ë°©ì§€)
+    public List<AssetReferenceT<UnitData>> startingUnitRefs = new List<AssetReferenceT<UnitData>>();
+
+    [Header("2. [ëŸ°íƒ€ì„] ì‹¤ì œ ë¡œë”©ëœ ìœ ë‹›ë“¤")]
+    // ê²Œì„ ë¡œì§(UI, ë°°í‹€ ë“±)ì€ ì—¬ì „íˆ ì´ ë¦¬ìŠ¤íŠ¸ë¥¼ ì”€. (ê¸°ì¡´ ì½”ë“œ í˜¸í™˜ì„± 100%)
+    public List<UnitData> ownedUnits = new List<UnitData>();
+
+    [Header("ì „íˆ¬ ì§„í˜•")]
+    public UnitData[] formation = new UnitData[19];
+
+    public event Action OnFormationChanged;
+    public event Action OnUnitsLoaded; // ë¡œë”© ì™„ë£Œ ì•Œë¦¼ ì´ë²¤íŠ¸ ì¶”ê°€
+
+    // ë¡œë”© ìƒíƒœ í™•ì¸ìš©
+    public bool IsLoading { get; private set; } = true;
+
+    void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject); // ì”¬ ë„˜ì–´ê°€ë„ íŒŒê´´ ì•ˆ ë¨
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    private void Start()
+    {
+        // ìƒì„±ë˜ìë§ˆì ë¡œë”© ì‹œì‘
+        if(Instance == null)
+            LoadStartingUnitsByLabel();
+
+        // ê²Œì„ ì‹œì‘ ì‹œ ìë™ìœ¼ë¡œ ë¡œë“œ ì‹œë„
+        LoadGame();
+    }
+    // === ì–´ë“œë ˆì„œë¸” ë¡œë”© ë¡œì§ ===
+    public async void LoadStartingUnitsByLabel()
+    {
+        // "StartingUnit" ë¼ë²¨ì´ ë¶™ì€ ëª¨ë“  UnitDataë¥¼ ê°€ì ¸ì™€ë¼!
+        var handle = Addressables.LoadAssetsAsync<UnitData>("StartingUnit", (loadedUnit) =>
+        {
+            // í•˜ë‚˜ì”© ë¡œë”©ë  ë•Œë§ˆë‹¤ ì‹¤í–‰ë¨
+            if (loadedUnit != null)
+            {
+                ownedUnits.Add(loadedUnit);
+                Debug.Log($"[ë¼ë²¨ ë¡œë”©] ìœ ë‹› íšë“: {loadedUnit.DisplayName}");
+            }
+        });
+
+        await handle.Task; // ë‹¤ ëë‚  ë•Œê¹Œì§€ ëŒ€ê¸°
+        IsLoading = false;
+        OnUnitsLoaded?.Invoke();
+        Debug.Log("ì´ˆê¸° ìœ ë‹› ë¡œë”© ì™„ë£Œ!");
+    }
+
+    // ê²Œì„ ë„ì¤‘ ìœ ë‹›ì„ íšë“í–ˆì„ ë•Œ ë¡œë”©í•˜ëŠ” í•¨ìˆ˜
+    public async void AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
+    {
+        if (unitRef == null) return;
+
+        var handle = unitRef.LoadAssetAsync();
+        await handle.Task;
+
+        if (handle.Status == AsyncOperationStatus.Succeeded)
+        {
+            ownedUnits.Add(handle.Result);
+            Debug.Log($"[UnitGet] ì‹ ê·œ ìœ ë‹› íšë“: {handle.Result.DisplayName}");
+        }
+    }
+    public UnitData GetOwnedUnit(int index)
+    {
+        // ì¸ë±ìŠ¤ ë²”ìœ„ ì²´í¬ (ì—ëŸ¬ ë°©ì§€ìš©)
+        if (index < 0 || index >= ownedUnits.Count)
+        {
+            Debug.LogWarning($"[PlayerData] ì¸ë±ìŠ¤ {index}ì— í•´ë‹¹í•˜ëŠ” ìœ ë‹›ì´ ì—†ìŠµë‹ˆë‹¤.");
+            return null;
+        }
+        return ownedUnits[index];
+    }
+
+    // ì§„í˜• ì„¤ì • í•¨ìˆ˜
+    public void SetFormation(int targetIndex, UnitData incomingUnit)
+    {
+        // ë“¤ì–´ì˜¤ë ¤ëŠ” ìœ ë‹›(incomingUnit)ì´ ì´ë¯¸ ì§„í˜• ì–´ë”˜ê°€ì— ìˆëŠ”ì§€ ì°¾ìŒ
+        int oldIndex = -1;
+        for (int i = 0; i < formation.Length; i++)
+        {
+            if (formation[i] == incomingUnit)
+            {
+                oldIndex = i;
+                break;
+            }
+        }
+
+        // ëª©í‘œ ìë¦¬(targetIndex)ì— ì›ë˜ ìˆë˜ ìœ ë‹›ì„ ê¸°ì–µ (ì—†ìœ¼ë©´ null)
+        UnitData unitAtTarget = formation[targetIndex];
+
+        // ë¡œì§ ë¶„ê¸°
+        if (oldIndex != -1) // Case A: ì´ë¯¸ ë°°ì¹˜ëœ ìœ ë‹›ì´ë‹¤ -> ìŠ¤ì™‘ (Swap)
+        {
+            if (oldIndex == targetIndex) return; // ì œìë¦¬ í´ë¦­ì´ë©´ ë¬´ì‹œ
+
+            // ìŠ¤ì™‘ ë¡œì§
+            formation[targetIndex] = incomingUnit; // ëª©í‘œ ìë¦¬ì— ë‚´ ìœ ë‹›
+            formation[oldIndex] = unitAtTarget;    // ë‚´ ì›ë˜ ìë¦¬ì— ì«“ê²¨ë‚œ ìœ ë‹›
+
+            Debug.Log($"[ì§„í˜• ë³€ê²½] {incomingUnit.DisplayName}({oldIndex}) <-> {(unitAtTarget != null ? unitAtTarget.DisplayName : "ë¹ˆì¹¸")}({targetIndex}) ìœ„ì¹˜ êµì²´ ì™„ë£Œ.");
+        }
+        else // Case B: ì§„í˜•ì— ì—†ë˜ ìƒˆ ìœ ë‹›ì´ë‹¤ -> ë®ì–´ì“°ê¸° (Overwrite)
+        {
+            formation[targetIndex] = incomingUnit;
+            // (unitAtTargetì€ ê°ˆ ê³³ì´ ì—†ìœ¼ë¯€ë¡œ ê·¸ëƒ¥ ì‚¬ë¼ì§ - ë®ì–´ì“°ê¸°)
+
+            Debug.Log($"[ì§„í˜• ë°°ì¹˜] {targetIndex}ë²ˆì— {incomingUnit.DisplayName} ì‹ ê·œ ë°°ì¹˜ë¨.");
+        }
+
+        // ë³€ê²½ ì‚¬í•­ì´ ìƒê²¼ìœ¼ë‹ˆ êµ¬ë…ìë“¤ì—ê²Œ ì•Œë¦¼
+        OnFormationChanged?.Invoke();
+    }
+
+    // í•´ë‹¹ ì¸ë±ìŠ¤ì— ëˆ„ê°€ ìˆëŠ”ì§€ í™•ì¸
+    public UnitData GetUnitAt(int index)
+    {
+        if (index < 0 || index >= formation.Length) return null;
+        return formation[index];
+    }
+
+    public void SaveGame()
+    {
+        SaveData data = new SaveData();
+        data.inventory = InventoryManager.Instance.GetSaveData();
+        data.gold = CurrencyManager.Instance.gold;
+
+        string json = JsonUtility.ToJson(data);
+        PlayerPrefs.SetString("SaveSlot_1", json);
+        PlayerPrefs.Save();
+    }
+    public void LoadGame()
+    {
+        if (!PlayerPrefs.HasKey("SaveSlot_1")) return;
+
+        string json = PlayerPrefs.GetString("SaveSlot_1");
+        SaveData data = JsonUtility.FromJson<SaveData>(json);
+
+        // ì¸ë²¤í† ë¦¬ ë§¤ë‹ˆì €ì— ë°ì´í„° ì£¼ì…
+        InventoryManager.Instance.LoadData(data.inventory);
+        CurrencyManager.Instance.gold = data.gold;
+
+        Debug.Log("ë°ì´í„° ë¡œë“œ ì™„ë£Œ.");
+    }
+    private void InitNewGame()
+    {
+        // ì²˜ìŒ ì‹œì‘í•  ë•Œ í•„ìš”í•œ ê¸°ë³¸ê°’ ì„¤ì •
+        // ì¸ë²¤í† ë¦¬ëŠ” InventoryManagerì˜ Dictionaryê°€ ìƒì„±ë  ë•Œ ì´ë¯¸ ë¹„ì–´ìˆìœ¼ë¯€ë¡œ 
+        // íŠ¹ë³„íˆ ì¶”ê°€í•  ê²Œ ì—†ë‹¤ë©´ ê·¸ëƒ¥ ë†”ë‘ë©´ ë¨ (ìë™ìœ¼ë¡œ ëª¨ë“  ì¬ë£Œ 0ê°œ)
+
+        CurrencyManager.Instance.gold = 500; // ì´ˆê¸° ìê¸ˆ ì •ë„ë§Œ ì„¤ì •
+
+        // í•„ìš”í•˜ë‹¤ë©´ ì´ˆê¸° ì§€ê¸‰ ì•„ì´í…œ ì¶”ê°€
+        // InventoryManager.Instance.AddItem("MAT_WOOD", 1); 
+
+        // ì´ˆê¸° ìƒíƒœë¥¼ í•œ ë²ˆ ì €ì¥í•´ë‘ëŠ” ê²ƒë„ ë°©ë²•
+        SaveGame();
+    }
 }

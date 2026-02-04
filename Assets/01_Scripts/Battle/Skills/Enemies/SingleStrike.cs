@@ -1,112 +1,112 @@
-// Assets/Scripts/Skills/EA_SingleStrike.cs
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/SkillAsset/Enemy/SingleStrike")]
-public class SingleStrike : SkillAsset
-{
-    [Header("Damage")]
-    public float damageMultiplier = 1f; // ±âº» ¹èÀ²(ÇÊ¿ä ½Ã Á¶Á¤)
-    [Tooltip("µĞÈ­ º¸À¯ÀÚ¿¡°Ô Àû¿ëÇÒ Ãß°¡ ¹è¼ö")]
-    public float slowBonusMultiplier = 3f; // ¿ä±¸»çÇ×: ÇöÀç ¹°°ø * 3¹è
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = SkillTargetMode.Unit; }  // ¿¡µğÅÍ¿¡¼­ Ç×»ó Unit·Î °íÁ¤
-#endif
-    void OnEnable()
-    {
-        targetMode = SkillTargetMode.Unit;
-        school = DamageSchool.Physical;
-        // power´Â ComputeDamage¿¡¼­ ¾È ¾²´Ï 0 ¶Ç´Â 1 ¾Æ¹«°Å³ª »ó°ü ¾øÀ½
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
-    {
-        yield return originCell; // ´ÜÀÏ ´ë»óÀÌ¹Ç·Î ¿øÁ¡ ¼¿¸¸
-    }
-
-    public override float ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
-    {
-        if (caster == null || target == null) return 0;
-
-        bool targetHasSlow = false;
-        var sc = target.GetComponent<StatusController>();
-        if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
-
-        float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
-        float raw = caster.STR * mult;
-        return Mathf.Max(0, Mathf.FloorToInt(raw));
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
-    {
-        if (caster == null) yield break;
-
-        // »ıÁ¸ ÇÃ·¹ÀÌ¾î ¼öÁı
-        var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead)
-            .Where(u => !SkillAsset.IsUntargetableByEnemy(u)) // Àáº¹ + ¿¬¸· Àº½Å ¸ğµÎ Á¦¿Ü
-            .ToList();
-
-        if (players.Count == 0) yield break;
-
-        // µĞÈ­ º¸À¯ÀÚ ¿ì¼± ¼±Á¤
-        var slowed = players.Where(u => {
-            var sc = u.GetComponent<StatusController>();
-            return sc != null && sc.Has(StatusId.Slow);
-        }).ToList();
-
-
-        // µĞÈ­ º¸À¯ÀÚ°¡ ÀÖ´Ù¸é ±×Áß¿¡¼­ 'Àû´ë°¨ ÃÖ»óÀ§'
-        // ¾ø´Ù¸é ÀüÃ¼ ÇÃ·¹ÀÌ¾î Áß 'Àû´ë°¨ ÃÖ»óÀ§'
-        BattleUnit actualTarget = null;
-        if (slowed.Count > 0)
-            actualTarget = SkillAsset.PickTargetByWeightedHostility(slowed);
-        else
-            actualTarget = SkillAsset.PickTargetByWeightedHostility(players);
-
-        // º¸Á¤(È¤½Ã nullÀÌ¸é ·£´ı º¸Á¤)
-        if (actualTarget == null)
-            actualTarget = players[Random.Range(0, players.Count)];
-
-        if (actualTarget == null || actualTarget.IsDead) yield break;
-
-        // ÀÓÆÑÆ® Å¸ÀÌ¹Ö¿¡ ´ë¹ÌÁö Àû¿ë (µĞÈ­ ´ë»óÀÌ¸é 3¹è)
-        bool impactDone = false;
-        System.Action impact = null;
-        impact = () =>
-        {
-            caster.OnAttackImpact -= impact;
-            impactDone = true;
-
-            if (actualTarget != null && !actualTarget.IsDead && bm != null)
-            {
-                var victims = new List<BattleUnit> { actualTarget };
-                var map = actualTarget.CurrentMap ?? caster.CurrentMap;
-                var originCell = actualTarget.Cell;
-
-                bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
-            }
-        };
-
-        caster.OnAttackImpact += impact;
-        yield return caster.AnimateAttack(actualTarget, null);
-
-        // ¾ÈÀüÀåÄ¡: ¾Ö´Ï ÀÌº¥Æ® ´©¶ô ½Ã Æú¹é
-if (!impactDone && actualTarget != null && !actualTarget.IsDead && bm != null)
-{
-    var victims = new List<BattleUnit> { actualTarget };
-    var map = actualTarget.CurrentMap ?? caster.CurrentMap;
-    var originCell = actualTarget.Cell;
-
-    bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
-}
-    }
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        yield break; // UnitÇüÀÌ¹Ç·Î »ç¿ë ¾ÈÇÔ
-    }
-}
+// Assets/Scripts/Skills/EA_SingleStrike.cs
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/SkillAsset/Enemy/SingleStrike")]
+public class SingleStrike : SkillAsset
+{
+    [Header("Damage")]
+    public float damageMultiplier = 1f; // ê¸°ë³¸ ë°°ìœ¨(í•„ìš” ì‹œ ì¡°ì •)
+    [Tooltip("ë‘”í™” ë³´ìœ ìì—ê²Œ ì ìš©í•  ì¶”ê°€ ë°°ìˆ˜")]
+    public float slowBonusMultiplier = 3f; // ìš”êµ¬ì‚¬í•­: í˜„ì¬ ë¬¼ê³µ * 3ë°°
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = SkillTargetMode.Unit; }  // ì—ë””í„°ì—ì„œ í•­ìƒ Unitë¡œ ê³ ì •
+#endif
+    void OnEnable()
+    {
+        targetMode = SkillTargetMode.Unit;
+        school = DamageSchool.Physical;
+        // powerëŠ” ComputeDamageì—ì„œ ì•ˆ ì“°ë‹ˆ 0 ë˜ëŠ” 1 ì•„ë¬´ê±°ë‚˜ ìƒê´€ ì—†ìŒ
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    {
+        yield return originCell; // ë‹¨ì¼ ëŒ€ìƒì´ë¯€ë¡œ ì›ì  ì…€ë§Œ
+    }
+
+    public override float ComputeDamage(BattleUnit caster, BattleUnit target, in SkillRuntime ctx)
+    {
+        if (caster == null || target == null) return 0;
+
+        bool targetHasSlow = false;
+        var sc = target.GetComponent<StatusController>();
+        if (sc != null) targetHasSlow = sc.Has(StatusId.Slow);
+
+        float mult = damageMultiplier * (targetHasSlow ? slowBonusMultiplier : 1f);
+        float raw = caster.STR * mult;
+        return Mathf.Max(0, Mathf.FloorToInt(raw));
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        if (caster == null) yield break;
+
+        // ìƒì¡´ í”Œë ˆì´ì–´ ìˆ˜ì§‘
+        var players = Object.FindObjectsOfType<BattleUnit>()
+            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead)
+            .Where(u => !SkillAsset.IsUntargetableByEnemy(u)) // ì ë³µ + ì—°ë§‰ ì€ì‹  ëª¨ë‘ ì œì™¸
+            .ToList();
+
+        if (players.Count == 0) yield break;
+
+        // ë‘”í™” ë³´ìœ ì ìš°ì„  ì„ ì •
+        var slowed = players.Where(u => {
+            var sc = u.GetComponent<StatusController>();
+            return sc != null && sc.Has(StatusId.Slow);
+        }).ToList();
+
+
+        // ë‘”í™” ë³´ìœ ìê°€ ìˆë‹¤ë©´ ê·¸ì¤‘ì—ì„œ 'ì ëŒ€ê° ìµœìƒìœ„'
+        // ì—†ë‹¤ë©´ ì „ì²´ í”Œë ˆì´ì–´ ì¤‘ 'ì ëŒ€ê° ìµœìƒìœ„'
+        BattleUnit actualTarget = null;
+        if (slowed.Count > 0)
+            actualTarget = SkillAsset.PickTargetByWeightedHostility(slowed);
+        else
+            actualTarget = SkillAsset.PickTargetByWeightedHostility(players);
+
+        // ë³´ì •(í˜¹ì‹œ nullì´ë©´ ëœë¤ ë³´ì •)
+        if (actualTarget == null)
+            actualTarget = players[Random.Range(0, players.Count)];
+
+        if (actualTarget == null || actualTarget.IsDead) yield break;
+
+        // ì„íŒ©íŠ¸ íƒ€ì´ë°ì— ëŒ€ë¯¸ì§€ ì ìš© (ë‘”í™” ëŒ€ìƒì´ë©´ 3ë°°)
+        bool impactDone = false;
+        System.Action impact = null;
+        impact = () =>
+        {
+            caster.OnAttackImpact -= impact;
+            impactDone = true;
+
+            if (actualTarget != null && !actualTarget.IsDead && bm != null)
+            {
+                var victims = new List<BattleUnit> { actualTarget };
+                var map = actualTarget.CurrentMap ?? caster.CurrentMap;
+                var originCell = actualTarget.Cell;
+
+                bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
+            }
+        };
+
+        caster.OnAttackImpact += impact;
+        yield return caster.AnimateAttack(actualTarget, null);
+
+        // ì•ˆì „ì¥ì¹˜: ì• ë‹ˆ ì´ë²¤íŠ¸ ëˆ„ë½ ì‹œ í´ë°±
+if (!impactDone && actualTarget != null && !actualTarget.IsDead && bm != null)
+{
+    var victims = new List<BattleUnit> { actualTarget };
+    var map = actualTarget.CurrentMap ?? caster.CurrentMap;
+    var originCell = actualTarget.Cell;
+
+    bm.ExecuteSkillDamage(caster, victims, this, map, originCell);
+}
+    }
+    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        yield break; // Unití˜•ì´ë¯€ë¡œ ì‚¬ìš© ì•ˆí•¨
+    }
+}

@@ -1,402 +1,402 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
-
-[DisallowMultipleComponent]
-public class UIArrowNavigator : MonoBehaviour
-{
-    public enum NavAxis { Horizontal, Vertical }
-
-    [Header("Buttons in order")]
-    [SerializeField] private List<Button> buttons = new List<Button>();
-
-    [Header("Navigation Axis")]
-    [SerializeField] private NavAxis navAxis = NavAxis.Horizontal; // ÆĞ³Îº°·Î ¼³Á¤
-
-    [Header("Keys")]
-    private KeyCode UpKey = KeyCode.W;
-    private KeyCode DownKey = KeyCode.S;
-    private KeyCode LeftKey = KeyCode.A;
-    private KeyCode RightKey = KeyCode.D;
-    private KeyCode confirmKey = KeyCode.E;  // È®Á¤Å°
-
-    [Header("Behavior")]
-    [SerializeField] private bool autoFocusOnEnable = true;
-    [Tooltip("¸¶¿ì½º/´Ù¸¥ ½ºÅ©¸³Æ®·Î ¼±ÅÃµÈ ¹öÆ°µµ ÇÏÀÌ¶óÀÌÆ®°¡ µû¶ó°¡µµ·Ï °»½Å")]
-    [SerializeField] private bool followExternalSelection = true;
-    int lockedIndex = -1;
-
-    [Header("Unity ±âº» ³×ºñ°ÔÀÌ¼Ç(Selectable Navigation) ²ô±â")]
-    [SerializeField] private bool disableUnitySelectableNavigation = true;
-
-    [Header("Lock Settings")]
-    //[SerializeField] private bool lockAfterConfirm = true;   // È®Á¤(¹öÆ° onClick) Á÷ÈÄ Àá±İ
-    [SerializeField] private bool lockWhileTargeting = true; // ÀüÅõ°¡ Å¸°ÙÆÃ/ÇÁ¸®ºä »óÅÂ¸é Àá±İ
-    [SerializeField] private BattleManager battleManager;           // (SkillPanel ÂÊ¸¸) ÀÎ½ºÆåÅÍ¿¡ ÇÒ´ç
-    bool navLocked;
-    public bool IsLocked => navLocked;
-
-    // ÅØ½ºÆ® »ö»ó ÇÏÀÌ¶óÀÌÆ®
-    [Header("Text Color Highlight")]
-    [SerializeField] private Color focusOrHoverColor = new Color32(255, 155, 0, 255);
-    [SerializeField, Range(0f, 1f)] float disabledLabelAlpha = 0.45f; // ºñÈ°¼º ÅØ½ºÆ® ¾ËÆÄ
-
-    private int index = 0;
-    private GameObject lastSelectedGO; // ¿ÜºÎ ¼±ÅÃ ÃßÀû¿ë
-
-    // ¹öÆ°º° ¶óº§ ¹× ¿øº» »ö»ó Ä³½Ã
-    private readonly List<Text> labelCache = new List<Text>();
-    private readonly List<Color> originalColors = new List<Color>();
-    private bool originalCaptured = false;   // ÃÖÃÊ 1È¸¸¸ ¿øº»»ö ÀúÀå
-
-    void Awake()
-    {
-        BuildLabelCache(captureOriginal: true);
-        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
-    }
-
-    void OnEnable()
-    {
-        BuildLabelCache(captureOriginal: false);
-        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
-        navLocked = false;
-
-        index = FirstActiveIndex();
-        if (autoFocusOnEnable) Focus();
-        UpdateHighlight(); // ÀÌÁ¦´Â "ÅØ½ºÆ® »ö"À» °»½ÅÇÏµµ·Ï µ¿ÀÛ  :contentReference[oaicite:1]{index=1}
-
-        lastSelectedGO = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
-        if (battleManager == null)
-            battleManager = BattleManager.Instance;
-    }
-
-    void Update()
-    {
-        // ÆĞ³ÎÀÌ ²¨Á® ÀÖ°Å³ª, HUD CanvasGroupÀÌ ²¨Á® ÀÖÀ¸¸é µ¿ÀÛ ¾ÈÇÔ
-        if (!gameObject.activeInHierarchy) return;
-        if (!IsInteractableByCanvasGroup(this.gameObject)) return;
-        if (PopupManager.IsModalOpen) return;
-        if (battleManager == null) battleManager = BattleManager.Instance;
-
-        if (lockWhileTargeting && battleManager != null && battleManager.IsTargeting)
-        {
-            if (!navLocked)
-            {
-                navLocked = true;
-                lockedIndex = index;           // ÇöÀç ¼±ÅÃµÈ ¹öÆ° ÀÎµ¦½º¸¦ Àá±İ ´ë»óÀ¸·Î
-            }
-            else if (lockedIndex < 0)
-            {
-                lockedIndex = index;           // È¤½Ã ºñ¾îÀÖ´Ù¸é º¸Á¤
-            }
-
-            ApplyLockedHighlight();            // ¸Å ÇÁ·¹ÀÓ °­Á¦·Î Àá±İ ¹öÆ°¿¡¸¸ Æ÷Ä¿½º Àû¿ë
-            return;                            // ¾Æ·¡ Å°/¸¶¿ì½º/¿ÜºÎ Æ÷Ä¿½º Ã³¸® ÀüºÎ Â÷´Ü
-        }
-        else if (navLocked)
-        {
-            // Å¸°ÙÆÃ Á¾·á ¡æ Àá±İ ÇØÁ¦ ¹× Æ÷Ä¿½º Á¤»óÈ­
-            navLocked = false;
-            lockedIndex = -1;
-            RebuildAndRefocus();
-            return;
-        }
-
-        navLocked = false;
-
-        bool handledKey = false;
-
-        // ÀÌµ¿ Å° ºĞ±â: Panel_Action(Horizontal) / Panel_Skill(Vertical)
-        if (navAxis == NavAxis.Horizontal)
-        {
-            if (Input.GetKeyDown(RightKey)) { index = NextIndex(+1); Focus(); UpdateHighlight(); handledKey = true; }
-            else if (Input.GetKeyDown(LeftKey)) { index = NextIndex(-1); Focus(); UpdateHighlight(); handledKey = true; }
-        }
-        else // Vertical
-        {
-            if (Input.GetKeyDown(DownKey)) { index = NextIndex(+1); Focus(); UpdateHighlight(); handledKey = true; }
-            else if (Input.GetKeyDown(UpKey)) { index = NextIndex(-1); Focus(); UpdateHighlight(); handledKey = true; }
-        }
-
-        // È®Á¤(E)  ÇöÀç ¹öÆ° onClick (Ãë¼Ò´Â BattleInput¿¡¼­ Ã³¸® °è¼Ó)
-        if (Input.GetKeyDown(confirmKey))
-        {
-            var b = GetButton(index);
-            b?.onClick?.Invoke();
-            handledKey = true;
-        }
-
-        // ¿ÜºÎ ¼±ÅÃ ÃßÀû(¸¶¿ì½º/´Ù¸¥ ½ºÅ©¸³Æ®), ÀÌ ÇÁ·¹ÀÓ¿¡ Å°¸¦ Ã³¸®Çß´Ù¸é °Ç³Ê¶Ü
-        if (!handledKey && followExternalSelection && EventSystem.current)
-        {
-            var now = EventSystem.current.currentSelectedGameObject;
-            if (now != lastSelectedGO && now != null)
-            {
-                // Å¬¸¯µÈ ¿ÀºêÁ§Æ®°¡ ¹öÆ°ÀÇ ÀÚ½ÄÀÌ¾îµµ ºÎ¸ğ ÂÊÀ¸·Î ¿Ã¶ó°¡¸ç ButtonÀ» Ã£´Â´Ù
-                int extIdx = IndexOfButtonDeep(now);
-                if (extIdx >= 0)
-                {
-                    var b = GetButton(extIdx);
-                    if (b != null && b.interactable)
-                    {
-                        index = extIdx;
-                        Focus();
-                        UpdateHighlight();
-                    }
-                }
-            }
-            lastSelectedGO = now;
-        }
-        else
-        {
-            // Å°·Î ¼±ÅÃÀ» ¹Ù²å´Ù¸é ¸¶Áö¸· ¼±ÅÃ Ä³½Ãµµ °»½Å
-            lastSelectedGO = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
-        }
-    }
-
-    // === Public helpers ===
-
-    // ¹öÆ° ¹è¿­ÀÌ ·±Å¸ÀÓ¿¡ ¹Ù²ï µÚ(¿¹: ½ºÅ³ ¸ñ·Ï Àç±¸¼º) ¹İµå½Ã È£Ãâ.
-    public void RebuildAndRefocus(bool keepCurrentIfPossible = true)
-    {
-        int prevIdx = index;
-        BuildLabelCache(captureOriginal: false);
-        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
-        if (!keepCurrentIfPossible || !IsUsable(GetButton(prevIdx)))
-            index = FirstActiveIndex();
-        Focus();
-        ApplyDisabledVisuals();
-        UpdateHighlight();
-    }
-
-    // ¿ÜºÎ¿¡¼­ ¹öÆ° ¸®½ºÆ®¸¦ ±³Ã¼ÇÏ·Á¸é ÀÌ ¸Ş¼­µå »ç¿ë.
-    public void SetButtons(List<Button> newButtons, bool refocus = true)
-    {
-        buttons = newButtons ?? new List<Button>();
-        BuildLabelCache(captureOriginal: true);
-        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
-        index = FirstActiveIndex();
-        if (refocus) { Focus(); UpdateHighlight(); }
-    }
-    public void SelectIndexImmediate(int i, bool focus = true, bool updateHighlight = true)
-    {
-        if (i < 0 || i >= buttons.Count) return;
-        index = i;
-        if (focus) Focus();
-        if (updateHighlight) UpdateHighlight();
-    }
-    // ¸¶¿ì½º/¿ÜºÎ Æ÷Ä¿½º ÁøÀÔ (Relay¿¡¼­ È£Ãâ)  :contentReference[oaicite:3]{index=3}
-    public void SetExternalFocus(Button b, bool alsoSetEventSystem = false)
-    {
-        if (!b) return;
-        int i = IndexOfButtonDeep(b.gameObject);
-        if (i < 0) return;
-
-        index = i;      // Æ÷Ä¿½º ÀÌµ¿
-        if (alsoSetEventSystem)
-        {
-            Focus();
-        }
-        UpdateHighlight();
-    }
-
-    // === Core ===
-
-    int FirstActiveIndex()
-    {
-        for (int i = 0; i < buttons.Count; i++)
-            if (IsUsable(buttons[i])) return i;
-        return 0;
-    }
-
-    int NextIndex(int dir)
-    {
-        int n = buttons.Count;
-        if (n == 0) return 0;
-
-        // °¨½ÎÁö ¾Ê°í °æ°è¿¡¼­ ¸ØÃã
-        int i = index + dir;
-        while (i >= 0 && i < n)
-        {
-            if (IsUsable(buttons[i])) return i;
-            i += dir; // ´ÙÀ½ À¯È¿ ¹öÆ°±îÁö Á÷¼± Å½»ö
-        }
-        return index; // ´õ ÀÌ»ó °¥ °÷ ¾øÀ¸¸é Á¦ÀÚ¸®
-    }
-
-    void Focus()
-    {
-        var b = GetButton(index);
-        if (b == null) return;
-
-        if (EventSystem.current != null)
-            EventSystem.current.SetSelectedGameObject(b.gameObject);
-        else
-            b.Select();
-    }
-    void ApplyDisableSelectableNavigation()
-    {
-        foreach (var btn in buttons)
-        {
-            if (!btn) continue;
-            var nav = btn.navigation;
-            nav.mode = Navigation.Mode.None; // Unity ±âº» ³×ºñ ºñÈ°¼ºÈ­
-            btn.navigation = nav;
-        }
-    }
-
-
-    void BuildLabelCache(bool captureOriginal)
-    {
-        labelCache.Clear();
-        foreach (var btn in buttons)
-            labelCache.Add(FindLabelText(btn));
-
-        if (captureOriginal && !originalCaptured)
-        {
-            originalColors.Clear();
-            for (int i = 0; i < labelCache.Count; i++)
-            {
-                var t = labelCache[i];
-                var c = t ? t.color : Color.white;
-                originalColors.Add(new Color(c.r, c.g, c.b, 1f)); // ¿øº» RGB+¾ËÆÄ1
-            }
-            originalCaptured = true;
-        }
-    }
-
-    void UpdateHighlight()
-    {
-        // ÀüÃ¼¸¦ ¿øº»À¸·Î µÇµ¹¸®µÇ, ºñÈ°¼º ¹öÆ°Àº ½ºÅµ
-        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
-        {
-            var t = labelCache[i];
-            var b = GetButton(i);
-            if (!t) continue;
-            if (b == null || !b.interactable) continue; // ¹İÅõ¸í À¯Áö
-
-
-            var oc = originalColors[i];
-            t.color = new Color(oc.r, oc.g, oc.b, 1f);
-        }
-
-        // Æ÷Ä¿½º »ö Àû¿ëµµ 'È°¼º ¹öÆ°'¿¡¸¸
-        if (index >= 0 && index < labelCache.Count && labelCache[index])
-        {
-            var b = GetButton(index);
-            if (b != null && b.interactable)
-            {
-                // È°¼ºÀÏ ¶§¸¸ ÇÏÀÌ¶óÀÌÆ®
-                var c = (Color)focusOrHoverColor;
-                labelCache[index].color = new Color(c.r, c.g, c.b, 1f);
-            }
-        }
-    }
-    void ApplyLockedHighlight()
-    {
-        // Ä³½Ã ¾øÀ¸¸é ÃÊ±âÈ­
-        if (!originalCaptured)
-            BuildLabelCache(captureOriginal: true);
-        else
-            BuildLabelCache(captureOriginal: false);
-
-        // ¸ÕÀú È°¼º/ºñÈ°¼º ¾ËÆÄ Ã³¸® (ºñÈ°¼ºÀº ±âº»»ö + ³·Àº ¾ËÆÄ)
-        ApplyDisabledVisuals();
-
-        // ¶ôµÈ ÀÎµ¦½º¿¡¸¸ Æ÷Ä¿½º »ö Àû¿ë
-        if (lockedIndex >= 0 && lockedIndex < labelCache.Count)
-        {
-            var t = labelCache[lockedIndex];
-            var b = GetButton(lockedIndex);
-            if (t != null && b != null && b.interactable)
-            {
-                var c = focusOrHoverColor;
-                t.color = new Color(c.r, c.g, c.b, 1f); // Æ÷Ä¿½º ÁÖÈ², ¾ËÆÄ 1
-            }
-        }
-    }
-
-    void ApplyDisabledVisuals()
-    {
-        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
-        {
-            var t = labelCache[i];
-            var b = GetButton(i);
-            if (!t) continue;
-
-            var oc = originalColors[i];
-            if (b != null && b.interactable)
-            {
-                // È°¼º: ¿øº» RGB + ¾ËÆÄ 1
-                t.color = new Color(oc.r, oc.g, oc.b, 1f);
-            }
-            else
-            {
-                // ºñÈ°¼º: ¿øº» RGB + ³·Àº ¾ËÆÄ (±âº»»ö À¯Áö, Åõ¸íµµ¸¸ ³·Ãã)
-                t.color = new Color(oc.r, oc.g, oc.b, disabledLabelAlpha);
-            }
-        }
-    }
-    Text FindLabelText(Button btn)
-    {
-        if (!btn) return null;
-
-        // targetGraphicÀÌ TextÀÎ °æ¿ì, ColorTint°¡ ÅØ½ºÆ®¸¦ ¹°µéÀÓ -> ¹è°æ Image°¡ ÀÖÀ¸¸é Å¸°ÙÀ» ±×ÂÊÀ¸·Î º¯°æ
-        var bg = btn.GetComponent<Image>();
-        if (bg && btn.targetGraphic is Text)
-            btn.targetGraphic = bg;
-
-        // ½ºÅ³ ¹öÆ°Àº ÅØ½ºÆ® »öÀ» ¿ì¸®°¡ Á÷Á¢ °ü¸®ÇÏ¹Ç·Î, Æ®·£Áö¼ÇÀº ¹è°æ¸¸ ¾²°Å³ª NoneÀ¸·Î
-        if (bg && btn.transition == Selectable.Transition.ColorTint)
-        {
-            // ¿©±â¼­ ColorBlockÀ» Èò»öÀ¸·Î Á¤¸®ÇØµµ µÇ°í,
-            // ÃÖ¼ÒÇÑ ÅØ½ºÆ®¿¡´Â ¿µÇâÀÌ ¾È °¡°Ô targetGraphic¸¸ Image·Î ¸ÂÃçÁÖ¸é ÃæºĞ.
-        }
-
-        var texts = btn.GetComponentsInChildren<Text>(true);
-        return texts.Length > 0 ? texts[0] : null;
-    }
-
-    // === Utils ===
-
-    Button GetButton(int i)
-    {
-        if (i < 0 || i >= buttons.Count) return null;
-        return buttons[i];
-    }
-
-    bool IsUsable(Button b)
-    {
-        return b != null && b.gameObject.activeInHierarchy && b.interactable;
-    }
-
-    static bool IsInteractableByCanvasGroup(GameObject go)
-    {
-        var groups = go.GetComponentsInParent<CanvasGroup>(true);
-        foreach (var cg in groups)
-        {
-            if (!cg.enabled) continue;
-            if (!cg.interactable || !cg.blocksRaycasts || cg.alpha <= 0f)
-                return false;
-        }
-        return true;
-    }
-    int IndexOfButtonDeep(GameObject go)
-    {
-        if (!go) return -1;
-        Transform t = go.transform;
-        while (t != null)
-        {
-            var btn = t.GetComponent<Button>();
-            if (btn != null)
-            {
-                for (int i = 0; i < buttons.Count; i++)
-                    if (buttons[i] == btn) return i;
-                return -1; // ¹öÆ°ÀÌÁö¸¸ ³» ¸®½ºÆ®°¡ ¾Æ´Ò ¶§
-            }
-            t = t.parent;
-        }
-        return -1;
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+[DisallowMultipleComponent]
+public class UIArrowNavigator : MonoBehaviour
+{
+    public enum NavAxis { Horizontal, Vertical }
+
+    [Header("Buttons in order")]
+    [SerializeField] private List<Button> buttons = new List<Button>();
+
+    [Header("Navigation Axis")]
+    [SerializeField] private NavAxis navAxis = NavAxis.Horizontal; // íŒ¨ë„ë³„ë¡œ ì„¤ì •
+
+    [Header("Keys")]
+    private KeyCode UpKey = KeyCode.W;
+    private KeyCode DownKey = KeyCode.S;
+    private KeyCode LeftKey = KeyCode.A;
+    private KeyCode RightKey = KeyCode.D;
+    private KeyCode confirmKey = KeyCode.E;  // í™•ì •í‚¤
+
+    [Header("Behavior")]
+    [SerializeField] private bool autoFocusOnEnable = true;
+    [Tooltip("ë§ˆìš°ìŠ¤/ë‹¤ë¥¸ ìŠ¤í¬ë¦½íŠ¸ë¡œ ì„ íƒëœ ë²„íŠ¼ë„ í•˜ì´ë¼ì´íŠ¸ê°€ ë”°ë¼ê°€ë„ë¡ ê°±ì‹ ")]
+    [SerializeField] private bool followExternalSelection = true;
+    int lockedIndex = -1;
+
+    [Header("Unity ê¸°ë³¸ ë„¤ë¹„ê²Œì´ì…˜(Selectable Navigation) ë„ê¸°")]
+    [SerializeField] private bool disableUnitySelectableNavigation = true;
+
+    [Header("Lock Settings")]
+    //[SerializeField] private bool lockAfterConfirm = true;   // í™•ì •(ë²„íŠ¼ onClick) ì§í›„ ì ê¸ˆ
+    [SerializeField] private bool lockWhileTargeting = true; // ì „íˆ¬ê°€ íƒ€ê²ŸíŒ…/í”„ë¦¬ë·° ìƒíƒœë©´ ì ê¸ˆ
+    [SerializeField] private BattleManager battleManager;           // (SkillPanel ìª½ë§Œ) ì¸ìŠ¤í™í„°ì— í• ë‹¹
+    bool navLocked;
+    public bool IsLocked => navLocked;
+
+    // í…ìŠ¤íŠ¸ ìƒ‰ìƒ í•˜ì´ë¼ì´íŠ¸
+    [Header("Text Color Highlight")]
+    [SerializeField] private Color focusOrHoverColor = new Color32(255, 155, 0, 255);
+    [SerializeField, Range(0f, 1f)] float disabledLabelAlpha = 0.45f; // ë¹„í™œì„± í…ìŠ¤íŠ¸ ì•ŒíŒŒ
+
+    private int index = 0;
+    private GameObject lastSelectedGO; // ì™¸ë¶€ ì„ íƒ ì¶”ì ìš©
+
+    // ë²„íŠ¼ë³„ ë¼ë²¨ ë° ì›ë³¸ ìƒ‰ìƒ ìºì‹œ
+    private readonly List<Text> labelCache = new List<Text>();
+    private readonly List<Color> originalColors = new List<Color>();
+    private bool originalCaptured = false;   // ìµœì´ˆ 1íšŒë§Œ ì›ë³¸ìƒ‰ ì €ì¥
+
+    void Awake()
+    {
+        BuildLabelCache(captureOriginal: true);
+        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
+    }
+
+    void OnEnable()
+    {
+        BuildLabelCache(captureOriginal: false);
+        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
+        navLocked = false;
+
+        index = FirstActiveIndex();
+        if (autoFocusOnEnable) Focus();
+        UpdateHighlight(); // ì´ì œëŠ” "í…ìŠ¤íŠ¸ ìƒ‰"ì„ ê°±ì‹ í•˜ë„ë¡ ë™ì‘  :contentReference[oaicite:1]{index=1}
+
+        lastSelectedGO = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
+        if (battleManager == null)
+            battleManager = BattleManager.Instance;
+    }
+
+    void Update()
+    {
+        // íŒ¨ë„ì´ êº¼ì ¸ ìˆê±°ë‚˜, HUD CanvasGroupì´ êº¼ì ¸ ìˆìœ¼ë©´ ë™ì‘ ì•ˆí•¨
+        if (!gameObject.activeInHierarchy) return;
+        if (!IsInteractableByCanvasGroup(this.gameObject)) return;
+        if (PopupManager.IsModalOpen) return;
+        if (battleManager == null) battleManager = BattleManager.Instance;
+
+        if (lockWhileTargeting && battleManager != null && battleManager.IsTargeting)
+        {
+            if (!navLocked)
+            {
+                navLocked = true;
+                lockedIndex = index;           // í˜„ì¬ ì„ íƒëœ ë²„íŠ¼ ì¸ë±ìŠ¤ë¥¼ ì ê¸ˆ ëŒ€ìƒìœ¼ë¡œ
+            }
+            else if (lockedIndex < 0)
+            {
+                lockedIndex = index;           // í˜¹ì‹œ ë¹„ì–´ìˆë‹¤ë©´ ë³´ì •
+            }
+
+            ApplyLockedHighlight();            // ë§¤ í”„ë ˆì„ ê°•ì œë¡œ ì ê¸ˆ ë²„íŠ¼ì—ë§Œ í¬ì»¤ìŠ¤ ì ìš©
+            return;                            // ì•„ë˜ í‚¤/ë§ˆìš°ìŠ¤/ì™¸ë¶€ í¬ì»¤ìŠ¤ ì²˜ë¦¬ ì „ë¶€ ì°¨ë‹¨
+        }
+        else if (navLocked)
+        {
+            // íƒ€ê²ŸíŒ… ì¢…ë£Œ â†’ ì ê¸ˆ í•´ì œ ë° í¬ì»¤ìŠ¤ ì •ìƒí™”
+            navLocked = false;
+            lockedIndex = -1;
+            RebuildAndRefocus();
+            return;
+        }
+
+        navLocked = false;
+
+        bool handledKey = false;
+
+        // ì´ë™ í‚¤ ë¶„ê¸°: Panel_Action(Horizontal) / Panel_Skill(Vertical)
+        if (navAxis == NavAxis.Horizontal)
+        {
+            if (Input.GetKeyDown(RightKey)) { index = NextIndex(+1); Focus(); UpdateHighlight(); handledKey = true; }
+            else if (Input.GetKeyDown(LeftKey)) { index = NextIndex(-1); Focus(); UpdateHighlight(); handledKey = true; }
+        }
+        else // Vertical
+        {
+            if (Input.GetKeyDown(DownKey)) { index = NextIndex(+1); Focus(); UpdateHighlight(); handledKey = true; }
+            else if (Input.GetKeyDown(UpKey)) { index = NextIndex(-1); Focus(); UpdateHighlight(); handledKey = true; }
+        }
+
+        // í™•ì •(E)  í˜„ì¬ ë²„íŠ¼ onClick (ì·¨ì†ŒëŠ” BattleInputì—ì„œ ì²˜ë¦¬ ê³„ì†)
+        if (Input.GetKeyDown(confirmKey))
+        {
+            var b = GetButton(index);
+            b?.onClick?.Invoke();
+            handledKey = true;
+        }
+
+        // ì™¸ë¶€ ì„ íƒ ì¶”ì (ë§ˆìš°ìŠ¤/ë‹¤ë¥¸ ìŠ¤í¬ë¦½íŠ¸), ì´ í”„ë ˆì„ì— í‚¤ë¥¼ ì²˜ë¦¬í–ˆë‹¤ë©´ ê±´ë„ˆëœ€
+        if (!handledKey && followExternalSelection && EventSystem.current)
+        {
+            var now = EventSystem.current.currentSelectedGameObject;
+            if (now != lastSelectedGO && now != null)
+            {
+                // í´ë¦­ëœ ì˜¤ë¸Œì íŠ¸ê°€ ë²„íŠ¼ì˜ ìì‹ì´ì–´ë„ ë¶€ëª¨ ìª½ìœ¼ë¡œ ì˜¬ë¼ê°€ë©° Buttonì„ ì°¾ëŠ”ë‹¤
+                int extIdx = IndexOfButtonDeep(now);
+                if (extIdx >= 0)
+                {
+                    var b = GetButton(extIdx);
+                    if (b != null && b.interactable)
+                    {
+                        index = extIdx;
+                        Focus();
+                        UpdateHighlight();
+                    }
+                }
+            }
+            lastSelectedGO = now;
+        }
+        else
+        {
+            // í‚¤ë¡œ ì„ íƒì„ ë°”ê¿¨ë‹¤ë©´ ë§ˆì§€ë§‰ ì„ íƒ ìºì‹œë„ ê°±ì‹ 
+            lastSelectedGO = EventSystem.current ? EventSystem.current.currentSelectedGameObject : null;
+        }
+    }
+
+    // === Public helpers ===
+
+    // ë²„íŠ¼ ë°°ì—´ì´ ëŸ°íƒ€ì„ì— ë°”ë€ ë’¤(ì˜ˆ: ìŠ¤í‚¬ ëª©ë¡ ì¬êµ¬ì„±) ë°˜ë“œì‹œ í˜¸ì¶œ.
+    public void RebuildAndRefocus(bool keepCurrentIfPossible = true)
+    {
+        int prevIdx = index;
+        BuildLabelCache(captureOriginal: false);
+        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
+        if (!keepCurrentIfPossible || !IsUsable(GetButton(prevIdx)))
+            index = FirstActiveIndex();
+        Focus();
+        ApplyDisabledVisuals();
+        UpdateHighlight();
+    }
+
+    // ì™¸ë¶€ì—ì„œ ë²„íŠ¼ ë¦¬ìŠ¤íŠ¸ë¥¼ êµì²´í•˜ë ¤ë©´ ì´ ë©”ì„œë“œ ì‚¬ìš©.
+    public void SetButtons(List<Button> newButtons, bool refocus = true)
+    {
+        buttons = newButtons ?? new List<Button>();
+        BuildLabelCache(captureOriginal: true);
+        if (disableUnitySelectableNavigation) ApplyDisableSelectableNavigation();
+        index = FirstActiveIndex();
+        if (refocus) { Focus(); UpdateHighlight(); }
+    }
+    public void SelectIndexImmediate(int i, bool focus = true, bool updateHighlight = true)
+    {
+        if (i < 0 || i >= buttons.Count) return;
+        index = i;
+        if (focus) Focus();
+        if (updateHighlight) UpdateHighlight();
+    }
+    // ë§ˆìš°ìŠ¤/ì™¸ë¶€ í¬ì»¤ìŠ¤ ì§„ì… (Relayì—ì„œ í˜¸ì¶œ)  :contentReference[oaicite:3]{index=3}
+    public void SetExternalFocus(Button b, bool alsoSetEventSystem = false)
+    {
+        if (!b) return;
+        int i = IndexOfButtonDeep(b.gameObject);
+        if (i < 0) return;
+
+        index = i;      // í¬ì»¤ìŠ¤ ì´ë™
+        if (alsoSetEventSystem)
+        {
+            Focus();
+        }
+        UpdateHighlight();
+    }
+
+    // === Core ===
+
+    int FirstActiveIndex()
+    {
+        for (int i = 0; i < buttons.Count; i++)
+            if (IsUsable(buttons[i])) return i;
+        return 0;
+    }
+
+    int NextIndex(int dir)
+    {
+        int n = buttons.Count;
+        if (n == 0) return 0;
+
+        // ê°ì‹¸ì§€ ì•Šê³  ê²½ê³„ì—ì„œ ë©ˆì¶¤
+        int i = index + dir;
+        while (i >= 0 && i < n)
+        {
+            if (IsUsable(buttons[i])) return i;
+            i += dir; // ë‹¤ìŒ ìœ íš¨ ë²„íŠ¼ê¹Œì§€ ì§ì„  íƒìƒ‰
+        }
+        return index; // ë” ì´ìƒ ê°ˆ ê³³ ì—†ìœ¼ë©´ ì œìë¦¬
+    }
+
+    void Focus()
+    {
+        var b = GetButton(index);
+        if (b == null) return;
+
+        if (EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(b.gameObject);
+        else
+            b.Select();
+    }
+    void ApplyDisableSelectableNavigation()
+    {
+        foreach (var btn in buttons)
+        {
+            if (!btn) continue;
+            var nav = btn.navigation;
+            nav.mode = Navigation.Mode.None; // Unity ê¸°ë³¸ ë„¤ë¹„ ë¹„í™œì„±í™”
+            btn.navigation = nav;
+        }
+    }
+
+
+    void BuildLabelCache(bool captureOriginal)
+    {
+        labelCache.Clear();
+        foreach (var btn in buttons)
+            labelCache.Add(FindLabelText(btn));
+
+        if (captureOriginal && !originalCaptured)
+        {
+            originalColors.Clear();
+            for (int i = 0; i < labelCache.Count; i++)
+            {
+                var t = labelCache[i];
+                var c = t ? t.color : Color.white;
+                originalColors.Add(new Color(c.r, c.g, c.b, 1f)); // ì›ë³¸ RGB+ì•ŒíŒŒ1
+            }
+            originalCaptured = true;
+        }
+    }
+
+    void UpdateHighlight()
+    {
+        // ì „ì²´ë¥¼ ì›ë³¸ìœ¼ë¡œ ë˜ëŒë¦¬ë˜, ë¹„í™œì„± ë²„íŠ¼ì€ ìŠ¤í‚µ
+        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
+        {
+            var t = labelCache[i];
+            var b = GetButton(i);
+            if (!t) continue;
+            if (b == null || !b.interactable) continue; // ë°˜íˆ¬ëª… ìœ ì§€
+
+
+            var oc = originalColors[i];
+            t.color = new Color(oc.r, oc.g, oc.b, 1f);
+        }
+
+        // í¬ì»¤ìŠ¤ ìƒ‰ ì ìš©ë„ 'í™œì„± ë²„íŠ¼'ì—ë§Œ
+        if (index >= 0 && index < labelCache.Count && labelCache[index])
+        {
+            var b = GetButton(index);
+            if (b != null && b.interactable)
+            {
+                // í™œì„±ì¼ ë•Œë§Œ í•˜ì´ë¼ì´íŠ¸
+                var c = (Color)focusOrHoverColor;
+                labelCache[index].color = new Color(c.r, c.g, c.b, 1f);
+            }
+        }
+    }
+    void ApplyLockedHighlight()
+    {
+        // ìºì‹œ ì—†ìœ¼ë©´ ì´ˆê¸°í™”
+        if (!originalCaptured)
+            BuildLabelCache(captureOriginal: true);
+        else
+            BuildLabelCache(captureOriginal: false);
+
+        // ë¨¼ì € í™œì„±/ë¹„í™œì„± ì•ŒíŒŒ ì²˜ë¦¬ (ë¹„í™œì„±ì€ ê¸°ë³¸ìƒ‰ + ë‚®ì€ ì•ŒíŒŒ)
+        ApplyDisabledVisuals();
+
+        // ë½ëœ ì¸ë±ìŠ¤ì—ë§Œ í¬ì»¤ìŠ¤ ìƒ‰ ì ìš©
+        if (lockedIndex >= 0 && lockedIndex < labelCache.Count)
+        {
+            var t = labelCache[lockedIndex];
+            var b = GetButton(lockedIndex);
+            if (t != null && b != null && b.interactable)
+            {
+                var c = focusOrHoverColor;
+                t.color = new Color(c.r, c.g, c.b, 1f); // í¬ì»¤ìŠ¤ ì£¼í™©, ì•ŒíŒŒ 1
+            }
+        }
+    }
+
+    void ApplyDisabledVisuals()
+    {
+        for (int i = 0; i < labelCache.Count && i < originalColors.Count; i++)
+        {
+            var t = labelCache[i];
+            var b = GetButton(i);
+            if (!t) continue;
+
+            var oc = originalColors[i];
+            if (b != null && b.interactable)
+            {
+                // í™œì„±: ì›ë³¸ RGB + ì•ŒíŒŒ 1
+                t.color = new Color(oc.r, oc.g, oc.b, 1f);
+            }
+            else
+            {
+                // ë¹„í™œì„±: ì›ë³¸ RGB + ë‚®ì€ ì•ŒíŒŒ (ê¸°ë³¸ìƒ‰ ìœ ì§€, íˆ¬ëª…ë„ë§Œ ë‚®ì¶¤)
+                t.color = new Color(oc.r, oc.g, oc.b, disabledLabelAlpha);
+            }
+        }
+    }
+    Text FindLabelText(Button btn)
+    {
+        if (!btn) return null;
+
+        // targetGraphicì´ Textì¸ ê²½ìš°, ColorTintê°€ í…ìŠ¤íŠ¸ë¥¼ ë¬¼ë“¤ì„ -> ë°°ê²½ Imageê°€ ìˆìœ¼ë©´ íƒ€ê²Ÿì„ ê·¸ìª½ìœ¼ë¡œ ë³€ê²½
+        var bg = btn.GetComponent<Image>();
+        if (bg && btn.targetGraphic is Text)
+            btn.targetGraphic = bg;
+
+        // ìŠ¤í‚¬ ë²„íŠ¼ì€ í…ìŠ¤íŠ¸ ìƒ‰ì„ ìš°ë¦¬ê°€ ì§ì ‘ ê´€ë¦¬í•˜ë¯€ë¡œ, íŠ¸ëœì§€ì…˜ì€ ë°°ê²½ë§Œ ì“°ê±°ë‚˜ Noneìœ¼ë¡œ
+        if (bg && btn.transition == Selectable.Transition.ColorTint)
+        {
+            // ì—¬ê¸°ì„œ ColorBlockì„ í°ìƒ‰ìœ¼ë¡œ ì •ë¦¬í•´ë„ ë˜ê³ ,
+            // ìµœì†Œí•œ í…ìŠ¤íŠ¸ì—ëŠ” ì˜í–¥ì´ ì•ˆ ê°€ê²Œ targetGraphicë§Œ Imageë¡œ ë§ì¶°ì£¼ë©´ ì¶©ë¶„.
+        }
+
+        var texts = btn.GetComponentsInChildren<Text>(true);
+        return texts.Length > 0 ? texts[0] : null;
+    }
+
+    // === Utils ===
+
+    Button GetButton(int i)
+    {
+        if (i < 0 || i >= buttons.Count) return null;
+        return buttons[i];
+    }
+
+    bool IsUsable(Button b)
+    {
+        return b != null && b.gameObject.activeInHierarchy && b.interactable;
+    }
+
+    static bool IsInteractableByCanvasGroup(GameObject go)
+    {
+        var groups = go.GetComponentsInParent<CanvasGroup>(true);
+        foreach (var cg in groups)
+        {
+            if (!cg.enabled) continue;
+            if (!cg.interactable || !cg.blocksRaycasts || cg.alpha <= 0f)
+                return false;
+        }
+        return true;
+    }
+    int IndexOfButtonDeep(GameObject go)
+    {
+        if (!go) return -1;
+        Transform t = go.transform;
+        while (t != null)
+        {
+            var btn = t.GetComponent<Button>();
+            if (btn != null)
+            {
+                for (int i = 0; i < buttons.Count; i++)
+                    if (buttons[i] == btn) return i;
+                return -1; // ë²„íŠ¼ì´ì§€ë§Œ ë‚´ ë¦¬ìŠ¤íŠ¸ê°€ ì•„ë‹ ë•Œ
+            }
+            t = t.parent;
+        }
+        return -1;
+    }
+}

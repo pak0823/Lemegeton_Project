@@ -1,90 +1,90 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using Unity.EditorCoroutines.Editor;
-using UnityEditor;
-using UnityEngine;
-using UnityEngine.Networking;
-
-public class GoogleSheetImporter
-{
-    // º¹»çÇÑ ±¸±Û ½ÃÆ® CSV URL
-    private static string sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=914486176&single=true&output=csv";
-    private static string savePath = "Assets/03_Data/Unit/Player"; // ¿¡¼ÂÀÌ »ı¼ºµÉ °æ·Î
-
-    [MenuItem("Tools/Sync Unit Data (ID Based)")]
-
-    public static void ImportData() => EditorCoroutineUtility.StartCoroutineOwnerless(DownloadCSV());
-
-    private static IEnumerator DownloadCSV()
-    {
-        Debug.Log("±¸±Û ½ºÇÁ·¹µå½ÃÆ®¿¡¼­ µ¥ÀÌÅÍ¸¦ °¡Á®¿À´Â Áß...");
-
-        using (UnityWebRequest www = UnityWebRequest.Get(sheetUrl))
-        {
-            yield return www.SendWebRequest();
-
-            if (www.result == UnityWebRequest.Result.Success)
-            {
-                // Á¤Àû ¸Ş¼­µåÀÌ¹Ç·Î ÀÎ½ºÅÏ½º ¾øÀÌ È£Ãâ
-                ProcessCSV(www.downloadHandler.text);
-                Debug.Log("<color=green>¸ğµç À¯´Ö µ¥ÀÌÅÍ µ¿±âÈ­ ¿Ï·á!</color>");
-            }
-            else
-            {
-                Debug.LogError($"µ¥ÀÌÅÍ ·Îµå ½ÇÆĞ: {www.error}");
-            }
-        }
-    }
-
-    private static void ProcessCSV(string csv)
-    {
-        // ÁÙ¹Ù²Ş ±âÈ£ ´ëÀÀ ºĞ¸®
-        string[] rows = csv.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-
-        // ±âÁ¸ ¸ğµç UnitData ·Îµå (ID ¸ÅÄª¿ë)
-        string[] guids = AssetDatabase.FindAssets("t:UnitData");
-        Dictionary<int, UnitData> unitDict = new Dictionary<int, UnitData>();
-        foreach (var guid in guids)
-        {
-            var asset = AssetDatabase.LoadAssetAtPath<UnitData>(AssetDatabase.GUIDToAssetPath(guid));
-            if (asset != null && !unitDict.ContainsKey(asset.unitID)) unitDict.Add(asset.unitID, asset);
-        }
-
-        // ½ÃÆ® µ¥ÀÌÅÍ ¼øÈ¸ (6ÇàºÎÅÍ)
-        for (int i = 5; i < rows.Length; i++)
-        {
-            string[] cols = rows[i].Split(',');
-            if (cols.Length < 8 || !int.TryParse(cols[0], out int id)) continue; // Num ÆÄ½Ì ½ÇÆĞ ½Ã ½ºÅµ
-
-            string alias = cols[1].Trim();
-            if (string.IsNullOrEmpty(alias)) continue;
-
-            UnitData so;
-            // ID°¡ ¾øÀ¸¸é ½Å±Ô »ı¼º, ÀÖÀ¸¸é ±âÁ¸ ÆÄÀÏ »ç¿ë
-            if (!unitDict.TryGetValue(id, out so))
-            {
-                so = ScriptableObject.CreateInstance<UnitData>();
-                so.unitID = id;
-                // Æú´õ Ã¼Å© ¹× »ı¼º
-                if (!AssetDatabase.IsValidFolder(savePath)) System.IO.Directory.CreateDirectory(savePath);
-                AssetDatabase.CreateAsset(so, $"{savePath}/{alias}_{id}.asset");
-                Debug.Log($"<color=cyan>½Å±Ô À¯´Ö »ı¼º: {alias}({id})</color>");
-            }
-
-            // µ¥ÀÌÅÍ °»½Å
-            so.DisplayName = alias;
-            int.TryParse(cols[3], out so.baseSTR);
-            int.TryParse(cols[4], out so.baseCLV);
-            int.TryParse(cols[5], out so.baseAGI);
-            int.TryParse(cols[6], out so.baseBDY);
-            int.TryParse(cols[7], out so.baseMND);
-            int.TryParse(cols[8], out so.baseINS);
-
-            EditorUtility.SetDirty(so);
-        }
-
-        AssetDatabase.SaveAssets();
-        Debug.Log("<color=green>ID ±â¹İ µ¿±âÈ­ ¿Ï·á!</color>");
-    }
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using Unity.EditorCoroutines.Editor;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Networking;
+
+public class GoogleSheetImporter
+{
+    // ë³µì‚¬í•œ êµ¬ê¸€ ì‹œíŠ¸ CSV URL
+    private static string sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=914486176&single=true&output=csv";
+    private static string savePath = "Assets/03_Data/Unit/Player"; // ì—ì…‹ì´ ìƒì„±ë  ê²½ë¡œ
+
+    [MenuItem("Tools/Sync Unit Data (ID Based)")]
+
+    public static void ImportData() => EditorCoroutineUtility.StartCoroutineOwnerless(DownloadCSV());
+
+    private static IEnumerator DownloadCSV()
+    {
+        Debug.Log("êµ¬ê¸€ ìŠ¤í”„ë ˆë“œì‹œíŠ¸ì—ì„œ ë°ì´í„°ë¥¼ ê°€ì ¸ì˜¤ëŠ” ì¤‘...");
+
+        using (UnityWebRequest www = UnityWebRequest.Get(sheetUrl))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                // ì •ì  ë©”ì„œë“œì´ë¯€ë¡œ ì¸ìŠ¤í„´ìŠ¤ ì—†ì´ í˜¸ì¶œ
+                ProcessCSV(www.downloadHandler.text);
+                Debug.Log("<color=green>ëª¨ë“  ìœ ë‹› ë°ì´í„° ë™ê¸°í™” ì™„ë£Œ!</color>");
+            }
+            else
+            {
+                Debug.LogError($"ë°ì´í„° ë¡œë“œ ì‹¤íŒ¨: {www.error}");
+            }
+        }
+    }
+
+    private static void ProcessCSV(string csv)
+    {
+        // ì¤„ë°”ê¿ˆ ê¸°í˜¸ ëŒ€ì‘ ë¶„ë¦¬
+        string[] rows = csv.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+        // ê¸°ì¡´ ëª¨ë“  UnitData ë¡œë“œ (ID ë§¤ì¹­ìš©)
+        string[] guids = AssetDatabase.FindAssets("t:UnitData");
+        Dictionary<int, UnitData> unitDict = new Dictionary<int, UnitData>();
+        foreach (var guid in guids)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<UnitData>(AssetDatabase.GUIDToAssetPath(guid));
+            if (asset != null && !unitDict.ContainsKey(asset.unitID)) unitDict.Add(asset.unitID, asset);
+        }
+
+        // ì‹œíŠ¸ ë°ì´í„° ìˆœíšŒ (6í–‰ë¶€í„°)
+        for (int i = 5; i < rows.Length; i++)
+        {
+            string[] cols = rows[i].Split(',');
+            if (cols.Length < 8 || !int.TryParse(cols[0], out int id)) continue; // Num íŒŒì‹± ì‹¤íŒ¨ ì‹œ ìŠ¤í‚µ
+
+            string alias = cols[1].Trim();
+            if (string.IsNullOrEmpty(alias)) continue;
+
+            UnitData so;
+            // IDê°€ ì—†ìœ¼ë©´ ì‹ ê·œ ìƒì„±, ìˆìœ¼ë©´ ê¸°ì¡´ íŒŒì¼ ì‚¬ìš©
+            if (!unitDict.TryGetValue(id, out so))
+            {
+                so = ScriptableObject.CreateInstance<UnitData>();
+                so.unitID = id;
+                // í´ë” ì²´í¬ ë° ìƒì„±
+                if (!AssetDatabase.IsValidFolder(savePath)) System.IO.Directory.CreateDirectory(savePath);
+                AssetDatabase.CreateAsset(so, $"{savePath}/{alias}_{id}.asset");
+                Debug.Log($"<color=cyan>ì‹ ê·œ ìœ ë‹› ìƒì„±: {alias}({id})</color>");
+            }
+
+            // ë°ì´í„° ê°±ì‹ 
+            so.DisplayName = alias;
+            int.TryParse(cols[3], out so.baseSTR);
+            int.TryParse(cols[4], out so.baseCLV);
+            int.TryParse(cols[5], out so.baseAGI);
+            int.TryParse(cols[6], out so.baseBDY);
+            int.TryParse(cols[7], out so.baseMND);
+            int.TryParse(cols[8], out so.baseINS);
+
+            EditorUtility.SetDirty(so);
+        }
+
+        AssetDatabase.SaveAssets();
+        Debug.Log("<color=green>ID ê¸°ë°˜ ë™ê¸°í™” ì™„ë£Œ!</color>");
+    }
 }

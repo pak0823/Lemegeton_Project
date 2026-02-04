@@ -1,275 +1,275 @@
-// SkillAsset.cs
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-using static ParametricDamageSkill;
-
-public struct SkillRuntime
-{
-    public Tilemap map;
-    public Vector3Int originCell;   // ½ÃÀüÀÚ Á¶ÁØ/Å¸°Ù ±âÁØ ¼¿
-    public Vector3Int casterCell;   // ½ÃÀüÀÚ ÇöÀç ¼¿
-    public Vector3Int targetCell;   // ÇÇ°İÀÚ ¼¿
-}
-
-[System.Serializable]
-public struct TrainingRouteInfo
-{
-    public string title;    // ÈÆ·Ã ÀÌ¸§
-    [TextArea] public string description;   // ÈÆ·Ã È¿°ú ¼³¸í
-
-    [Header("Override Info")]
-    [TextArea] public string overrideSkillDescription; // ÀÌ ÈÆ·Ã Àû¿ë ½Ã º¸¿©ÁÙ ½ºÅ³ ¼³¸í
-
-    public int trainingCost;  //ÇØ±İ ºñ¿ë
-}
-
-public abstract class SkillAsset : ScriptableObject
-{
-    [Header("Display")]
-    public string displayName;
-    public Sprite descriptionImage; //½ºÅ³ ¹üÀ§ ¼³¸í ÀÌ¹ÌÁö(ÆĞ³Î¿¡ Ç¥½Ã)
-    [TextArea] public string description;   // ½ºÅ³ ¼³¸í(ÆĞ³Î¿¡ Ç¥½Ã)
-
-    [Header("Damage Type")]
-    public DamageSchool school = DamageSchool.Physical;
-    public AttackAttr attribute = AttackAttr.None;
-    public float power = 1f; // ±âº» ¹è¼ö(¿¹: 1.0 = ¿ø °ø°İ·Â)
-
-    [Header("Cost")]
-    public SkillCostResource costResource = SkillCostResource.MP;
-    [Tooltip("½ÇÁ¦ »ç¿ëµÇ´Â ±âº» ºñ¿ë (MP/Rage °øÅë)")]
-    [Min(0)] public int cost = 0;
-
-    [HideInInspector]
-    public int mpCost = 0;
-
-    [Header("Targeting")]
-    public SkillTargetMode targetMode; // ±âÁ¸ enum Àç»ç¿ë (Unit/Tile) 
-
-    [Header("Targeting Rules")]
-    [Tooltip("ÀÌ ½ºÅ³À» ´©±¸¿¡°Ô »ç¿ëÇÒ ¼ö ÀÖ´Â°¡?")]
-    public SkillTargetAlignment targetAlignment = SkillTargetAlignment.Enemy; // ±âº»°ªÀº Àû
-
-    [Header("Cooldown")]
-    [Tooltip("ÇØ´ç ½ºÅ³ »ç¿ë ÈÄ ´Ù½Ã »ç¿ëÇÒ ¶§±îÁö ÇÊ¿äÇÑ 'ÀÚ½ÅÀÇ ÅÏ ¼ö'. 0ÀÌ¸é Äğ´Ù¿î ¾øÀ½.")]
-    public int cooldownTurns = 0;
-
-    [Header("Animation")]
-    [Tooltip("ÀÌ ½ºÅ³ÀÇ ¾Ö´Ï¸ŞÀÌ¼Ç Å¸ÀÔ. ±ÙÁ¢, ¿ø°Å¸®, ÀÚ±â °­È­ µî.")]
-    public SkillAnimKind animKind = SkillAnimKind.Melee;
-
-    [Tooltip("ÀÌ ½ºÅ³ÀÇ ±âº» ¾Ö´Ï¸ŞÀÌ¼Ç Æ®¸®°Å ÀÌ¸§. ºñ¿öµÎ¸é Å¸ÀÔº° ±âº»°ª(Attack/Ranged/Casting µî)À» »ç¿ë.")]
-    public string animTriggerOverride;
-
-    [Header("Melee / Gap Close")]
-    [Tooltip("Unit Å¸°Ù ½ºÅ³ÀÏ ¶§, ´ë»ó¿¡°Ô ¶Ù¾î°¡¼­ °ø°İÇÒÁö ¿©ºÎ. false¸é Á¦ÀÚ¸®¿¡¼­ ½ÃÀü.")]
-    public bool useGapCloseJump = true;
-
-    [Header("Compat")]
-    public SkillId legacyId = SkillId.Skill1; // ±âÁ¸ ºĞ±â ·ÎÁ÷ È£È¯¿ë
-
-    [Header("Training")]
-    [Tooltip("ÈÆ·Ã UI¿¡ Ç¥½ÃÇÒ 3°³ ·çÆ®ÀÇ Á¦¸ñ/¼³¸í. ºñ¾î ÀÖÀ¸¸é ±âº» ÅØ½ºÆ®·Î ´ëÃ¼.")]
-    public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
-
-    // BattleManager´Â ÀÌ ÇÔ¼ö¸¸ È£ÃâÇÏ°í, ±¸Ã¼ÀûÀÎ ÀıÂ÷(¼±ÅÃ, ¾Ö´Ï, È¿°ú)´Â ½ºÅ³ÀÌ ¾Ë¾Æ¼­ ÇÔ.
-    public virtual IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit = null, Tilemap _targetMap = null, Vector3Int _targetCell = default)
-    {
-        // ±âº» µ¿ÀÛ: Å¸°Ù ¸ğµå¿¡ µû¶ó ´Ü¼ø Resolve È£Ãâ
-        // Æ¯¼ö ·ÎÁ÷ÀÌ ÇÊ¿äÇÑ ÀÚ½Ä Å¬·¡½º(³Ë¹é, ÈÄÅğ µî)´Â ÀÌ ÇÔ¼ö¸¦ overrideÇØ¼­ ¾´´Ù.
-
-        if (targetMode == SkillTargetMode.Unit)
-        {
-            if (_targetUnit != null)
-            {
-                // °øÅë °¸Å¬·ÎÁî(Á¢±Ù) & °ø°İ ¿¬Ãâ ÄÚ·çÆ¾ È£Ãâ
-                yield return _battlemanager.PerformStandardUnitSkillFlow(this, _caster, _targetUnit);
-            }
-        }
-        else // Tile Mode
-        {
-            if (_targetMap != null)
-            {
-                yield return _battlemanager.PerformStandardTileSkillFlow(this, _targetMap, _targetCell, _caster);
-            }
-        }
-    }
-
-    public static bool IsUntargetableByEnemy(BattleUnit _target)
-    {
-        if (_target == null || _target.IsDead) return true;
-
-        var usc = _target.GetComponent<UnitStateController>();
-        if (usc == null) return false;
-
-        // Àáº¹(±âÁ¸) + ¿¬¸· Àº½Å(½Å±Ô ¹öÇÁ) ¸ğµÎ µ¿ÀÏÇÏ°Ô "Å¸°Ù ÁöÁ¤ ºÒ°¡"
-        return usc.Has(UnitStateId.Ambush) || usc.HasBuff(UnitStateBuffId.SmokeHidden);
-    }
-
-    // ±âº»°ª 0 = Á¦¾Ğ °¨¼Ò ¾øÀ½
-    public virtual int GetSuppressionOnHit(BattleUnit _caster) => 0;
-
-    /// <summary>¹Ì¸®º¸±â/ÇÇ°İÆÇÁ¤À» À§ÇÑ ¹üÀ§ ¼¿ ¹İÈ¯. origin = ´ë»ó À¯´Ö ¼¿(À¯´ÖÇü) ¶Ç´Â Á¶ÁØ ¼¿(Å¸ÀÏÇü)</summary>
-    public abstract IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow);
-
-    /// <summary>À¯´Ö Áö¸ñÇü ÇØ°á</summary>
-    public abstract IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target);
-
-    /// <summary>Å¸ÀÏ Áö¸ñÇü ÇØ°á</summary>
-    public abstract IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster);
-
-    //½ºÅ³º° ´ë¹ÌÁö °è»ê. ÇÊ¿ä½Ã ÇÏÀ§ Å¬·¡½º¿¡¼­ override
-    public virtual float ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
-    {
-        if (_caster == null)
-            return 0f;
-
-        // ±âº» °ø°İ ½ºÅÈ ¼±ÅÃ
-        float stat = 0f;
-        switch (school)
-        {
-            case DamageSchool.Physical:
-                stat = _caster.STR;
-                break;
-
-            case DamageSchool.Magical:
-                stat = _caster.CLV;
-                break;
-
-            case DamageSchool.Composite:
-                // °íÁ¤ ´ë¹ÌÁö STR + MAG
-                stat = _caster.STR + _caster.CLV;
-                break;
-
-            default:
-                stat = _caster.STR; // È¤Àº 0f
-                break;
-        }
-
-        // ±â¼ú À§·Â Àû¿ë
-        float dmg = stat * power;
-
-        return dmg;
-    }
-    public virtual int GetBaseCost()
-    {
-        // ½Å±Ô cost¸¦ ¿ì¼±, 0ÀÌ¸é ±âÁ¸ mpCost·Î fallback
-        if (cost > 0) return cost;
-        return mpCost;
-    }
-
-    public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> _potentialTargets)
-    {
-        if (_potentialTargets == null || _potentialTargets.Count == 0) return null;
-        if (_potentialTargets.Count == 1) return _potentialTargets[0];
-
-        // ¸ğµç ´ë»óÀÇ Hostility ÇÕ°è °è»ê
-        float totalHostility = 0f;
-        foreach (var unit in _potentialTargets)
-        {
-            totalHostility += Mathf.Max(0f, unit.Hostility);
-        }
-
-        // ÇÕ°è°¡ 0 ÀÌÇÏ¸é (¸ğµÎ Àû´ë°¨ÀÌ 0), ·£´ıÀ¸·Î ÇÑ ¸í ¼±ÅÃ
-        if (totalHostility <= 0)
-        {
-            return _potentialTargets[Random.Range(0, _potentialTargets.Count)];
-        }
-
-        // 0 ~ totalHostility »çÀÌÀÇ ·£´ı °ª ¼±ÅÃ
-        float randomPoint = Random.Range(0, totalHostility);
-
-        // ·£´ı °ª¿¡¼­ °¢ À¯´ÖÀÇ Hostility¸¦ »©³ª°¡´Ù°¡ 0 ÀÌÇÏ°¡ µÇ¸é ÇØ´ç À¯´Ö ¼±ÅÃ
-        foreach (var unit in _potentialTargets)
-        {
-            randomPoint -= Mathf.Max(0f, unit.Hostility);
-            if (randomPoint <= 0)
-            {
-                return unit;
-            }
-        }
-
-        // ¸¸¾àÀÇ °æ¿ì(ºÎµ¿¼Ò¼öÁ¡ ¿À·ù µî)¸¦ ´ëºñÇØ ¸¶Áö¸· À¯´ÖÀ» ¹İÈ¯
-        return _potentialTargets[_potentialTargets.Count - 1];
-    }
-
-    // <summary>ÄÃ·º¼Ç¿¡¼­ 'Àû´ë°¨(Hostility)'ÀÌ °¡Àå ³ôÀº ÇÃ·¹ÀÌ¾î À¯´ÖÀ» ¼±ÅÃ. µ¿·üÀÌ¸é ·£´ı.</summary>
-    //public static BattleUnit PickHighestHostility(IEnumerable<BattleUnit> candidates)
-    //{
-    //    if (candidates == null) return null;
-    //    // »ıÁ¸ÇÑ ÇÃ·¹ÀÌ¾î¸¸
-    //    var list = candidates.Where(u => u != null && u.team == Team.Player && !u.IsDead).ToList();
-    //    if (list.Count == 0) return null;
-
-    //    float max = list.Max(u => Mathf.Max(0, u.Hostility));
-    //    var top = list.Where(u => Mathf.Max(0, u.Hostility) == max).ToList();
-
-    //    return top[Random.Range(0, top.Count)];
-    //}
-    public static BattleUnit PickPreferredStatusThenHighestHostility(IEnumerable<BattleUnit> _candidates, StatusId _preferred)
-    {
-        if (_candidates == null) return null;
-        var list = _candidates
-            .Where(u => u && u.data.team == Team.Player && !u.IsDead)
-            .Where(u => !IsUntargetableByEnemy(u))   // ¿¬¸· Àº½Å/Àáº¹ Å¸°Ù Á¦¿Ü
-            .ToList();
-        if (list.Count == 0) return null;
-
-        var slowed = list.Where(u =>
-        {
-            var sc = u.GetComponent<StatusController>();
-            return sc != null && sc.Has(_preferred);
-        }).ToList();
-
-        var pool = (slowed.Count > 0) ? slowed : list;
-
-        // °¡½Ã °¨¼è °í·ÁÇÑ °¡ÁßÄ¡ ·£´ı
-        float total = 0f;
-        foreach (var u in pool)
-            total += Mathf.Max(0f, u.Hostility);
-
-        if (total <= 0f) return pool[Random.Range(0, pool.Count)];
-
-        float r = Random.Range(0, total);
-        foreach (var u in pool)
-        {
-            r -= Mathf.Max(0f, u.Hostility);
-            if (r <= 0f) return u;
-        }
-        return pool[pool.Count - 1];
-        //if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
-        //return PickTargetByWeightedHostility(list);
-    }
-    public virtual string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-
-        if (cost <= 0) return description;
-
-        string label = (res == SkillCostResource.MP) ? "MP" : "Rage";
-        string color = (res == SkillCostResource.MP) ? "#00A2FF" : "#FF4B4B"; // ¿¹½Ã
-        return $"{description}<size=20%><color=#808080>({label}:<color={color}>{cost}</color>)</color></size>";
-    }
-
-    public virtual SkillCostResource GetCostResource(BattleUnit caster) => costResource;
-
-    public virtual bool ShouldGapCloseToTarget(BattleUnit _caster, BattleUnit _target)    /// Unit Å¸°Ù »ç¿ë ½Ã Á¡ÇÁ ¿¬Ãâ(gap close)À» »ç¿ëÇÒÁö ¿©ºÎ
-    {
-        return useGapCloseJump;
-    }
-    public virtual int GetEffectiveCost(BattleUnit _caster)
-    {
-        // ±âº»°ª: base cost (MP/Rage °øÅë)
-        return Mathf.Max(0, GetBaseCost());
-    }
-    public virtual int GetEffectiveCooldownTurns(BattleUnit _caster)
-    {
-        // ±âº»Àº ±×³É ¼³Á¤°ª ±×´ë·Î
-        return cooldownTurns;
-    }
-
+// SkillAsset.cs
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using static ParametricDamageSkill;
+
+public struct SkillRuntime
+{
+    public Tilemap map;
+    public Vector3Int originCell;   // ì‹œì „ì ì¡°ì¤€/íƒ€ê²Ÿ ê¸°ì¤€ ì…€
+    public Vector3Int casterCell;   // ì‹œì „ì í˜„ì¬ ì…€
+    public Vector3Int targetCell;   // í”¼ê²©ì ì…€
+}
+
+[System.Serializable]
+public struct TrainingRouteInfo
+{
+    public string title;    // í›ˆë ¨ ì´ë¦„
+    [TextArea] public string description;   // í›ˆë ¨ íš¨ê³¼ ì„¤ëª…
+
+    [Header("Override Info")]
+    [TextArea] public string overrideSkillDescription; // ì´ í›ˆë ¨ ì ìš© ì‹œ ë³´ì—¬ì¤„ ìŠ¤í‚¬ ì„¤ëª…
+
+    public int trainingCost;  //í•´ê¸ˆ ë¹„ìš©
+}
+
+public abstract class SkillAsset : ScriptableObject
+{
+    [Header("Display")]
+    public string displayName;
+    public Sprite descriptionImage; //ìŠ¤í‚¬ ë²”ìœ„ ì„¤ëª… ì´ë¯¸ì§€(íŒ¨ë„ì— í‘œì‹œ)
+    [TextArea] public string description;   // ìŠ¤í‚¬ ì„¤ëª…(íŒ¨ë„ì— í‘œì‹œ)
+
+    [Header("Damage Type")]
+    public DamageSchool school = DamageSchool.Physical;
+    public AttackAttr attribute = AttackAttr.None;
+    public float power = 1f; // ê¸°ë³¸ ë°°ìˆ˜(ì˜ˆ: 1.0 = ì› ê³µê²©ë ¥)
+
+    [Header("Cost")]
+    public SkillCostResource costResource = SkillCostResource.MP;
+    [Tooltip("ì‹¤ì œ ì‚¬ìš©ë˜ëŠ” ê¸°ë³¸ ë¹„ìš© (MP/Rage ê³µí†µ)")]
+    [Min(0)] public int cost = 0;
+
+    [HideInInspector]
+    public int mpCost = 0;
+
+    [Header("Targeting")]
+    public SkillTargetMode targetMode; // ê¸°ì¡´ enum ì¬ì‚¬ìš© (Unit/Tile) 
+
+    [Header("Targeting Rules")]
+    [Tooltip("ì´ ìŠ¤í‚¬ì„ ëˆ„êµ¬ì—ê²Œ ì‚¬ìš©í•  ìˆ˜ ìˆëŠ”ê°€?")]
+    public SkillTargetAlignment targetAlignment = SkillTargetAlignment.Enemy; // ê¸°ë³¸ê°’ì€ ì 
+
+    [Header("Cooldown")]
+    [Tooltip("í•´ë‹¹ ìŠ¤í‚¬ ì‚¬ìš© í›„ ë‹¤ì‹œ ì‚¬ìš©í•  ë•Œê¹Œì§€ í•„ìš”í•œ 'ìì‹ ì˜ í„´ ìˆ˜'. 0ì´ë©´ ì¿¨ë‹¤ìš´ ì—†ìŒ.")]
+    public int cooldownTurns = 0;
+
+    [Header("Animation")]
+    [Tooltip("ì´ ìŠ¤í‚¬ì˜ ì• ë‹ˆë©”ì´ì…˜ íƒ€ì…. ê·¼ì ‘, ì›ê±°ë¦¬, ìê¸° ê°•í™” ë“±.")]
+    public SkillAnimKind animKind = SkillAnimKind.Melee;
+
+    [Tooltip("ì´ ìŠ¤í‚¬ì˜ ê¸°ë³¸ ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë¦¬ê±° ì´ë¦„. ë¹„ì›Œë‘ë©´ íƒ€ì…ë³„ ê¸°ë³¸ê°’(Attack/Ranged/Casting ë“±)ì„ ì‚¬ìš©.")]
+    public string animTriggerOverride;
+
+    [Header("Melee / Gap Close")]
+    [Tooltip("Unit íƒ€ê²Ÿ ìŠ¤í‚¬ì¼ ë•Œ, ëŒ€ìƒì—ê²Œ ë›°ì–´ê°€ì„œ ê³µê²©í• ì§€ ì—¬ë¶€. falseë©´ ì œìë¦¬ì—ì„œ ì‹œì „.")]
+    public bool useGapCloseJump = true;
+
+    [Header("Compat")]
+    public SkillId legacyId = SkillId.Skill1; // ê¸°ì¡´ ë¶„ê¸° ë¡œì§ í˜¸í™˜ìš©
+
+    [Header("Training")]
+    [Tooltip("í›ˆë ¨ UIì— í‘œì‹œí•  3ê°œ ë£¨íŠ¸ì˜ ì œëª©/ì„¤ëª…. ë¹„ì–´ ìˆìœ¼ë©´ ê¸°ë³¸ í…ìŠ¤íŠ¸ë¡œ ëŒ€ì²´.")]
+    public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
+
+    // BattleManagerëŠ” ì´ í•¨ìˆ˜ë§Œ í˜¸ì¶œí•˜ê³ , êµ¬ì²´ì ì¸ ì ˆì°¨(ì„ íƒ, ì• ë‹ˆ, íš¨ê³¼)ëŠ” ìŠ¤í‚¬ì´ ì•Œì•„ì„œ í•¨.
+    public virtual IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit = null, Tilemap _targetMap = null, Vector3Int _targetCell = default)
+    {
+        // ê¸°ë³¸ ë™ì‘: íƒ€ê²Ÿ ëª¨ë“œì— ë”°ë¼ ë‹¨ìˆœ Resolve í˜¸ì¶œ
+        // íŠ¹ìˆ˜ ë¡œì§ì´ í•„ìš”í•œ ìì‹ í´ë˜ìŠ¤(ë„‰ë°±, í›„í‡´ ë“±)ëŠ” ì´ í•¨ìˆ˜ë¥¼ overrideí•´ì„œ ì“´ë‹¤.
+
+        if (targetMode == SkillTargetMode.Unit)
+        {
+            if (_targetUnit != null)
+            {
+                // ê³µí†µ ê°­í´ë¡œì¦ˆ(ì ‘ê·¼) & ê³µê²© ì—°ì¶œ ì½”ë£¨í‹´ í˜¸ì¶œ
+                yield return _battlemanager.PerformStandardUnitSkillFlow(this, _caster, _targetUnit);
+            }
+        }
+        else // Tile Mode
+        {
+            if (_targetMap != null)
+            {
+                yield return _battlemanager.PerformStandardTileSkillFlow(this, _targetMap, _targetCell, _caster);
+            }
+        }
+    }
+
+    public static bool IsUntargetableByEnemy(BattleUnit _target)
+    {
+        if (_target == null || _target.IsDead) return true;
+
+        var usc = _target.GetComponent<UnitStateController>();
+        if (usc == null) return false;
+
+        // ì ë³µ(ê¸°ì¡´) + ì—°ë§‰ ì€ì‹ (ì‹ ê·œ ë²„í”„) ëª¨ë‘ ë™ì¼í•˜ê²Œ "íƒ€ê²Ÿ ì§€ì • ë¶ˆê°€"
+        return usc.Has(UnitStateId.Ambush) || usc.HasBuff(UnitStateBuffId.SmokeHidden);
+    }
+
+    // ê¸°ë³¸ê°’ 0 = ì œì•• ê°ì†Œ ì—†ìŒ
+    public virtual int GetSuppressionOnHit(BattleUnit _caster) => 0;
+
+    /// <summary>ë¯¸ë¦¬ë³´ê¸°/í”¼ê²©íŒì •ì„ ìœ„í•œ ë²”ìœ„ ì…€ ë°˜í™˜. origin = ëŒ€ìƒ ìœ ë‹› ì…€(ìœ ë‹›í˜•) ë˜ëŠ” ì¡°ì¤€ ì…€(íƒ€ì¼í˜•)</summary>
+    public abstract IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow);
+
+    /// <summary>ìœ ë‹› ì§€ëª©í˜• í•´ê²°</summary>
+    public abstract IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target);
+
+    /// <summary>íƒ€ì¼ ì§€ëª©í˜• í•´ê²°</summary>
+    public abstract IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster);
+
+    //ìŠ¤í‚¬ë³„ ëŒ€ë¯¸ì§€ ê³„ì‚°. í•„ìš”ì‹œ í•˜ìœ„ í´ë˜ìŠ¤ì—ì„œ override
+    public virtual float ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
+    {
+        if (_caster == null)
+            return 0f;
+
+        // ê¸°ë³¸ ê³µê²© ìŠ¤íƒ¯ ì„ íƒ
+        float stat = 0f;
+        switch (school)
+        {
+            case DamageSchool.Physical:
+                stat = _caster.STR;
+                break;
+
+            case DamageSchool.Magical:
+                stat = _caster.CLV;
+                break;
+
+            case DamageSchool.Composite:
+                // ê³ ì • ëŒ€ë¯¸ì§€ STR + MAG
+                stat = _caster.STR + _caster.CLV;
+                break;
+
+            default:
+                stat = _caster.STR; // í˜¹ì€ 0f
+                break;
+        }
+
+        // ê¸°ìˆ  ìœ„ë ¥ ì ìš©
+        float dmg = stat * power;
+
+        return dmg;
+    }
+    public virtual int GetBaseCost()
+    {
+        // ì‹ ê·œ costë¥¼ ìš°ì„ , 0ì´ë©´ ê¸°ì¡´ mpCostë¡œ fallback
+        if (cost > 0) return cost;
+        return mpCost;
+    }
+
+    public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> _potentialTargets)
+    {
+        if (_potentialTargets == null || _potentialTargets.Count == 0) return null;
+        if (_potentialTargets.Count == 1) return _potentialTargets[0];
+
+        // ëª¨ë“  ëŒ€ìƒì˜ Hostility í•©ê³„ ê³„ì‚°
+        float totalHostility = 0f;
+        foreach (var unit in _potentialTargets)
+        {
+            totalHostility += Mathf.Max(0f, unit.Hostility);
+        }
+
+        // í•©ê³„ê°€ 0 ì´í•˜ë©´ (ëª¨ë‘ ì ëŒ€ê°ì´ 0), ëœë¤ìœ¼ë¡œ í•œ ëª… ì„ íƒ
+        if (totalHostility <= 0)
+        {
+            return _potentialTargets[Random.Range(0, _potentialTargets.Count)];
+        }
+
+        // 0 ~ totalHostility ì‚¬ì´ì˜ ëœë¤ ê°’ ì„ íƒ
+        float randomPoint = Random.Range(0, totalHostility);
+
+        // ëœë¤ ê°’ì—ì„œ ê° ìœ ë‹›ì˜ Hostilityë¥¼ ë¹¼ë‚˜ê°€ë‹¤ê°€ 0 ì´í•˜ê°€ ë˜ë©´ í•´ë‹¹ ìœ ë‹› ì„ íƒ
+        foreach (var unit in _potentialTargets)
+        {
+            randomPoint -= Mathf.Max(0f, unit.Hostility);
+            if (randomPoint <= 0)
+            {
+                return unit;
+            }
+        }
+
+        // ë§Œì•½ì˜ ê²½ìš°(ë¶€ë™ì†Œìˆ˜ì  ì˜¤ë¥˜ ë“±)ë¥¼ ëŒ€ë¹„í•´ ë§ˆì§€ë§‰ ìœ ë‹›ì„ ë°˜í™˜
+        return _potentialTargets[_potentialTargets.Count - 1];
+    }
+
+    // <summary>ì»¬ë ‰ì…˜ì—ì„œ 'ì ëŒ€ê°(Hostility)'ì´ ê°€ì¥ ë†’ì€ í”Œë ˆì´ì–´ ìœ ë‹›ì„ ì„ íƒ. ë™ë¥ ì´ë©´ ëœë¤.</summary>
+    //public static BattleUnit PickHighestHostility(IEnumerable<BattleUnit> candidates)
+    //{
+    //    if (candidates == null) return null;
+    //    // ìƒì¡´í•œ í”Œë ˆì´ì–´ë§Œ
+    //    var list = candidates.Where(u => u != null && u.team == Team.Player && !u.IsDead).ToList();
+    //    if (list.Count == 0) return null;
+
+    //    float max = list.Max(u => Mathf.Max(0, u.Hostility));
+    //    var top = list.Where(u => Mathf.Max(0, u.Hostility) == max).ToList();
+
+    //    return top[Random.Range(0, top.Count)];
+    //}
+    public static BattleUnit PickPreferredStatusThenHighestHostility(IEnumerable<BattleUnit> _candidates, StatusId _preferred)
+    {
+        if (_candidates == null) return null;
+        var list = _candidates
+            .Where(u => u && u.data.team == Team.Player && !u.IsDead)
+            .Where(u => !IsUntargetableByEnemy(u))   // ì—°ë§‰ ì€ì‹ /ì ë³µ íƒ€ê²Ÿ ì œì™¸
+            .ToList();
+        if (list.Count == 0) return null;
+
+        var slowed = list.Where(u =>
+        {
+            var sc = u.GetComponent<StatusController>();
+            return sc != null && sc.Has(_preferred);
+        }).ToList();
+
+        var pool = (slowed.Count > 0) ? slowed : list;
+
+        // ê°€ì‹œ ê°ì‡  ê³ ë ¤í•œ ê°€ì¤‘ì¹˜ ëœë¤
+        float total = 0f;
+        foreach (var u in pool)
+            total += Mathf.Max(0f, u.Hostility);
+
+        if (total <= 0f) return pool[Random.Range(0, pool.Count)];
+
+        float r = Random.Range(0, total);
+        foreach (var u in pool)
+        {
+            r -= Mathf.Max(0f, u.Hostility);
+            if (r <= 0f) return u;
+        }
+        return pool[pool.Count - 1];
+        //if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
+        //return PickTargetByWeightedHostility(list);
+    }
+    public virtual string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+
+        if (cost <= 0) return description;
+
+        string label = (res == SkillCostResource.MP) ? "MP" : "Rage";
+        string color = (res == SkillCostResource.MP) ? "#00A2FF" : "#FF4B4B"; // ì˜ˆì‹œ
+        return $"{description}<size=20%><color=#808080>({label}:<color={color}>{cost}</color>)</color></size>";
+    }
+
+    public virtual SkillCostResource GetCostResource(BattleUnit caster) => costResource;
+
+    public virtual bool ShouldGapCloseToTarget(BattleUnit _caster, BattleUnit _target)    /// Unit íƒ€ê²Ÿ ì‚¬ìš© ì‹œ ì í”„ ì—°ì¶œ(gap close)ì„ ì‚¬ìš©í• ì§€ ì—¬ë¶€
+    {
+        return useGapCloseJump;
+    }
+    public virtual int GetEffectiveCost(BattleUnit _caster)
+    {
+        // ê¸°ë³¸ê°’: base cost (MP/Rage ê³µí†µ)
+        return Mathf.Max(0, GetBaseCost());
+    }
+    public virtual int GetEffectiveCooldownTurns(BattleUnit _caster)
+    {
+        // ê¸°ë³¸ì€ ê·¸ëƒ¥ ì„¤ì •ê°’ ê·¸ëŒ€ë¡œ
+        return cooldownTurns;
+    }
+
 }

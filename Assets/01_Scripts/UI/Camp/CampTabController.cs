@@ -1,34 +1,34 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-public class CampTabController : MonoBehaviour
-{
-    private WaitForEndOfFrame _waitForEndOfFrame = new WaitForEndOfFrame();
-
-    public void UpdateTabVisuals(List<CampTab> tabs, CampTab activeTab)
-    {
-        foreach (var tab in tabs)
-        {
-            bool isActive = (tab.contentPage == activeTab.contentPage);
-
-            // ½ºÇÁ¶óÀÌÆ® ±³Ã¼
-            if (tab.tabImage != null)
-                tab.tabImage.sprite = isActive ? tab.selectedSprite : tab.normalSprite;
-
-            // ÁÂÇ¥ ¼öÁ¤ ÄÚ·çÆ¾ ½ÇÇà
-            StartCoroutine(ApplyTabPosition(tab, isActive));
-        }
-    }
-
-    private IEnumerator ApplyTabPosition(CampTab tab, bool isActive)
-    {
-        yield return _waitForEndOfFrame;
-        if (tab.tabImage != null)
-        {
-            RectTransform imageRT = tab.tabImage.rectTransform;
-            // ·¹ÀÌ¾Æ¿ô ±×·ì °è»ê ÈÄ °­Á¦ ÁÂÇ¥ ÁÖÀÔ
-            imageRT.anchoredPosition = new Vector2(imageRT.anchoredPosition.x, isActive ? -30f : -22f);
-        }
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class CampTabController : MonoBehaviour
+{
+    private WaitForEndOfFrame _waitForEndOfFrame = new WaitForEndOfFrame();
+
+    public void UpdateTabVisuals(List<CampTab> tabs, CampTab activeTab)
+    {
+        foreach (var tab in tabs)
+        {
+            bool isActive = (tab.contentPage == activeTab.contentPage);
+
+            // ìŠ¤í”„ë¼ì´íŠ¸ êµì²´
+            if (tab.tabImage != null)
+                tab.tabImage.sprite = isActive ? tab.selectedSprite : tab.normalSprite;
+
+            // ì¢Œí‘œ ìˆ˜ì • ì½”ë£¨í‹´ ì‹¤í–‰
+            StartCoroutine(ApplyTabPosition(tab, isActive));
+        }
+    }
+
+    private IEnumerator ApplyTabPosition(CampTab tab, bool isActive)
+    {
+        yield return _waitForEndOfFrame;
+        if (tab.tabImage != null)
+        {
+            RectTransform imageRT = tab.tabImage.rectTransform;
+            // ë ˆì´ì•„ì›ƒ ê·¸ë£¹ ê³„ì‚° í›„ ê°•ì œ ì¢Œí‘œ ì£¼ì…
+            imageRT.anchoredPosition = new Vector2(imageRT.anchoredPosition.x, isActive ? -30f : -22f);
+        }
+    }
+}

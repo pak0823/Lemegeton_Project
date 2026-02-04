@@ -1,63 +1,63 @@
-using UnityEngine;
-
-[RequireComponent(typeof(Collider2D))]
-public class EncounterPersist : MonoBehaviour, IExplorationPersistable
-{
-    private ExplorationPersistId pid;
-
-    [SerializeField] private bool consumed = false; // ÀÌ¹Ì ÀÎÄ«¿îÅÍ·Î ¼ÒºñµÇ¾ú´ÂÁö
-
-    public bool IsConsumed => consumed;
-
-    void Awake()
-    {
-        pid = GetComponent<ExplorationPersistId>();
-        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
-    }
-
-    public void MarkConsumed()
-    {
-        if (consumed) return;
-        consumed = true;
-
-        // ÀÎÄ«¿îÅÍ´Â ¡°´Ù½Ã ¹âÈ÷¸é ¾È µÊ¡± ¡æ ºñÈ°¼ºÈ­(¶Ç´Â ¸®¼Ò½º º¯°æ)
-        // Áö±İÀº ÃÖ¼Ò Ã³¸®·Î ºñÈ°¼ºÈ­
-        gameObject.SetActive(false);
-    }
-
-    // IExplorationPersistable
-    public string PersistID => pid.Id;
-
-    public ExplorationObjectState SaveState()
-    {
-        // ÇöÀç È°¼º ¿©ºÎ¸¦ ±âÁØÀ¸·Î consumed Àç»êÃâµµ °¡´É
-        bool consumedNow = consumed || !gameObject.activeInHierarchy;
-
-        return new ExplorationObjectState
-        {
-            id = PersistID,
-            kind = "Encounter",
-            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
-            position = transform.position,
-            b1 = consumedNow, // consumed ¿©ºÎ
-            b2 = gameObject.activeInHierarchy // Âü°í¿ë(È®Àå)
-        };
-    }
-
-    public void LoadState(ExplorationObjectState s)
-    {
-        transform.position = s.position;
-        consumed = s.b1;
-
-        if (consumed)
-        {
-            gameObject.SetActive(false);
-            return;
-        }
-
-        // ¼ÒºñµÇÁö ¾ÊÀº »óÅÂ¸é È°¼ºÈ­ º¸Á¤
-        gameObject.SetActive(true);
-        var col = GetComponent<Collider2D>();
-        if (col) col.enabled = true;
-    }
-}
+using UnityEngine;
+
+[RequireComponent(typeof(Collider2D))]
+public class EncounterPersist : MonoBehaviour, IExplorationPersistable
+{
+    private ExplorationPersistId pid;
+
+    [SerializeField] private bool consumed = false; // ì´ë¯¸ ì¸ì¹´ìš´í„°ë¡œ ì†Œë¹„ë˜ì—ˆëŠ”ì§€
+
+    public bool IsConsumed => consumed;
+
+    void Awake()
+    {
+        pid = GetComponent<ExplorationPersistId>();
+        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
+    }
+
+    public void MarkConsumed()
+    {
+        if (consumed) return;
+        consumed = true;
+
+        // ì¸ì¹´ìš´í„°ëŠ” â€œë‹¤ì‹œ ë°Ÿíˆë©´ ì•ˆ ë¨â€ â†’ ë¹„í™œì„±í™”(ë˜ëŠ” ë¦¬ì†ŒìŠ¤ ë³€ê²½)
+        // ì§€ê¸ˆì€ ìµœì†Œ ì²˜ë¦¬ë¡œ ë¹„í™œì„±í™”
+        gameObject.SetActive(false);
+    }
+
+    // IExplorationPersistable
+    public string PersistID => pid.Id;
+
+    public ExplorationObjectState SaveState()
+    {
+        // í˜„ì¬ í™œì„± ì—¬ë¶€ë¥¼ ê¸°ì¤€ìœ¼ë¡œ consumed ì¬ì‚°ì¶œë„ ê°€ëŠ¥
+        bool consumedNow = consumed || !gameObject.activeInHierarchy;
+
+        return new ExplorationObjectState
+        {
+            id = PersistID,
+            kind = "Encounter",
+            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
+            position = transform.position,
+            b1 = consumedNow, // consumed ì—¬ë¶€
+            b2 = gameObject.activeInHierarchy // ì°¸ê³ ìš©(í™•ì¥)
+        };
+    }
+
+    public void LoadState(ExplorationObjectState s)
+    {
+        transform.position = s.position;
+        consumed = s.b1;
+
+        if (consumed)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
+
+        // ì†Œë¹„ë˜ì§€ ì•Šì€ ìƒíƒœë©´ í™œì„±í™” ë³´ì •
+        gameObject.SetActive(true);
+        var col = GetComponent<Collider2D>();
+        if (col) col.enabled = true;
+    }
+}

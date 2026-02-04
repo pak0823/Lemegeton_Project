@@ -1,73 +1,73 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public class DescriptionDialogUI : MonoBehaviour
-{
-    public static DescriptionDialogUI Instance {  get; private set; }
-
-    [Header("Root")]
-    [SerializeField] CanvasGroup group;
-    [SerializeField] Text bodyText;
-
-    bool isOpen;
-    float hideLockUntil = 0f;
-    [SerializeField] float defaultMovementLock = 0.5f; // 0ÀÌ¸é Àá±Ý ¾È ÇÔ
-
-    void Awake()
-    {
-        HideImmediate();
-        if(Instance == null) Instance = this;
-        else Destroy(gameObject);
-    }
-    // Àá±ÝÇü Ç¥½Ã
-    public void ShowTemporarily(string text, float seconds)
-    {
-        Show(text);
-        hideLockUntil = Mathf.Max(hideLockUntil, Time.time + Mathf.Max(0f, seconds));
-        PlayerMovement.Instance?.LockMovementFor(seconds);
-    }
-
-    public void Show(string text)
-    {
-        if (!group) return;
-        if (bodyText) bodyText.text = text;
-
-        isOpen = true;
-
-        group.alpha = 1f;
-        group.blocksRaycasts = false;
-        group.interactable = false;
-
-        if (defaultMovementLock > 0f)
-            PlayerMovement.Instance?.LockMovementFor(defaultMovementLock); // ±âº» Àá±Ý
-    }
-
-    public void Hide()
-    {
-
-        if (Time.time < hideLockUntil) return;  // Àá±Ý ÁßÀÌ¸é ¹«½Ã
-        if (!group) return;
-
-        isOpen = false;
-        group.alpha = 0f;
-        group.blocksRaycasts = false;
-        group.interactable = false;
-    }
-
-    // °­Á¦ ´Ý±â(Àá±Ý ¹«½Ã)
-    public void ForceHide()
-    {
-        hideLockUntil = 0f;
-        Hide();
-    }
-
-    public void HideImmediate() => Hide();
-
-    public void Toggle(string text)
-    {
-        if (isOpen) Hide();
-        else Show(text);
-    }
-
-    public bool IsOpen => isOpen;
-}
+using UnityEngine;
+using UnityEngine.UI;
+
+public class DescriptionDialogUI : MonoBehaviour
+{
+    public static DescriptionDialogUI Instance {  get; private set; }
+
+    [Header("Root")]
+    [SerializeField] CanvasGroup group;
+    [SerializeField] Text bodyText;
+
+    bool isOpen;
+    float hideLockUntil = 0f;
+    [SerializeField] float defaultMovementLock = 0.5f; // 0ì´ë©´ ìž ê¸ˆ ì•ˆ í•¨
+
+    void Awake()
+    {
+        HideImmediate();
+        if(Instance == null) Instance = this;
+        else Destroy(gameObject);
+    }
+    // ìž ê¸ˆí˜• í‘œì‹œ
+    public void ShowTemporarily(string text, float seconds)
+    {
+        Show(text);
+        hideLockUntil = Mathf.Max(hideLockUntil, Time.time + Mathf.Max(0f, seconds));
+        PlayerMovement.Instance?.LockMovementFor(seconds);
+    }
+
+    public void Show(string text)
+    {
+        if (!group) return;
+        if (bodyText) bodyText.text = text;
+
+        isOpen = true;
+
+        group.alpha = 1f;
+        group.blocksRaycasts = false;
+        group.interactable = false;
+
+        if (defaultMovementLock > 0f)
+            PlayerMovement.Instance?.LockMovementFor(defaultMovementLock); // ê¸°ë³¸ ìž ê¸ˆ
+    }
+
+    public void Hide()
+    {
+
+        if (Time.time < hideLockUntil) return;  // ìž ê¸ˆ ì¤‘ì´ë©´ ë¬´ì‹œ
+        if (!group) return;
+
+        isOpen = false;
+        group.alpha = 0f;
+        group.blocksRaycasts = false;
+        group.interactable = false;
+    }
+
+    // ê°•ì œ ë‹«ê¸°(ìž ê¸ˆ ë¬´ì‹œ)
+    public void ForceHide()
+    {
+        hideLockUntil = 0f;
+        Hide();
+    }
+
+    public void HideImmediate() => Hide();
+
+    public void Toggle(string text)
+    {
+        if (isOpen) Hide();
+        else Show(text);
+    }
+
+    public bool IsOpen => isOpen;
+}

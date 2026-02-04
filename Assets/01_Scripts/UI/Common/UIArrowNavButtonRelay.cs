@@ -1,33 +1,33 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems;
-
-public class UIArrowNavButtonRelay : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler
-{
-    public UIArrowNavigator navigator;
-    public Button button;
-
-    void Awake()
-    {
-        if (!button) button = GetComponent<Button>();
-        if (!navigator) navigator = GetComponentInParent<UIArrowNavigator>();
-    }
-    public void OnPointerEnter(PointerEventData e)
-    {
-        if (!navigator || !button) return;
-        if (!button.interactable) return;
-        if (navigator.IsLocked) return;
-
-        // È£¹ö ½Ã Æ÷Ä¿½º ÀÌµ¿ (EventSystem±îÁö ¹Ù²ÙÁö ¾Êµµ·Ï false ±ÇÀå)
-        navigator.SetExternalFocus(button, false);
-    }
-    public void OnPointerClick(PointerEventData e)
-    {
-        if (!navigator || !button) return;
-        if (e.button != PointerEventData.InputButton.Left) return;
-        if (!button.interactable) return;          // ºñÈ°¼º ¹öÆ° Å¬¸¯ ¹«½Ã
-        if (navigator.IsLocked) return;            // Å¸°ÙÆÃ/Àá±İ »óÅÂ¸é Å¬¸¯ ¹«½Ã)
-
-        button.onClick?.Invoke();
-    }
-}
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+
+public class UIArrowNavButtonRelay : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler
+{
+    public UIArrowNavigator navigator;
+    public Button button;
+
+    void Awake()
+    {
+        if (!button) button = GetComponent<Button>();
+        if (!navigator) navigator = GetComponentInParent<UIArrowNavigator>();
+    }
+    public void OnPointerEnter(PointerEventData e)
+    {
+        if (!navigator || !button) return;
+        if (!button.interactable) return;
+        if (navigator.IsLocked) return;
+
+        // í˜¸ë²„ ì‹œ í¬ì»¤ìŠ¤ ì´ë™ (EventSystemê¹Œì§€ ë°”ê¾¸ì§€ ì•Šë„ë¡ false ê¶Œì¥)
+        navigator.SetExternalFocus(button, false);
+    }
+    public void OnPointerClick(PointerEventData e)
+    {
+        if (!navigator || !button) return;
+        if (e.button != PointerEventData.InputButton.Left) return;
+        if (!button.interactable) return;          // ë¹„í™œì„± ë²„íŠ¼ í´ë¦­ ë¬´ì‹œ
+        if (navigator.IsLocked) return;            // íƒ€ê²ŸíŒ…/ì ê¸ˆ ìƒíƒœë©´ í´ë¦­ ë¬´ì‹œ)
+
+        button.onClick?.Invoke();
+    }
+}

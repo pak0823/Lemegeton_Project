@@ -1,30 +1,30 @@
-public enum DamageSchool { Physical, Magical, Composite }
-public enum AttackAttr { None, Pierce, Strike, Slash }
-public enum SkillTargetMode { Unit, Tile }
-public enum SkillTargetAlignment { Enemy, Ally, Any, Self }
-public enum SkillCostResource { MP, Rage }
-public enum SkillAnimKind { None, Melee, Ranged, SelfCast, Special }
-public enum SkillId
-{
-    None = -1,
-    Skill1 = 0,
-    Skill2 = 1,
-    Skill3 = 2,
-    Skill4 = 3,
-    Skill5 = 4
-}
-public enum TargetPriorityMode
-{
-    None,
-    RandomSurvivor,
-    HighestHostility,
-    PreferredStatusThenHighestHostility,  // ¿¹: Slow ¿ì¼± ¡æ ±× ¾È¿¡¼­ Àû´ë°¨ ÃÖ°í
-}
-public enum AreaPreset
-{
-    Single, //´ÜÀÏ ´ë»ó
-    Ring, //¿øÇü(Áß¾Ó Æ÷ÇÔ 7Ä­)
-    LineDiagU3, //¼¼·Î(3Ä­)
-    LineHorizontal, //(°¡·Î 3Ä­)
-    LineDiagU7 //(1½Ã 7½Ã ¹æÇâ ´ë°¢¼± 7Ä­)
+public enum DamageSchool { Physical, Magical, Composite }
+public enum AttackAttr { None, Pierce, Strike, Slash }
+public enum SkillTargetMode { Unit, Tile }
+public enum SkillTargetAlignment { Enemy, Ally, Any, Self }
+public enum SkillCostResource { MP, Rage }
+public enum SkillAnimKind { None, Melee, Ranged, SelfCast, Special }
+public enum SkillId
+{
+    None = -1,
+    Skill1 = 0,
+    Skill2 = 1,
+    Skill3 = 2,
+    Skill4 = 3,
+    Skill5 = 4
+}
+public enum TargetPriorityMode
+{
+    None,
+    RandomSurvivor,
+    HighestHostility,
+    PreferredStatusThenHighestHostility,  // ì˜ˆ: Slow ìš°ì„  â†’ ê·¸ ì•ˆì—ì„œ ì ëŒ€ê° ìµœê³ 
+}
+public enum AreaPreset
+{
+    Single, //ë‹¨ì¼ ëŒ€ìƒ
+    Ring, //ì›í˜•(ì¤‘ì•™ í¬í•¨ 7ì¹¸)
+    LineDiagU3, //ì„¸ë¡œ(3ì¹¸)
+    LineHorizontal, //(ê°€ë¡œ 3ì¹¸)
+    LineDiagU7 //(1ì‹œ 7ì‹œ ë°©í–¥ ëŒ€ê°ì„  7ì¹¸)
 }

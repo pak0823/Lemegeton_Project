@@ -1,37 +1,37 @@
-using UnityEngine;
-
-public class CurrencyManager : MonoBehaviour
-{
-    public static CurrencyManager Instance {  get; private set; }
-
-    [Header("Temporary Currency")]
-    public int gold = 1000; // Å×½ºÆ®¿ë ÃÊ±â ÀÚ±İ
-
-    private void Awake()
-    {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-    }
-
-    // ÀçÈ­°¡ ÃæºĞÇÑÁö È®ÀÎ
-    public bool HasAmount(int amount)
-    {
-        return gold >= amount;
-    }
-
-    // ÀçÈ­ ¼Òºñ (¼º°ø ½Ã true ¸®ÅÏ)
-    public bool Consume(int amount)
-    {
-        if (gold >= amount)
-        {
-            gold -= amount;
-            Debug.Log($"[Currency] {amount} ¼Ò¸ğµÊ. ³²Àº ÀçÈ­: {gold}");
-            return true;
-        }
-        else
-        {
-            Debug.Log($"[Currency] ÀçÈ­ ºÎÁ·! (ÇÊ¿ä: {amount}, º¸À¯: {gold})");
-            return false;
-        }
-    }
+using UnityEngine;
+
+public class CurrencyManager : MonoBehaviour
+{
+    public static CurrencyManager Instance {  get; private set; }
+
+    [Header("Temporary Currency")]
+    public int gold = 1000; // í…ŒìŠ¤íŠ¸ìš© ì´ˆê¸° ìê¸ˆ
+
+    private void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+    }
+
+    // ì¬í™”ê°€ ì¶©ë¶„í•œì§€ í™•ì¸
+    public bool HasAmount(int amount)
+    {
+        return gold >= amount;
+    }
+
+    // ì¬í™” ì†Œë¹„ (ì„±ê³µ ì‹œ true ë¦¬í„´)
+    public bool Consume(int amount)
+    {
+        if (gold >= amount)
+        {
+            gold -= amount;
+            Debug.Log($"[Currency] {amount} ì†Œëª¨ë¨. ë‚¨ì€ ì¬í™”: {gold}");
+            return true;
+        }
+        else
+        {
+            Debug.Log($"[Currency] ì¬í™” ë¶€ì¡±! (í•„ìš”: {amount}, ë³´ìœ : {gold})");
+            return false;
+        }
+    }
 }

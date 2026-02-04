@@ -1,101 +1,101 @@
-using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.EventSystems;
-using UnityEngine.ResourceManagement.AsyncOperations;
-using UnityEngine.UI;
-
-public class InventoryDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
-{
-    private CanvasGroup canvasGroup;
-    private Transform originalParent;
-    private Vector3 originalPosition;
-    private int fromIndex;
-
-    private AsyncOperationHandle<Sprite> _handle;
-
-    private void Awake()
-    {
-        canvasGroup = GetComponent<CanvasGroup>();
-        fromIndex = GetComponentInParent<InventorySlotUI>().slotIndex;
-    }
-
-    private void OnDisable()
-    {
-        // ¿ÀºêÁ§Æ®°¡ ²¨Áú ¶§(¹ö·ÁÁú ¶§ Æ÷ÇÔ) ¹«Á¶°Ç ·¹ÀÌÄ³½ºÆ®¸¦ ´Ù½Ã ÄÔ
-        if (canvasGroup != null) canvasGroup.blocksRaycasts = true;
-    }
-
-    public void SetIcon(ItemData data)
-    {
-        if (_handle.IsValid()) Addressables.Release(_handle);
-
-        _handle = Addressables.LoadAssetAsync<Sprite>(data.GetAtlasKey());
-        _handle.Completed += h => {
-            if (h.Status == AsyncOperationStatus.Succeeded)
-                GetComponent<Image>().sprite = h.Result;
-        };
-    }
-    private void OnDestroy()
-    {
-        if (_handle.IsValid()) Addressables.Release(_handle);
-    }
-
-    public int GetFromIndex() { return fromIndex; }
-
-    public void OnBeginDrag(PointerEventData eventData)
-    {
-        // µå·¡±× ½ÃÀÛ ½ÃÁ¡¿¡ ÇöÀç ºÎ¸ğ ½½·ÔÀÇ ÀÎµ¦½º¸¦ È®Á¤ÇÔ (¾ÈÀü¼º È®º¸)
-        InventorySlotUI parentSlot = GetComponentInParent<InventorySlotUI>();
-        if (parentSlot != null) fromIndex = parentSlot.slotIndex;
-
-        originalParent = transform.parent;
-        originalPosition = transform.localPosition;
-
-        // µå·¡±× Áß¿¡´Â ´Ù¸¥ UI µÚ·Î °¡°Å³ª ½½·Ô¿¡ °¡·ÁÁöÁö ¾Ê°Ô ÃÖ»ó´Ü Äµ¹ö½º·Î Àá½Ã ÀÌµ¿
-        transform.SetParent(transform.root);
-        canvasGroup.blocksRaycasts = false; // ¸¶¿ì½º°¡ 'µµÂøÁö ½½·Ô'À» °¨ÁöÇÒ ¼ö ÀÖ°Ô ÇÔ
-
-        ItemTooltipUI.Instance.Hide();
-    }
-
-    public void OnDrag(PointerEventData eventData) => transform.position = Input.mousePosition;
-
-    public void OnEndDrag(PointerEventData eventData)
-    {
-        canvasGroup.blocksRaycasts = true;
-        transform.SetParent(originalParent); // ´Ù½Ã ¿ø·¡ SlotÀ¸·Î º¹±Í
-        transform.localPosition = originalPosition;
-
-        // ¸¶¿ì½º ¾Æ·¡¿¡ ¾î¶² ¿ÀºêÁ§Æ®°¡ ÀÖ´ÂÁö Ã¼Å©
-        if (eventData.pointerEnter != null)
-        {
-            // µµÂøÁö°¡ SlotÀÎÁö È®ÀÎ (Raycast TargetÀÌ ÄÑÁ® ÀÖ¾î¾ß ÇÔ)
-            InventorySlotUI targetSlot = eventData.pointerEnter.GetComponentInParent<InventorySlotUI>();
-            if (targetSlot != null)
-            {
-                InventoryManager.Instance.SwapSlots(fromIndex, targetSlot.slotIndex);
-                PlayerDataManager.Instance.SaveGame(); // ÀÌµ¿ ÈÄ ÀúÀå
-            }
-        }
-    }
-
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        // µå·¡±× ÁßÀÌ ¾Æ´Ò ¶§¸¸ ÅøÆÁ Ç¥½Ã
-        if (!eventData.dragging)
-        {
-            var slotUI = GetComponentInParent<InventorySlotUI>();
-            var item = InventoryManager.Instance.slots[slotUI.slotIndex];
-
-            if (item != null)
-            {
-                ItemData data = InventoryUI.Instance.itemLibrary.GetItem(item.itemID);
-                ItemTooltipUI.Instance.Show(data);
-            }
-        }
-    }
-    public void OnPointerExit(PointerEventData eventData)
-    {
-        ItemTooltipUI.Instance.Hide();
-    }
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.EventSystems;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
+
+public class InventoryDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerEnterHandler, IPointerExitHandler
+{
+    private CanvasGroup canvasGroup;
+    private Transform originalParent;
+    private Vector3 originalPosition;
+    private int fromIndex;
+
+    private AsyncOperationHandle<Sprite> _handle;
+
+    private void Awake()
+    {
+        canvasGroup = GetComponent<CanvasGroup>();
+        fromIndex = GetComponentInParent<InventorySlotUI>().slotIndex;
+    }
+
+    private void OnDisable()
+    {
+        // ì˜¤ë¸Œì íŠ¸ê°€ êº¼ì§ˆ ë•Œ(ë²„ë ¤ì§ˆ ë•Œ í¬í•¨) ë¬´ì¡°ê±´ ë ˆì´ìºìŠ¤íŠ¸ë¥¼ ë‹¤ì‹œ ì¼¬
+        if (canvasGroup != null) canvasGroup.blocksRaycasts = true;
+    }
+
+    public void SetIcon(ItemData data)
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
+
+        _handle = Addressables.LoadAssetAsync<Sprite>(data.GetAtlasKey());
+        _handle.Completed += h => {
+            if (h.Status == AsyncOperationStatus.Succeeded)
+                GetComponent<Image>().sprite = h.Result;
+        };
+    }
+    private void OnDestroy()
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
+    }
+
+    public int GetFromIndex() { return fromIndex; }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        // ë“œë˜ê·¸ ì‹œì‘ ì‹œì ì— í˜„ì¬ ë¶€ëª¨ ìŠ¬ë¡¯ì˜ ì¸ë±ìŠ¤ë¥¼ í™•ì •í•¨ (ì•ˆì „ì„± í™•ë³´)
+        InventorySlotUI parentSlot = GetComponentInParent<InventorySlotUI>();
+        if (parentSlot != null) fromIndex = parentSlot.slotIndex;
+
+        originalParent = transform.parent;
+        originalPosition = transform.localPosition;
+
+        // ë“œë˜ê·¸ ì¤‘ì—ëŠ” ë‹¤ë¥¸ UI ë’¤ë¡œ ê°€ê±°ë‚˜ ìŠ¬ë¡¯ì— ê°€ë ¤ì§€ì§€ ì•Šê²Œ ìµœìƒë‹¨ ìº”ë²„ìŠ¤ë¡œ ì ì‹œ ì´ë™
+        transform.SetParent(transform.root);
+        canvasGroup.blocksRaycasts = false; // ë§ˆìš°ìŠ¤ê°€ 'ë„ì°©ì§€ ìŠ¬ë¡¯'ì„ ê°ì§€í•  ìˆ˜ ìˆê²Œ í•¨
+
+        ItemTooltipUI.Instance.Hide();
+    }
+
+    public void OnDrag(PointerEventData eventData) => transform.position = Input.mousePosition;
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        canvasGroup.blocksRaycasts = true;
+        transform.SetParent(originalParent); // ë‹¤ì‹œ ì›ë˜ Slotìœ¼ë¡œ ë³µê·€
+        transform.localPosition = originalPosition;
+
+        // ë§ˆìš°ìŠ¤ ì•„ë˜ì— ì–´ë–¤ ì˜¤ë¸Œì íŠ¸ê°€ ìˆëŠ”ì§€ ì²´í¬
+        if (eventData.pointerEnter != null)
+        {
+            // ë„ì°©ì§€ê°€ Slotì¸ì§€ í™•ì¸ (Raycast Targetì´ ì¼œì ¸ ìˆì–´ì•¼ í•¨)
+            InventorySlotUI targetSlot = eventData.pointerEnter.GetComponentInParent<InventorySlotUI>();
+            if (targetSlot != null)
+            {
+                InventoryManager.Instance.SwapSlots(fromIndex, targetSlot.slotIndex);
+                PlayerDataManager.Instance.SaveGame(); // ì´ë™ í›„ ì €ì¥
+            }
+        }
+    }
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        // ë“œë˜ê·¸ ì¤‘ì´ ì•„ë‹ ë•Œë§Œ íˆ´íŒ í‘œì‹œ
+        if (!eventData.dragging)
+        {
+            var slotUI = GetComponentInParent<InventorySlotUI>();
+            var item = InventoryManager.Instance.slots[slotUI.slotIndex];
+
+            if (item != null)
+            {
+                ItemData data = InventoryUI.Instance.itemLibrary.GetItem(item.itemID);
+                ItemTooltipUI.Instance.Show(data);
+            }
+        }
+    }
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        ItemTooltipUI.Instance.Hide();
+    }
 }

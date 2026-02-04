@@ -1,723 +1,723 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-// »óÅÂ ÀÌ»ó ºÎ¿©¸¦ À§ÇÑ ±¸Á¶Ã¼ Á¤ÀÇ
-[System.Serializable]
-public struct StatusEffectInfo
-{
-    public StatusId status;
-    public int stack;
-    [Tooltip("Áö¼Ó ÅÏ (StatusController°¡ Áö¿øÇÏ´Â °æ¿ì »ç¿ë)")]
-    public int duration;
-}
-
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Damage", fileName = "ParametricDamageSkill")]
-public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
-{
-    // 6°³ Ãà ¹æÇâ(Ç¥ÁØ ÃàÁÂÇ¥ ´ÜÀ§º¤ÅÍ)
-    static readonly Vector2Int[] AX_DIRS = new[]{
-    new Vector2Int( 1,  0), // E
-    new Vector2Int( 1, -1), // NE
-    new Vector2Int( 0, -1), // NW
-    new Vector2Int(-1,  0), // W
-    new Vector2Int(-1,  1), // SW
-    new Vector2Int( 0,  1), // SE
-};
-
-    [Header("Targeting")]
-    public TargetPriorityMode priorityMode = TargetPriorityMode.RandomSurvivor;
-    public StatusId preferredStatus = StatusId.Slow; // ¿ì¼± »óÅÂ(¿¹: Slow)
-    public AreaPreset areaPreset = AreaPreset.Single;
-
-    [Header("Player Targeting")]
-    public bool useProvidedUnitTarget = true;   // ÇÃ·¹ÀÌ¾î ½ºÅ³: Å¬¸¯ÇÑ ´ë»ó »ç¿ë
-
-    [Header("On Hit Effects (È®Àå ±â´É)")]
-    [Tooltip("ÀûÁß ½Ã ´ë»ó¿¡°Ô ºÎ¿©ÇÒ »óÅÂ ¸ñ·Ï (¿¹: Áßµ¶, ¹ßÈ­)")]
-    public List<StatusEffectInfo> applyStatusOnHit = new List<StatusEffectInfo>();
-
-    [Header("Tile Modification (È®Àå ±â´É)")]
-    [Tooltip("½ºÅ³ ÀûÁß ½Ã ÇØ´ç Å¸ÀÏÀ» ÀÌ Å¸ÀÏ·Î ±³Ã¼ (nullÀÌ¸é º¯°æ ¾È ÇÔ)")]
-    public TileBase changeTileTo;
-    [Tooltip("Å¸ÀÏ º¯°æ Áö¼Ó ÅÏ (±âº» 2)")]
-    public int tileChangeDuration = 2;
-    [Tooltip("Áö´ë À§¿¡ ÀÖ´Â À¯´Ö¿¡°Ô ºÎ¿©ÇÒ »óÅÂ (¿¹: Poisoning)")]
-    public StatusId zoneStatusId = StatusId.None;
-    [Tooltip("Áö´ë ºÎ¿© »óÅÂ ½ºÅÃ")]
-    public int zoneStatusStack = 1;
-    [Tooltip("Áö´ë ºÎ¿© »óÅÂ Áö¼Ó ½Ã°£")]
-    public int zoneStatusDuration = 3;
-
-    [System.Serializable]
-    public struct ConditionalMultiplier
-    {
-        public StatusId status;
-        public float multiplier; // ¿¹: Slow¸é 3.0
-    }
-    [Header("Damage")]
-    public float powerOverride = 1f;             // ±âº» ¹è¼ö µ¤¾î¾²±â(¿É¼Ç)
-    public DamageSchool damageSchool = DamageSchool.Physical;
-    public List<ConditionalMultiplier> conditionalMultipliers = new();
-
-    [Header("Mode")]
-    public SkillTargetMode selectionMode = SkillTargetMode.Unit; // ÀÎ½ºÆåÅÍ¿¡¼­ Unit/Tile ¼±ÅÃ
-    [Header("Diagonal Options")]
-    [SerializeField] private bool diagUseNEAxis = true; //¹æÇâ º¯°æ
-
-    // ½ÃÀü ÈÄ »óÅÂ Á¦°Å ¿É¼Ç
-    [Header("State Consumption(»óÅÂ Á¦°Å ¼³Á¤)")]
-    public bool consumeStateOnCast = false;
-    [Tooltip("Á¦°ÅÇÒ »óÅÂ ¸ñ·Ï")]
-    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = selectionMode; }  // ¼±ÅÃ°ª ¹İ¿µ
-#endif
-
-    public static void ClearFrontlineCache() => _frontlineCache.Clear();
-
-    [Header("Projectile Settings (Ranged Only)")]
-    [Tooltip("Åõ»çÃ¼ ÇÁ¸®ÆÕ (ProjectileController ÄÄÆ÷³ÍÆ® ÇÊ¼ö)")]
-    public ProjectileController projectilePrefab;
-
-    [Tooltip("Åõ»çÃ¼ ¼Óµµ (ÃÊ´ç À¯´Ö)")]
-    public float projectileSpeed = 10f;
-
-    [Header("Training Effects")]
-    [Header("¹üÀ§ º¯°æ")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î ¹üÀ§ º¯°æÀ» Àû¿ëÇÒ °ÍÀÎÁö")]
-    public bool trainingUseAreaOverride = false;
-    [Tooltip("¹üÀ§ ÇÁ¸®¼Â ±³Ã¼¸¦ È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)]
-    public int routeForAreaOverride = -1;
-    public AreaPreset trainingAreaPreset = AreaPreset.Single;
-    public bool trainingDiagUseNEAxis = true;
-
-
-    [Header("Á¦¾Ğ ºÎ¿© ¼³Á¤")]
-    [Tooltip("Á¦¾ĞÀ» È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)]
-    public int routeForSuppression = -1;
-    [Tooltip("Ä³½ºÆÃ Á¦¾Ğ Ãß°¡ °¨¼Ò·®(ÇÇ°İ ½Ã)")]
-    public int trainingSuppressionOnHit = 0; // 0=¹Ì»ç¿ë, 1 ÀÌ»óÀÌ¸é ±×¸¸Å­ Ãß°¡·Î suppressCur °¨¼Ò
-
-    [Header("ÃâÇ÷ ºÎ¿© ¼³Á¤")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î ÃâÇ÷ È¿°ú¸¦ Àû¿ëÇÒ °ÍÀÎÁö")]
-    public bool trainingApplyBleed = false;
-    [Tooltip("ÃâÇ÷À» È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)]
-    public int routeForBleed = -1;
-    [Range(1, DebuffTuning.MaxStacks)] public int trainingBleedStacks = 1;
-    [Min(1)] public int trainingBleedDurationTurns = 2;
-
-    [Header("¹æ¾î ÁßÃ¸ ¹öÇÁ")]
-    [Tooltip("Æ¯Á¤ ÈÆ·Ã ·çÆ®¿¡¼­ ½ÃÀüÀÚ¿¡°Ô ¹æ¾î ÁßÃ¸ »óÅÂ¸¦ ºÎ¿©ÇÒÁö ¿©ºÎ")]
-    public bool trainingApplyDefenseStacks = false;
-    [Tooltip("¹æ¾î ÁßÃ¸ »óÅÂ¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ¹Ì»ç¿ë, 0~2)")]
-    [Range(-1, 2)] public int routeForDefenseStacks = -1;
-    [Tooltip("ºÎ¿©ÇÒ StatusId (StackableStatusVisualDB¿¡ ¾ÆÀÌÄÜ/ÀÌ¸§ ¿¬°á °¡´É)")]
-    public StatusId trainingDefenseStatusId = StatusId.None;
-    [Tooltip("ÇÑ ¹ø¿¡ ºÎ¿©ÇÒ ¹æ¾î ÁßÃ¸ ¼ö")]
-    [Min(1)] public int trainingDefenseStacks = 1;
-    [Tooltip("¹æ¾î ÁßÃ¸ Áö¼Ó ÅÏ")]
-    [Min(1)] public int trainingDefenseDurationTurns = 3;
-
-    [Header("ÅÏ¼ö º¯È­ ¼³Á¤")]
-    [Tooltip("Äğ´Ù¿î º¯È­¸¦ È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)]
-    public int routeForCooldown = -1;
-    [Tooltip("Äğ´Ù¿î ÅÏ¼ö º¯È­·®(À½¼ö¸é ´ÜÃà)")]
-    public int trainingCooldownDelta = 0;
-
-    [Header("³Ë¹é ¼³Á¤")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î ³Ë¹é È¿°ú¸¦ »ç¿ëÇÒ °ÍÀÎÁö")]
-    public bool trainingUseKnockback = false;
-    [Tooltip("³Ë¹é È¿°ú°¡ È°¼ºÈ­µÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)]
-    public int routeForKnockback = -1;
-
-    [Header("Ãß°¡ ÀÌµ¿ ¼³Á¤")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î '±â¼ú »ç¿ë ÈÄ 1Ä­ ÀÌµ¿' È¿°ú¸¦ »ç¿ëÇÒ °ÍÀÎÁö")]
-    public bool trainingUsePostMove = false;
-    [Tooltip("Ãß°¡ ÀÌµ¿ È¿°ú°¡ È°¼ºÈ­µÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)]
-    public int routeForPostMove = -1;
-    [Tooltip("±â¼ú »ç¿ë ÈÄ ÀÌµ¿ÇÒ ¼ö ÀÖ´Â ÃÖ´ë Ä­ ¼ö(Çí»ç °Å¸®)")]
-    [Min(1)] public int trainingPostMoveRange = 1;
-
-    [Header("ÀüÃ¼ °ø°İ ¼³Á¤")]
-    [Tooltip("ÀÌ È¿°ú(ÀüÃ¼ Àû±º Å¸°İ)¸¦ È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)]
-    public int routeForHitAllEnemies = -1;
-    [Tooltip("ÀÌ ½ºÅ³À» ¸Ê »óÀÇ ¸ğµç Àû±º¿¡°Ô ÀûÁß½ÃÅ°±â")]
-    public bool trainingHitAllEnemies = false;
-
-    [Header("¸ÖÆ¼ È÷Æ® ¼³Á¤")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î ¸ÖÆ¼ È÷Æ®(2Å¸ ÀÌ»ó) È¿°ú¸¦ »ç¿ëÇÒ °ÍÀÎÁö")]
-    public bool trainingUseMultiHit = false;
-    [Tooltip("ÇÑ ¹ø »ç¿ë ½Ã ¸î Å¸±îÁö ¶§¸±Áö (±âº» 2Å¸)")]
-    [Min(1)] public int trainingHitCount = 2;
-
-    [Header("¹°¸® ´ë¹ÌÁö ¹öÇÁ ¼³Á¤")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î: ±â¼ú »ç¿ë ÈÄ ÀÚ½ÅÀÇ ¹°¸®´ë¹ÌÁö¸¦ ÀÏÁ¤ ÅÏ µ¿¾È °­È­")]
-    public bool trainingUseSelfAtkBuff = false;
-    [Tooltip("ÀÌ ·çÆ®°¡ ¼±ÅÃµÇ¾úÀ» ¶§ ÀÚ±â ¹°¸®´ë¹ÌÁö ¹öÇÁ¸¦ ºÎ¿©")]
-    public int routeForSelfAtkBuff = -1;
-    [Tooltip("ºÎ¿©ÇÒ ¹öÇÁ ID (StateStatModifierDB.BuffEntry¿¡¼­ atkMultiplier¸¦ 1.4 µîÀ¸·Î ¼³Á¤)")]
-    public UnitStateBuffId selfAtkBuffId = UnitStateBuffId.Self_AtkUp;
-    [Tooltip("ÀÚ½ÅÀÇ ÅÏ ±âÁØ Áö¼Ó ÅÏ ¼ö (½ÇÁ¦ Àû¿ë ½Ã +1 ÇØ¼­ »ç¿ë ÅÏÀ» °Ç³Ê¶Ü)")]
-    public int selfAtkBuffDurationTurns = 1;
-
-    [Header("Å¸°Ù ¹ÎÃ¸ ¾àÈ­ Àû¿ë ¼³Á¤")]
-    [Tooltip("°ø°İ¹ŞÀº ´ë»óÀÇ ¹ÎÃ¸À» ¾àÈ­")]
-    public bool trainingApplyAgiDebuff = false;
-    [Tooltip("ÀÌ ·çÆ®°¡ ¼±ÅÃµÇ¾úÀ» ¶§ ´ë»ó¿¡°Ô ¹ÎÃ¸ µğ¹öÇÁ ¹öÇÁ¸¦ °Ç´Ù")]
-    public int routeForAgiDebuff = -1;
-    [Tooltip("ºÎ¿©ÇÒ ¹öÇÁ ID (StateStatModifierDB.BuffEntry¿¡¼­ agiMultiplier¸¦ 0.6 µîÀ¸·Î ¼³Á¤)")]
-    public UnitStateBuffId targetAgiDebuffId = UnitStateBuffId.Target_AgiDown;
-    [Tooltip("Áö¼Ó ÅÏ¼ö")]
-    public int targetAgiDebuffDurationTurns = 1;
-
-    [Header("°øÆ÷ »óÅÂ ºÎ¿© ¼³Á¤")]
-    [Tooltip("°ø°İ¹Ş´Â ´ë»ó¿¡°Ô °øÆ÷ »óÅÂ¸¦ ºÎ¿©ÇÒÁö ¿©ºÎ")]
-    public bool trainingApplyFear = false;
-    [Tooltip("ÀÌ ·çÆ®°¡ ¼±ÅÃµÇ¾úÀ» ¶§ ´ë»ó¿¡°Ô °øÆ÷ »óÅÂ¸¦ °Ç´Ù")]
-    public int routeForFear = -1;
-    [Tooltip("°øÆ÷ »óÅÂ Áö¼Ó ÅÏ ¼ö")]
-    public int fearDurationTurns = 1;
-
-    [Header("ÀÚ¿ø ¹İÈ¯ ¼³Á¤")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î: °ø°İ¹ŞÀº ´ë»óÀÇ »ı¸íÀÌ 0ÀÌ µÇ¸é ¼ÒºñÇÑ ÀÚ¿øÀ» µ¹·Á¹ŞÀ½")]
-    public bool trainingRefundOnKill = false;
-    [Tooltip("ÀÌ ·çÆ®°¡ ¼±ÅÃµÇ¾úÀ» ¶§, ÀÌ ½ºÅ³·Î ÀûÀ» Ã³Ä¡ÇÏ¸é MP¸¦ µ¹·Á¹ŞÀ½")]
-    public int routeForRefundOnKill = -1;
-
-    // ÀûÀÇ(Hostility) °¨¼Ò ÈÆ·Ã
-    [Header("ÀûÀÇ °¨¼Ò ÈÆ·Ã")]
-    [Tooltip("ÈÆ·Ã ½Ã °ø°İÀ¸·Î ÀÎÇÑ ÀûÀÇ »ı¼º·®À» °¨¼Ò½ÃÅ³Áö ¿©ºÎ")]
-    public bool trainingReduceHostility = false;
-    [Tooltip("ÀûÀÇ °¨¼Ò¸¦ È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)] public int routeForReduceHostility = -1;
-    [Tooltip("Àû¿ëµÉ ÀûÀÇ »ı¼º ¹èÀ² (¿¹: 0.5 = 50%¸¸ »ı¼º = 0.5¸¸Å­ °¨¼Ò)")]
-    public float trainingHostilityMultiplier = 0.5f;
-
-    // ÃÑ¸í(Clarity) °­È­ ÈÆ·Ã
-    [Header("Training: Clarity Buff")]
-    [Tooltip("ÃÑ¸í(Magic Damage) °­È­ ¹öÇÁ ºÎ¿© È°¼ºÈ­")]
-    public bool trainingApplyClarityBuff = false;
-    [Range(-1, 2)] public int routeForClarityBuff = -1;
-    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
-    [Min(1)] public int trainingClarityDuration = 1;
-
-    [Header("Frontline Bonus")]
-    [SerializeField] private bool useFrontlineBonus = false;   // Àü¹æ º¸³Ê½º »ç¿ë ¿©ºÎ
-    [SerializeField] private int frontlineDepth = 2;            // "¾Õ N¿­"
-    [SerializeField] private float frontlineMultiplier = 1.5f;  // ¹è¼ö(¿¹: 1.5)
-    [SerializeField] private bool useManualFrontier = true;
-
-    // 1¿­ ¼öµ¿ °æ°è
-    [SerializeField] private List<Vector3Int> manualFrontierPlayer;
-    [SerializeField] private List<Vector3Int> manualFrontierEnemy;
-
-    // 2¿­ ¼öµ¿ ÁöÁ¤(ÀÖÀ¸¸é ÀÚµ¿ È®Àå ´ë½Å ÀÌ°É ¿ì¼± »ç¿ë)
-    [SerializeField] private List<Vector3Int> manualSecondLayerPlayer;
-    [SerializeField] private List<Vector3Int> manualSecondLayerEnemy;
-    [SerializeField] private AxialDir playerFrontlineDir = AxialDir.SW; // ÇÃ·¹ÀÌ¾î Àü¹æÃà
-    [SerializeField] private AxialDir enemyFrontlineDir = AxialDir.NE; // Àû Àü¹æÃà
-
-    public bool UseFrontlineBonus => useFrontlineBonus;
-    public int FrontlineDepth => frontlineDepth;
-    public float FrontlineMultiplier => frontlineMultiplier;
-    public bool CheckFrontline(BattleUnit unit)
-        => IsInFrontline(unit, frontlineDepth);
-
-    // ¼±ÅÃµÈ ÈÆ·Ã ·çÆ®¸¦ ÀĞ¾î ÇöÀç ½ÇÇà¿¡ ¹İ¿µ
-    int GetRoute(BattleUnit _caster)
-    {
-        if (_caster == null) return -1;
-        return _caster.GetTrainingRouteIndex(this);
-    }
-
-    void OnEnable()
-    {
-        school = damageSchool;
-        if (powerOverride > 0f) power = powerOverride;
-        targetMode = selectionMode;  // ½ÇÇà ½Ã¿¡µµ ¼±ÅÃ°ª ¹İ¿µ
-        costResource = SkillCostResource.MP;
-    }
-
-    public ProjectileController GetProjectilePrefab(BattleUnit caster)
-    {
-        return projectilePrefab;
-    }
-
-    public float GetProjectileSpeed(BattleUnit caster)
-    {
-        return projectileSpeed;
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // 1. ÈÆ·Ã ·çÆ® È®ÀÎ: ³Ë¹éÀ» »ç¿ëÇÏ´Â°¡?
-        int route = caster.GetTrainingRouteIndex(this);
-        bool useKnockback = trainingUseKnockback && routeForKnockback >= 0 && route == routeForKnockback;
-
-        if (useKnockback && targetUnit != null)
-        {
-            // 2. ³Ë¹é ÈÄº¸ °è»ê
-            var candidates = GetKnockbackCandidates(bm, caster, targetUnit);
-
-            if (candidates != null && candidates.Count > 0)
-            {
-                // 3. »ç¿ëÀÚ ¼±ÅÃ ´ë±â
-                Vector3Int? chosen = null;
-                yield return bm.WaitForCellSelection(targetUnit.CurrentMap, candidates, (res) => chosen = res);
-
-                // 4. ¼±ÅÃµÊ -> Pending µî·Ï
-                if (chosen.HasValue)
-                {
-                    bm.SetPendingKnockback(this, targetUnit, chosen.Value);
-                }
-                else
-                {
-                    // Ãë¼Ò ½Ã ½ºÅ³ ÀÚÃ¼¸¦ Ãë¼ÒÇÒÁö, ³Ë¹é ¾øÀÌ °ø°İÇÒÁö °áÁ¤.
-                    // º¸ÅëÀº Ãë¼Ò¸é ½ºÅ³ Ãë¼Ò.
-                    bm.CancelCurrentAction();
-                    yield break;
-                }
-            }
-        }
-
-        // Å¸°Ù À¯´ÖÀÌ ÀÖÀ¸¸é À¯´Ö Èå¸§, ¾øÀ¸¸é(Å¸ÀÏ Å¸°ÙÆÃÀÌ¸é) Å¸ÀÏ Èå¸§ ½ÇÇà
-        if (targetUnit != null)
-        {
-            yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
-        }
-        else
-        {
-            // Å¸ÀÏ ´ë»ó ½ºÅ³ Èå¸§ (Åõ»çÃ¼ or Áï¹ß µîÀº BattleManager°¡ ÆÇ´Ü)
-            yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
-        }
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
-    {
-        // ÇöÀç ÅÏÀÇ ½ÃÀüÀÚ(ÇÃ·¹ÀÌ¾îµç ÀûÀÌµç)
-        var bm = BattleManager.Instance;
-        BattleUnit caster = bm != null ? bm.ActingUnit : null;
-
-        int route = GetRoute(caster);
-        bool useOverride = trainingUseAreaOverride
-                   && routeForAreaOverride >= 0
-                   && route == routeForAreaOverride;
-
-        // ±âº»/ÈÆ·Ã ÇÁ¸®¼Â ¼±ÅÃ
-        var preset = useOverride ? trainingAreaPreset : areaPreset;
-        bool useDiag = useOverride ? trainingDiagUseNEAxis : diagUseNEAxis;
-
-        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
-            yield return c;
-    }
-
-    BattleUnit PickPrimaryTarget()
-    {
-        var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u && u.data.team == Team.Player && !u.IsDead).ToList();
-        if (players.Count == 0) return null;
-
-        switch (priorityMode)
-        {
-            case TargetPriorityMode.HighestHostility:
-                return PickTargetByWeightedHostility(players);
-
-            case TargetPriorityMode.PreferredStatusThenHighestHostility:
-                return PickPreferredStatusThenHighestHostility(players, preferredStatus);
-
-            default:
-                return players[Random.Range(0, players.Count)];
-        }
-    }
-
-    float GetMultiplierFor(BattleUnit _victim)
-    {
-        if (conditionalMultipliers == null || conditionalMultipliers.Count == 0) return 1f;
-        var sc = _victim ? _victim.GetComponent<StatusController>() : null;
-        if (sc == null) return 1f;
-
-        float mult = 1f;
-        foreach (var c in conditionalMultipliers)
-            if (sc.Has(c.status)) mult *= c.multiplier; // ¿©·¯ Á¶°Ç ÁßÃ¸ ½Ã °ö¿¬»ê
-        return mult;
-    }
-
-    
-    public enum AxialDir { E, NE, NW, W, SW, SE }
-    Vector2Int DirToAx(AxialDir _d) => AX_DIRS[(int)_d];
-    // ¸Êº°/ÆÀº°/±íÀÌº° Ä³½Ã
-    static readonly Dictionary<(Tilemap, int, int), HashSet<Vector3Int>> _frontlineCache
-        = new Dictionary<(Tilemap, int, int), HashSet<Vector3Int>>();
-
-    HashSet<Vector3Int> GetFrontlineSet(Tilemap _map, Team _team, int _depth)
-    {
-        if (!_map || _depth <= 0) return null;
-        var key = (_map, (int)_team, _depth);
-        if (_frontlineCache.TryGetValue(key, out var cached)) return cached;
-
-        // ¸Ê Á¸Àç Å¸ÀÏ ¼öÁı
-        var b = _map.cellBounds;
-        var all = new HashSet<Vector3Int>();
-        for (int y = b.yMin; y < b.yMax; y++)
-            for (int x = b.xMin; x < b.xMax; x++)
-            { var c = new Vector3Int(x, y, 0); if (_map.HasTile(c)) all.Add(c); }
-
-        // Àü¹æÃà f (ÀÌ¹Ì ¼öµ¿Ãà SW/NE¸¦ ¾²°í °è½Å´Ù¸é ±×´ë·Î)
-        Vector2Int f = (_team == Team.Player) ? DirToAx(playerFrontlineDir)
-                                             : DirToAx(enemyFrontlineDir);
-
-        // 1) 1¿­: ¼öµ¿ °æ°è ¿ì¼±, ¾øÀ¸¸é ÀÚµ¿ frontier
-        var frontier = new HashSet<Vector3Int>();
-        var srcFront = (_team == Team.Player) ? manualFrontierPlayer : manualFrontierEnemy;
-        if (useManualFrontier && srcFront != null && srcFront.Count > 0)
-        {
-            foreach (var c in srcFront) if (_map.HasTile(c)) frontier.Add(c);
-        }
-        else
-        {
-            // ÀÚµ¿ frontier: f·Î ÇÑ Ä­ ³ª°¡¸é Å¸ÀÏ ¾øÀ½
-            foreach (var c in all)
-            {
-                var ax = SkillLibrary.OffsetToAxial(c);
-                var axF = new Vector2Int(ax.x + f.x, ax.y + f.y);
-                var offF = SkillLibrary.AxialToOffset(axF);
-                if (!_map.HasTile(offF)) frontier.Add(c);
-            }
-        }
-
-        // ÃÖÁ¾ °á°ú¿¡ 1¿­ Ãß°¡
-        var result = new HashSet<Vector3Int>(frontier);
-
-        if (_depth >= 2)
-        {
-            // 2) 2¿­: ¼öµ¿ 2¿­ÀÌ ÀÖÀ¸¸é ¿ì¼± »ç¿ë
-            var secondManual = (_team == Team.Player) ? manualSecondLayerPlayer : manualSecondLayerEnemy;
-            if (secondManual != null && secondManual.Count > 0)
-            {
-                foreach (var c in secondManual) if (_map.HasTile(c)) result.Add(c);
-            }
-            else
-            {
-                // ¾øÀ¸¸é ±âÁ¸Ã³·³ -f·Î 1¿­¿¡¼­ ÇÑ Ä­ ¾ÈÂÊ È®Àå
-                var layer = new HashSet<Vector3Int>(frontier);
-                var next = new HashSet<Vector3Int>();
-                foreach (var c in layer)
-                {
-                    var ax = SkillLibrary.OffsetToAxial(c);
-                    var axBk = new Vector2Int(ax.x - f.x, ax.y - f.y); // -f
-                    var offBk = SkillLibrary.AxialToOffset(axBk);
-                    if (_map.HasTile(offBk)) next.Add(offBk);
-                }
-                foreach (var n in next) result.Add(n);
-            }
-        }
-
-        _frontlineCache[key] = result;
-        return result;
-    }
-
-    public List<Vector3Int> GetKnockbackCandidates(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        var result = new List<Vector3Int>();
-        if (!_battlemanager || !_caster || !_target) return result;
-
-        var map = _target.CurrentMap;
-        if (!map) return result;
-
-        var start = _target.Cell;
-
-        // caster -> target ¹æÇâ (³Ë¹éÀº "caster¿¡¼­ targetÀ¸·Î"ÀÇ ¿¬Àå¼± ¹æÇâ)
-        Vector3 casterW = map.GetCellCenterWorld(_caster.Cell);
-        Vector3 targetW = map.GetCellCenterWorld(start);
-        Vector2 awayDir = (Vector2)(targetW - casterW);
-        if (awayDir.sqrMagnitude < 1e-6f) return result;
-        awayDir.Normalize();
-
-        bool oddCol = SkillLibrary.IsOddColumn(start);
-
-        // BattleManager.TryGetFrontCellOfTarget¿¡¼­ ¾²´Â ÀÌ¿ô ¿ÀÇÁ¼Â ±×´ë·Î º¹ºÙ 
-        Vector3Int[] neighOffsetsEven = {
-        new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
-        new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
-        new Vector3Int(-1,-1, 0), new Vector3Int( 0,-1,0)
-    };
-        Vector3Int[] neighOffsetsOdd = {
-        new Vector3Int(+1, 0, 0), new Vector3Int(+1,+1,0),
-        new Vector3Int( 0,+1, 0), new Vector3Int(-1, 0,0),
-        new Vector3Int( 0,-1, 0), new Vector3Int(+1,-1,0)
-    };
-
-        var neighs = oddCol ? neighOffsetsOdd : neighOffsetsEven;
-        var scored = new List<(float score, Vector3Int cell)>();
-
-        foreach (var off in neighs)
-        {
-            var cand = new Vector3Int(start.x + off.x, start.y + off.y, start.z);
-            if (!map.HasTile(cand)) continue;
-
-            // target -> candidate ¹æÇâ
-            Vector3 candW = map.GetCellCenterWorld(cand);
-            Vector2 dir = (Vector2)(candW - targetW);
-            if (dir.sqrMagnitude < 1e-6f) continue;
-            dir.Normalize();
-
-            // awayDir(Ä³½ºÅÍ¿¡¼­ Å¸°ÙÂÊ)°ú °¡Àå ºñ½ÁÇÑ(=dot°¡ Å«) ÀÌ¿ô 2°³ ¼±ÅÃ
-            float dot = Vector2.Dot(awayDir, dir);
-            scored.Add((dot, cand));
-        }
-
-        // dot Å« ¼øÀ¸·Î Á¤·Ä
-        scored.Sort((a, b) => b.score.CompareTo(a.score));
-
-        // === »óÀ§ 2°³¸¸ ÈÄº¸ ½½·ÔÀ¸·Î °íÁ¤ ===
-        int maxSlots = Mathf.Min(2, scored.Count);
-        for (int i = 0; i < maxSlots; i++)
-        {
-            var cell = scored[i].cell;
-
-            // Å¸ÀÏ ¾øÀ¸¸é ÀÌ ½½·ÔÀº ±×³É ½ºÅµ (´ëÃ¼ ¹æÇâ X)
-            if (!map.HasTile(cell))
-                continue;
-
-            // Á¡À¯ ¿©ºÎ Ã¼Å©
-            var units = _battlemanager.Grid.GetUnitsInArea(map, new[] { cell });
-            bool occupied = false;
-            foreach (var u in units)
-            {
-                if (u != null && !u.IsDead && u.Cell == cell)
-                {
-                    occupied = true;
-                    break;
-                }
-            }
-
-            if (!occupied)
-                result.Add(cell);
-        }
-
-        // result¿¡´Â 0~2°³ÀÇ ¼¿¸¸ µé¾î°¨ (´ëÃ¼ ¹æÇâ ¾øÀ½)
-        return result;
-    }
-
-    bool IsInFrontline(BattleUnit _battleunit, int _depth)
-    {
-        if (!_battleunit || !_battleunit.CurrentMap) return false;
-        var set = GetFrontlineSet(_battleunit.CurrentMap, _battleunit.data.team, _depth);
-        return set != null && set.Contains(_battleunit.Cell);
-    }
-
-    // Áß½É ¼¿ ±âÁØÀ¸·Î ¹üÀ§ À¯´ÖµéÀ» Ã£¾Æ µ¥¹ÌÁö Àû¿ë(ÆÀ ¹İ´ëÆí¸¸)
-    void DealAreaDamage(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
-    {
-        if (!_battlemanager || !_caster) return;
-
-        int route = GetRoute(_caster);
-
-        // ¹üÀ§ °è»ê
-        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
-
-        // === ¸ÖÆ¼ È÷Æ® È½¼ö °è»ê ===
-        int hits = trainingUseMultiHit ? Mathf.Max(1, trainingHitCount) : 1;
-
-        List<BattleUnit> victims;
-        if (trainingHitAllEnemies && routeForHitAllEnemies >= 0 && route == routeForHitAllEnemies)
-        {
-            victims = Object.FindObjectsOfType<BattleUnit>()
-                .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team && u.CurrentMap == _map).ToList();
-        }
-        else
-        {
-            victims = _battlemanager.Grid.GetUnitsInArea(_map, area)
-                            .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team).ToList();
-        }
-
-        // Å¸ÀÏ º¯°æ ¹× Áö´ë(Zone) »ı¼º ·ÎÁ÷
-        if (changeTileTo != null && _map != null)
-        {
-            // °ø°İ ¹üÀ§(area) ÀüÃ¼¸¦ ¼øÈ¸ÇÏ¸ç Áö´ë »ı¼º
-            foreach (var cell in area)
-            {
-                _battlemanager.Field.CreateStatusTileZone(
-                    _caster,
-                    _map,
-                    cell,
-                    tileChangeDuration, // Áö¼Ó ÅÏ
-                    changeTileTo,       // º¯°æÇÒ Å¸ÀÏ ÀÌ¹ÌÁö
-                    zoneStatusId,       // ºÎ¿©ÇÒ »óÅÂ
-                    zoneStatusStack,    // ½ºÅÃ
-                    zoneStatusDuration  // »óÅÂ Áö¼Ó
-                );
-            }
-        }
-
-        // ¹æ¾î ÁßÃ¸ ÈÆ·Ã (½ÃÀüÀÚ)
-        if (trainingApplyDefenseStacks && routeForDefenseStacks >= 0 && route == routeForDefenseStacks && trainingDefenseStatusId != StatusId.None)
-        {
-            _caster.GetComponent<StatusController>()?.ApplyWithTurnContext(
-                trainingDefenseStatusId, Mathf.Max(1, trainingDefenseStacks), Mathf.Max(1, trainingDefenseDurationTurns)
-            );
-        }
-
-        // ½ÇÁ¦ Å¸°İ (¸ÖÆ¼ È÷Æ®)
-        for (int i = 0; i < hits; i++)
-        {
-            _battlemanager.ExecuteSkillDamage(_caster, victims, this, _map, _centerCell);
-        }
-
-        foreach (var v in victims)
-        {
-            ApplyStatusEffects(v);
-        }
-
-        if (trainingUseSelfAtkBuff && routeForSelfAtkBuff >= 0 && route == routeForSelfAtkBuff && selfAtkBuffId != UnitStateBuffId.None)
-        {
-            _caster.GetComponent<UnitStateController>()?.ApplyBuffForTurns(selfAtkBuffId, selfAtkBuffDurationTurns + 1);
-        }
-
-        // ÃÑ¸í °­È­ ¹öÇÁ Àû¿ë
-        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
-        {
-            var usc = _caster.GetComponent<UnitStateController>();
-            if (usc != null)
-            {
-                // ÁöÁ¤µÈ ÅÏ ¼ö¸¸Å­ ¹öÇÁ ºÎ¿©
-                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1); // +1Àº ÇöÀç ÅÏ ¼Ò¸ğ º¸Á¤
-                Debug.Log($"[ParametricDamage] Clarity Enhanced: {_caster.name}, Duration={trainingClarityDuration}");
-            }
-        }
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (!_battlemanager || !_caster) yield break;
-
-        // MP ¼Òºñ
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        BattleUnit primary = (useProvidedUnitTarget && _target != null && !_target.IsDead)
-                                ? _target
-                                : PickPrimaryTarget();
-
-        if (primary == null) yield break;
-
-        int route = GetRoute(_caster);
-        Debug.Log($"[Training] {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
-
-        // ¹üÀ§ °è»êÀº GetAreaCells ¾È¿¡¼­ route¸¦ º¸°í ¾Ë¾Æ¼­ Ã³¸®
-        DealAreaDamage(_battlemanager, _caster, primary.CurrentMap, primary.Cell);
-        // »óÅÂ ÀÌ»ó ºÎ¿©
-        ApplyStatusEffects(_target);
-        yield break;
-    }
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-    {
-        if (!_battlemanager || !_caster || !_map) yield break;
-
-        // MP ¼Òºñ
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        int route = GetRoute(_caster);
-        Debug.Log($"[Training] (Tile) {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
-
-        DealAreaDamage(_battlemanager, _caster, _map, _originCell);
-
-        // ½ÃÀü ÈÄ »óÅÂ Á¦°Å
-        ConsumeStates(_caster);
-
-        yield break;
-    }
-
-    protected void ApplyStatusEffects(BattleUnit target)
-    {
-        if (applyStatusOnHit == null || applyStatusOnHit.Count == 0) return;
-        if (target == null) return;
-
-        var statusCtrl = target.GetComponent<StatusController>();
-        if (statusCtrl != null)
-        {
-            foreach (var effect in applyStatusOnHit)
-            {
-                if (effect.status != StatusId.None)
-                {
-                    // DurationÀÌ 0º¸´Ù Å©¸é ÅÏ ÄÁÅØ½ºÆ® Æ÷ÇÔ Àû¿ë, ¾Æ´Ï¸é ´Ü¼ø ½ºÅÃ ¼³Á¤
-                    if (effect.duration > 0)
-                    {
-                        statusCtrl.ApplyWithTurnContext(effect.status, effect.stack, effect.duration);
-                        Debug.Log($"[Status] {target.name}¿¡°Ô {effect.status} ºÎ¿©: {effect.stack}½ºÅÃ / {effect.duration}ÅÏ");
-                    }
-                    else
-                    {
-                        statusCtrl.SetStacks(effect.status, effect.stack);
-                    }
-                }
-            }
-        }
-    }
-
-    // »óÅÂ Á¦°Å
-    void ConsumeStates(BattleUnit caster)
-    {
-        if (!consumeStateOnCast || statesToConsume == null) return;
-        var usc = caster.GetComponent<UnitStateController>();
-        if (usc == null) return;
-
-        foreach (var s in statesToConsume)
-        {
-            if (s != UnitStateId.None)
-                usc.Remove(s);
-        }
-    }
-
-    public override int GetSuppressionOnHit(BattleUnit _caster)
-    {
-        int route = GetRoute(_caster);
-        if (trainingSuppressionOnHit <= 0) return 0;
-        if (routeForSuppression < 0) return 0;
-        return (route == routeForSuppression) ? Mathf.Max(0, trainingSuppressionOnHit) : 0;
-    }
-
-    public override int GetEffectiveCooldownTurns(BattleUnit _caster)
-    {
-        int cd = cooldownTurns;
-
-        int route = GetRoute(_caster);
-        if (trainingCooldownDelta != 0 && routeForCooldown >= 0 && route == routeForCooldown)
-        {
-            cd = Mathf.Max(0, cd + trainingCooldownDelta);
-        }
-
-        return cd;
-    }
-
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-
-}
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+// ìƒíƒœ ì´ìƒ ë¶€ì—¬ë¥¼ ìœ„í•œ êµ¬ì¡°ì²´ ì •ì˜
+[System.Serializable]
+public struct StatusEffectInfo
+{
+    public StatusId status;
+    public int stack;
+    [Tooltip("ì§€ì† í„´ (StatusControllerê°€ ì§€ì›í•˜ëŠ” ê²½ìš° ì‚¬ìš©)")]
+    public int duration;
+}
+
+[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Damage", fileName = "ParametricDamageSkill")]
+public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
+{
+    // 6ê°œ ì¶• ë°©í–¥(í‘œì¤€ ì¶•ì¢Œí‘œ ë‹¨ìœ„ë²¡í„°)
+    static readonly Vector2Int[] AX_DIRS = new[]{
+    new Vector2Int( 1,  0), // E
+    new Vector2Int( 1, -1), // NE
+    new Vector2Int( 0, -1), // NW
+    new Vector2Int(-1,  0), // W
+    new Vector2Int(-1,  1), // SW
+    new Vector2Int( 0,  1), // SE
+};
+
+    [Header("Targeting")]
+    public TargetPriorityMode priorityMode = TargetPriorityMode.RandomSurvivor;
+    public StatusId preferredStatus = StatusId.Slow; // ìš°ì„  ìƒíƒœ(ì˜ˆ: Slow)
+    public AreaPreset areaPreset = AreaPreset.Single;
+
+    [Header("Player Targeting")]
+    public bool useProvidedUnitTarget = true;   // í”Œë ˆì´ì–´ ìŠ¤í‚¬: í´ë¦­í•œ ëŒ€ìƒ ì‚¬ìš©
+
+    [Header("On Hit Effects (í™•ì¥ ê¸°ëŠ¥)")]
+    [Tooltip("ì ì¤‘ ì‹œ ëŒ€ìƒì—ê²Œ ë¶€ì—¬í•  ìƒíƒœ ëª©ë¡ (ì˜ˆ: ì¤‘ë…, ë°œí™”)")]
+    public List<StatusEffectInfo> applyStatusOnHit = new List<StatusEffectInfo>();
+
+    [Header("Tile Modification (í™•ì¥ ê¸°ëŠ¥)")]
+    [Tooltip("ìŠ¤í‚¬ ì ì¤‘ ì‹œ í•´ë‹¹ íƒ€ì¼ì„ ì´ íƒ€ì¼ë¡œ êµì²´ (nullì´ë©´ ë³€ê²½ ì•ˆ í•¨)")]
+    public TileBase changeTileTo;
+    [Tooltip("íƒ€ì¼ ë³€ê²½ ì§€ì† í„´ (ê¸°ë³¸ 2)")]
+    public int tileChangeDuration = 2;
+    [Tooltip("ì§€ëŒ€ ìœ„ì— ìˆëŠ” ìœ ë‹›ì—ê²Œ ë¶€ì—¬í•  ìƒíƒœ (ì˜ˆ: Poisoning)")]
+    public StatusId zoneStatusId = StatusId.None;
+    [Tooltip("ì§€ëŒ€ ë¶€ì—¬ ìƒíƒœ ìŠ¤íƒ")]
+    public int zoneStatusStack = 1;
+    [Tooltip("ì§€ëŒ€ ë¶€ì—¬ ìƒíƒœ ì§€ì† ì‹œê°„")]
+    public int zoneStatusDuration = 3;
+
+    [System.Serializable]
+    public struct ConditionalMultiplier
+    {
+        public StatusId status;
+        public float multiplier; // ì˜ˆ: Slowë©´ 3.0
+    }
+    [Header("Damage")]
+    public float powerOverride = 1f;             // ê¸°ë³¸ ë°°ìˆ˜ ë®ì–´ì“°ê¸°(ì˜µì…˜)
+    public DamageSchool damageSchool = DamageSchool.Physical;
+    public List<ConditionalMultiplier> conditionalMultipliers = new();
+
+    [Header("Mode")]
+    public SkillTargetMode selectionMode = SkillTargetMode.Unit; // ì¸ìŠ¤í™í„°ì—ì„œ Unit/Tile ì„ íƒ
+    [Header("Diagonal Options")]
+    [SerializeField] private bool diagUseNEAxis = true; //ë°©í–¥ ë³€ê²½
+
+    // ì‹œì „ í›„ ìƒíƒœ ì œê±° ì˜µì…˜
+    [Header("State Consumption(ìƒíƒœ ì œê±° ì„¤ì •)")]
+    public bool consumeStateOnCast = false;
+    [Tooltip("ì œê±°í•  ìƒíƒœ ëª©ë¡")]
+    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = selectionMode; }  // ì„ íƒê°’ ë°˜ì˜
+#endif
+
+    public static void ClearFrontlineCache() => _frontlineCache.Clear();
+
+    [Header("Projectile Settings (Ranged Only)")]
+    [Tooltip("íˆ¬ì‚¬ì²´ í”„ë¦¬íŒ¹ (ProjectileController ì»´í¬ë„ŒíŠ¸ í•„ìˆ˜)")]
+    public ProjectileController projectilePrefab;
+
+    [Tooltip("íˆ¬ì‚¬ì²´ ì†ë„ (ì´ˆë‹¹ ìœ ë‹›)")]
+    public float projectileSpeed = 10f;
+
+    [Header("Training Effects")]
+    [Header("ë²”ìœ„ ë³€ê²½")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ ë²”ìœ„ ë³€ê²½ì„ ì ìš©í•  ê²ƒì¸ì§€")]
+    public bool trainingUseAreaOverride = false;
+    [Tooltip("ë²”ìœ„ í”„ë¦¬ì…‹ êµì²´ë¥¼ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)]
+    public int routeForAreaOverride = -1;
+    public AreaPreset trainingAreaPreset = AreaPreset.Single;
+    public bool trainingDiagUseNEAxis = true;
+
+
+    [Header("ì œì•• ë¶€ì—¬ ì„¤ì •")]
+    [Tooltip("ì œì••ì„ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)]
+    public int routeForSuppression = -1;
+    [Tooltip("ìºìŠ¤íŒ… ì œì•• ì¶”ê°€ ê°ì†ŒëŸ‰(í”¼ê²© ì‹œ)")]
+    public int trainingSuppressionOnHit = 0; // 0=ë¯¸ì‚¬ìš©, 1 ì´ìƒì´ë©´ ê·¸ë§Œí¼ ì¶”ê°€ë¡œ suppressCur ê°ì†Œ
+
+    [Header("ì¶œí˜ˆ ë¶€ì—¬ ì„¤ì •")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ ì¶œí˜ˆ íš¨ê³¼ë¥¼ ì ìš©í•  ê²ƒì¸ì§€")]
+    public bool trainingApplyBleed = false;
+    [Tooltip("ì¶œí˜ˆì„ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)]
+    public int routeForBleed = -1;
+    [Range(1, DebuffTuning.MaxStacks)] public int trainingBleedStacks = 1;
+    [Min(1)] public int trainingBleedDurationTurns = 2;
+
+    [Header("ë°©ì–´ ì¤‘ì²© ë²„í”„")]
+    [Tooltip("íŠ¹ì • í›ˆë ¨ ë£¨íŠ¸ì—ì„œ ì‹œì „ìì—ê²Œ ë°©ì–´ ì¤‘ì²© ìƒíƒœë¥¼ ë¶€ì—¬í• ì§€ ì—¬ë¶€")]
+    public bool trainingApplyDefenseStacks = false;
+    [Tooltip("ë°©ì–´ ì¤‘ì²© ìƒíƒœë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¯¸ì‚¬ìš©, 0~2)")]
+    [Range(-1, 2)] public int routeForDefenseStacks = -1;
+    [Tooltip("ë¶€ì—¬í•  StatusId (StackableStatusVisualDBì— ì•„ì´ì½˜/ì´ë¦„ ì—°ê²° ê°€ëŠ¥)")]
+    public StatusId trainingDefenseStatusId = StatusId.None;
+    [Tooltip("í•œ ë²ˆì— ë¶€ì—¬í•  ë°©ì–´ ì¤‘ì²© ìˆ˜")]
+    [Min(1)] public int trainingDefenseStacks = 1;
+    [Tooltip("ë°©ì–´ ì¤‘ì²© ì§€ì† í„´")]
+    [Min(1)] public int trainingDefenseDurationTurns = 3;
+
+    [Header("í„´ìˆ˜ ë³€í™” ì„¤ì •")]
+    [Tooltip("ì¿¨ë‹¤ìš´ ë³€í™”ë¥¼ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)]
+    public int routeForCooldown = -1;
+    [Tooltip("ì¿¨ë‹¤ìš´ í„´ìˆ˜ ë³€í™”ëŸ‰(ìŒìˆ˜ë©´ ë‹¨ì¶•)")]
+    public int trainingCooldownDelta = 0;
+
+    [Header("ë„‰ë°± ì„¤ì •")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ ë„‰ë°± íš¨ê³¼ë¥¼ ì‚¬ìš©í•  ê²ƒì¸ì§€")]
+    public bool trainingUseKnockback = false;
+    [Tooltip("ë„‰ë°± íš¨ê³¼ê°€ í™œì„±í™”ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)]
+    public int routeForKnockback = -1;
+
+    [Header("ì¶”ê°€ ì´ë™ ì„¤ì •")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ 'ê¸°ìˆ  ì‚¬ìš© í›„ 1ì¹¸ ì´ë™' íš¨ê³¼ë¥¼ ì‚¬ìš©í•  ê²ƒì¸ì§€")]
+    public bool trainingUsePostMove = false;
+    [Tooltip("ì¶”ê°€ ì´ë™ íš¨ê³¼ê°€ í™œì„±í™”ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)]
+    public int routeForPostMove = -1;
+    [Tooltip("ê¸°ìˆ  ì‚¬ìš© í›„ ì´ë™í•  ìˆ˜ ìˆëŠ” ìµœëŒ€ ì¹¸ ìˆ˜(í—¥ì‚¬ ê±°ë¦¬)")]
+    [Min(1)] public int trainingPostMoveRange = 1;
+
+    [Header("ì „ì²´ ê³µê²© ì„¤ì •")]
+    [Tooltip("ì´ íš¨ê³¼(ì „ì²´ ì êµ° íƒ€ê²©)ë¥¼ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)]
+    public int routeForHitAllEnemies = -1;
+    [Tooltip("ì´ ìŠ¤í‚¬ì„ ë§µ ìƒì˜ ëª¨ë“  ì êµ°ì—ê²Œ ì ì¤‘ì‹œí‚¤ê¸°")]
+    public bool trainingHitAllEnemies = false;
+
+    [Header("ë©€í‹° íˆíŠ¸ ì„¤ì •")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ ë©€í‹° íˆíŠ¸(2íƒ€ ì´ìƒ) íš¨ê³¼ë¥¼ ì‚¬ìš©í•  ê²ƒì¸ì§€")]
+    public bool trainingUseMultiHit = false;
+    [Tooltip("í•œ ë²ˆ ì‚¬ìš© ì‹œ ëª‡ íƒ€ê¹Œì§€ ë•Œë¦´ì§€ (ê¸°ë³¸ 2íƒ€)")]
+    [Min(1)] public int trainingHitCount = 2;
+
+    [Header("ë¬¼ë¦¬ ëŒ€ë¯¸ì§€ ë²„í”„ ì„¤ì •")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ: ê¸°ìˆ  ì‚¬ìš© í›„ ìì‹ ì˜ ë¬¼ë¦¬ëŒ€ë¯¸ì§€ë¥¼ ì¼ì • í„´ ë™ì•ˆ ê°•í™”")]
+    public bool trainingUseSelfAtkBuff = false;
+    [Tooltip("ì´ ë£¨íŠ¸ê°€ ì„ íƒë˜ì—ˆì„ ë•Œ ìê¸° ë¬¼ë¦¬ëŒ€ë¯¸ì§€ ë²„í”„ë¥¼ ë¶€ì—¬")]
+    public int routeForSelfAtkBuff = -1;
+    [Tooltip("ë¶€ì—¬í•  ë²„í”„ ID (StateStatModifierDB.BuffEntryì—ì„œ atkMultiplierë¥¼ 1.4 ë“±ìœ¼ë¡œ ì„¤ì •)")]
+    public UnitStateBuffId selfAtkBuffId = UnitStateBuffId.Self_AtkUp;
+    [Tooltip("ìì‹ ì˜ í„´ ê¸°ì¤€ ì§€ì† í„´ ìˆ˜ (ì‹¤ì œ ì ìš© ì‹œ +1 í•´ì„œ ì‚¬ìš© í„´ì„ ê±´ë„ˆëœ€)")]
+    public int selfAtkBuffDurationTurns = 1;
+
+    [Header("íƒ€ê²Ÿ ë¯¼ì²© ì•½í™” ì ìš© ì„¤ì •")]
+    [Tooltip("ê³µê²©ë°›ì€ ëŒ€ìƒì˜ ë¯¼ì²©ì„ ì•½í™”")]
+    public bool trainingApplyAgiDebuff = false;
+    [Tooltip("ì´ ë£¨íŠ¸ê°€ ì„ íƒë˜ì—ˆì„ ë•Œ ëŒ€ìƒì—ê²Œ ë¯¼ì²© ë””ë²„í”„ ë²„í”„ë¥¼ ê±´ë‹¤")]
+    public int routeForAgiDebuff = -1;
+    [Tooltip("ë¶€ì—¬í•  ë²„í”„ ID (StateStatModifierDB.BuffEntryì—ì„œ agiMultiplierë¥¼ 0.6 ë“±ìœ¼ë¡œ ì„¤ì •)")]
+    public UnitStateBuffId targetAgiDebuffId = UnitStateBuffId.Target_AgiDown;
+    [Tooltip("ì§€ì† í„´ìˆ˜")]
+    public int targetAgiDebuffDurationTurns = 1;
+
+    [Header("ê³µí¬ ìƒíƒœ ë¶€ì—¬ ì„¤ì •")]
+    [Tooltip("ê³µê²©ë°›ëŠ” ëŒ€ìƒì—ê²Œ ê³µí¬ ìƒíƒœë¥¼ ë¶€ì—¬í• ì§€ ì—¬ë¶€")]
+    public bool trainingApplyFear = false;
+    [Tooltip("ì´ ë£¨íŠ¸ê°€ ì„ íƒë˜ì—ˆì„ ë•Œ ëŒ€ìƒì—ê²Œ ê³µí¬ ìƒíƒœë¥¼ ê±´ë‹¤")]
+    public int routeForFear = -1;
+    [Tooltip("ê³µí¬ ìƒíƒœ ì§€ì† í„´ ìˆ˜")]
+    public int fearDurationTurns = 1;
+
+    [Header("ìì› ë°˜í™˜ ì„¤ì •")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ: ê³µê²©ë°›ì€ ëŒ€ìƒì˜ ìƒëª…ì´ 0ì´ ë˜ë©´ ì†Œë¹„í•œ ìì›ì„ ëŒë ¤ë°›ìŒ")]
+    public bool trainingRefundOnKill = false;
+    [Tooltip("ì´ ë£¨íŠ¸ê°€ ì„ íƒë˜ì—ˆì„ ë•Œ, ì´ ìŠ¤í‚¬ë¡œ ì ì„ ì²˜ì¹˜í•˜ë©´ MPë¥¼ ëŒë ¤ë°›ìŒ")]
+    public int routeForRefundOnKill = -1;
+
+    // ì ì˜(Hostility) ê°ì†Œ í›ˆë ¨
+    [Header("ì ì˜ ê°ì†Œ í›ˆë ¨")]
+    [Tooltip("í›ˆë ¨ ì‹œ ê³µê²©ìœ¼ë¡œ ì¸í•œ ì ì˜ ìƒì„±ëŸ‰ì„ ê°ì†Œì‹œí‚¬ì§€ ì—¬ë¶€")]
+    public bool trainingReduceHostility = false;
+    [Tooltip("ì ì˜ ê°ì†Œë¥¼ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)] public int routeForReduceHostility = -1;
+    [Tooltip("ì ìš©ë  ì ì˜ ìƒì„± ë°°ìœ¨ (ì˜ˆ: 0.5 = 50%ë§Œ ìƒì„± = 0.5ë§Œí¼ ê°ì†Œ)")]
+    public float trainingHostilityMultiplier = 0.5f;
+
+    // ì´ëª…(Clarity) ê°•í™” í›ˆë ¨
+    [Header("Training: Clarity Buff")]
+    [Tooltip("ì´ëª…(Magic Damage) ê°•í™” ë²„í”„ ë¶€ì—¬ í™œì„±í™”")]
+    public bool trainingApplyClarityBuff = false;
+    [Range(-1, 2)] public int routeForClarityBuff = -1;
+    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+    [Min(1)] public int trainingClarityDuration = 1;
+
+    [Header("Frontline Bonus")]
+    [SerializeField] private bool useFrontlineBonus = false;   // ì „ë°© ë³´ë„ˆìŠ¤ ì‚¬ìš© ì—¬ë¶€
+    [SerializeField] private int frontlineDepth = 2;            // "ì• Nì—´"
+    [SerializeField] private float frontlineMultiplier = 1.5f;  // ë°°ìˆ˜(ì˜ˆ: 1.5)
+    [SerializeField] private bool useManualFrontier = true;
+
+    // 1ì—´ ìˆ˜ë™ ê²½ê³„
+    [SerializeField] private List<Vector3Int> manualFrontierPlayer;
+    [SerializeField] private List<Vector3Int> manualFrontierEnemy;
+
+    // 2ì—´ ìˆ˜ë™ ì§€ì •(ìˆìœ¼ë©´ ìë™ í™•ì¥ ëŒ€ì‹  ì´ê±¸ ìš°ì„  ì‚¬ìš©)
+    [SerializeField] private List<Vector3Int> manualSecondLayerPlayer;
+    [SerializeField] private List<Vector3Int> manualSecondLayerEnemy;
+    [SerializeField] private AxialDir playerFrontlineDir = AxialDir.SW; // í”Œë ˆì´ì–´ ì „ë°©ì¶•
+    [SerializeField] private AxialDir enemyFrontlineDir = AxialDir.NE; // ì  ì „ë°©ì¶•
+
+    public bool UseFrontlineBonus => useFrontlineBonus;
+    public int FrontlineDepth => frontlineDepth;
+    public float FrontlineMultiplier => frontlineMultiplier;
+    public bool CheckFrontline(BattleUnit unit)
+        => IsInFrontline(unit, frontlineDepth);
+
+    // ì„ íƒëœ í›ˆë ¨ ë£¨íŠ¸ë¥¼ ì½ì–´ í˜„ì¬ ì‹¤í–‰ì— ë°˜ì˜
+    int GetRoute(BattleUnit _caster)
+    {
+        if (_caster == null) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
+    void OnEnable()
+    {
+        school = damageSchool;
+        if (powerOverride > 0f) power = powerOverride;
+        targetMode = selectionMode;  // ì‹¤í–‰ ì‹œì—ë„ ì„ íƒê°’ ë°˜ì˜
+        costResource = SkillCostResource.MP;
+    }
+
+    public ProjectileController GetProjectilePrefab(BattleUnit caster)
+    {
+        return projectilePrefab;
+    }
+
+    public float GetProjectileSpeed(BattleUnit caster)
+    {
+        return projectileSpeed;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 1. í›ˆë ¨ ë£¨íŠ¸ í™•ì¸: ë„‰ë°±ì„ ì‚¬ìš©í•˜ëŠ”ê°€?
+        int route = caster.GetTrainingRouteIndex(this);
+        bool useKnockback = trainingUseKnockback && routeForKnockback >= 0 && route == routeForKnockback;
+
+        if (useKnockback && targetUnit != null)
+        {
+            // 2. ë„‰ë°± í›„ë³´ ê³„ì‚°
+            var candidates = GetKnockbackCandidates(bm, caster, targetUnit);
+
+            if (candidates != null && candidates.Count > 0)
+            {
+                // 3. ì‚¬ìš©ì ì„ íƒ ëŒ€ê¸°
+                Vector3Int? chosen = null;
+                yield return bm.WaitForCellSelection(targetUnit.CurrentMap, candidates, (res) => chosen = res);
+
+                // 4. ì„ íƒë¨ -> Pending ë“±ë¡
+                if (chosen.HasValue)
+                {
+                    bm.SetPendingKnockback(this, targetUnit, chosen.Value);
+                }
+                else
+                {
+                    // ì·¨ì†Œ ì‹œ ìŠ¤í‚¬ ìì²´ë¥¼ ì·¨ì†Œí• ì§€, ë„‰ë°± ì—†ì´ ê³µê²©í• ì§€ ê²°ì •.
+                    // ë³´í†µì€ ì·¨ì†Œë©´ ìŠ¤í‚¬ ì·¨ì†Œ.
+                    bm.CancelCurrentAction();
+                    yield break;
+                }
+            }
+        }
+
+        // íƒ€ê²Ÿ ìœ ë‹›ì´ ìˆìœ¼ë©´ ìœ ë‹› íë¦„, ì—†ìœ¼ë©´(íƒ€ì¼ íƒ€ê²ŸíŒ…ì´ë©´) íƒ€ì¼ íë¦„ ì‹¤í–‰
+        if (targetUnit != null)
+        {
+            yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
+        }
+        else
+        {
+            // íƒ€ì¼ ëŒ€ìƒ ìŠ¤í‚¬ íë¦„ (íˆ¬ì‚¬ì²´ or ì¦‰ë°œ ë“±ì€ BattleManagerê°€ íŒë‹¨)
+            yield return bm.PerformStandardTileSkillFlow(this, targetMap, targetCell, caster);
+        }
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
+    {
+        // í˜„ì¬ í„´ì˜ ì‹œì „ì(í”Œë ˆì´ì–´ë“  ì ì´ë“ )
+        var bm = BattleManager.Instance;
+        BattleUnit caster = bm != null ? bm.ActingUnit : null;
+
+        int route = GetRoute(caster);
+        bool useOverride = trainingUseAreaOverride
+                   && routeForAreaOverride >= 0
+                   && route == routeForAreaOverride;
+
+        // ê¸°ë³¸/í›ˆë ¨ í”„ë¦¬ì…‹ ì„ íƒ
+        var preset = useOverride ? trainingAreaPreset : areaPreset;
+        bool useDiag = useOverride ? trainingDiagUseNEAxis : diagUseNEAxis;
+
+        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
+            yield return c;
+    }
+
+    BattleUnit PickPrimaryTarget()
+    {
+        var players = Object.FindObjectsOfType<BattleUnit>()
+            .Where(u => u && u.data.team == Team.Player && !u.IsDead).ToList();
+        if (players.Count == 0) return null;
+
+        switch (priorityMode)
+        {
+            case TargetPriorityMode.HighestHostility:
+                return PickTargetByWeightedHostility(players);
+
+            case TargetPriorityMode.PreferredStatusThenHighestHostility:
+                return PickPreferredStatusThenHighestHostility(players, preferredStatus);
+
+            default:
+                return players[Random.Range(0, players.Count)];
+        }
+    }
+
+    float GetMultiplierFor(BattleUnit _victim)
+    {
+        if (conditionalMultipliers == null || conditionalMultipliers.Count == 0) return 1f;
+        var sc = _victim ? _victim.GetComponent<StatusController>() : null;
+        if (sc == null) return 1f;
+
+        float mult = 1f;
+        foreach (var c in conditionalMultipliers)
+            if (sc.Has(c.status)) mult *= c.multiplier; // ì—¬ëŸ¬ ì¡°ê±´ ì¤‘ì²© ì‹œ ê³±ì—°ì‚°
+        return mult;
+    }
+
+    
+    public enum AxialDir { E, NE, NW, W, SW, SE }
+    Vector2Int DirToAx(AxialDir _d) => AX_DIRS[(int)_d];
+    // ë§µë³„/íŒ€ë³„/ê¹Šì´ë³„ ìºì‹œ
+    static readonly Dictionary<(Tilemap, int, int), HashSet<Vector3Int>> _frontlineCache
+        = new Dictionary<(Tilemap, int, int), HashSet<Vector3Int>>();
+
+    HashSet<Vector3Int> GetFrontlineSet(Tilemap _map, Team _team, int _depth)
+    {
+        if (!_map || _depth <= 0) return null;
+        var key = (_map, (int)_team, _depth);
+        if (_frontlineCache.TryGetValue(key, out var cached)) return cached;
+
+        // ë§µ ì¡´ì¬ íƒ€ì¼ ìˆ˜ì§‘
+        var b = _map.cellBounds;
+        var all = new HashSet<Vector3Int>();
+        for (int y = b.yMin; y < b.yMax; y++)
+            for (int x = b.xMin; x < b.xMax; x++)
+            { var c = new Vector3Int(x, y, 0); if (_map.HasTile(c)) all.Add(c); }
+
+        // ì „ë°©ì¶• f (ì´ë¯¸ ìˆ˜ë™ì¶• SW/NEë¥¼ ì“°ê³  ê³„ì‹ ë‹¤ë©´ ê·¸ëŒ€ë¡œ)
+        Vector2Int f = (_team == Team.Player) ? DirToAx(playerFrontlineDir)
+                                             : DirToAx(enemyFrontlineDir);
+
+        // 1) 1ì—´: ìˆ˜ë™ ê²½ê³„ ìš°ì„ , ì—†ìœ¼ë©´ ìë™ frontier
+        var frontier = new HashSet<Vector3Int>();
+        var srcFront = (_team == Team.Player) ? manualFrontierPlayer : manualFrontierEnemy;
+        if (useManualFrontier && srcFront != null && srcFront.Count > 0)
+        {
+            foreach (var c in srcFront) if (_map.HasTile(c)) frontier.Add(c);
+        }
+        else
+        {
+            // ìë™ frontier: fë¡œ í•œ ì¹¸ ë‚˜ê°€ë©´ íƒ€ì¼ ì—†ìŒ
+            foreach (var c in all)
+            {
+                var ax = SkillLibrary.OffsetToAxial(c);
+                var axF = new Vector2Int(ax.x + f.x, ax.y + f.y);
+                var offF = SkillLibrary.AxialToOffset(axF);
+                if (!_map.HasTile(offF)) frontier.Add(c);
+            }
+        }
+
+        // ìµœì¢… ê²°ê³¼ì— 1ì—´ ì¶”ê°€
+        var result = new HashSet<Vector3Int>(frontier);
+
+        if (_depth >= 2)
+        {
+            // 2) 2ì—´: ìˆ˜ë™ 2ì—´ì´ ìˆìœ¼ë©´ ìš°ì„  ì‚¬ìš©
+            var secondManual = (_team == Team.Player) ? manualSecondLayerPlayer : manualSecondLayerEnemy;
+            if (secondManual != null && secondManual.Count > 0)
+            {
+                foreach (var c in secondManual) if (_map.HasTile(c)) result.Add(c);
+            }
+            else
+            {
+                // ì—†ìœ¼ë©´ ê¸°ì¡´ì²˜ëŸ¼ -fë¡œ 1ì—´ì—ì„œ í•œ ì¹¸ ì•ˆìª½ í™•ì¥
+                var layer = new HashSet<Vector3Int>(frontier);
+                var next = new HashSet<Vector3Int>();
+                foreach (var c in layer)
+                {
+                    var ax = SkillLibrary.OffsetToAxial(c);
+                    var axBk = new Vector2Int(ax.x - f.x, ax.y - f.y); // -f
+                    var offBk = SkillLibrary.AxialToOffset(axBk);
+                    if (_map.HasTile(offBk)) next.Add(offBk);
+                }
+                foreach (var n in next) result.Add(n);
+            }
+        }
+
+        _frontlineCache[key] = result;
+        return result;
+    }
+
+    public List<Vector3Int> GetKnockbackCandidates(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        var result = new List<Vector3Int>();
+        if (!_battlemanager || !_caster || !_target) return result;
+
+        var map = _target.CurrentMap;
+        if (!map) return result;
+
+        var start = _target.Cell;
+
+        // caster -> target ë°©í–¥ (ë„‰ë°±ì€ "casterì—ì„œ targetìœ¼ë¡œ"ì˜ ì—°ì¥ì„  ë°©í–¥)
+        Vector3 casterW = map.GetCellCenterWorld(_caster.Cell);
+        Vector3 targetW = map.GetCellCenterWorld(start);
+        Vector2 awayDir = (Vector2)(targetW - casterW);
+        if (awayDir.sqrMagnitude < 1e-6f) return result;
+        awayDir.Normalize();
+
+        bool oddCol = SkillLibrary.IsOddColumn(start);
+
+        // BattleManager.TryGetFrontCellOfTargetì—ì„œ ì“°ëŠ” ì´ì›ƒ ì˜¤í”„ì…‹ ê·¸ëŒ€ë¡œ ë³µë¶™ 
+        Vector3Int[] neighOffsetsEven = {
+        new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
+        new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int(-1,-1, 0), new Vector3Int( 0,-1,0)
+    };
+        Vector3Int[] neighOffsetsOdd = {
+        new Vector3Int(+1, 0, 0), new Vector3Int(+1,+1,0),
+        new Vector3Int( 0,+1, 0), new Vector3Int(-1, 0,0),
+        new Vector3Int( 0,-1, 0), new Vector3Int(+1,-1,0)
+    };
+
+        var neighs = oddCol ? neighOffsetsOdd : neighOffsetsEven;
+        var scored = new List<(float score, Vector3Int cell)>();
+
+        foreach (var off in neighs)
+        {
+            var cand = new Vector3Int(start.x + off.x, start.y + off.y, start.z);
+            if (!map.HasTile(cand)) continue;
+
+            // target -> candidate ë°©í–¥
+            Vector3 candW = map.GetCellCenterWorld(cand);
+            Vector2 dir = (Vector2)(candW - targetW);
+            if (dir.sqrMagnitude < 1e-6f) continue;
+            dir.Normalize();
+
+            // awayDir(ìºìŠ¤í„°ì—ì„œ íƒ€ê²Ÿìª½)ê³¼ ê°€ì¥ ë¹„ìŠ·í•œ(=dotê°€ í°) ì´ì›ƒ 2ê°œ ì„ íƒ
+            float dot = Vector2.Dot(awayDir, dir);
+            scored.Add((dot, cand));
+        }
+
+        // dot í° ìˆœìœ¼ë¡œ ì •ë ¬
+        scored.Sort((a, b) => b.score.CompareTo(a.score));
+
+        // === ìƒìœ„ 2ê°œë§Œ í›„ë³´ ìŠ¬ë¡¯ìœ¼ë¡œ ê³ ì • ===
+        int maxSlots = Mathf.Min(2, scored.Count);
+        for (int i = 0; i < maxSlots; i++)
+        {
+            var cell = scored[i].cell;
+
+            // íƒ€ì¼ ì—†ìœ¼ë©´ ì´ ìŠ¬ë¡¯ì€ ê·¸ëƒ¥ ìŠ¤í‚µ (ëŒ€ì²´ ë°©í–¥ X)
+            if (!map.HasTile(cell))
+                continue;
+
+            // ì ìœ  ì—¬ë¶€ ì²´í¬
+            var units = _battlemanager.Grid.GetUnitsInArea(map, new[] { cell });
+            bool occupied = false;
+            foreach (var u in units)
+            {
+                if (u != null && !u.IsDead && u.Cell == cell)
+                {
+                    occupied = true;
+                    break;
+                }
+            }
+
+            if (!occupied)
+                result.Add(cell);
+        }
+
+        // resultì—ëŠ” 0~2ê°œì˜ ì…€ë§Œ ë“¤ì–´ê° (ëŒ€ì²´ ë°©í–¥ ì—†ìŒ)
+        return result;
+    }
+
+    bool IsInFrontline(BattleUnit _battleunit, int _depth)
+    {
+        if (!_battleunit || !_battleunit.CurrentMap) return false;
+        var set = GetFrontlineSet(_battleunit.CurrentMap, _battleunit.data.team, _depth);
+        return set != null && set.Contains(_battleunit.Cell);
+    }
+
+    // ì¤‘ì‹¬ ì…€ ê¸°ì¤€ìœ¼ë¡œ ë²”ìœ„ ìœ ë‹›ë“¤ì„ ì°¾ì•„ ë°ë¯¸ì§€ ì ìš©(íŒ€ ë°˜ëŒ€í¸ë§Œ)
+    void DealAreaDamage(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _centerCell)
+    {
+        if (!_battlemanager || !_caster) return;
+
+        int route = GetRoute(_caster);
+
+        // ë²”ìœ„ ê³„ì‚°
+        var area = GetAreaCells(_centerCell, SkillLibrary.IsOddColumn(_centerCell));
+
+        // === ë©€í‹° íˆíŠ¸ íšŸìˆ˜ ê³„ì‚° ===
+        int hits = trainingUseMultiHit ? Mathf.Max(1, trainingHitCount) : 1;
+
+        List<BattleUnit> victims;
+        if (trainingHitAllEnemies && routeForHitAllEnemies >= 0 && route == routeForHitAllEnemies)
+        {
+            victims = Object.FindObjectsOfType<BattleUnit>()
+                .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team && u.CurrentMap == _map).ToList();
+        }
+        else
+        {
+            victims = _battlemanager.Grid.GetUnitsInArea(_map, area)
+                            .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team).ToList();
+        }
+
+        // íƒ€ì¼ ë³€ê²½ ë° ì§€ëŒ€(Zone) ìƒì„± ë¡œì§
+        if (changeTileTo != null && _map != null)
+        {
+            // ê³µê²© ë²”ìœ„(area) ì „ì²´ë¥¼ ìˆœíšŒí•˜ë©° ì§€ëŒ€ ìƒì„±
+            foreach (var cell in area)
+            {
+                _battlemanager.Field.CreateStatusTileZone(
+                    _caster,
+                    _map,
+                    cell,
+                    tileChangeDuration, // ì§€ì† í„´
+                    changeTileTo,       // ë³€ê²½í•  íƒ€ì¼ ì´ë¯¸ì§€
+                    zoneStatusId,       // ë¶€ì—¬í•  ìƒíƒœ
+                    zoneStatusStack,    // ìŠ¤íƒ
+                    zoneStatusDuration  // ìƒíƒœ ì§€ì†
+                );
+            }
+        }
+
+        // ë°©ì–´ ì¤‘ì²© í›ˆë ¨ (ì‹œì „ì)
+        if (trainingApplyDefenseStacks && routeForDefenseStacks >= 0 && route == routeForDefenseStacks && trainingDefenseStatusId != StatusId.None)
+        {
+            _caster.GetComponent<StatusController>()?.ApplyWithTurnContext(
+                trainingDefenseStatusId, Mathf.Max(1, trainingDefenseStacks), Mathf.Max(1, trainingDefenseDurationTurns)
+            );
+        }
+
+        // ì‹¤ì œ íƒ€ê²© (ë©€í‹° íˆíŠ¸)
+        for (int i = 0; i < hits; i++)
+        {
+            _battlemanager.ExecuteSkillDamage(_caster, victims, this, _map, _centerCell);
+        }
+
+        foreach (var v in victims)
+        {
+            ApplyStatusEffects(v);
+        }
+
+        if (trainingUseSelfAtkBuff && routeForSelfAtkBuff >= 0 && route == routeForSelfAtkBuff && selfAtkBuffId != UnitStateBuffId.None)
+        {
+            _caster.GetComponent<UnitStateController>()?.ApplyBuffForTurns(selfAtkBuffId, selfAtkBuffDurationTurns + 1);
+        }
+
+        // ì´ëª… ê°•í™” ë²„í”„ ì ìš©
+        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        {
+            var usc = _caster.GetComponent<UnitStateController>();
+            if (usc != null)
+            {
+                // ì§€ì •ëœ í„´ ìˆ˜ë§Œí¼ ë²„í”„ ë¶€ì—¬
+                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1); // +1ì€ í˜„ì¬ í„´ ì†Œëª¨ ë³´ì •
+                Debug.Log($"[ParametricDamage] Clarity Enhanced: {_caster.name}, Duration={trainingClarityDuration}");
+            }
+        }
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (!_battlemanager || !_caster) yield break;
+
+        // MP ì†Œë¹„
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        BattleUnit primary = (useProvidedUnitTarget && _target != null && !_target.IsDead)
+                                ? _target
+                                : PickPrimaryTarget();
+
+        if (primary == null) yield break;
+
+        int route = GetRoute(_caster);
+        Debug.Log($"[Training] {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
+
+        // ë²”ìœ„ ê³„ì‚°ì€ GetAreaCells ì•ˆì—ì„œ routeë¥¼ ë³´ê³  ì•Œì•„ì„œ ì²˜ë¦¬
+        DealAreaDamage(_battlemanager, _caster, primary.CurrentMap, primary.Cell);
+        // ìƒíƒœ ì´ìƒ ë¶€ì—¬
+        ApplyStatusEffects(_target);
+        yield break;
+    }
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    {
+        if (!_battlemanager || !_caster || !_map) yield break;
+
+        // MP ì†Œë¹„
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        int route = GetRoute(_caster);
+        Debug.Log($"[Training] (Tile) {name} by {_caster.name} route={route}, useAreaOverride={trainingUseAreaOverride}");
+
+        DealAreaDamage(_battlemanager, _caster, _map, _originCell);
+
+        // ì‹œì „ í›„ ìƒíƒœ ì œê±°
+        ConsumeStates(_caster);
+
+        yield break;
+    }
+
+    protected void ApplyStatusEffects(BattleUnit target)
+    {
+        if (applyStatusOnHit == null || applyStatusOnHit.Count == 0) return;
+        if (target == null) return;
+
+        var statusCtrl = target.GetComponent<StatusController>();
+        if (statusCtrl != null)
+        {
+            foreach (var effect in applyStatusOnHit)
+            {
+                if (effect.status != StatusId.None)
+                {
+                    // Durationì´ 0ë³´ë‹¤ í¬ë©´ í„´ ì»¨í…ìŠ¤íŠ¸ í¬í•¨ ì ìš©, ì•„ë‹ˆë©´ ë‹¨ìˆœ ìŠ¤íƒ ì„¤ì •
+                    if (effect.duration > 0)
+                    {
+                        statusCtrl.ApplyWithTurnContext(effect.status, effect.stack, effect.duration);
+                        Debug.Log($"[Status] {target.name}ì—ê²Œ {effect.status} ë¶€ì—¬: {effect.stack}ìŠ¤íƒ / {effect.duration}í„´");
+                    }
+                    else
+                    {
+                        statusCtrl.SetStacks(effect.status, effect.stack);
+                    }
+                }
+            }
+        }
+    }
+
+    // ìƒíƒœ ì œê±°
+    void ConsumeStates(BattleUnit caster)
+    {
+        if (!consumeStateOnCast || statesToConsume == null) return;
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null) return;
+
+        foreach (var s in statesToConsume)
+        {
+            if (s != UnitStateId.None)
+                usc.Remove(s);
+        }
+    }
+
+    public override int GetSuppressionOnHit(BattleUnit _caster)
+    {
+        int route = GetRoute(_caster);
+        if (trainingSuppressionOnHit <= 0) return 0;
+        if (routeForSuppression < 0) return 0;
+        return (route == routeForSuppression) ? Mathf.Max(0, trainingSuppressionOnHit) : 0;
+    }
+
+    public override int GetEffectiveCooldownTurns(BattleUnit _caster)
+    {
+        int cd = cooldownTurns;
+
+        int route = GetRoute(_caster);
+        if (trainingCooldownDelta != 0 && routeForCooldown >= 0 && route == routeForCooldown)
+        {
+            cd = Mathf.Max(0, cd + trainingCooldownDelta);
+        }
+
+        return cd;
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+
+}

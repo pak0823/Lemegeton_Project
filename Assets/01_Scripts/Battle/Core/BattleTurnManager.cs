@@ -1,373 +1,373 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-
-public class BattleTurnManager : MonoBehaviour
-{
-    private BattleManager battleManager;
-    private IGridProvider grid;
-    private BattleInputHandler inputHandler;
-    private BattleFieldManager fieldManager;
-
-    [Header("Settings")]
-    [SerializeField] private int baseActionsPerTurn = 1;
-
-    // State
-    public BattleUnit ActingUnit { get; private set; }
-    public bool IsPlayerTurn => ActingUnit != null && ActingUnit.data.team == Team.Player;
-
-    private int remainingActions = 0;
-    public int RemainingActions => remainingActions;
-    private HashSet<BattleAction> usedActions = new();
-    private Coroutine enemyRoutine;
-
-    // Events
-    public event System.Action<BattleUnit> OnUnitTurnStarted; // BM.OnAnyUnitTurnStarted ¿¬°á¿ë
-    public event System.Action<BattleUnit> OnUnitEndTurn;
-    public event System.Action<BattleUnit> OnOverworkTriggered;
-
-    public void Initialize(BattleManager _battleManager,IGridProvider _grid, BattleInputHandler _input, BattleFieldManager _fieldManager)
-    {
-        battleManager = _battleManager;
-        grid = _grid;
-        inputHandler = _input;
-        fieldManager = _fieldManager;
-    }
-    // À¯´Ö »ç¸Á ½Ã °­Á¦·Î ÅÏ ÁÖÃ¼¸¦ ºñ¿ì±â À§ÇØ È£Ãâ
-    public void ForceClearActingUnit()
-    {
-        ActingUnit = null;
-    }
-
-    // ÀüÅõ ÃÊ±âÈ­/¿şÀÌºê ÀüÈ¯ ½Ã »óÅÂ ¸®¼Â
-    public void ResetTurnState()
-    {
-        ActingUnit = null;
-        remainingActions = 0;
-        usedActions.Clear();
-        if (enemyRoutine != null) StopCoroutine(enemyRoutine);
-        enemyRoutine = null;
-    }
-
-    #region Turn Lifecycle
-    public void StartTurn(BattleUnit unit)
-    {
-        if (unit == null) return;
-        ActingUnit = unit;
-        remainingActions = baseActionsPerTurn;
-        usedActions.Clear();
-
-        // ÃÊ±âÈ­
-        battleManager.ClearAllPreviews();
-        inputHandler.ClearAllPreviews(); // Å¸°ÙÆÃ ÃÊ±âÈ­
-
-        //BattleManager¿¡°Ô ÇöÀç ÅÏ À¯´Ö Àü´Ş
-        battleManager.OnUnitTurnStartedByManager(unit);
-
-        // ÀÌº¥Æ® ¹ß¼Û
-        OnUnitTurnStarted?.Invoke(unit);
-        BattleManager.EmitGlobalTurnStart(unit); // Static Event Wrapper È£Ãâ
-        battleManager.EmitActionLabel(null, "");
-        battleManager.SetHint(string.Empty);
-        battleManager.EmitTurnLabel(unit);
-
-        Debug.Log($"[TurnManager] StartTurn -> {unit.name}");
-
-        // »óÅÂÀÌ»ó Ã¼Å© (¼ö¸é)
-        var usc = unit.GetComponent<UnitStateController>();
-        if (usc != null && usc.Has(UnitStateId.Sleep))
-        {
-            Debug.Log($"[Sleep] {unit.name} ¼ö¸é »óÅÂ -> ÅÏ ½ºÅµ");
-            usc.Remove(UnitStateId.Sleep);
-            EndTurnDirectly(unit);
-            return;
-        }
-
-        // »óÅÂÀÌ»ó Ã¼Å© (°øÆ÷)
-        bool hadFear = (usc != null && usc.Has(UnitStateId.Fear));
-
-        // ÅÏ ½ÃÀÛ È¿°ú Ã³¸®
-        var sc = unit.GetComponent<StatusController>();
-        if (sc != null) sc.OnTurnStart();
-        if (usc != null) usc.OnTurnStart();
-
-        // ¸Åº¹ Èú µî Æ¯¼ö ·ÎÁ÷ (BM¿¡ ÀÖ´ø ·ÎÁ÷ °¡Á®¿È - ÇÊ¿ä½Ã Helper·Î ºĞ¸® °¡´É)
-        battleManager.TryApplyAmbushTurnStartHeal(unit);
-
-        // °øÆ÷ Ã³¸®
-        if (hadFear)
-        {
-            Debug.Log($"[Fear] {unit.name} °øÆ÷ -> °­Á¦ ÈÄÅğ");
-            battleManager.SetState(BattleState.Resolving);
-            remainingActions = 0;
-            usedActions.Clear();
-            StartCoroutine(battleManager.Co_HandleFearTurn(unit)); // ÀÌ°Ç ÀÌµ¿ ·ÎÁ÷ÀÌ¶ó BM/Grid ÀÇÁ¸¼ºÀÌ Å­
-            return;
-        }
-
-        // ÇÊµå È¿°ú (ÀåÆÇ)
-        fieldManager?.OnTurnStart(unit);
-
-        // Àû: À¥ Ä³½ºÆÃ Ã¼Å©
-        if (unit.data.team == Team.Enemy)
-        {
-            var ecs = unit.GetComponent<EnemyCastState>();
-            if (ecs != null && ecs.TryTakeReady(out var pending))
-            {
-                StartCoroutine(battleManager.Co_EnemyFireWebThenConsume(unit, pending));
-                return;
-            }
-        }
-
-        // »óÅÂ ÀüÈ¯
-        if (unit.data.team == Team.Player)
-        {
-            battleManager.SetState(BattleState.ActionSelect);
-        }
-        else
-        {
-            battleManager.SetState(BattleState.Resolving);
-            enemyRoutine = StartCoroutine(EnemyTurnRoutine(unit));
-        }
-    }
-
-    private void EndTurnDirectly(BattleUnit unit)
-    {
-        if (unit.data.team == Team.Player) EndPlayerTurn();
-        else EndEnemyTurn(unit);
-    }
-
-    public void EndPlayerTurn()
-    {
-        if (TryProcessOverwork()) return;
-
-        fieldManager?.OnTurnEnd(ActingUnit);
-        battleManager.ClearAllPreviews();
-
-        OnUnitEndTurn?.Invoke(ActingUnit);
-
-        // ÅÏ ÄÁÆ®·Ñ·¯¿¡°Ô Á¾·á ¾Ë¸²
-        battleManager.turnController.CompleteTurn(ActingUnit);
-
-        ActingUnit = null;
-        battleManager.SetState(BattleState.Idle);
-    }
-
-    public void EndEnemyTurn(BattleUnit enemy)
-    {
-        if (enemy == null)
-        {
-            battleManager.SetState(BattleState.Idle);
-            return;
-        }
-
-        if (TryProcessOverwork()) return;
-        enemyRoutine = null;
-
-        fieldManager?.OnTurnEnd(enemy);
-
-        // Àû AI °èÈ¹ ¼ö¸³
-        var ecs = enemy.GetComponent<EnemyCastState>();
-        if (ecs == null || !ecs.IsCasting)
-        {
-            battleManager.EmitActionLabel(enemy, "");
-            var ai = enemy.GetComponent<EnemyAI>();
-            if (ai != null) ai.PlanNextSkill();
-        }
-
-        enemy.ResetATB(); // (ATBController°¡ ÇØµµ µÇÁö¸¸ ¾ÈÀüÀåÄ¡)
-        OnUnitEndTurn?.Invoke(enemy);
-
-        battleManager.turnController.CompleteTurn(enemy);
-
-        if (ActingUnit == enemy) ActingUnit = null;
-        battleManager.SetState(BattleState.Idle);
-    }
-    #endregion
-
-    #region Action Logic
-    // Çàµ¿ ¼Ò¸ğ ¹× ÅÏ Èå¸§ Á¦¾î
-    public void OnActionConsumed(BattleAction act)
-    {
-        if (ActingUnit == null) return;
-
-        usedActions.Add(act);
-        remainingActions = Mathf.Max(0, remainingActions - 1);
-
-        if (remainingActions > 0)
-        {
-            if (IsPlayerTurn)
-            {
-                battleManager.SetState(BattleState.ActionSelect);
-            }
-            else
-            {
-                if (enemyRoutine != null) StopCoroutine(enemyRoutine);
-                enemyRoutine = StartCoroutine(EnemyTurnRoutine(ActingUnit));
-            }
-        }
-        else
-        {
-            if (IsPlayerTurn) EndPlayerTurn();
-            else EndEnemyTurn(ActingUnit);
-        }
-    }
-
-    // °ú·Î Ã³¸®
-    private bool TryProcessOverwork()
-    {
-        if (ActingUnit == null) return false;
-
-        var statusCtrl = ActingUnit.GetComponent<StatusController>();
-        var usc = ActingUnit.GetComponent<UnitStateController>();
-        if (statusCtrl == null) return false;
-
-        int overworkStacks = statusCtrl.GetStacks(StatusId.Overwork);
-        if (overworkStacks <= 0) return false;
-
-        int nextStack = overworkStacks - 1;
-        statusCtrl.SetStacks(StatusId.Overwork, nextStack);
-
-        if (nextStack == 0)
-        {
-            // ÈÆ·Ã Æ¯¼º Ã¼Å© (°ú·Î Á¾·á ½Ã ¼ö¸é ¸éÁ¦)
-            bool skipSleep = CheckOverworkTraining(ActingUnit);
-
-            if (usc != null)
-            {
-                if (!skipSleep) usc.Apply(UnitStateId.Sleep);
-                else Debug.Log($"[BattleManager] {ActingUnit.name} °ú·Î Á¾·á -> ÈÆ·Ã È¿°ú·Î ¼ö¸é ¸éÁ¦!");
-            }
-            return false;
-        }
-
-        Debug.Log($"[BattleManager] {ActingUnit.name} °ú·Î ¹ßµ¿! (³²Àº ½ºÅÃ: {nextStack})");
-
-        // Çàµ¿·Â ¸®ÇÊ ¹× ÅÏ ¿¬Àå
-        remainingActions = baseActionsPerTurn;
-        usedActions.Clear();
-        battleManager.SetState(BattleState.ActionSelect);
-
-        OnOverworkTriggered?.Invoke(ActingUnit);
-        return true;
-    }
-
-    // °ú·Î ÈÆ·Ã Ã¼Å© ·ÎÁ÷ (BM¿¡ ÀÖ´ø °Å °£¼ÒÈ­)
-    private bool CheckOverworkTraining(BattleUnit unit)
-    {
-        if (unit.data == null || unit.data.skills == null) return false;
-        foreach (var s in unit.data.skills)
-        {
-            if (s is ParametricSupportSkill pss && pss.buffStatus == StatusId.Overwork)
-            {
-                int route = unit.GetTrainingRouteIndex(pss);
-                if (pss.trainingNoSleepOnOverworkEnd &&
-                    pss.routeForNoSleepOnOverworkEnd >= 0 &&
-                    route == pss.routeForNoSleepOnOverworkEnd)
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    // ¿ÜºÎ(BM/Input)¿¡¼­ È£ÃâÇÏ´Â Çàµ¿ °ËÁõ
-    public bool CanPerformAction(BattleAction action)
-    {
-        if (ActingUnit == null) return false;
-        if (remainingActions <= 0) return false;
-        if (usedActions.Contains(action)) return false;
-        return true;
-    }
-    #endregion
-
-    #region Basic Actions (Rest/Calm)
-    public void Rest()
-    {
-        if (ActingUnit == null || !IsPlayerTurn) return;
-        if (remainingActions <= 0) return;
-
-        battleManager.ClearAllPreviews();
-
-        float before = ActingUnit.HP;
-        ActingUnit.HealPercent(0.10f);
-
-        OnActionConsumed(BattleAction.Rest);
-    }
-
-    public void Calm()
-    {
-        if (ActingUnit == null || !IsPlayerTurn) return;
-        if (remainingActions <= 0) return;
-
-        battleManager.ClearAllPreviews();
-
-        float maxMP = ActingUnit.MaxMP;
-        float maxRage = ActingUnit.MaxRage;
-        float beforeRage = ActingUnit.Rage;
-
-        int mpGain = Mathf.FloorToInt(maxMP * 0.10f);
-        if (mpGain <= 0 && maxMP > 0f) mpGain = 1;
-
-        if (ActingUnit.Rage <= 0f)
-        {
-            ActingUnit.GainMP(mpGain);
-            OnActionConsumed(BattleAction.Calm);
-            return;
-        }
-
-        if (mpGain > 0) ActingUnit.GainMP(mpGain);
-
-        float rageCostTarget = maxRage * 0.10f;
-        if (rageCostTarget <= 0f) rageCostTarget = beforeRage;
-
-        float spend = Mathf.Min(beforeRage, rageCostTarget);
-        if (spend > 0f) ActingUnit.AddRage(-spend);
-
-        OnActionConsumed(BattleAction.Calm);
-    }
-    #endregion
-
-    #region Enemy AI
-    IEnumerator EnemyTurnRoutine(BattleUnit enemy)
-    {
-        yield return new WaitForSeconds(0.5f);
-
-        // Å¸°Ù Ã£±â (Grid/Unit Á¶È¸´Â BMÀ» ÅëÇÏ°Å³ª GridManager Á÷Á¢ »ç¿ë)
-        var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead)
-            .Where(u => !SkillAsset.IsUntargetableByEnemy(u))
-            .ToList();
-
-        if (players.Count == 0) { EndEnemyTurn(enemy); yield break; }
-
-        BattleUnit target = players[Random.Range(0, players.Count)];
-
-        var ai = enemy.GetComponent<EnemyAI>();
-        SkillAsset so = (ai != null) ? ai.ConsumePlannedSkillOrPick() : null;
-
-        if (so != null) battleManager.EmitActionLabel(enemy, so.displayName);
-
-        if (so != null)
-        {
-            if (so.targetMode == SkillTargetMode.Unit)
-            {
-                // ½ºÅ³ ½ÇÇàÀº BM/SkillProcessor¿¡°Ô À§ÀÓÇÏ°í ´ë±â
-                yield return StartCoroutine(so.ResolveOnUnit(battleManager, enemy, target));
-
-                // ½ºÅ³ ÈÄ Ã³¸® (BMÀ» ÅëÇØ ´Ù½Ã ¿©±â OnActionConsumed·Î µ¹¾Æ¿È)
-                battleManager.FinishActionAfterSkill();
-                yield break;
-            }
-            else if (so.targetMode == SkillTargetMode.Tile)
-            {
-                // Å¸ÀÏ Å¸°Ù AI ·ÎÁ÷ (ÇÊ¿ä½Ã ±¸Çö)
-                yield break;
-            }
-        }
-        EndEnemyTurn(enemy);
-    }
-    #endregion
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+public class BattleTurnManager : MonoBehaviour
+{
+    private BattleManager battleManager;
+    private IGridProvider grid;
+    private BattleInputHandler inputHandler;
+    private BattleFieldManager fieldManager;
+
+    [Header("Settings")]
+    [SerializeField] private int baseActionsPerTurn = 1;
+
+    // State
+    public BattleUnit ActingUnit { get; private set; }
+    public bool IsPlayerTurn => ActingUnit != null && ActingUnit.data.team == Team.Player;
+
+    private int remainingActions = 0;
+    public int RemainingActions => remainingActions;
+    private HashSet<BattleAction> usedActions = new();
+    private Coroutine enemyRoutine;
+
+    // Events
+    public event System.Action<BattleUnit> OnUnitTurnStarted; // BM.OnAnyUnitTurnStarted ì—°ê²°ìš©
+    public event System.Action<BattleUnit> OnUnitEndTurn;
+    public event System.Action<BattleUnit> OnOverworkTriggered;
+
+    public void Initialize(BattleManager _battleManager,IGridProvider _grid, BattleInputHandler _input, BattleFieldManager _fieldManager)
+    {
+        battleManager = _battleManager;
+        grid = _grid;
+        inputHandler = _input;
+        fieldManager = _fieldManager;
+    }
+    // ìœ ë‹› ì‚¬ë§ ì‹œ ê°•ì œë¡œ í„´ ì£¼ì²´ë¥¼ ë¹„ìš°ê¸° ìœ„í•´ í˜¸ì¶œ
+    public void ForceClearActingUnit()
+    {
+        ActingUnit = null;
+    }
+
+    // ì „íˆ¬ ì´ˆê¸°í™”/ì›¨ì´ë¸Œ ì „í™˜ ì‹œ ìƒíƒœ ë¦¬ì…‹
+    public void ResetTurnState()
+    {
+        ActingUnit = null;
+        remainingActions = 0;
+        usedActions.Clear();
+        if (enemyRoutine != null) StopCoroutine(enemyRoutine);
+        enemyRoutine = null;
+    }
+
+    #region Turn Lifecycle
+    public void StartTurn(BattleUnit unit)
+    {
+        if (unit == null) return;
+        ActingUnit = unit;
+        remainingActions = baseActionsPerTurn;
+        usedActions.Clear();
+
+        // ì´ˆê¸°í™”
+        battleManager.ClearAllPreviews();
+        inputHandler.ClearAllPreviews(); // íƒ€ê²ŸíŒ… ì´ˆê¸°í™”
+
+        //BattleManagerì—ê²Œ í˜„ì¬ í„´ ìœ ë‹› ì „ë‹¬
+        battleManager.OnUnitTurnStartedByManager(unit);
+
+        // ì´ë²¤íŠ¸ ë°œì†¡
+        OnUnitTurnStarted?.Invoke(unit);
+        BattleManager.EmitGlobalTurnStart(unit); // Static Event Wrapper í˜¸ì¶œ
+        battleManager.EmitActionLabel(null, "");
+        battleManager.SetHint(string.Empty);
+        battleManager.EmitTurnLabel(unit);
+
+        Debug.Log($"[TurnManager] StartTurn -> {unit.name}");
+
+        // ìƒíƒœì´ìƒ ì²´í¬ (ìˆ˜ë©´)
+        var usc = unit.GetComponent<UnitStateController>();
+        if (usc != null && usc.Has(UnitStateId.Sleep))
+        {
+            Debug.Log($"[Sleep] {unit.name} ìˆ˜ë©´ ìƒíƒœ -> í„´ ìŠ¤í‚µ");
+            usc.Remove(UnitStateId.Sleep);
+            EndTurnDirectly(unit);
+            return;
+        }
+
+        // ìƒíƒœì´ìƒ ì²´í¬ (ê³µí¬)
+        bool hadFear = (usc != null && usc.Has(UnitStateId.Fear));
+
+        // í„´ ì‹œì‘ íš¨ê³¼ ì²˜ë¦¬
+        var sc = unit.GetComponent<StatusController>();
+        if (sc != null) sc.OnTurnStart();
+        if (usc != null) usc.OnTurnStart();
+
+        // ë§¤ë³µ í ë“± íŠ¹ìˆ˜ ë¡œì§ (BMì— ìˆë˜ ë¡œì§ ê°€ì ¸ì˜´ - í•„ìš”ì‹œ Helperë¡œ ë¶„ë¦¬ ê°€ëŠ¥)
+        battleManager.TryApplyAmbushTurnStartHeal(unit);
+
+        // ê³µí¬ ì²˜ë¦¬
+        if (hadFear)
+        {
+            Debug.Log($"[Fear] {unit.name} ê³µí¬ -> ê°•ì œ í›„í‡´");
+            battleManager.SetState(BattleState.Resolving);
+            remainingActions = 0;
+            usedActions.Clear();
+            StartCoroutine(battleManager.Co_HandleFearTurn(unit)); // ì´ê±´ ì´ë™ ë¡œì§ì´ë¼ BM/Grid ì˜ì¡´ì„±ì´ í¼
+            return;
+        }
+
+        // í•„ë“œ íš¨ê³¼ (ì¥íŒ)
+        fieldManager?.OnTurnStart(unit);
+
+        // ì : ì›¹ ìºìŠ¤íŒ… ì²´í¬
+        if (unit.data.team == Team.Enemy)
+        {
+            var ecs = unit.GetComponent<EnemyCastState>();
+            if (ecs != null && ecs.TryTakeReady(out var pending))
+            {
+                StartCoroutine(battleManager.Co_EnemyFireWebThenConsume(unit, pending));
+                return;
+            }
+        }
+
+        // ìƒíƒœ ì „í™˜
+        if (unit.data.team == Team.Player)
+        {
+            battleManager.SetState(BattleState.ActionSelect);
+        }
+        else
+        {
+            battleManager.SetState(BattleState.Resolving);
+            enemyRoutine = StartCoroutine(EnemyTurnRoutine(unit));
+        }
+    }
+
+    private void EndTurnDirectly(BattleUnit unit)
+    {
+        if (unit.data.team == Team.Player) EndPlayerTurn();
+        else EndEnemyTurn(unit);
+    }
+
+    public void EndPlayerTurn()
+    {
+        if (TryProcessOverwork()) return;
+
+        fieldManager?.OnTurnEnd(ActingUnit);
+        battleManager.ClearAllPreviews();
+
+        OnUnitEndTurn?.Invoke(ActingUnit);
+
+        // í„´ ì»¨íŠ¸ë¡¤ëŸ¬ì—ê²Œ ì¢…ë£Œ ì•Œë¦¼
+        battleManager.turnController.CompleteTurn(ActingUnit);
+
+        ActingUnit = null;
+        battleManager.SetState(BattleState.Idle);
+    }
+
+    public void EndEnemyTurn(BattleUnit enemy)
+    {
+        if (enemy == null)
+        {
+            battleManager.SetState(BattleState.Idle);
+            return;
+        }
+
+        if (TryProcessOverwork()) return;
+        enemyRoutine = null;
+
+        fieldManager?.OnTurnEnd(enemy);
+
+        // ì  AI ê³„íš ìˆ˜ë¦½
+        var ecs = enemy.GetComponent<EnemyCastState>();
+        if (ecs == null || !ecs.IsCasting)
+        {
+            battleManager.EmitActionLabel(enemy, "");
+            var ai = enemy.GetComponent<EnemyAI>();
+            if (ai != null) ai.PlanNextSkill();
+        }
+
+        enemy.ResetATB(); // (ATBControllerê°€ í•´ë„ ë˜ì§€ë§Œ ì•ˆì „ì¥ì¹˜)
+        OnUnitEndTurn?.Invoke(enemy);
+
+        battleManager.turnController.CompleteTurn(enemy);
+
+        if (ActingUnit == enemy) ActingUnit = null;
+        battleManager.SetState(BattleState.Idle);
+    }
+    #endregion
+
+    #region Action Logic
+    // í–‰ë™ ì†Œëª¨ ë° í„´ íë¦„ ì œì–´
+    public void OnActionConsumed(BattleAction act)
+    {
+        if (ActingUnit == null) return;
+
+        usedActions.Add(act);
+        remainingActions = Mathf.Max(0, remainingActions - 1);
+
+        if (remainingActions > 0)
+        {
+            if (IsPlayerTurn)
+            {
+                battleManager.SetState(BattleState.ActionSelect);
+            }
+            else
+            {
+                if (enemyRoutine != null) StopCoroutine(enemyRoutine);
+                enemyRoutine = StartCoroutine(EnemyTurnRoutine(ActingUnit));
+            }
+        }
+        else
+        {
+            if (IsPlayerTurn) EndPlayerTurn();
+            else EndEnemyTurn(ActingUnit);
+        }
+    }
+
+    // ê³¼ë¡œ ì²˜ë¦¬
+    private bool TryProcessOverwork()
+    {
+        if (ActingUnit == null) return false;
+
+        var statusCtrl = ActingUnit.GetComponent<StatusController>();
+        var usc = ActingUnit.GetComponent<UnitStateController>();
+        if (statusCtrl == null) return false;
+
+        int overworkStacks = statusCtrl.GetStacks(StatusId.Overwork);
+        if (overworkStacks <= 0) return false;
+
+        int nextStack = overworkStacks - 1;
+        statusCtrl.SetStacks(StatusId.Overwork, nextStack);
+
+        if (nextStack == 0)
+        {
+            // í›ˆë ¨ íŠ¹ì„± ì²´í¬ (ê³¼ë¡œ ì¢…ë£Œ ì‹œ ìˆ˜ë©´ ë©´ì œ)
+            bool skipSleep = CheckOverworkTraining(ActingUnit);
+
+            if (usc != null)
+            {
+                if (!skipSleep) usc.Apply(UnitStateId.Sleep);
+                else Debug.Log($"[BattleManager] {ActingUnit.name} ê³¼ë¡œ ì¢…ë£Œ -> í›ˆë ¨ íš¨ê³¼ë¡œ ìˆ˜ë©´ ë©´ì œ!");
+            }
+            return false;
+        }
+
+        Debug.Log($"[BattleManager] {ActingUnit.name} ê³¼ë¡œ ë°œë™! (ë‚¨ì€ ìŠ¤íƒ: {nextStack})");
+
+        // í–‰ë™ë ¥ ë¦¬í•„ ë° í„´ ì—°ì¥
+        remainingActions = baseActionsPerTurn;
+        usedActions.Clear();
+        battleManager.SetState(BattleState.ActionSelect);
+
+        OnOverworkTriggered?.Invoke(ActingUnit);
+        return true;
+    }
+
+    // ê³¼ë¡œ í›ˆë ¨ ì²´í¬ ë¡œì§ (BMì— ìˆë˜ ê±° ê°„ì†Œí™”)
+    private bool CheckOverworkTraining(BattleUnit unit)
+    {
+        if (unit.data == null || unit.data.skills == null) return false;
+        foreach (var s in unit.data.skills)
+        {
+            if (s is ParametricSupportSkill pss && pss.buffStatus == StatusId.Overwork)
+            {
+                int route = unit.GetTrainingRouteIndex(pss);
+                if (pss.trainingNoSleepOnOverworkEnd &&
+                    pss.routeForNoSleepOnOverworkEnd >= 0 &&
+                    route == pss.routeForNoSleepOnOverworkEnd)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // ì™¸ë¶€(BM/Input)ì—ì„œ í˜¸ì¶œí•˜ëŠ” í–‰ë™ ê²€ì¦
+    public bool CanPerformAction(BattleAction action)
+    {
+        if (ActingUnit == null) return false;
+        if (remainingActions <= 0) return false;
+        if (usedActions.Contains(action)) return false;
+        return true;
+    }
+    #endregion
+
+    #region Basic Actions (Rest/Calm)
+    public void Rest()
+    {
+        if (ActingUnit == null || !IsPlayerTurn) return;
+        if (remainingActions <= 0) return;
+
+        battleManager.ClearAllPreviews();
+
+        float before = ActingUnit.HP;
+        ActingUnit.HealPercent(0.10f);
+
+        OnActionConsumed(BattleAction.Rest);
+    }
+
+    public void Calm()
+    {
+        if (ActingUnit == null || !IsPlayerTurn) return;
+        if (remainingActions <= 0) return;
+
+        battleManager.ClearAllPreviews();
+
+        float maxMP = ActingUnit.MaxMP;
+        float maxRage = ActingUnit.MaxRage;
+        float beforeRage = ActingUnit.Rage;
+
+        int mpGain = Mathf.FloorToInt(maxMP * 0.10f);
+        if (mpGain <= 0 && maxMP > 0f) mpGain = 1;
+
+        if (ActingUnit.Rage <= 0f)
+        {
+            ActingUnit.GainMP(mpGain);
+            OnActionConsumed(BattleAction.Calm);
+            return;
+        }
+
+        if (mpGain > 0) ActingUnit.GainMP(mpGain);
+
+        float rageCostTarget = maxRage * 0.10f;
+        if (rageCostTarget <= 0f) rageCostTarget = beforeRage;
+
+        float spend = Mathf.Min(beforeRage, rageCostTarget);
+        if (spend > 0f) ActingUnit.AddRage(-spend);
+
+        OnActionConsumed(BattleAction.Calm);
+    }
+    #endregion
+
+    #region Enemy AI
+    IEnumerator EnemyTurnRoutine(BattleUnit enemy)
+    {
+        yield return new WaitForSeconds(0.5f);
+
+        // íƒ€ê²Ÿ ì°¾ê¸° (Grid/Unit ì¡°íšŒëŠ” BMì„ í†µí•˜ê±°ë‚˜ GridManager ì§ì ‘ ì‚¬ìš©)
+        var players = Object.FindObjectsOfType<BattleUnit>()
+            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead)
+            .Where(u => !SkillAsset.IsUntargetableByEnemy(u))
+            .ToList();
+
+        if (players.Count == 0) { EndEnemyTurn(enemy); yield break; }
+
+        BattleUnit target = players[Random.Range(0, players.Count)];
+
+        var ai = enemy.GetComponent<EnemyAI>();
+        SkillAsset so = (ai != null) ? ai.ConsumePlannedSkillOrPick() : null;
+
+        if (so != null) battleManager.EmitActionLabel(enemy, so.displayName);
+
+        if (so != null)
+        {
+            if (so.targetMode == SkillTargetMode.Unit)
+            {
+                // ìŠ¤í‚¬ ì‹¤í–‰ì€ BM/SkillProcessorì—ê²Œ ìœ„ì„í•˜ê³  ëŒ€ê¸°
+                yield return StartCoroutine(so.ResolveOnUnit(battleManager, enemy, target));
+
+                // ìŠ¤í‚¬ í›„ ì²˜ë¦¬ (BMì„ í†µí•´ ë‹¤ì‹œ ì—¬ê¸° OnActionConsumedë¡œ ëŒì•„ì˜´)
+                battleManager.FinishActionAfterSkill();
+                yield break;
+            }
+            else if (so.targetMode == SkillTargetMode.Tile)
+            {
+                // íƒ€ì¼ íƒ€ê²Ÿ AI ë¡œì§ (í•„ìš”ì‹œ êµ¬í˜„)
+                yield break;
+            }
+        }
+        EndEnemyTurn(enemy);
+    }
+    #endregion
 }

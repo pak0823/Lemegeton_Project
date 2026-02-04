@@ -1,283 +1,283 @@
-using UnityEngine;
-using UnityEngine.UI;
-using System.Collections.Generic;
-using UnityEngine.EventSystems;
-
-namespace Project.UI
-{
-    public class TitleMenuUI : MonoBehaviour, ISceneUiModule
-    {
-        [System.Serializable]
-        public class MenuItem
-        {
-            public string id;               // ½Äº°ÀÚ (µğ¹ö±×¿ë)
-            public Button button;           // UI ¹öÆ°
-            public bool requiresSaveData;   // ¼¼ÀÌºê µ¥ÀÌÅÍ°¡ ÀÖ¾î¾ß È°¼ºÈ­µÇ´ÂÁö
-            // ÇÊ¿äÇÏ´Ù¸é ¿©±â¿¡ UnityEvent onClick µîÀ» Ãß°¡ÇØ ÀÎ½ºÆåÅÍ¿¡¼­ ¿¬°á °¡´É
-        }
-
-        [Header("Configuration")]
-        [SerializeField] private List<MenuItem> menuItems = new List<MenuItem>(); // ¹öÆ° ¸®½ºÆ®·Î ÅëÇÕ °ü¸®
-
-        [Header("Navigation & Visuals")]
-        [SerializeField] private RectTransform arrow;
-        [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f);
-        [SerializeField] private Color focusTextColor = new Color(1f, 0.6f, 0f); // ÁÖÈ²»ö
-
-        [Header("Settings")]
-        [SerializeField] private bool simulateHasSaveData = false; // ÀÓ½Ã µ¥ÀÌÅÍ ÇÃ·¡±×
-        [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f;
-
-        // »óÅÂ °ü¸®
-        private int _currentIndex = -1;
-        private bool _isInputActive = false;
-
-        // Áßº¹ ½ÇÇà ¹æÁö¿ë ÇÃ·¡±× Ãß°¡
-        private bool _isBusy = false;
-
-        // ÅØ½ºÆ® »ö»ó Ä³½Ì
-        private Dictionary<Text, Color> _originalTextColors = new Dictionary<Text, Color>();
-
-        // ¿ÜºÎ ÀÇÁ¸¼º (¿É¼Ç ÆĞ³Î µî) -> ÀÎÅÍÆäÀÌ½º³ª ¸Å´ÏÀú¸¦ ÅëÇÏ´Â °ÍÀÌ ÁÁÀ¸³ª, ÆíÀÇ»ó À¯ÁöÇÏµÇ ÀÇÁ¸¼º ÃÖ¼ÒÈ­
-        public OptionsMenuUI optionPanel;
-
-        private void Awake()
-        {
-            InitializeButtons();
-        }
-
-        private void InitializeButtons()
-        {
-            foreach (var item in menuItems)
-            {
-                if (item.button == null) continue;
-
-                // 1. ÅØ½ºÆ® »ö»ó Ä³½Ì
-                var texts = item.button.GetComponentsInChildren<Text>(true);
-                foreach (var t in texts)
-                {
-                    if (!_originalTextColors.ContainsKey(t))
-                        _originalTextColors.Add(t, t.color);
-                }
-
-                // 2. ¸¶¿ì½º ÀÌº¥Æ® ¿¬°á (EventTrigger ´ë½Å °¡º­¿î ¹æ½Ä ±ÇÀåÇÏÁö¸¸, ±âÁ¸ ·ÎÁ÷ Á¸ÁßÇÏ¿© À¯Áö)
-                // ¶÷´Ù Ä¸Ã³ ÁÖÀÇ: foreach º¯¼ö¸¦ Á÷Á¢ ¾²Áö ¸»°í ·ÎÄÃ º¯¼ö¿¡ ÇÒ´ç
-                var targetBtn = item.button;
-                var itemIndex = menuItems.IndexOf(item);
-
-                var trigger = targetBtn.gameObject.GetComponent<EventTrigger>() ?? targetBtn.gameObject.AddComponent<EventTrigger>();
-                var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-                entry.callback.AddListener((data) => OnPointerEnterButton(itemIndex));
-                trigger.triggers.Add(entry);
-
-                // 3. Å¬¸¯ ¸®½º³Ê (ÀÎ½ºÆåÅÍ¿¡¼­ ¿¬°áÇß´Ù¸é »ı·« °¡´ÉÇÏÁö¸¸, ÄÚµå Á¦¾î¸¦ ¿øÇÑ´Ù¸é ¿©±â¼­)
-                // ¿¹: if (item.id == "Start") item.button.onClick.AddListener(OnBtnStartGame);
-                // ÇöÀç ±¸Á¶´Â ÀÎ½ºÆåÅÍ onClick »ç¿ëÀ» °¡Á¤ÇÕ´Ï´Ù.
-            }
-        }
-
-        // --- ISceneUiModule Implementation ---
-        public void OnUiShown()
-        {
-            _isInputActive = true;
-            _isBusy = false;
-
-            RefreshSaveDataState(); // ¼¼ÀÌºê µ¥ÀÌÅÍ À¯¹«¿¡ µû¸¥ ¹öÆ° »óÅÂ °»½Å
-
-            // ÃÊ±â Æ÷Ä¿½º ¼³Á¤ (°¡´ÉÇÑ Ã¹ ¹øÂ° ¹öÆ°)
-            int startIndex = GetNextValidIndex(-1, 1);
-            SelectButton(startIndex);
-
-            if (arrow) arrow.gameObject.SetActive(true);
-        }
-
-        public void OnUiHidden()
-        {
-            _isInputActive = false;
-            if (arrow) arrow.gameObject.SetActive(false);
-            ResetVisuals();
-        }
-        // -------------------------------------
-
-        private void Update()
-        {
-            // ¿É¼Ç Ã¢ÀÌ ¿­·ÁÀÖ°Å³ª ÀÔ·Â ºñÈ°¼º »óÅÂ¸é ¹«½Ã
-            if (!_isInputActive || _isBusy || (optionPanel != null && optionPanel.IsShow)) return;
-
-            HandleKeyboardInput();
-        }
-
-        private void HandleKeyboardInput()
-        {
-            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
-            {
-                Navigate(-1);
-            }
-            else if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
-            {
-                Navigate(1);
-            }
-            else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
-            {
-                PressCurrentButton();
-            }
-        }
-
-        private void Navigate(int direction)
-        {
-            int nextIndex = GetNextValidIndex(_currentIndex, direction);
-
-            // º¯°æ»çÇ×ÀÌ ÀÖÀ» ¶§¸¸ °»½Å
-            if (nextIndex != -1 && nextIndex != _currentIndex)
-            {
-                SelectButton(nextIndex);
-            }
-        }
-
-        // ¹æÇâ(direction)À¸·Î Å½»öÇÏ¿© Å¬¸¯ °¡´ÉÇÑ ´ÙÀ½ ¹öÆ° ÀÎµ¦½º ¹İÈ¯
-        private int GetNextValidIndex(int startIdx, int direction)
-        {
-            if (menuItems.Count == 0) return -1;
-
-            int current = startIdx;
-            // ¸®½ºÆ® Å©±â¸¸Å­¸¸ ¹İº¹ÇØ¼­ ¹«ÇÑ·çÇÁ ¹æÁö
-            for (int i = 0; i < menuItems.Count; i++)
-            {
-                current += direction;
-
-                // ¹üÀ§ Ã¼Å© (Wrap ¹æÁö: ³¡¿¡ µµ´ŞÇÏ¸é ¸ØÃã)
-                // WrapÀ» ¿øÇÏ¸é: current = (current + menuItems.Count) % menuItems.Count;
-                if (current < 0 || current >= menuItems.Count)
-                    return startIdx; // ´õ ÀÌ»ó °¥ °÷ÀÌ ¾øÀ¸¸é Á¦ÀÚ¸®
-
-                if (IsButtonInteractable(current))
-                {
-                    return current;
-                }
-            }
-            return startIdx;
-        }
-
-        private bool IsButtonInteractable(int index)
-        {
-            if (index < 0 || index >= menuItems.Count) return false;
-            var item = menuItems[index];
-            return item.button != null && item.button.gameObject.activeInHierarchy && item.button.interactable;
-        }
-
-        private void SelectButton(int index)
-        {
-            if (index < 0 || index >= menuItems.Count) return;
-
-            // ÀÌÀü ¼±ÅÃ ÇØÁ¦ È¿°ú (ÇÊ¿ä½Ã)
-            // ResetVisuals(); // ÀüÃ¼ ¸®¼Âº¸´Ù´Â ÃÖÀûÈ­ °¡´ÉÇÏÁö¸¸, ¾ÈÀüÇÏ°Ô ÀüÃ¼ ¸®¼Â »ç¿ë
-
-            _currentIndex = index;
-            UpdateVisuals();
-        }
-
-        private void PressCurrentButton()
-        {
-            if (_isBusy) return;
-
-            if (_currentIndex >= 0 && _currentIndex < menuItems.Count)
-            {
-                var btn = menuItems[_currentIndex].button;
-                if (btn.interactable) btn.onClick.Invoke();
-            }
-        }
-
-        private void OnPointerEnterButton(int index)
-        {
-            if (!_isInputActive || _isBusy || (optionPanel && optionPanel.IsShow)) return;
-            if (IsButtonInteractable(index))
-            {
-                SelectButton(index);
-            }
-        }
-
-        // ¼¼ÀÌºê µ¥ÀÌÅÍ »óÅÂ¿¡ µû¶ó ¹öÆ° È°¼º/ºñÈ°¼º Ã³¸®
-        private void RefreshSaveDataState()
-        {
-            bool hasSave = HasAnySaveData();
-
-            foreach (var item in menuItems)
-            {
-                if (item.requiresSaveData)
-                {
-                    // ·ÎÁ÷»ó ÀÎÅÍ·¢ÅÍºí ¼³Á¤
-                    item.button.interactable = hasSave;
-
-                    // ½Ã°¢Àû Ã³¸® (CanvasGroup)
-                    var cg = item.button.GetComponent<CanvasGroup>();
-                    if (!cg) cg = item.button.gameObject.AddComponent<CanvasGroup>();
-
-                    cg.alpha = hasSave ? 1f : disabledAlpha;
-                    cg.blocksRaycasts = hasSave; // ¸¶¿ì½º Å¬¸¯ ¹æÁö
-                }
-            }
-        }
-
-        private void UpdateVisuals()
-        {
-            // 1. È­»ìÇ¥ ÀÌµ¿
-            if (arrow && _currentIndex >= 0 && _currentIndex < menuItems.Count)
-            {
-                var targetRect = menuItems[_currentIndex].button.transform as RectTransform;
-                arrow.SetParent(targetRect.parent, true); // worldPositionStays=true
-                // ¾ŞÄ¿¿Í ÇÇ¹şÀ» Å¸°Ù°ú ¸ÂÃß°Å³ª, ´Ü¼ø À§Ä¡ ÀÌµ¿
-                arrow.position = targetRect.position + (Vector3)arrowOffset;
-                // ÇÊ¿ä½Ã SetAsLastSibling µîÀ¸·Î ·»´õ¸µ ¼ø¼­ Á¶Á¤
-            }
-
-            // 2. ÅØ½ºÆ® »ö»ó º¯°æ
-            foreach (var kv in _originalTextColors)
-            {
-                // ¼±ÅÃµÈ ¹öÆ°ÀÇ ÅØ½ºÆ®ÀÎÁö È®ÀÎ
-                bool isSelected = IsTextChildOfSelectedButton(kv.Key);
-                kv.Key.color = isSelected ? focusTextColor : kv.Value;
-            }
-        }
-
-        private bool IsTextChildOfSelectedButton(Text t)
-        {
-            if (_currentIndex < 0 || _currentIndex >= menuItems.Count) return false;
-            return t.transform.IsChildOf(menuItems[_currentIndex].button.transform);
-        }
-
-        private void ResetVisuals()
-        {
-            foreach (var kv in _originalTextColors)
-            {
-                if (kv.Key) kv.Key.color = kv.Value;
-            }
-        }
-
-        private bool HasAnySaveData()
-        {
-            // ÃßÈÄ ½ÇÁ¦ µ¥ÀÌÅÍ ¸Å´ÏÀú ¿¬°á
-            return simulateHasSaveData;
-        }
-
-        // --- ¹öÆ° ÀÌº¥Æ® ¿¬°á¿ë (ÀÎ½ºÆåÅÍ¿¡¼­ »ç¿ë) ---
-        public void OnBtnStartGame()
-        {
-            if (_isBusy) return; // ÀÌ¹Ì ½ÇÇà ÁßÀÌ¸é ¹«½Ã
-            _isBusy = true;      // ½ÇÇà ½ÃÀÛ Àá±İ
-
-            GameResetter.ResetAll(deleteSaves: true);
-            SceneTransitionManager.Instance.FadeToScene("ExplorationScene");
-        }
-
-        public void OnBtnQuitGame()
-        {
-            if (_isBusy) return; // ÀÌ¹Ì ½ÇÇà ÁßÀÌ¸é ¹«½Ã
-            _isBusy = true;      // ½ÇÇà ½ÃÀÛ Àá±İ
-
-            Application.Quit();
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#endif
-        }
-    }
-}
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections.Generic;
+using UnityEngine.EventSystems;
+
+namespace Project.UI
+{
+    public class TitleMenuUI : MonoBehaviour, ISceneUiModule
+    {
+        [System.Serializable]
+        public class MenuItem
+        {
+            public string id;               // ì‹ë³„ì (ë””ë²„ê·¸ìš©)
+            public Button button;           // UI ë²„íŠ¼
+            public bool requiresSaveData;   // ì„¸ì´ë¸Œ ë°ì´í„°ê°€ ìˆì–´ì•¼ í™œì„±í™”ë˜ëŠ”ì§€
+            // í•„ìš”í•˜ë‹¤ë©´ ì—¬ê¸°ì— UnityEvent onClick ë“±ì„ ì¶”ê°€í•´ ì¸ìŠ¤í™í„°ì—ì„œ ì—°ê²° ê°€ëŠ¥
+        }
+
+        [Header("Configuration")]
+        [SerializeField] private List<MenuItem> menuItems = new List<MenuItem>(); // ë²„íŠ¼ ë¦¬ìŠ¤íŠ¸ë¡œ í†µí•© ê´€ë¦¬
+
+        [Header("Navigation & Visuals")]
+        [SerializeField] private RectTransform arrow;
+        [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f);
+        [SerializeField] private Color focusTextColor = new Color(1f, 0.6f, 0f); // ì£¼í™©ìƒ‰
+
+        [Header("Settings")]
+        [SerializeField] private bool simulateHasSaveData = false; // ì„ì‹œ ë°ì´í„° í”Œë˜ê·¸
+        [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f;
+
+        // ìƒíƒœ ê´€ë¦¬
+        private int _currentIndex = -1;
+        private bool _isInputActive = false;
+
+        // ì¤‘ë³µ ì‹¤í–‰ ë°©ì§€ìš© í”Œë˜ê·¸ ì¶”ê°€
+        private bool _isBusy = false;
+
+        // í…ìŠ¤íŠ¸ ìƒ‰ìƒ ìºì‹±
+        private Dictionary<Text, Color> _originalTextColors = new Dictionary<Text, Color>();
+
+        // ì™¸ë¶€ ì˜ì¡´ì„± (ì˜µì…˜ íŒ¨ë„ ë“±) -> ì¸í„°í˜ì´ìŠ¤ë‚˜ ë§¤ë‹ˆì €ë¥¼ í†µí•˜ëŠ” ê²ƒì´ ì¢‹ìœ¼ë‚˜, í¸ì˜ìƒ ìœ ì§€í•˜ë˜ ì˜ì¡´ì„± ìµœì†Œí™”
+        public OptionsMenuUI optionPanel;
+
+        private void Awake()
+        {
+            InitializeButtons();
+        }
+
+        private void InitializeButtons()
+        {
+            foreach (var item in menuItems)
+            {
+                if (item.button == null) continue;
+
+                // 1. í…ìŠ¤íŠ¸ ìƒ‰ìƒ ìºì‹±
+                var texts = item.button.GetComponentsInChildren<Text>(true);
+                foreach (var t in texts)
+                {
+                    if (!_originalTextColors.ContainsKey(t))
+                        _originalTextColors.Add(t, t.color);
+                }
+
+                // 2. ë§ˆìš°ìŠ¤ ì´ë²¤íŠ¸ ì—°ê²° (EventTrigger ëŒ€ì‹  ê°€ë²¼ìš´ ë°©ì‹ ê¶Œì¥í•˜ì§€ë§Œ, ê¸°ì¡´ ë¡œì§ ì¡´ì¤‘í•˜ì—¬ ìœ ì§€)
+                // ëŒë‹¤ ìº¡ì²˜ ì£¼ì˜: foreach ë³€ìˆ˜ë¥¼ ì§ì ‘ ì“°ì§€ ë§ê³  ë¡œì»¬ ë³€ìˆ˜ì— í• ë‹¹
+                var targetBtn = item.button;
+                var itemIndex = menuItems.IndexOf(item);
+
+                var trigger = targetBtn.gameObject.GetComponent<EventTrigger>() ?? targetBtn.gameObject.AddComponent<EventTrigger>();
+                var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+                entry.callback.AddListener((data) => OnPointerEnterButton(itemIndex));
+                trigger.triggers.Add(entry);
+
+                // 3. í´ë¦­ ë¦¬ìŠ¤ë„ˆ (ì¸ìŠ¤í™í„°ì—ì„œ ì—°ê²°í–ˆë‹¤ë©´ ìƒëµ ê°€ëŠ¥í•˜ì§€ë§Œ, ì½”ë“œ ì œì–´ë¥¼ ì›í•œë‹¤ë©´ ì—¬ê¸°ì„œ)
+                // ì˜ˆ: if (item.id == "Start") item.button.onClick.AddListener(OnBtnStartGame);
+                // í˜„ì¬ êµ¬ì¡°ëŠ” ì¸ìŠ¤í™í„° onClick ì‚¬ìš©ì„ ê°€ì •í•©ë‹ˆë‹¤.
+            }
+        }
+
+        // --- ISceneUiModule Implementation ---
+        public void OnUiShown()
+        {
+            _isInputActive = true;
+            _isBusy = false;
+
+            RefreshSaveDataState(); // ì„¸ì´ë¸Œ ë°ì´í„° ìœ ë¬´ì— ë”°ë¥¸ ë²„íŠ¼ ìƒíƒœ ê°±ì‹ 
+
+            // ì´ˆê¸° í¬ì»¤ìŠ¤ ì„¤ì • (ê°€ëŠ¥í•œ ì²« ë²ˆì§¸ ë²„íŠ¼)
+            int startIndex = GetNextValidIndex(-1, 1);
+            SelectButton(startIndex);
+
+            if (arrow) arrow.gameObject.SetActive(true);
+        }
+
+        public void OnUiHidden()
+        {
+            _isInputActive = false;
+            if (arrow) arrow.gameObject.SetActive(false);
+            ResetVisuals();
+        }
+        // -------------------------------------
+
+        private void Update()
+        {
+            // ì˜µì…˜ ì°½ì´ ì—´ë ¤ìˆê±°ë‚˜ ì…ë ¥ ë¹„í™œì„± ìƒíƒœë©´ ë¬´ì‹œ
+            if (!_isInputActive || _isBusy || (optionPanel != null && optionPanel.IsShow)) return;
+
+            HandleKeyboardInput();
+        }
+
+        private void HandleKeyboardInput()
+        {
+            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+            {
+                Navigate(-1);
+            }
+            else if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
+            {
+                Navigate(1);
+            }
+            else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+            {
+                PressCurrentButton();
+            }
+        }
+
+        private void Navigate(int direction)
+        {
+            int nextIndex = GetNextValidIndex(_currentIndex, direction);
+
+            // ë³€ê²½ì‚¬í•­ì´ ìˆì„ ë•Œë§Œ ê°±ì‹ 
+            if (nextIndex != -1 && nextIndex != _currentIndex)
+            {
+                SelectButton(nextIndex);
+            }
+        }
+
+        // ë°©í–¥(direction)ìœ¼ë¡œ íƒìƒ‰í•˜ì—¬ í´ë¦­ ê°€ëŠ¥í•œ ë‹¤ìŒ ë²„íŠ¼ ì¸ë±ìŠ¤ ë°˜í™˜
+        private int GetNextValidIndex(int startIdx, int direction)
+        {
+            if (menuItems.Count == 0) return -1;
+
+            int current = startIdx;
+            // ë¦¬ìŠ¤íŠ¸ í¬ê¸°ë§Œí¼ë§Œ ë°˜ë³µí•´ì„œ ë¬´í•œë£¨í”„ ë°©ì§€
+            for (int i = 0; i < menuItems.Count; i++)
+            {
+                current += direction;
+
+                // ë²”ìœ„ ì²´í¬ (Wrap ë°©ì§€: ëì— ë„ë‹¬í•˜ë©´ ë©ˆì¶¤)
+                // Wrapì„ ì›í•˜ë©´: current = (current + menuItems.Count) % menuItems.Count;
+                if (current < 0 || current >= menuItems.Count)
+                    return startIdx; // ë” ì´ìƒ ê°ˆ ê³³ì´ ì—†ìœ¼ë©´ ì œìë¦¬
+
+                if (IsButtonInteractable(current))
+                {
+                    return current;
+                }
+            }
+            return startIdx;
+        }
+
+        private bool IsButtonInteractable(int index)
+        {
+            if (index < 0 || index >= menuItems.Count) return false;
+            var item = menuItems[index];
+            return item.button != null && item.button.gameObject.activeInHierarchy && item.button.interactable;
+        }
+
+        private void SelectButton(int index)
+        {
+            if (index < 0 || index >= menuItems.Count) return;
+
+            // ì´ì „ ì„ íƒ í•´ì œ íš¨ê³¼ (í•„ìš”ì‹œ)
+            // ResetVisuals(); // ì „ì²´ ë¦¬ì…‹ë³´ë‹¤ëŠ” ìµœì í™” ê°€ëŠ¥í•˜ì§€ë§Œ, ì•ˆì „í•˜ê²Œ ì „ì²´ ë¦¬ì…‹ ì‚¬ìš©
+
+            _currentIndex = index;
+            UpdateVisuals();
+        }
+
+        private void PressCurrentButton()
+        {
+            if (_isBusy) return;
+
+            if (_currentIndex >= 0 && _currentIndex < menuItems.Count)
+            {
+                var btn = menuItems[_currentIndex].button;
+                if (btn.interactable) btn.onClick.Invoke();
+            }
+        }
+
+        private void OnPointerEnterButton(int index)
+        {
+            if (!_isInputActive || _isBusy || (optionPanel && optionPanel.IsShow)) return;
+            if (IsButtonInteractable(index))
+            {
+                SelectButton(index);
+            }
+        }
+
+        // ì„¸ì´ë¸Œ ë°ì´í„° ìƒíƒœì— ë”°ë¼ ë²„íŠ¼ í™œì„±/ë¹„í™œì„± ì²˜ë¦¬
+        private void RefreshSaveDataState()
+        {
+            bool hasSave = HasAnySaveData();
+
+            foreach (var item in menuItems)
+            {
+                if (item.requiresSaveData)
+                {
+                    // ë¡œì§ìƒ ì¸í„°ë™í„°ë¸” ì„¤ì •
+                    item.button.interactable = hasSave;
+
+                    // ì‹œê°ì  ì²˜ë¦¬ (CanvasGroup)
+                    var cg = item.button.GetComponent<CanvasGroup>();
+                    if (!cg) cg = item.button.gameObject.AddComponent<CanvasGroup>();
+
+                    cg.alpha = hasSave ? 1f : disabledAlpha;
+                    cg.blocksRaycasts = hasSave; // ë§ˆìš°ìŠ¤ í´ë¦­ ë°©ì§€
+                }
+            }
+        }
+
+        private void UpdateVisuals()
+        {
+            // 1. í™”ì‚´í‘œ ì´ë™
+            if (arrow && _currentIndex >= 0 && _currentIndex < menuItems.Count)
+            {
+                var targetRect = menuItems[_currentIndex].button.transform as RectTransform;
+                arrow.SetParent(targetRect.parent, true); // worldPositionStays=true
+                // ì•µì»¤ì™€ í”¼ë²—ì„ íƒ€ê²Ÿê³¼ ë§ì¶”ê±°ë‚˜, ë‹¨ìˆœ ìœ„ì¹˜ ì´ë™
+                arrow.position = targetRect.position + (Vector3)arrowOffset;
+                // í•„ìš”ì‹œ SetAsLastSibling ë“±ìœ¼ë¡œ ë Œë”ë§ ìˆœì„œ ì¡°ì •
+            }
+
+            // 2. í…ìŠ¤íŠ¸ ìƒ‰ìƒ ë³€ê²½
+            foreach (var kv in _originalTextColors)
+            {
+                // ì„ íƒëœ ë²„íŠ¼ì˜ í…ìŠ¤íŠ¸ì¸ì§€ í™•ì¸
+                bool isSelected = IsTextChildOfSelectedButton(kv.Key);
+                kv.Key.color = isSelected ? focusTextColor : kv.Value;
+            }
+        }
+
+        private bool IsTextChildOfSelectedButton(Text t)
+        {
+            if (_currentIndex < 0 || _currentIndex >= menuItems.Count) return false;
+            return t.transform.IsChildOf(menuItems[_currentIndex].button.transform);
+        }
+
+        private void ResetVisuals()
+        {
+            foreach (var kv in _originalTextColors)
+            {
+                if (kv.Key) kv.Key.color = kv.Value;
+            }
+        }
+
+        private bool HasAnySaveData()
+        {
+            // ì¶”í›„ ì‹¤ì œ ë°ì´í„° ë§¤ë‹ˆì € ì—°ê²°
+            return simulateHasSaveData;
+        }
+
+        // --- ë²„íŠ¼ ì´ë²¤íŠ¸ ì—°ê²°ìš© (ì¸ìŠ¤í™í„°ì—ì„œ ì‚¬ìš©) ---
+        public void OnBtnStartGame()
+        {
+            if (_isBusy) return; // ì´ë¯¸ ì‹¤í–‰ ì¤‘ì´ë©´ ë¬´ì‹œ
+            _isBusy = true;      // ì‹¤í–‰ ì‹œì‘ ì ê¸ˆ
+
+            GameResetter.ResetAll(deleteSaves: true);
+            SceneTransitionManager.Instance.FadeToScene("ExplorationScene");
+        }
+
+        public void OnBtnQuitGame()
+        {
+            if (_isBusy) return; // ì´ë¯¸ ì‹¤í–‰ ì¤‘ì´ë©´ ë¬´ì‹œ
+            _isBusy = true;      // ì‹¤í–‰ ì‹œì‘ ì ê¸ˆ
+
+            Application.Quit();
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#endif
+        }
+    }
+}

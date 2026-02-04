@@ -1,115 +1,115 @@
-using System.Threading.Tasks;
-using Unity.VisualScripting;
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
-using static UnityEngine.GraphicsBuffer;
-
-public class RetreatConfirmPopup : MonoBehaviour
-{
-    [Header("UI")]
-    [SerializeField] Text messageText;    // º»¹®
-    [SerializeField] Button btnOk;        // È®ÀÎ (È®·ü °è»ê ÁøÇà)
-    [SerializeField] Button btnCancel;    // Ãë¼Ò
-    [SerializeField] Image focusOk;       // Æ÷Ä¿½º Ç¥½Ã¿ë(¼±ÅÃ)
-    [SerializeField] Image focusCancel;   // Æ÷Ä¿½º Ç¥½Ã¿ë(¼±ÅÃ)
-    [SerializeField] CanvasGroup cg;      // ÀÔ·Â Â÷´Ü¿ë(¾øÀ¸¸é ÀÎ½ºÆåÅÍ·Î Ãß°¡ ±ÇÀå)
-
-    [Header("InputKey")]
-    [SerializeField] private KeyCode leftMove_Key = KeyCode.A; //¿ŞÂÊ ÀÌµ¿ Å°
-    [SerializeField] private KeyCode rightMove_Key = KeyCode.D; //¿À¸¥ÂÊ ÀÌµ¿ Å°
-    [SerializeField] private KeyCode current_Key = KeyCode.E; //¼±ÅÃ È®Á¤ Å°
-    [SerializeField] private KeyCode cancel_Key = KeyCode.Q; //¼±ÅÃ Ãë¼Ò Å°
-    [SerializeField] private KeyCode cancelClose_Key = KeyCode.Escape; //Ã¢ ´İ±â Å°
-
-
-    int focus = 0; // 0=OK, 1=Cancel
-    TaskCompletionSource<bool> tcs;
-    bool closing = false; // ´İÈ÷´Â Áß(ÀÔ·Â Â÷´Ü)
-
-    void OnEnable()
-    {
-        SetFocus(0);
-        // ¼±ÅÃÀ» ÇöÀç Æ÷Ä¿½º ¹öÆ°À¸·Î °íÁ¤
-        var target = (focus == 0 ? btnOk : btnCancel);
-        if (target) EventSystem.current?.SetSelectedGameObject(target.gameObject);
-        closing = false;
-        EnableUI(true);
-    }
-
-    void Update()
-    {
-        if (closing) return; // ´İÈ÷´Â ÇÁ·¹ÀÓ¿¡ Ãß°¡ ÀÔ·Â ±İÁö
-
-        // A/D·Î ÁÂ¿ì ÀÌµ¿
-        if (Input.GetKeyDown(leftMove_Key)) MoveFocus(-1);
-        if (Input.GetKeyDown(rightMove_Key)) MoveFocus(+1);
-
-        // ÇöÀç Æ÷Ä¿½ºµÈ ¹öÆ° Å¬¸¯
-        if (Input.GetKeyDown(current_Key))
-        {
-            if (focus == 0) ClickOk();
-            else ClickCancel();
-        }
-        if (Input.GetKeyDown(cancel_Key) || Input.GetKeyDown(cancelClose_Key)) ClickCancel();
-    }
-
-    void MoveFocus(int dir) => SetFocus((focus + dir + 2) % 2);
-
-    void SetFocus(int idx)
-    {
-        focus = idx;
-        if (focusOk) focusOk.enabled = (focus == 0);
-        if (focusCancel) focusCancel.enabled = (focus == 1);
-    }
-
-    public async Task<bool> ShowAsync(string message, float successChance01)
-    {
-        tcs = new TaskCompletionSource<bool>();
-
-        if (messageText) messageText.text = message;
-
-        btnOk.onClick.RemoveAllListeners();
-        btnCancel.onClick.RemoveAllListeners();
-        btnOk.onClick.AddListener(ClickOk);
-        btnCancel.onClick.AddListener(ClickCancel);
-
-        gameObject.SetActive(true);
-        var result = await tcs.Task;
-        gameObject.SetActive(false);
-        closing = false;
-        return result;
-    }
-
-    void ClickOk()
-    {
-        if (closing || tcs == null) return;
-        BeginClose();   // Áï½Ã ÀÔ·Â/·¹ÀÌÄ³½ºÆ® Â÷´Ü
-        tcs.TrySetResult(true);
-    }
-    void ClickCancel()
-    {
-        if (closing || tcs == null) return;
-        BeginClose();   // Áï½Ã ÀÔ·Â/·¹ÀÌÄ³½ºÆ® Â÷´Ü
-        tcs.TrySetResult(false);
-    }
-    // ´İÈû ½ÃÀÛ: ÀÌ ÇÁ·¹ÀÓºÎÅÍ ´õ´Â Å¬¸¯/Æ÷Ä¿½º/Å° ÀÔ·Â Ã³¸®ÇÏÁö ¾Êµµ·Ï
-    void BeginClose()
-    {
-        closing = true;
-        EnableUI(false);
-        // ÇÊ¿äÇÏ¸é Áï½Ã ¼û±â±â:
-        // gameObject.SetActive(false);
-    }
-
-    void EnableUI(bool on)
-    {
-        if (cg)
-        {
-            cg.interactable = on;
-            cg.blocksRaycasts = on;
-        }
-        if (btnOk) btnOk.interactable = on;
-        if (btnCancel) btnCancel.interactable = on;
-    }
-}
+using System.Threading.Tasks;
+using Unity.VisualScripting;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using static UnityEngine.GraphicsBuffer;
+
+public class RetreatConfirmPopup : MonoBehaviour
+{
+    [Header("UI")]
+    [SerializeField] Text messageText;    // ë³¸ë¬¸
+    [SerializeField] Button btnOk;        // í™•ì¸ (í™•ë¥  ê³„ì‚° ì§„í–‰)
+    [SerializeField] Button btnCancel;    // ì·¨ì†Œ
+    [SerializeField] Image focusOk;       // í¬ì»¤ìŠ¤ í‘œì‹œìš©(ì„ íƒ)
+    [SerializeField] Image focusCancel;   // í¬ì»¤ìŠ¤ í‘œì‹œìš©(ì„ íƒ)
+    [SerializeField] CanvasGroup cg;      // ì…ë ¥ ì°¨ë‹¨ìš©(ì—†ìœ¼ë©´ ì¸ìŠ¤í™í„°ë¡œ ì¶”ê°€ ê¶Œì¥)
+
+    [Header("InputKey")]
+    [SerializeField] private KeyCode leftMove_Key = KeyCode.A; //ì™¼ìª½ ì´ë™ í‚¤
+    [SerializeField] private KeyCode rightMove_Key = KeyCode.D; //ì˜¤ë¥¸ìª½ ì´ë™ í‚¤
+    [SerializeField] private KeyCode current_Key = KeyCode.E; //ì„ íƒ í™•ì • í‚¤
+    [SerializeField] private KeyCode cancel_Key = KeyCode.Q; //ì„ íƒ ì·¨ì†Œ í‚¤
+    [SerializeField] private KeyCode cancelClose_Key = KeyCode.Escape; //ì°½ ë‹«ê¸° í‚¤
+
+
+    int focus = 0; // 0=OK, 1=Cancel
+    TaskCompletionSource<bool> tcs;
+    bool closing = false; // ë‹«íˆëŠ” ì¤‘(ì…ë ¥ ì°¨ë‹¨)
+
+    void OnEnable()
+    {
+        SetFocus(0);
+        // ì„ íƒì„ í˜„ì¬ í¬ì»¤ìŠ¤ ë²„íŠ¼ìœ¼ë¡œ ê³ ì •
+        var target = (focus == 0 ? btnOk : btnCancel);
+        if (target) EventSystem.current?.SetSelectedGameObject(target.gameObject);
+        closing = false;
+        EnableUI(true);
+    }
+
+    void Update()
+    {
+        if (closing) return; // ë‹«íˆëŠ” í”„ë ˆì„ì— ì¶”ê°€ ì…ë ¥ ê¸ˆì§€
+
+        // A/Dë¡œ ì¢Œìš° ì´ë™
+        if (Input.GetKeyDown(leftMove_Key)) MoveFocus(-1);
+        if (Input.GetKeyDown(rightMove_Key)) MoveFocus(+1);
+
+        // í˜„ì¬ í¬ì»¤ìŠ¤ëœ ë²„íŠ¼ í´ë¦­
+        if (Input.GetKeyDown(current_Key))
+        {
+            if (focus == 0) ClickOk();
+            else ClickCancel();
+        }
+        if (Input.GetKeyDown(cancel_Key) || Input.GetKeyDown(cancelClose_Key)) ClickCancel();
+    }
+
+    void MoveFocus(int dir) => SetFocus((focus + dir + 2) % 2);
+
+    void SetFocus(int idx)
+    {
+        focus = idx;
+        if (focusOk) focusOk.enabled = (focus == 0);
+        if (focusCancel) focusCancel.enabled = (focus == 1);
+    }
+
+    public async Task<bool> ShowAsync(string message, float successChance01)
+    {
+        tcs = new TaskCompletionSource<bool>();
+
+        if (messageText) messageText.text = message;
+
+        btnOk.onClick.RemoveAllListeners();
+        btnCancel.onClick.RemoveAllListeners();
+        btnOk.onClick.AddListener(ClickOk);
+        btnCancel.onClick.AddListener(ClickCancel);
+
+        gameObject.SetActive(true);
+        var result = await tcs.Task;
+        gameObject.SetActive(false);
+        closing = false;
+        return result;
+    }
+
+    void ClickOk()
+    {
+        if (closing || tcs == null) return;
+        BeginClose();   // ì¦‰ì‹œ ì…ë ¥/ë ˆì´ìºìŠ¤íŠ¸ ì°¨ë‹¨
+        tcs.TrySetResult(true);
+    }
+    void ClickCancel()
+    {
+        if (closing || tcs == null) return;
+        BeginClose();   // ì¦‰ì‹œ ì…ë ¥/ë ˆì´ìºìŠ¤íŠ¸ ì°¨ë‹¨
+        tcs.TrySetResult(false);
+    }
+    // ë‹«í˜ ì‹œì‘: ì´ í”„ë ˆì„ë¶€í„° ë”ëŠ” í´ë¦­/í¬ì»¤ìŠ¤/í‚¤ ì…ë ¥ ì²˜ë¦¬í•˜ì§€ ì•Šë„ë¡
+    void BeginClose()
+    {
+        closing = true;
+        EnableUI(false);
+        // í•„ìš”í•˜ë©´ ì¦‰ì‹œ ìˆ¨ê¸°ê¸°:
+        // gameObject.SetActive(false);
+    }
+
+    void EnableUI(bool on)
+    {
+        if (cg)
+        {
+            cg.interactable = on;
+            cg.blocksRaycasts = on;
+        }
+        if (btnOk) btnOk.interactable = on;
+        if (btnCancel) btnCancel.interactable = on;
+    }
+}

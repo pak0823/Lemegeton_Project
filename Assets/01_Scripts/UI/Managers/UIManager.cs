@@ -1,48 +1,48 @@
-using UnityEngine.UI;
-using UnityEngine;
-
-public class UIManager : MonoBehaviour
-{
-    public static UIManager Instance;
-    [Header("°øÅë UI")]
-    [SerializeField] private GameObject optionPanel;
-    [SerializeField] private Button optionButton;
-
-    private void Awake()
-    {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        else Destroy(gameObject);
-
-
-        // ÃÊ±âÈ­
-        if (optionPanel != null)
-            optionPanel.SetActive(false);
-
-        if (optionButton != null)
-            optionButton.onClick.AddListener(ToggleOptionPanel);
-    }
-
-
-    private void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            // ESC Å° ÀÔ·Â ½Ã ¿É¼ÇÃ¢ ´Ý±â
-            if (optionPanel != null && optionPanel.activeSelf)
-                optionPanel.SetActive(false);
-        }
-    }
-
-    // ¿É¼ÇÃ¢ ¿­±â/´Ý±â
-    public void ToggleOptionPanel()
-    {
-        if (optionPanel == null) return;
-
-        bool isActive = optionPanel.activeSelf;
-        optionPanel.SetActive(!isActive);
-    }
-}
+using UnityEngine.UI;
+using UnityEngine;
+
+public class UIManager : MonoBehaviour
+{
+    public static UIManager Instance;
+    [Header("ê³µí†µ UI")]
+    [SerializeField] private GameObject optionPanel;
+    [SerializeField] private Button optionButton;
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else Destroy(gameObject);
+
+
+        // ì´ˆê¸°í™”
+        if (optionPanel != null)
+            optionPanel.SetActive(false);
+
+        if (optionButton != null)
+            optionButton.onClick.AddListener(ToggleOptionPanel);
+    }
+
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            // ESC í‚¤ ìž…ë ¥ ì‹œ ì˜µì…˜ì°½ ë‹«ê¸°
+            if (optionPanel != null && optionPanel.activeSelf)
+                optionPanel.SetActive(false);
+        }
+    }
+
+    // ì˜µì…˜ì°½ ì—´ê¸°/ë‹«ê¸°
+    public void ToggleOptionPanel()
+    {
+        if (optionPanel == null) return;
+
+        bool isActive = optionPanel.activeSelf;
+        optionPanel.SetActive(!isActive);
+    }
+}

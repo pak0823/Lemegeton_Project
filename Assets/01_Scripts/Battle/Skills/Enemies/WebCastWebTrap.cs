@@ -1,64 +1,64 @@
-// Assets/Scripts/Skills/EA_WebCastWebTrap.cs
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/SkillAsset/Enemy/WebCast")]
-public class WebCastWebTrap : EnemySkill, IProjectileTileSkill
-{
-    [Header("Web Trap")]
-    public ProjectileController projectilePrefab;   // ½ºÅ³ Àü¿ë Åõ»çÃ¼ ÁöÁ¤
-    public float projectileSpeed = 3f;
-    public WebTrapController trapPrefab; // ÇÁ¸®ÆÕ ÇÊ¿ä(°£´ÜÇÑ ½ºÇÁ¶óÀÌÆ®/ºó ¿ÀºêÁ§Æ®¿©µµ OK)
-    public string previewTagText = "WEB-CAST"; // »óÅÂÆĞ³Î µî ¶óº§¿ë(¼±ÅÃ)
-
-    public ProjectileController GetProjectilePrefab(BattleUnit caster) => projectilePrefab;
-    public float GetProjectileSpeed(BattleUnit caster) => projectileSpeed;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = SkillTargetMode.Unit; }  // ¿¡µğÅÍ¿¡¼­ Ç×»ó Unit·Î °íÁ¤
-#endif
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
-    {
-        yield return originCell; // Ä³½ºÆÃ/¼³Ä¡ ÁöÁ¡ 1¼¿
-    }
-
-    // À¯´Ö ´ë»óÀ¸·Î ¡°Ä³½ºÆÃ ¿¹Á¤¡± µî·Ï
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (_battlemanager == null || _caster == null || _target == null || _target.IsDead) yield break;
-
-        // ÇöÀç Å¸°ÙÀÇ ¼¿À» ±â·Ï(½ÃÁ¡ °íÁ¤)
-        Tilemap map = _target.CurrentMap;
-        Vector3Int cell = _target.Cell;
-
-        // Ä³½ºÆÃ »óÅÂ ÁøÀÔ(¼ÒÀ¯ ÀûÀÇ ´ÙÀ½ ÅÏ ½ÃÀÛ¿¡ »ı¼º)
-        var cast = _caster.GetComponent<EnemyCastState>();
-        if (cast == null) cast = _caster.gameObject.AddComponent<EnemyCastState>();
-        cast.BeginCasting(new EnemyCastState.PendingCast
-        {
-            owner = _caster,
-            bm = _battlemanager,
-            map = map,
-            cell = cell,
-            trapPrefab = trapPrefab,
-            projectilePrefab = projectilePrefab,
-            projectileSpeed = projectileSpeed,
-            skillSO = this  //ÀÌ¹ø¿¡ ½ÃÀü ÁßÀÎ ½ºÅ³ SO ÁöÁ¤
-        });
-
-        // Ä³½ºÆÃ Á¦½ºÃ³(¿ø°Å¸® Æ÷Áî µî)
-        _caster.SetCasting(true);
-
-
-        yield break;
-    }
-
-    //Å¸ÀÏ ´ë»óÀ¸·Îµµ ¹Ù·Î Ä³½ºÆÃ °¡´ÉÇÏµµ·Ï(no-op ¾Æ´Ô)
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        yield return null;
-    }
-}
+// Assets/Scripts/Skills/EA_WebCastWebTrap.cs
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/SkillAsset/Enemy/WebCast")]
+public class WebCastWebTrap : EnemySkill, IProjectileTileSkill
+{
+    [Header("Web Trap")]
+    public ProjectileController projectilePrefab;   // ìŠ¤í‚¬ ì „ìš© íˆ¬ì‚¬ì²´ ì§€ì •
+    public float projectileSpeed = 3f;
+    public WebTrapController trapPrefab; // í”„ë¦¬íŒ¹ í•„ìš”(ê°„ë‹¨í•œ ìŠ¤í”„ë¼ì´íŠ¸/ë¹ˆ ì˜¤ë¸Œì íŠ¸ì—¬ë„ OK)
+    public string previewTagText = "WEB-CAST"; // ìƒíƒœíŒ¨ë„ ë“± ë¼ë²¨ìš©(ì„ íƒ)
+
+    public ProjectileController GetProjectilePrefab(BattleUnit caster) => projectilePrefab;
+    public float GetProjectileSpeed(BattleUnit caster) => projectileSpeed;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = SkillTargetMode.Unit; }  // ì—ë””í„°ì—ì„œ í•­ìƒ Unitë¡œ ê³ ì •
+#endif
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    {
+        yield return originCell; // ìºìŠ¤íŒ…/ì„¤ì¹˜ ì§€ì  1ì…€
+    }
+
+    // ìœ ë‹› ëŒ€ìƒìœ¼ë¡œ â€œìºìŠ¤íŒ… ì˜ˆì •â€ ë“±ë¡
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (_battlemanager == null || _caster == null || _target == null || _target.IsDead) yield break;
+
+        // í˜„ì¬ íƒ€ê²Ÿì˜ ì…€ì„ ê¸°ë¡(ì‹œì  ê³ ì •)
+        Tilemap map = _target.CurrentMap;
+        Vector3Int cell = _target.Cell;
+
+        // ìºìŠ¤íŒ… ìƒíƒœ ì§„ì…(ì†Œìœ  ì ì˜ ë‹¤ìŒ í„´ ì‹œì‘ì— ìƒì„±)
+        var cast = _caster.GetComponent<EnemyCastState>();
+        if (cast == null) cast = _caster.gameObject.AddComponent<EnemyCastState>();
+        cast.BeginCasting(new EnemyCastState.PendingCast
+        {
+            owner = _caster,
+            bm = _battlemanager,
+            map = map,
+            cell = cell,
+            trapPrefab = trapPrefab,
+            projectilePrefab = projectilePrefab,
+            projectileSpeed = projectileSpeed,
+            skillSO = this  //ì´ë²ˆì— ì‹œì „ ì¤‘ì¸ ìŠ¤í‚¬ SO ì§€ì •
+        });
+
+        // ìºìŠ¤íŒ… ì œìŠ¤ì²˜(ì›ê±°ë¦¬ í¬ì¦ˆ ë“±)
+        _caster.SetCasting(true);
+
+
+        yield break;
+    }
+
+    //íƒ€ì¼ ëŒ€ìƒìœ¼ë¡œë„ ë°”ë¡œ ìºìŠ¤íŒ… ê°€ëŠ¥í•˜ë„ë¡(no-op ì•„ë‹˜)
+    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        yield return null;
+    }
+}

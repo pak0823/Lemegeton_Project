@@ -1,214 +1,214 @@
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-
-public class UnitStatusPanelUI : MonoBehaviour
-{
-    [Header("Refs")]
-    public BattleManager battle;              // ºñ¿öµÎ¸é ÀÚµ¿ Ã£À½
-    public RectTransform enemyParent;         // ¿ŞÂÊ Áß¾Ó Á¤·Ä ÄÁÅ×ÀÌ³Ê
-    public RectTransform playerParent;          // ¿À¸¥ÂÊ Áß¾Ó Á¤·Ä ÄÁÅ×ÀÌ³Ê
-    public UnitStatusItemUI enemyItemPrefab;  // Àû¿ë Ä«µå ÇÁ¸®ÆÕ
-    public UnitStatusItemUI playerItemPrefab;   // ¾Æ±º¿ë Ä«µå ÇÁ¸®ÆÕ
-
-    readonly Dictionary<BattleUnit, UnitStatusItemUI> views = new();
-
-    [Header("Highlight")]
-    public Sprite defaultHighlightSprite;
-
-    [SerializeField] private UnitStateVisualDB sharedUnitStateDB;
-    [SerializeField] private StackableStatusVisualDB sharedStackVisualDB;
-
-
-
-    public enum UnitSort { AsFound, NameAsc, YPosDesc, AgiDesc }    //Á¤·Ä ¹æ½Ä
-    [SerializeField] UnitSort enemySort = UnitSort.AsFound;  // Àû Á¤·Ä ±âÁØ
-    [SerializeField] UnitSort playerSort = UnitSort.AsFound;  // ¾Æ±º Á¤·Ä ±âÁØ
-
-    void Awake()
-    {
-        if (!battle) battle = FindObjectOfType<BattleManager>();
-        if (battle != null) battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
-    }
-
-    void Start()
-    {
-        BuildOnce();
-        if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // ±â¼ú¸í ¶óº§ ¾÷µ¥ÀÌÆ®
-
-        //¾Æ±º Ä«µå°¡ ÇÏ³ªµµ ¾øÀ¸¸é Áï½Ã º¸°­
-        if (!views.Keys.Any(k => k && k.data.team == Team.Player))
-            BuildOnce();
-    }
-
-    void OnDestroy()
-    {
-        if (battle != null) battle.OnUnitActionLabel -= HandleActionLabel;
-        if (battle != null) battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
-        foreach (var kv in views)
-            if (kv.Key)
-            {
-                kv.Key.OnDied -= OnUnitDied; //»ç¸Á ÀÌº¥Æ® ±¸µ¶ ÇØÁ¦
-                kv.Key.OnRetreated -= OnUnitRetreated;  //µµÁÖ ÀÌº¥Æ® ±¸µ¶ ÇØÁ¦
-            }
-    }
-
-    // === Á¤·Ä ÇÔ¼ö Ãß°¡ ===
-    IEnumerable<BattleUnit> Sort(IEnumerable<BattleUnit> src, UnitSort mode)
-    {
-        switch (mode)
-        {
-            case UnitSort.NameAsc: return src.OrderBy(u => u.name);
-            case UnitSort.YPosDesc: return src.OrderByDescending(u => u.transform.position.y); // È­¸é À§¡æ¾Æ·¡
-            case UnitSort.AgiDesc: return src.OrderByDescending(u => u.EffectiveAGI);
-            default: return src; // °Ë»öµÈ ±×´ë·Î
-        }
-    }
-
-    void BuildOnce()
-    {
-        // ÇöÀç ¾ÀÀÇ »ıÁ¸ À¯´Ö Á¶È¸
-        var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
-
-        var enemies = Sort(units.Where(u => u.data.team == Team.Enemy), enemySort);
-        var allies = Sort(units.Where(u => u.data.team == Team.Player), playerSort);
-
-        // ÀÌ¹Ì ¸¸µé¾îÁø Ä«µå°¡ ÀÖ¾îµµ ¾ø´Â °Í¸¸ Ã¤¿ö ³ÖÀ½
-        foreach (var u in enemies) if (!views.ContainsKey(u)) SpawnCard(enemyParent, enemyItemPrefab, u);
-        foreach (var u in allies) if (!views.ContainsKey(u)) SpawnCard(playerParent, playerItemPrefab, u);
-    }
-    void SpawnCard(RectTransform parent, UnitStatusItemUI prefab, BattleUnit u)
-    {
-        if (!parent || !prefab) return;
-        var item = Instantiate(prefab, parent);
-        item.Bind(u);
-        item.SetHighlighted(false);
-        item.SetSkillLabel(""); // ÃÊ±â ¶óº§ ºñ¿ì±â
-
-        if (sharedUnitStateDB) item.SetVisualDB(sharedUnitStateDB);
-        if (sharedStackVisualDB) item.SetStackVisualDB(sharedStackVisualDB);
-
-        var usc = u.GetComponent<UnitStateController>();
-        var sc = u.GetComponent<StatusController>();
-
-        // ÃÊ±â ·»´õ
-        item.RefreshFromControllers(usc, sc);
-
-        // ÀÌº¥Æ® ±¸µ¶(µÑ ´Ù °°Àº Äİ¹éÀ¸·Î)
-        if (usc != null)
-        {
-            usc.OnStatesChanged += () =>
-            {
-                if (u) item.RefreshFromControllers(usc, sc);
-            };
-        }
-        if (sc != null)
-        {
-            sc.OnStatusChanged += () =>
-            {
-                if (u) item.RefreshFromControllers(usc, sc);
-            };
-        }
-
-        // ÃÊ±â »óÅÂ°¡ ÀÌ¹Ì Á×¾îÀÖ´Ù¸é(¿¹¿Ü ÄÉÀÌ½º), Player¸¸ È¸»ö À¯Áö
-        if (u.data.team == Team.Player && u.IsDead) item.SetDeadStyle(true);
-
-        views[u] = item;
-        u.OnDied += OnUnitDied; //»ç¸Á ÀÌº¥Æ® ±¸µ¶
-        u.OnRetreated += OnUnitRetreated; //µµÁÖ ÀÌº¥Æ® ±¸µ¶
-    }
-    //public void Resort()  // ÇöÀç views¿¡ ÀÖ´Â À¯´Ö¸¸ ´ë»óÀ¸·Î Á¤·ÄÇØ Àç¹èÄ¡
-    //{
-    //    var enemies = Sort(views.Keys.Where(u => u && u.team == Team.Enemy), enemySort).ToList();
-    //    for (int i = 0; i < enemies.Count; i++)
-    //        views[enemies[i]].transform.SetSiblingIndex(i);
-
-    //    var allies = Sort(views.Keys.Where(u => u && u.team == Team.Player), playerSort).ToList();
-    //    for (int i = 0; i < allies.Count; i++)
-    //        views[allies[i]].transform.SetSiblingIndex(i);
-    //}
-
-    void OnUnitDied(BattleUnit u)
-    {
-        if (u == null) return;
-        if (!views.TryGetValue(u, out var item)) return;
-
-        if (u.data.team == Team.Enemy)
-        {
-            // ÀûÀº Áï½Ã Á¦°Å
-            RemoveView(u);
-        }
-        else
-        {
-            // ÇÃ·¹ÀÌ¾î´Â À¯Áö + È¸»ö ÇÏÀÌ¶óÀÌÆ®
-            item.SetDeadStyle(true);
-            // ÇÊ¿ä ½Ã »óÅÂÄ¨/¶óº§ ¾÷µ¥ÀÌÆ® µî Ãß°¡ ÀÛ¾÷ °¡´É
-        }
-    }
-    void OnUnitRetreated(BattleUnit u)
-    {
-        if (u == null) return;
-        if (u.data.team == Team.Enemy) return;
-        RemoveView(u);
-    }
-
-    void RemoveView(BattleUnit u)
-    {
-        if (!views.ContainsKey(u)) return;
-        Destroy(views[u].gameObject);
-        views.Remove(u);
-    }
-
-
-    // ¿şÀÌºê º¯°æ ½Ã Àû Ä«µå Àç±¸¼º
-    void HandleWaveChanged_RebuildEnemies(int cur, int total, string _)
-    {
-        var toRemove = views
-        .Where(kv =>
-            (kv.Key != null && kv.Key.data.team == Team.Enemy) ||
-            (kv.Key == null && kv.Value != null && kv.Value.transform != null &&
-              enemyParent != null && kv.Value.transform.IsChildOf(enemyParent)))
-        .Select(kv => kv.Key)
-        .ToList();
-
-        foreach (var key in toRemove)
-        {
-            var view = views[key];
-            if (view) Destroy(view.gameObject);
-            views.Remove(key);
-        }
-
-        // 2) ÇöÀç ¾ÀÀÇ '»ıÁ¸ Àû'¸¸ ´Ù½Ã Ä«µå »ı¼º
-        var enemies = Sort(
-        FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead && u.data.team == Team.Enemy),
-        enemySort
-            );
-        foreach (var u in enemies)
-        {
-            if (views.ContainsKey(u)) continue; // ÀÌ¹Ì ÀÖÀ¸¸é ½ºÅµ(ÀÌ·Ğ»ó ¾øÀ½)
-            SpawnCard(enemyParent, enemyItemPrefab, u);
-        }
-    }
-
-    // ¹üÀ§ ¾ÈÀÇ À¯´Ö¸¸ ÇÏÀÌ¶óÀÌÆ®
-    public void HighlightUnits(IEnumerable<BattleUnit> units, Sprite overlaySprite = null)
-    {
-        var set = (units != null) ? new HashSet<BattleUnit>(units) : new HashSet<BattleUnit>();
-        foreach (var kv in views)
-        {
-            bool on = set.Contains(kv.Key);
-            kv.Value.SetHighlighted(on, overlaySprite ?? defaultHighlightSprite);
-        }
-    }
-
-    // ÀüºÎ ²ô±â
-    public void ClearHighlights() => HighlightUnits(null);
-
-    // === ÀÌº¥Æ® ÇÚµé·¯ ===
-    void HandleActionLabel(BattleUnit u, string label)
-    {
-        if (u == null) return;
-        if (!views.TryGetValue(u, out var v)) return;
-        v.SetSkillLabel(label);
-    }
-}
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+public class UnitStatusPanelUI : MonoBehaviour
+{
+    [Header("Refs")]
+    public BattleManager battle;              // ë¹„ì›Œë‘ë©´ ìë™ ì°¾ìŒ
+    public RectTransform enemyParent;         // ì™¼ìª½ ì¤‘ì•™ ì •ë ¬ ì»¨í…Œì´ë„ˆ
+    public RectTransform playerParent;          // ì˜¤ë¥¸ìª½ ì¤‘ì•™ ì •ë ¬ ì»¨í…Œì´ë„ˆ
+    public UnitStatusItemUI enemyItemPrefab;  // ì ìš© ì¹´ë“œ í”„ë¦¬íŒ¹
+    public UnitStatusItemUI playerItemPrefab;   // ì•„êµ°ìš© ì¹´ë“œ í”„ë¦¬íŒ¹
+
+    readonly Dictionary<BattleUnit, UnitStatusItemUI> views = new();
+
+    [Header("Highlight")]
+    public Sprite defaultHighlightSprite;
+
+    [SerializeField] private UnitStateVisualDB sharedUnitStateDB;
+    [SerializeField] private StackableStatusVisualDB sharedStackVisualDB;
+
+
+
+    public enum UnitSort { AsFound, NameAsc, YPosDesc, AgiDesc }    //ì •ë ¬ ë°©ì‹
+    [SerializeField] UnitSort enemySort = UnitSort.AsFound;  // ì  ì •ë ¬ ê¸°ì¤€
+    [SerializeField] UnitSort playerSort = UnitSort.AsFound;  // ì•„êµ° ì •ë ¬ ê¸°ì¤€
+
+    void Awake()
+    {
+        if (!battle) battle = FindObjectOfType<BattleManager>();
+        if (battle != null) battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
+    }
+
+    void Start()
+    {
+        BuildOnce();
+        if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // ê¸°ìˆ ëª… ë¼ë²¨ ì—…ë°ì´íŠ¸
+
+        //ì•„êµ° ì¹´ë“œê°€ í•˜ë‚˜ë„ ì—†ìœ¼ë©´ ì¦‰ì‹œ ë³´ê°•
+        if (!views.Keys.Any(k => k && k.data.team == Team.Player))
+            BuildOnce();
+    }
+
+    void OnDestroy()
+    {
+        if (battle != null) battle.OnUnitActionLabel -= HandleActionLabel;
+        if (battle != null) battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
+        foreach (var kv in views)
+            if (kv.Key)
+            {
+                kv.Key.OnDied -= OnUnitDied; //ì‚¬ë§ ì´ë²¤íŠ¸ êµ¬ë… í•´ì œ
+                kv.Key.OnRetreated -= OnUnitRetreated;  //ë„ì£¼ ì´ë²¤íŠ¸ êµ¬ë… í•´ì œ
+            }
+    }
+
+    // === ì •ë ¬ í•¨ìˆ˜ ì¶”ê°€ ===
+    IEnumerable<BattleUnit> Sort(IEnumerable<BattleUnit> src, UnitSort mode)
+    {
+        switch (mode)
+        {
+            case UnitSort.NameAsc: return src.OrderBy(u => u.name);
+            case UnitSort.YPosDesc: return src.OrderByDescending(u => u.transform.position.y); // í™”ë©´ ìœ„â†’ì•„ë˜
+            case UnitSort.AgiDesc: return src.OrderByDescending(u => u.EffectiveAGI);
+            default: return src; // ê²€ìƒ‰ëœ ê·¸ëŒ€ë¡œ
+        }
+    }
+
+    void BuildOnce()
+    {
+        // í˜„ì¬ ì”¬ì˜ ìƒì¡´ ìœ ë‹› ì¡°íšŒ
+        var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
+
+        var enemies = Sort(units.Where(u => u.data.team == Team.Enemy), enemySort);
+        var allies = Sort(units.Where(u => u.data.team == Team.Player), playerSort);
+
+        // ì´ë¯¸ ë§Œë“¤ì–´ì§„ ì¹´ë“œê°€ ìˆì–´ë„ ì—†ëŠ” ê²ƒë§Œ ì±„ì›Œ ë„£ìŒ
+        foreach (var u in enemies) if (!views.ContainsKey(u)) SpawnCard(enemyParent, enemyItemPrefab, u);
+        foreach (var u in allies) if (!views.ContainsKey(u)) SpawnCard(playerParent, playerItemPrefab, u);
+    }
+    void SpawnCard(RectTransform parent, UnitStatusItemUI prefab, BattleUnit u)
+    {
+        if (!parent || !prefab) return;
+        var item = Instantiate(prefab, parent);
+        item.Bind(u);
+        item.SetHighlighted(false);
+        item.SetSkillLabel(""); // ì´ˆê¸° ë¼ë²¨ ë¹„ìš°ê¸°
+
+        if (sharedUnitStateDB) item.SetVisualDB(sharedUnitStateDB);
+        if (sharedStackVisualDB) item.SetStackVisualDB(sharedStackVisualDB);
+
+        var usc = u.GetComponent<UnitStateController>();
+        var sc = u.GetComponent<StatusController>();
+
+        // ì´ˆê¸° ë Œë”
+        item.RefreshFromControllers(usc, sc);
+
+        // ì´ë²¤íŠ¸ êµ¬ë…(ë‘˜ ë‹¤ ê°™ì€ ì½œë°±ìœ¼ë¡œ)
+        if (usc != null)
+        {
+            usc.OnStatesChanged += () =>
+            {
+                if (u) item.RefreshFromControllers(usc, sc);
+            };
+        }
+        if (sc != null)
+        {
+            sc.OnStatusChanged += () =>
+            {
+                if (u) item.RefreshFromControllers(usc, sc);
+            };
+        }
+
+        // ì´ˆê¸° ìƒíƒœê°€ ì´ë¯¸ ì£½ì–´ìˆë‹¤ë©´(ì˜ˆì™¸ ì¼€ì´ìŠ¤), Playerë§Œ íšŒìƒ‰ ìœ ì§€
+        if (u.data.team == Team.Player && u.IsDead) item.SetDeadStyle(true);
+
+        views[u] = item;
+        u.OnDied += OnUnitDied; //ì‚¬ë§ ì´ë²¤íŠ¸ êµ¬ë…
+        u.OnRetreated += OnUnitRetreated; //ë„ì£¼ ì´ë²¤íŠ¸ êµ¬ë…
+    }
+    //public void Resort()  // í˜„ì¬ viewsì— ìˆëŠ” ìœ ë‹›ë§Œ ëŒ€ìƒìœ¼ë¡œ ì •ë ¬í•´ ì¬ë°°ì¹˜
+    //{
+    //    var enemies = Sort(views.Keys.Where(u => u && u.team == Team.Enemy), enemySort).ToList();
+    //    for (int i = 0; i < enemies.Count; i++)
+    //        views[enemies[i]].transform.SetSiblingIndex(i);
+
+    //    var allies = Sort(views.Keys.Where(u => u && u.team == Team.Player), playerSort).ToList();
+    //    for (int i = 0; i < allies.Count; i++)
+    //        views[allies[i]].transform.SetSiblingIndex(i);
+    //}
+
+    void OnUnitDied(BattleUnit u)
+    {
+        if (u == null) return;
+        if (!views.TryGetValue(u, out var item)) return;
+
+        if (u.data.team == Team.Enemy)
+        {
+            // ì ì€ ì¦‰ì‹œ ì œê±°
+            RemoveView(u);
+        }
+        else
+        {
+            // í”Œë ˆì´ì–´ëŠ” ìœ ì§€ + íšŒìƒ‰ í•˜ì´ë¼ì´íŠ¸
+            item.SetDeadStyle(true);
+            // í•„ìš” ì‹œ ìƒíƒœì¹©/ë¼ë²¨ ì—…ë°ì´íŠ¸ ë“± ì¶”ê°€ ì‘ì—… ê°€ëŠ¥
+        }
+    }
+    void OnUnitRetreated(BattleUnit u)
+    {
+        if (u == null) return;
+        if (u.data.team == Team.Enemy) return;
+        RemoveView(u);
+    }
+
+    void RemoveView(BattleUnit u)
+    {
+        if (!views.ContainsKey(u)) return;
+        Destroy(views[u].gameObject);
+        views.Remove(u);
+    }
+
+
+    // ì›¨ì´ë¸Œ ë³€ê²½ ì‹œ ì  ì¹´ë“œ ì¬êµ¬ì„±
+    void HandleWaveChanged_RebuildEnemies(int cur, int total, string _)
+    {
+        var toRemove = views
+        .Where(kv =>
+            (kv.Key != null && kv.Key.data.team == Team.Enemy) ||
+            (kv.Key == null && kv.Value != null && kv.Value.transform != null &&
+              enemyParent != null && kv.Value.transform.IsChildOf(enemyParent)))
+        .Select(kv => kv.Key)
+        .ToList();
+
+        foreach (var key in toRemove)
+        {
+            var view = views[key];
+            if (view) Destroy(view.gameObject);
+            views.Remove(key);
+        }
+
+        // 2) í˜„ì¬ ì”¬ì˜ 'ìƒì¡´ ì 'ë§Œ ë‹¤ì‹œ ì¹´ë“œ ìƒì„±
+        var enemies = Sort(
+        FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead && u.data.team == Team.Enemy),
+        enemySort
+            );
+        foreach (var u in enemies)
+        {
+            if (views.ContainsKey(u)) continue; // ì´ë¯¸ ìˆìœ¼ë©´ ìŠ¤í‚µ(ì´ë¡ ìƒ ì—†ìŒ)
+            SpawnCard(enemyParent, enemyItemPrefab, u);
+        }
+    }
+
+    // ë²”ìœ„ ì•ˆì˜ ìœ ë‹›ë§Œ í•˜ì´ë¼ì´íŠ¸
+    public void HighlightUnits(IEnumerable<BattleUnit> units, Sprite overlaySprite = null)
+    {
+        var set = (units != null) ? new HashSet<BattleUnit>(units) : new HashSet<BattleUnit>();
+        foreach (var kv in views)
+        {
+            bool on = set.Contains(kv.Key);
+            kv.Value.SetHighlighted(on, overlaySprite ?? defaultHighlightSprite);
+        }
+    }
+
+    // ì „ë¶€ ë„ê¸°
+    public void ClearHighlights() => HighlightUnits(null);
+
+    // === ì´ë²¤íŠ¸ í•¸ë“¤ëŸ¬ ===
+    void HandleActionLabel(BattleUnit u, string label)
+    {
+        if (u == null) return;
+        if (!views.TryGetValue(u, out var v)) return;
+        v.SetSkillLabel(label);
+    }
+}

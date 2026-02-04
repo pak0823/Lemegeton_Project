@@ -1,108 +1,108 @@
-using UnityEngine;
-using UnityEngine.Events;
-
-public class BarrierController : MonoBehaviour
-{
-    [Header("Barrier Components")]
-    [Tooltip("BarrierÀÇ Collider2D (´İÈú ¶§ È°¼ºÈ­)")]
-    Collider2D barrierCollider;
-    [Tooltip("Barrier ¾Õ¿¡ À§Ä¡ÇÑ Æ®¸®°Å Collider2D (Player ÁøÀÔ °¨Áö)")]
-    Collider2D exitTrigger;
-
-    public int stageIndex;  // ÀÌ ¹è¸®¾î°¡ ¼ÓÇÑ ½ºÅ×ÀÌÁö ¹øÈ£
-
-    [Header("Interaction")]
-    [Tooltip("UI·Î 'Press F to Exit' Ç¥½Ã¿ë ÀÌº¥Æ®")]
-    public UnityEvent onShowPrompt;
-    public UnityEvent onHidePrompt;
-
-    private bool isOpen = false;
-    private bool playerInRange = false;
-    private bool hasLoaded = false;
-    [SerializeField] private KeyCode surveyKey = KeyCode.F;
-
-    void Start()
-    {
-        // Àåº®¿ë Äİ¶óÀÌ´õ¿Í ÁøÀÔ °¨Áö¿ë Æ®¸®°Å¸¦ ±¸ºĞÇØ¼­ Ã£±â
-        var allCols = GetComponentsInChildren<Collider2D>();
-        foreach (var col in allCols)
-        {
-            if (col.isTrigger) exitTrigger = col;
-            else barrierCollider = col;
-        }
-
-        if (exitTrigger == null) Debug.LogError("ExitTrigger Äİ¶óÀÌ´õ°¡ ¾ø½À´Ï´Ù!");
-        if (barrierCollider == null) Debug.LogError("BarrierCollider Äİ¶óÀÌ´õ°¡ ¾ø½À´Ï´Ù!");
-
-        Close();
-
-        //Open();
-    }
-
-    void Update()
-    {
-        if (!isOpen || !playerInRange || hasLoaded) return;
-
-        if (Input.GetKeyDown(surveyKey))
-        {
-            LoadNextMap();
-            Debug.Log("[Barrier] ÄûÁî¸ÊÀ¸·Î ÀÌµ¿ÇÔ");
-        }
-    }
-
-    void OnTriggerEnter2D(Collider2D other)
-    {
-        if (!isOpen || hasLoaded) return;
-        if (other.CompareTag("Player"))
-        {
-            playerInRange = true;
-            onShowPrompt?.Invoke();
-        }
-    }
-
-    void OnTriggerExit2D(Collider2D other)
-    {
-        if (!isOpen || hasLoaded) return;
-        if (other.CompareTag("Player"))
-        {
-            playerInRange = false;
-            onHidePrompt?.Invoke();
-        }
-    }
-
-    public void Open()
-    {
-        isOpen = true;
-        barrierCollider.enabled = false;
-        Debug.Log("[Barrier] ¿­¸² »óÅÂ");
-    }
-
-    public void Close()
-    {
-        isOpen = false;
-        barrierCollider.enabled = true;
-    }
-
-    // ´ÙÀ½ ¸ÊÀ¸·Î ÀÌµ¿
-    private void LoadNextMap()
-    {
-        if (MapToggleManager.Instance == null)
-        {
-            Debug.LogError("[Barrier] MapToggleManager°¡ ¼³Á¤µÇÁö ¾Ê¾Ò½À´Ï´Ù!");
-            return;
-        }
-
-        hasLoaded = true;
-        onHidePrompt?.Invoke();
-
-        PuzzleManager.Instance?.ClearMaps();
-        MapToggleManager.Instance.currentStage = stageIndex;
-
-        //StartCoroutine(Shared.SceneTransitionManager.RunWithFade(() =>
-        //{
-        //    // ÆäÀÌµå ¾Æ¿ôÀÌ ¿Ï·áµÈ Á¤È®ÇÑ Å¸ÀÌ¹Ö¿¡ ÀüÈ¯ ½ÇÇà
-           
-        //}));
-        MapToggleManager.Instance.EnterQuizMap();
-    }
-}
+using UnityEngine;
+using UnityEngine.Events;
+
+public class BarrierController : MonoBehaviour
+{
+    [Header("Barrier Components")]
+    [Tooltip("Barrierì˜ Collider2D (ë‹«í ë•Œ í™œì„±í™”)")]
+    Collider2D barrierCollider;
+    [Tooltip("Barrier ì•ì— ìœ„ì¹˜í•œ íŠ¸ë¦¬ê±° Collider2D (Player ì§„ì… ê°ì§€)")]
+    Collider2D exitTrigger;
+
+    public int stageIndex;  // ì´ ë°°ë¦¬ì–´ê°€ ì†í•œ ìŠ¤í…Œì´ì§€ ë²ˆí˜¸
+
+    [Header("Interaction")]
+    [Tooltip("UIë¡œ 'Press F to Exit' í‘œì‹œìš© ì´ë²¤íŠ¸")]
+    public UnityEvent onShowPrompt;
+    public UnityEvent onHidePrompt;
+
+    private bool isOpen = false;
+    private bool playerInRange = false;
+    private bool hasLoaded = false;
+    [SerializeField] private KeyCode surveyKey = KeyCode.F;
+
+    void Start()
+    {
+        // ì¥ë²½ìš© ì½œë¼ì´ë”ì™€ ì§„ì… ê°ì§€ìš© íŠ¸ë¦¬ê±°ë¥¼ êµ¬ë¶„í•´ì„œ ì°¾ê¸°
+        var allCols = GetComponentsInChildren<Collider2D>();
+        foreach (var col in allCols)
+        {
+            if (col.isTrigger) exitTrigger = col;
+            else barrierCollider = col;
+        }
+
+        if (exitTrigger == null) Debug.LogError("ExitTrigger ì½œë¼ì´ë”ê°€ ì—†ìŠµë‹ˆë‹¤!");
+        if (barrierCollider == null) Debug.LogError("BarrierCollider ì½œë¼ì´ë”ê°€ ì—†ìŠµë‹ˆë‹¤!");
+
+        Close();
+
+        //Open();
+    }
+
+    void Update()
+    {
+        if (!isOpen || !playerInRange || hasLoaded) return;
+
+        if (Input.GetKeyDown(surveyKey))
+        {
+            LoadNextMap();
+            Debug.Log("[Barrier] í€´ì¦ˆë§µìœ¼ë¡œ ì´ë™í•¨");
+        }
+    }
+
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        if (!isOpen || hasLoaded) return;
+        if (other.CompareTag("Player"))
+        {
+            playerInRange = true;
+            onShowPrompt?.Invoke();
+        }
+    }
+
+    void OnTriggerExit2D(Collider2D other)
+    {
+        if (!isOpen || hasLoaded) return;
+        if (other.CompareTag("Player"))
+        {
+            playerInRange = false;
+            onHidePrompt?.Invoke();
+        }
+    }
+
+    public void Open()
+    {
+        isOpen = true;
+        barrierCollider.enabled = false;
+        Debug.Log("[Barrier] ì—´ë¦¼ ìƒíƒœ");
+    }
+
+    public void Close()
+    {
+        isOpen = false;
+        barrierCollider.enabled = true;
+    }
+
+    // ë‹¤ìŒ ë§µìœ¼ë¡œ ì´ë™
+    private void LoadNextMap()
+    {
+        if (MapToggleManager.Instance == null)
+        {
+            Debug.LogError("[Barrier] MapToggleManagerê°€ ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤!");
+            return;
+        }
+
+        hasLoaded = true;
+        onHidePrompt?.Invoke();
+
+        PuzzleManager.Instance?.ClearMaps();
+        MapToggleManager.Instance.currentStage = stageIndex;
+
+        //StartCoroutine(Shared.SceneTransitionManager.RunWithFade(() =>
+        //{
+        //    // í˜ì´ë“œ ì•„ì›ƒì´ ì™„ë£Œëœ ì •í™•í•œ íƒ€ì´ë°ì— ì „í™˜ ì‹¤í–‰
+           
+        //}));
+        MapToggleManager.Instance.EnterQuizMap();
+    }
+}

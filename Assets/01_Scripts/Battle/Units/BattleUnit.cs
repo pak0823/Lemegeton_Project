@@ -1,973 +1,973 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-
-public class BattleUnit : MonoBehaviour
-{
-    #region 1. Core Data & Configuration (µ¥ÀÌÅÍ ¹× ¼³Á¤)
-    [Header("Data Source")]
-    public UnitData data;                   // À¯´Ö µ¥ÀÌÅÍ ¿øº» (ScriptableObject)
-    public StateStatModifierDB stateStatDB; // »óÅÂ ÀÌ»ó ½ºÅÈ º¸Á¤ DB
-
-    [Header("Prefab Settings")]
-    public ProjectileController defaultProjectilePrefab; // ±âº» Åõ»çÃ¼ ÇÁ¸®ÆÕ
-
-    [Header("Debug")]
-    [SerializeField] private bool debugLogStats = false; // ½ºÅÈ µğ¹ö±ë¿ë (ºôµå ½Ã Á¦¿Ü °¡´É)
-    #endregion
-
-    #region 2. Dependencies (¿ÜºÎ ÀÇÁ¸¼º)
-    [Header("Managers & Controllers")]
-    // BattleManager: ¿ÜºÎ¿¡¼­´Â ÇÁ·ÎÆÛÆ¼·Î Á¢±Ù
-    [SerializeField] private BattleManager battleManager;
-    public BattleManager Battle => battleManager;
-
-    // ³»ºÎ Ä³½Ì¿ë ÄÁÆ®·Ñ·¯
-    private UnitStateController unitStateController;
-    private StatusController statusController;
-    #endregion
-
-    #region 3. Runtime Status (½Ç½Ã°£ ÀüÅõ »óÅÂ)
-    //Vital Stats
-    public float HP { get; private set; }
-    public float MP { get; private set; }
-    public float Rage { get; private set; }
-    public bool IsRetreated { get; private set; } = false; // µµÁÖ ¿©ºÎ
-
-    [Header("Map Position")]
-    public Tilemap CurrentMap;      // ÇöÀç À§Ä¡ÇÑ Å¸ÀÏ¸Ê
-    public Vector3Int Cell { get; private set; } // ±×¸®µå ÁÂÇ¥
-
-    // ¼Ó¼º ÀúÇ× Å×ÀÌºí (·±Å¸ÀÓ º¯µ¿ °¡´É¼º °í·ÁÇÏ¿© ±¸Á¶Ã¼ ¹è¿­ À¯Áö)
-    [System.Serializable]
-    public struct AttrMod { public AttackAttr attr; public float mult; }
-    public AttrMod[] resistTable;
-    #endregion
-
-    #region 4. ATB System (ÅÏ °ü¸® ½Ã½ºÅÛ)
-    [Header("ATB Settings")]
-    [NonSerialized] public float ATB = 0f;
-    public float MaxATB { get; private set; } = 100f;
-    public float Overfill { get; private set; } = 0f; // ÅÏ ÃÊ°úºĞ (¿ì¼±±Ç °áÁ¤¿ë)
-
-    [SerializeField] private float speedMultiplier = 1.0f;  // ¼Óµµ °è¼ö
-
-    // ATB °è»ê ÇÁ·ÎÆÛÆ¼
-    public bool IsTurnReady => ATB >= MaxATB;
-    public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
-    public float atbPerSecond
-    {
-        get
-        {
-            // ÇöÀç AGI °¡Á®¿À±â (0 ¹æÁö)
-            float currentAgi = Mathf.Max(0.1f, EffectiveAGI);
-
-            // ÃÖÁ¾ ¼Óµµ °è»ê (¼±Çü ºñ·Ê)
-            float finalSpeed = currentAgi * speedMultiplier;
-
-            // ³Ê¹« »¡¶ó¼­ °ÔÀÓÀÌ °íÀå³ª´Â °Í¸¸ ¹æÁö (ÃÖ¼Ò 0.1, ÃÖ´ë 5000 µî ³Ë³ËÇÏ°Ô)
-            return Mathf.Clamp(finalSpeed, 1f, 10000f);
-        }
-    }
-
-    // ³»ºÎ ¿¬»ê¿ë º¯¼ö
-    private float _agiMinRef, _agiMaxRef;
-    #endregion
-
-    #region 5. Visuals & Animation (ºñÁÖ¾ó)
-    [Header("Visual Components")]
-    [SerializeField] private Animator animator;
-    [SerializeField] private SpriteRenderer spriteRenderer;
-
-    [Header("Animation Settings")]
-    [SerializeField] private float moveDuration = 0.18f; // ÀÌµ¿ ¿¬Ãâ ½Ã°£
-    [SerializeField] private float defaultAnimEndTimeout = 8f; // ¾Ö´Ï¸ŞÀÌ¼Ç °­Á¦ Á¾·á Å¸ÀÓ¾Æ¿ô
-    private const float MinTimeout = 0.25f;
-
-    // ¾Ö´Ï¸ŞÀÌ¼Ç ÀÌº¥Æ® Äİ¹é (Action)
-    public Action OnAttackImpact;  // Å¸°İ ½ÃÁ¡ (µ¥¹ÌÁö Àû¿ë)
-    public Action OnAttackEnded;   // ¸ğ¼Ç Á¾·á ½ÃÁ¡
-    #endregion
-
-    #region 6. Internal Logic & Cache (³»ºÎ ·ÎÁ÷¿ë)
-    // ÆĞ½Ãºê °ü¸®
-    private readonly List<PassiveAsset> _activePassives = new();
-    private int _passiveBDYBonus = 0;
-
-    // ½ºÅÈ Ä³½Ì ÇÃ·¡±×
-    private bool _statCacheDirty = true;
-    #endregion
-
-    #region 7. Events (¿ÜºÎ ¾Ë¸²¿ë)
-    // »óÅÂ º¯È­ ÀÌº¥Æ®
-    public event Action<int> OnDamaged;       // ÇÇ°İ ½Ã
-    public event Action<BattleUnit> OnDied;   // »ç¸Á ½Ã
-    public event Action<BattleUnit> OnRetreated; // µµÁÖ ½Ã
-
-    // Çàµ¿ ¹× ÀÌµ¿ ÀÌº¥Æ®
-    public event Action<BattleUnit, Tilemap, Vector3Int, Vector3Int> OnMoved; // ÀÌµ¿ ¿Ï·á ½Ã
-    public static event Action<BattleUnit> OnAnyMoved; // (Static) ´©±º°¡ ÀÌµ¿ÇßÀ» ¶§
-
-    // ÀüÅõ ·ÎÁ÷ ÀÌº¥Æ®
-    public event Action<BattleUnit, BattleUnit, int, SkillAsset> OnDealtDamage; // ÇÇÇØ¸¦ ÀÔÇûÀ» ¶§ (Æ®¸®°Å¿ë)
-    public event Action<SkillAsset> OnSkillUsed; // ½ºÅ³ »ç¿ë ½Ã
-
-    // ÀÌº¥Æ® È£Ãâ ÇïÆÛ
-    public void NotifySkillUsed(SkillAsset skill) => OnSkillUsed?.Invoke(skill);
-    #endregion
-
-    #region 8. State-based Stat System (½ºÅÈ ¹× »óÅÂ °è»ê ½Ã½ºÅÛ)
-
-    // ========================================================================
-    // [1] Calculation Structs (³»ºÎ ¿¬»ê¿ë ±¸Á¶Ã¼)
-    // ========================================================================
-
-    // °¢Á¾ ¹èÀ²(Multiplier)°ú °¡»êÄ¡(Add)¸¦ ¸ğ¾ÆµĞ ±¸Á¶Ã¼
-    private struct StatMult
-    {
-        public float str, clv, mnd, agi, ins;
-        public int hpAdd, mpAdd;
-        public float hostilityGain, hostilityDecay;
-        public float hostilityGenerationMultiplier;
-
-        // ÃÊ±â°ª (¹èÀ²Àº 1.0, °¡»êÄ¡´Â 0)
-        public static StatMult Identity => new StatMult
-        {
-            str = 1f,
-            clv = 1f,
-            agi = 1f,
-            ins = 1f,
-            mnd = 1f,
-            hpAdd = 0,
-            mpAdd = 0,
-            hostilityGenerationMultiplier = 1.0f
-        };
-
-        // »óÅÂ ÀÌ»ó(State) Àû¿ë
-        public void Apply(StateStatModifierDB.Entry e)
-        {
-            if (e == null) return;
-            str *= Mathf.Max(0f, e.atkMultiplier);
-            clv *= Mathf.Max(0f, e.magMultiplier);
-            agi *= Mathf.Max(0f, e.agiMultiplier);
-            ins *= Mathf.Max(0f, e.insMultiplier);
-            hpAdd += e.hpFlatAdd;
-            mpAdd += e.mpFlatAdd;
-            hostilityGenerationMultiplier *= Mathf.Max(0f, e.hostilityStatMultiplier);
-        }
-
-        // ¹öÇÁ(Buff) Àû¿ë
-        public void ApplyBuff(StateStatModifierDB.BuffEntry e)
-        {
-            if (e == null) return;
-            str *= e.atkMultiplier;
-            clv *= e.magMultiplier;
-            agi *= e.agiMultiplier;
-            ins *= e.insMultiplier;
-            hpAdd += e.hpFlatAdd;
-            mpAdd += e.mpFlatAdd;
-            hostilityGenerationMultiplier *= e.hostilityStatMultiplier;
-        }
-    }
-
-    // ½ºÅÈ º¯È­ ÃßÀû¿ë ½º³À¼¦ (µğ¹ö±ë¿ë)
-    private struct StatSnapshot
-    {
-        public float MaxHP, MaxMP;
-        public float PhysicalDamage, MagicDamage;
-        public float EffectiveAGI, EffectiveINS;
-        public float CritChance;
-
-        public static StatSnapshot From(BattleUnit u)
-        {
-            return new StatSnapshot
-            {
-                MaxHP = u.MaxHP,
-                MaxMP = u.MaxMP,
-                PhysicalDamage = u.STR,
-                MagicDamage = u.CLV,
-                EffectiveAGI = u.EffectiveAGI,
-                EffectiveINS = u.INS,
-                CritChance = u.CritChance,
-            };
-        }
-    }
-
-    // ========================================================================
-    // [2] Caching & Core Logic (Ä³½Ì ¹× ÇÙ½É °è»ê)
-    // ========================================================================
-
-    private StatMult _cachedMult = StatMult.Identity;
-    private StatSnapshot _lastSnapshot;
-    private bool _hasSnapshot = false;
-
-    // ¹èÀ² °è»ê ÇÁ·ÎÆÛÆ¼ (Ä³½Ì Àû¿ë)
-    private StatMult Mult
-    {
-        get
-        {
-            if (_statCacheDirty)
-            {
-                _cachedMult = StatMult.Identity;
-                if (unitStateController != null && stateStatDB != null)
-                {
-                    // 1. »óÅÂ(State) ¹è¼ö Àû¿ë
-                    foreach (var s in unitStateController.GetAll())
-                    {
-                        var entry = stateStatDB.Get(s);
-                        if (entry != null) _cachedMult.Apply(entry);
-                    }
-
-                    // 2. ¹öÇÁ(Buff) ¹è¼ö Àû¿ë
-                    foreach (var b in unitStateController.GetAllBuffs())
-                    {
-                        var buffEntry = stateStatDB.GetBuff(b);
-                        if (buffEntry != null) _cachedMult.ApplyBuff(buffEntry);
-                    }
-                }
-                _statCacheDirty = false;
-            }
-            return _cachedMult;
-        }
-    }
-
-    // ½ºÅÈ Ä³½Ã ÃÊ±âÈ­ (»óÅÂ º¯È­ ½Ã È£Ãâ)
-    public void InvalidateStatCache()
-    {
-        _statCacheDirty = true;
-
-        // ÃÖ´ëÄ¡°¡ ÁÙ¾îµé ¶© ÇöÀç°ªµµ Áï½Ã ¸ÂÃçÁÜ (Clamping)
-        HP = Mathf.Min(HP, MaxHP);
-        MP = Mathf.Min(MP, MaxMP);
-        Rage = Mathf.Min(Rage, MaxRage);
-
-        // µğ¹ö±× ¸ğµåÀÏ ¶§¸¸ ·Î±× Ãâ·Â (¼º´É ºÎÇÏ ¹æÁö)
-        if (debugLogStats)
-        {
-            // »õ °ª °è»ê °­Á¦ (Mult Àç°è»ê À¯µµ)
-            var _ = Mult;
-            var newSnap = StatSnapshot.From(this);
-
-            if (!_hasSnapshot)
-            {
-                _lastSnapshot = newSnap;
-                _hasSnapshot = true;
-                Debug.Log($"[STAT] {name} ÃÊ±â ½º³À¼¦: HP={HP}/{newSnap.MaxHP}, ATK={newSnap.PhysicalDamage}, AGI={newSnap.EffectiveAGI:F2}");
-            }
-            else
-            {
-                CompareAndLogSnapshot(_lastSnapshot, newSnap);
-                _lastSnapshot = newSnap;
-            }
-        }
-    }
-
-    private void CompareAndLogSnapshot(StatSnapshot oldSnap, StatSnapshot newSnap)
-    {
-        if (newSnap.MaxHP != oldSnap.MaxHP) Debug.Log($"[STAT¥Ä] {name} MaxHP: {oldSnap.MaxHP} -> {newSnap.MaxHP}");
-        if (newSnap.PhysicalDamage != oldSnap.PhysicalDamage) Debug.Log($"[STAT¥Ä] {name} STR: {oldSnap.PhysicalDamage} -> {newSnap.PhysicalDamage}");
-        if (Mathf.Abs(newSnap.EffectiveAGI - oldSnap.EffectiveAGI) > 0.001f) Debug.Log($"[STAT¥Ä] {name} AGI: {oldSnap.EffectiveAGI:F2} -> {newSnap.EffectiveAGI:F2}");
-        // ÇÊ¿äÇÑ Ç×¸ñ Ãß°¡ °¡´É
-    }
-
-    // ========================================================================
-    // [3] Public Stat Properties (ÃÖÁ¾ ½ºÅÈ ¹İÈ¯)
-    // ========================================================================
-
-    // ±âº» 6´ë ½ºÅÈ (Data * Mult)
-    public float STR => Mathf.Max(0f, data.baseSTR * Mult.str);
-    public float CLV => Mathf.Max(0f, data.baseCLV * Mult.clv);
-    public float MND => Mathf.Max(0, data.baseMND * Mult.mnd); // (* Mult.mnd·Î ¼öÁ¤: ±¸Á¶Ã¼ ·ÎÁ÷°ú ÀÏÄ¡)
-    public float INS => Mathf.Max(0, data.baseINS * Mult.ins);
-
-    // ½ÅÃ¼(BDY)´Â ÆĞ½Ãºê º¸³Ê½º °¡»ê ¹æ½Ä
-    public float BDY => Mathf.Max(0, data.baseBDY + _passiveBDYBonus);
-    public float EffectiveAGI
-    {
-        get
-        {
-            if (data == null) return 0f;
-
-            // 1. ±âÁ¸ StatusController ¹èÀ² (Awake¿¡¼­ Ä³½ÌµÈ statusController »ç¿ë)
-            float scMul = (statusController != null) ? statusController.GetAgilityMultiplier() : 1f;
-
-            // 2. ½Å±Ô DB ½Ã½ºÅÛ ¹èÀ² (Mult.agi¿¡ ÀÌ¹Ì Ä³½ÌµÇ¾î ÀÖÀ½)
-            float dbMul = Mult.agi;
-
-            // 3. ÆĞ½Ãºê ¹× ÃÖÁ¾ ¿¬»ê
-            return Mathf.Max(0f, data.baseAGI * scMul * dbMul * _passiveAgilityMultiplier);
-        }
-    }
-
-    // ¹ÎÃ¸(AGI)Àº ÆĞ½Ãºê ½Â¼ö Ãß°¡ Àû¿ë
-    private float _passiveAgilityMultiplier = 1f;
-
-    // ÆÄ»ı ½ºÅÈ (MaxHP, MaxMP, MaxRage)
-    public float MaxHP
-    {
-        get
-        {
-            float fromBody = BDY * 3f;
-            float fromStr = STR;
-            float buffAdd = Mult.hpAdd;
-            return Mathf.Max(1, Mathf.FloorToInt(fromBody + fromStr + buffAdd));
-        }
-    }
-
-    public float MaxMP
-    {
-        get
-        {
-            // (ÁÖÀÇ: Mult.mpAdd »ç¿ë)
-            float raw = (MND * 3f) + CLV + Mult.mpAdd;
-            return Mathf.Max(0, Mathf.FloorToInt(raw));
-        }
-    }
-
-    public float MaxRage
-    {
-        get
-        {
-            // 6´ë ½ºÅÈ ÃÑÇÕ
-            return Mathf.Max(0f, STR + CLV + EffectiveAGI + BDY + MND + INS);
-        }
-    }
-
-    public float CritChance => data.baseINS * Mult.ins * 0.01f;  // ¿¹: INS 30 ¡æ 30%
-
-    // ========================================================================
-    // [4] Helper Methods (Rage, Hostility Á¶ÀÛ)
-    // ========================================================================
-
-    // --- Rage ---
-    public void AddRage(float amount)
-    {
-        if (Mathf.Approximately(amount, 0f)) return;
-        float before = Rage;
-        Rage = Mathf.Clamp(before + amount, 0f, MaxRage);
-        if (debugLogStats) Debug.Log($"[RAGE] {name}: {before:F1} -> {Rage:F1} ({amount:+#;-#;0})");
-    }
-
-    public void ReduceRageByRatio(float ratio)
-    {
-        if (ratio <= 0f) return;
-        float amount = Rage * Mathf.Clamp01(ratio);
-        Rage = Mathf.Clamp(Rage - amount, 0f, MaxRage);
-    }
-
-    // --- Hostility (Àû´ë°¨) ---
-    public float Hostility { get; private set; } = 1.0f;
-    public float HostilityGenerationMultiplier => Mult.hostilityGenerationMultiplier;
-
-    public void AddHostility(float amount)
-    {
-        if (amount > 0f) amount *= HostilityGenerationMultiplier; // Àû´ë°¨ »ı¼º ¹èÀ² Àû¿ë
-        Hostility = Mathf.Max(0f, Hostility + amount);
-    }
-
-    public void ResetHostility() => Hostility = 1.0f;
-
-    // --- Utils ---
-    public void SetPassiveAgilityMultiplier(float multiplier)
-    {
-        _passiveAgilityMultiplier = Mathf.Max(0f, multiplier);
-        InvalidateStatCache(); // AGI º¯°æ ½Ã Ä³½Ã °»½Å
-
-        // ¸¸¾à ATB ½Ã½ºÅÛÀÌ ÀÌ °ªÀ» Ä³½ÌÇÏ°í ÀÖ´Ù¸é ¾Ë¸² ÇÊ¿ä (¿¹: ATBTurnController.RefreshUnits())
-    }
-
-    #endregion
-
-    #region Unity Callbacks
-    void Awake()
-    {
-        if (!animator) animator = GetComponent<Animator>();
-        if (!spriteRenderer) spriteRenderer = GetComponent<SpriteRenderer>();
-
-        unitStateController = GetComponent<UnitStateController>();
-        // »óÅÂ º¯°æ ½Ã Ä³½Ã ¹«È¿È­(ÀÌº¥Æ®°¡ ÀÖ´Ù¸é ±¸µ¶)
-        if (unitStateController != null)
-        {
-            unitStateController.OnStatesChanged += InvalidateStatCache;
-            unitStateController.OnBuffsChanged += InvalidateStatCache; // Ä³½Ã ¹«È¿È­
-
-            // ATB Àç°è»êµµ ¿¬°á
-            unitStateController.OnStatesChanged += RecomputeATBFromRefs;
-            unitStateController.OnBuffsChanged += RecomputeATBFromRefs;
-        }
-
-        ApplyData(); // µ¥ÀÌÅÍ ¹İ¿µ(HP/MP ÃÊ±âÈ­ Æ÷ÇÔ)
-    }
-    void OnEnable()
-    {
-        if (battleManager == null) battleManager = FindObjectOfType<BattleManager>();
-        if (battleManager != null) battleManager.OnWaveStarted += HandleWaveStarted;
-    }
-
-    void OnDestroy()
-    {
-        if (unitStateController != null)
-        {
-            unitStateController.OnStatesChanged -= InvalidateStatCache;
-            unitStateController.OnBuffsChanged -= InvalidateStatCache;
-
-            unitStateController.OnStatesChanged -= RecomputeATBFromRefs;
-            unitStateController.OnBuffsChanged -= RecomputeATBFromRefs;
-        }
-        if (BattleManager.Instance != null)
-        {
-            BattleManager.Instance.OnWaveStarted -= HandleWaveStarted;
-        }
-    }
-
-    void Start()
-    {
-        if (CurrentMap == null && BattleMapManager.Instance != null)
-        {
-            var map = (data.team == Team.Player) ? BattleMapManager.Instance.PlayerFloor : BattleMapManager.Instance.EnemyFloor;
-            var cell = map.WorldToCell(transform.position);
-            MoveTo(map, cell);
-        }
-    }
-    #endregion
-
-    #region Data Initialization
-    public void ApplyData()
-    {
-        gameObject.name = data.DisplayName;
-        Hostility = data.baseHostility; // ·±Å¸ÀÓ¿¡ º¯ÇÏ´Â °ª¸¸ ÃÊ±â°ª ´ëÀÔ
-
-        // »óÅÂ ¹İ¿µµÈ ÃÖ´ëÄ¡°¡ ÇÊ¿äÇÏ¹Ç·Î ¸ÕÀú Ä³½Ã ¹«È¿È­
-        InvalidateStatCache();
-
-        // ÇöÀç°ª ÃÊ±âÈ­/º¸Á¤
-        HP = Mathf.Clamp(HP == 0 ? MaxHP : HP, 0, MaxHP);
-        MP = Mathf.Clamp(MP == 0 ? MaxMP : MP, 0, MaxMP);
-        Rage = Mathf.Clamp(Rage, 0, MaxRage);
-    }
-    #endregion
-
-    public void InitPassives(BattleManager _battlemanager)
-    {
-        _activePassives.Clear();
-
-        if (data == null || data.passives == null) return;
-
-        foreach (var passives in data.passives)
-        {
-            if (passives == null) continue;
-            if (!passives.unlockedByDefault) continue; // ÃßÈÄ ÇØ±İ Á¶°Ç Ã¼Å© ÁöÁ¡
-
-            _activePassives.Add(passives);
-            passives.OnAttach(this, _battlemanager);
-        }
-    }
-
-    public void InitializeATB(float minAGI, float maxAGI)
-    {
-        _agiMinRef = minAGI;
-        _agiMaxRef = maxAGI;
-    }
-
-    // ¹öÇÁ/»óÅÂ º¯°æ ½Ã ºÒ·¯ÁÙ ÇïÆÛ
-    void RecomputeATBFromRefs()
-    {
-        if (_agiMaxRef <= _agiMinRef + 0.001f) return;
-        // °°Àº ±âÁØÀ¸·Î ´Ù½Ã °è»ê(EffectiveAGI°¡ ´Ş¶óÁ³À¸´Ï atbPerSecond°¡ °»½ÅµÊ)
-        InitializeATB(_agiMinRef, _agiMaxRef);
-    }
-
-    public void UpdateATB(float deltaTime)
-    {
-        if (IsDead || IsTurnReady) return; // »ç¸Á ¶Ç´Â ÀÌ¹Ì ÁØºñ ¿Ï·á
-
-        float gain = atbPerSecond * deltaTime;
-        float raw = ATB + gain;           // Å¬·¥ÇÁ Àü ¿ø½Ã°ª
-
-        // ÀÌ¹ø ÇÁ·¹ÀÓ¿¡ 100%¸¦ ³Ñ°å´Ù¸é, ³Ñ±ä ¸¸Å­À» Overfill¿¡ º¸°ü
-        if (raw >= 100f)
-            Overfill = raw - 100f;
-        else
-            Overfill = 0f;
-
-        ATB = Mathf.Min(100f, raw);
-    }
-
-    public void AddBodyBonusFromPassive(int delta)
-    {
-        _passiveBDYBonus += delta;
-        // BDY°¡ ¹Ù²î¸é MaxHPµµ ´Ù½Ã °è»êµÇµµ·Ï Ä³½Ã °»½Å
-        InvalidateStatCache();
-    }
-
-    // ÅÏÀÌ ³¡³µÀ» ¶§ ATB ÃÊ±âÈ­
-    public void ResetATB()
-    {
-        ATB = 0f;
-        Overfill = 0f; // µ¿½ÃÅÏ ¿ì¼±¼øÀ§ ÀÜ¿©°ªµµ ÃÊ±âÈ­
-    }
-
-    // ¿ÜºÎ¿¡¼­ ÆĞ½Ãºê on/off ÇÒ ¶§ »ç¿ë (¿¹: ÇØ±İ Á¶°Ç ´Ş¼º ½Ã ÄÑ±â)
-    public void SetPassiveEnabled(PassiveAsset _passives, bool enabled, BattleManager _battlemanager)
-    {
-        if (_passives == null) return;
-
-        bool has = _activePassives.Contains(_passives);
-
-        if (enabled && !has)
-        {
-            _activePassives.Add(_passives);
-            _passives.OnAttach(this, _battlemanager);
-        }
-        else if (!enabled && has)
-        {
-            _activePassives.Remove(_passives);
-            _passives.OnDetach(this, _battlemanager);
-        }
-    }
-
-    #region Skill Cooldowns
-    // === Skill Cooldowns (per unit) ===
-    private readonly Dictionary<SkillAsset, int> _cooldowns = new();
-
-    public bool IsSkillOnCooldown(SkillAsset s)
-    {
-        var key = GetCooldownKey(s);
-        return key != null && _cooldowns.TryGetValue(key, out var left) && left > 0;
-    }
-
-    public int GetCooldownRemaining(SkillAsset s)
-    {
-        var key = GetCooldownKey(s);
-        return key != null && _cooldowns.TryGetValue(key, out var left)
-            ? Mathf.Max(0, left)
-            : 0;
-    }
-
-    public void ApplyCooldown(SkillAsset s)
-    {
-        var key = GetCooldownKey(s);
-        if (key == null) return;
-
-        // ÈÆ·Ã µîÀ» ¹İ¿µÇÑ ½ÇÁ¦ Äğ´Ù¿î ÅÏ¼ö
-        int cd = Mathf.Max(0, s.GetEffectiveCooldownTurns(this));
-        if (cd <= 0)
-        {
-            _cooldowns.Remove(key);
-            return;
-        }
-
-        _cooldowns[key] = cd;
-    }
-
-    // ÀÚ½ÅÀÇ ÅÏÀÌ ³¡³¯ ¶§ 1¾¿ °¨¼Ò
-    public void TickAllCooldowns()
-    {
-        var keys = new List<SkillAsset>(_cooldowns.Keys);
-        foreach (var k in keys)
-        {
-            _cooldowns[k] = Mathf.Max(0, _cooldowns[k] - 1);
-            if (_cooldowns[k] == 0) _cooldowns.Remove(k);
-        }
-    }
-
-    private SkillAsset GetCooldownKey(SkillAsset s)
-    {
-        if (s == null) return null;
-
-        // ÀÌ¹Ì µî·ÏµÈ °Í Áß °°Àº legacyId¸¦ °¡Áø ¾Ö°¡ ÀÖÀ¸¸é ±×°É °ø¿ë Å°·Î »ç¿ë
-        foreach (var key in _cooldowns.Keys)
-        {
-            if (key != null && key.legacyId == s.legacyId)
-                return key;
-        }
-
-        // 2) ¾ÆÁ÷ ¾øÀ¸¸é ÀÌ¹ø ½ºÅ³ ÀÚ½ÅÀ» Å°·Î »ç¿ë
-        return s;
-    }
-    #endregion
-
-    #region Movement
-    /// <summary>
-    /// ÁÖ¾îÁø ½ºÅ³¿¡ ´ëÇØ, ÀÌ À¯´ÖÀÌ »ç¿ëÇÒ ¾Ö´Ï¸ŞÀÌ¼Ç Æ®¸®°Å ÀÌ¸§À» °áÁ¤ÇÕ´Ï´Ù.
-    /// ¿ì¼±¼øÀ§: UnitData.skillAnimBindings ¡æ SkillAsset.animTriggerOverride ¡æ animKind ±âº»°ª
-    /// </summary>
-    public string GetAnimTriggerForSkill(SkillAsset skill)
-    {
-        if (skill == null)
-            return "Skill_1";
-
-        // 1) UnitData¿¡ À¯´Öº° ¸ÅÇÎÀÌ ÀÖÀ¸¸é ¿ì¼± »ç¿ë
-        if (data != null && data.skillAnimBindings != null)
-        {
-            foreach (var b in data.skillAnimBindings)
-            {
-                if (b.skillId == skill.legacyId && !string.IsNullOrEmpty(b.triggerName))
-                    return b.triggerName;
-            }
-        }
-
-        // 2) ½ºÅ³ ÀÚÃ¼¿¡¼­ ¿À¹ö¶óÀÌµå ÁöÁ¤µÈ °æ¿ì
-        if (!string.IsNullOrEmpty(skill.animTriggerOverride))
-            return skill.animTriggerOverride;
-
-        // 3) animKind ¿¡ µû¸¥ ±âº»°ª
-        switch (skill.animKind)
-        {
-            case SkillAnimKind.SelfCast:
-                // ÀÚ±â °­È­¿ë Ä³½ºÆÃ Æ®¸®°Å (Animator¿¡ µû¶ó ÀÌ¸§ ´Ù¸¦ ¼ö ÀÖÀ½)
-                return "Casting";
-            case SkillAnimKind.None:
-            case SkillAnimKind.Special:
-            case SkillAnimKind.Melee:
-            case SkillAnimKind.Ranged:
-                return "Skill_1";
-            default:
-                return "Skill_1";
-        }
-    }
-
-    public IEnumerator AnimateMoveTo(Tilemap map, Vector3Int toCell)
-    {
-        Vector3 fromW = transform.position;
-        Vector3 toW = map.GetCellCenterWorld(toCell);
-
-        if (animator) animator.SetBool("Move", true);
-
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.deltaTime / Mathf.Max(0.01f, moveDuration);
-            transform.position = Vector3.Lerp(fromW, toW, t);
-            yield return null;
-        }
-
-        transform.position = toW; // ¼¿ ½º³À/»óÅÂ °»½Å
-        MoveTo(map, toCell);
-
-        if (animator) animator.SetBool("Move", false);
-    }
-    public void PlayTrigger(string triggerName)
-    {
-        if (!animator || string.IsNullOrEmpty(triggerName)) return;
-        animator.ResetTrigger(triggerName);
-        animator.SetTrigger(triggerName);
-    }
-
-    public void Bind(Tilemap map, Vector3Int startCell)
-    {
-        CurrentMap = map;
-        Cell = startCell;
-        transform.position = map.GetCellCenterWorld(startCell);
-    }
-
-    public void MoveTo(Tilemap map, Vector3Int toCell)
-    {
-        Tilemap fromMap = CurrentMap;
-        Vector3Int fromCell = Cell;
-
-        CurrentMap = map;
-        Cell = toCell;
-        transform.position = map.GetCellCenterWorld(toCell);
-
-        // ÀÎ½ºÅÏ½º ÀÌº¥Æ®
-        OnMoved?.Invoke(this, fromMap, fromCell, toCell);
-        // Àü¿ª ÀÌº¥Æ® (ÆĞ½ÃºêµéÀÌ µè´Â ¿ëµµ)
-        OnAnyMoved?.Invoke(this);
-    }
-
-    void HandleWaveStarted()
-    {
-        ResetHostility();   //ÀûÀÇ ÃÊ±âÈ­
-#if UNITY_EDITOR
-        AddRage(9999f);
-#endif
-    }
-    #endregion
-
-    #region Attack
-    public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride)
-     => AnimateAttack(target, triggerOverride, null);
-
-    public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride, float? timeoutOverride)
-    {
-        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Skill_1" : triggerOverride;
-        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "Skill_1(Override)");
-    }
-
-    public IEnumerator AnimateRanged(string triggerOverride)
-     => AnimateRanged(triggerOverride, null);
-
-    public IEnumerator AnimateRanged(string triggerOverride, float? timeoutOverride)
-    {
-        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Ranged" : triggerOverride;
-        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "Ranged(Override)");
-    }
-
-    public IEnumerator AnimateShootWeb()
-    {
-        // ±âÁ¸ ·ÎÁ÷ À¯Áö: ShootWeb ÀÖÀ¸¸é ShootWeb, ¾øÀ¸¸é Ranged
-        string trigger = HasParam("ShootWeb") ? "ShootWeb" : "Ranged";
-        yield return PlayTriggerAndWaitEnd(trigger, null, "ShootWeb");
-    }
-
-    //Á¡ÇÁ ¾Ö´Ï¸ŞÀÌ¼Ç ¹× ±â´É
-    public IEnumerator AnimateJumpToWorld(
-    Vector3 toWorld,
-    float? durationOverride = null,         // ½Ã°£À» Á÷Á¢ ÁöÁ¤
-    float? speedUnitsPerSec = null,         // ¶Ç´Â ¼Óµµ·Î ÁöÁ¤(°Å¸®/¼Óµµ = ½Ã°£)
-    float arcHeight = 0.15f)
-    {
-        Vector3 from = transform.position;
-        float distance = Vector3.Distance(from, toWorld);
-        float duration = durationOverride ?? (speedUnitsPerSec.HasValue
-            ? distance / Mathf.Max(0.01f, speedUnitsPerSec.Value)
-            : 0.18f); // ±âº»°ª
-
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.deltaTime / Mathf.Max(0.01f, duration);
-            float arc = Mathf.Sin(t * Mathf.PI) * arcHeight;
-            transform.position = Vector3.Lerp(from, toWorld, t) + new Vector3(0f, arc, 0f);
-            yield return null;
-        }
-    }
-
-    public void SetCasting(bool on) //Ä³½ºÆÃ ¾Ö´Ï¸ŞÀÌ¼Ç ½ÇÇà
-    {
-        if (animator) animator.SetBool("Casting", on);
-    }
-
-    bool HasParam(string name)
-    {
-        if (!animator) return false;
-        foreach (var p in animator.parameters) if (p.name == name) return true;
-        return false;
-    }
-    #endregion
-
-    public bool HasMP(int cost) => cost <= 0 || MP >= cost;
-    public bool TryConsumeMP(int cost)
-    {
-        if (cost <= 0) return true;
-        if (MP < cost) return false;
-        MP = Mathf.Max(0, MP - cost);
-        return true;
-    }
-    public void GainMP(int amount)
-    {
-        int MPInt = Mathf.FloorToInt(amount);
-        if (MPInt <= 0)
-            return;
-
-        float before = MP;
-        int maxThrPer = Mathf.FloorToInt(MaxMP * 0.3f);
-
-        MP = Mathf.Min(MaxMP, MP + MPInt);
-    }
-
-    public bool HasRage(int amount) => amount <= 0 || Rage >= amount;
-    public bool TryConsumeRage(int amount)
-    {
-        if (amount <= 0) return true;
-        if (Rage < amount) return false;
-        Rage = Mathf.Max(0f, Rage - amount);
-        return true;
-    }
-    public bool HasResource(SkillCostResource res, int amount)
-    {
-        return res switch
-        {
-            SkillCostResource.MP => HasMP(amount),
-            SkillCostResource.Rage => HasRage(amount),
-            _ => true
-        };
-    }
-    public bool TryConsumeResource(SkillCostResource res, int amount)
-    {
-        return res switch
-        {
-            SkillCostResource.MP => TryConsumeMP(amount),
-            SkillCostResource.Rage => TryConsumeRage(amount),
-            _ => true
-        };
-    }
-
-    public void Retreat()
-    {
-        if (IsRetreated || IsDead) return;
-        IsRetreated = true;
-        OnRetreated?.Invoke(this);
-    }
-
-    #region Hit / Death
-    public void PlayHit()
-    {
-        if (animator) animator.SetTrigger("Hit"); // Hit ¾Ö´Ï¸ŞÀÌ¼Ç Ãß°¡ ½Ã »ç¿ë
-    }
-
-    public IEnumerator PlayDieAndWait(float maxWait = 1.5f)
-    {
-        if (animator)
-        {
-            if (data.team == Team.Player)
-                animator.SetTrigger("Die");
-        }
-        yield return new WaitForSeconds(maxWait); // °£´Ü ´ë±â
-    }
-    #endregion
-
-    #region Damage / Heal
-    public bool IsDead => HP <= 0;
-
-    public void TakeDamage(int amount)
-    {
-        HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
-        OnDamaged?.Invoke(amount);
-
-        int dmg = Mathf.Max(0, amount);
-        HP = Mathf.Max(HP - dmg, 0);
-        OnDamaged?.Invoke(dmg);
-
-        // FloatingText (Damage)
-        if (dmg > 0)
-        {
-            var pos = transform.position + Vector3.up * 0.15f;
-            // TMP RichText·Î »¡°£»ö Ãâ·Â
-            FloatingTextManager.Instance?.Spawn(pos, $"<color=#FF0000>{dmg}</color>");
-        }
-
-        if (HP == 0) //Á×¾úÀ» ½Ã
-        {
-            if (animator && Team.Player == data.team) animator.SetBool("hurt", false);
-            OnDied?.Invoke(this);
-        }
-        else if (HP <= (MaxHP * 0.3f)) // ÃÖ´ëÃ¼·ÂÀÇ 30% Hpº¸´Ù ÀÛ°Å³ª °°À» ¶§
-        {
-            if (animator) animator.SetBool("hurt", true);
-        }
-
-        Debug.Log($"Damaged: {name} damage={amount}");
-    }
-    public void HealPercent(float ratio)
-    {
-        ratio = Mathf.Clamp01(ratio);
-        int amount = Mathf.FloorToInt(MaxHP * ratio);
-        Heal(amount);
-    }
-
-    public void Heal(float amount)
-    {
-        int healInt = Mathf.FloorToInt(amount);
-        if (healInt <= 0)
-            return;
-
-        float before = HP;
-        int maxThrPer = Mathf.FloorToInt(MaxHP * 0.3f);
-
-        HP = Mathf.Min((int)MaxHP, HP + healInt);
-
-        // È¸º¹ ÈÄ À§Çè »óÅÂ¿¡¼­ ¹ş¾î³µÀ¸¸é Warning ²û
-        if (HP > maxThrPer && animator)
-            animator.SetBool("hurt", false);
-
-        // ÇÊ¿äÇÏ¸é µğ¹ö±× ·Î±×
-        //Debug.Log($"{name} Heal +{HP - before} ¡æ {HP}/{MaxHP}");
-    }
-    #endregion
-
-    public int GetTrainingRouteIndex(SkillAsset skill)
-    {
-        if (Battle == null || Battle.Training == null || data == null || skill == null)
-            return -1;
-
-        var db = Battle.Training;
-
-        // 1) legacyId ±×·ì ±âÁØ Á¶È¸
-        if (skill.legacyId != SkillId.None)
-        {
-            int r = db.GetRouteByLegacy(data, skill.legacyId);
-            if (r >= 0) return r;
-        }
-
-        // 2) fallback: °³º° ½ºÅ³ ±âÁØ Á¶È¸
-        return db.GetRoute(data, skill);
-    }
-    //ÆĞ½Ãºê ¼³¸í È£Ãâ
-    public void AnnouncePassive(string passiveName)
-    {
-        Battle?.EmitPassiveLabelAutoClear(this, passiveName, 1.0f);
-    }
-
-    #region Animation Events
-    // Attack Å¬¸³ÀÇ ÀÓÆÑÆ® ÇÁ·¹ÀÓ¿¡¼­ È£Ãâ
-    public void AnimEvent_AttackImpact() => OnAttackImpact?.Invoke();
-
-    // Attack Å¬¸³ ³¡¿¡¼­ È£Ãâ(¶Ç´Â Æ®·£Áö¼Ç Exit ÀÌº¥Æ®)
-    public void AnimEvent_AttackEnd() => OnAttackEnded?.Invoke();
-    #endregion
-
-    /// ÀÌ À¯´ÖÀÌ ÇÇÇØ¸¦ ¼º°øÀûÀ¸·Î °¡ÇßÀ» ¶§ È£ÃâÇØ, ÆĞ½Ãºê µî ¸®½º³Ê¿¡°Ô ¾Ë¸°´Ù.
-    /// ¹İµå½Ã BattleUnit ¿ÜºÎ¿¡¼± ÀÌ ¸Ş¼­µå¸¸ È£ÃâÇÏ°í, ÀÌº¥Æ®¸¦ Á÷Á¢ InvokeÇÏÁö ¸» °Í.
-    public void NotifyDealtDamage(BattleUnit victim, int damage, SkillAsset source)
-    {
-        OnDealtDamage?.Invoke(this, victim, damage, source);
-    }
-
-    private IEnumerator PlayTriggerAndWaitEnd(string trigger, float? timeoutOverride, string debugTag)
-    {
-        if (!animator)
-            yield break;
-
-        if (string.IsNullOrEmpty(trigger))
-            trigger = "Skill_1";
-
-        bool ended = false;
-        Action onEnd = () => ended = true;
-        OnAttackEnded += onEnd;
-
-        animator.ResetTrigger(trigger);  // ¼±ÅÃ: Æ®¸®°Å ²¿ÀÓ ¹æÁö(ÇÁ·ÎÁ§Æ® Àü¹İ ¿µÇâ ³·À½)
-        animator.SetTrigger(trigger);
-
-        float timeout = Mathf.Max(MinTimeout, timeoutOverride ?? defaultAnimEndTimeout);
-
-        yield return null;
-
-        while (!ended && timeout > 0f)
-        {
-            timeout -= Time.deltaTime;
-
-            // ÀÌº¥Æ®°¡ ´©¶ôµÇ¾ú´õ¶óµµ, ÇöÀç Àç»ı ÁßÀÎ ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ³¡³µ´Ù¸é Á¾·á Ã³¸®
-            var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
-
-            // ÅÂ±×(Tag)¸¦ ¾²°Å³ª, ´Ü¼øÈ÷ "Attack"ÀÌ³ª "Casting" µî ÇÙ½É µ¿ÀÛ ÁßÀÎÁö Ã¼Å©
-            // ¿©±â¼­´Â ÁøÇàµµ°¡ 1.0(100%)À» ³Ñ¾ú°í, Loop°¡ ¾Æ´Ñ °æ¿ì °­Á¦ Á¾·á
-            if (stateInfo.normalizedTime >= 1.0f && !stateInfo.loop)
-            {
-                // Æ®·£Áö¼Ç ÁßÀÌ ¾Æ´Ò ¶§¸¸ Ã¼Å© (Æ®·£Áö¼Ç Áß¿¡´Â ÀÌÀü/´ÙÀ½ »óÅÂ°¡ ¼¯ÀÓ)
-                if (!animator.IsInTransition(0))
-                {
-                    // Debug.Log($"[SafetyBreak] {name} ¾Ö´Ï¸ŞÀÌ¼Ç Á¾·á °¨ÁöµÇ¾î °­Á¦ ³Ñ±è.");
-                    ended = true;
-                }
-            }
-            yield return null;
-        }
-
-        OnAttackEnded -= onEnd;
-
-        if (!ended)
-        {
-            // watchdog ¹ßµ¿: "End ÀÌº¥Æ® ´©¶ô/ÀüÀÌ ¹®Á¦"¸¦ ½ÇÁ¦·Î Àâ¾Æ³»±â À§ÇÑ °æ°í
-            var state = animator.GetCurrentAnimatorStateInfo(0);
-            Debug.LogWarning(
-                $"[AnimTimeout] Unit='{name}', Trigger='{trigger}', Tag='{debugTag}', " +
-                $"StateHash={state.shortNameHash}, NormalizedTime={state.normalizedTime:F2}. " +
-                $"Check AnimationEvent 'AnimEvent_AttackEnd' on the clip and transitions.");
-        }
-    }
-}
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+
+public class BattleUnit : MonoBehaviour
+{
+    #region 1. Core Data & Configuration (ë°ì´í„° ë° ì„¤ì •)
+    [Header("Data Source")]
+    public UnitData data;                   // ìœ ë‹› ë°ì´í„° ì›ë³¸ (ScriptableObject)
+    public StateStatModifierDB stateStatDB; // ìƒíƒœ ì´ìƒ ìŠ¤íƒ¯ ë³´ì • DB
+
+    [Header("Prefab Settings")]
+    public ProjectileController defaultProjectilePrefab; // ê¸°ë³¸ íˆ¬ì‚¬ì²´ í”„ë¦¬íŒ¹
+
+    [Header("Debug")]
+    [SerializeField] private bool debugLogStats = false; // ìŠ¤íƒ¯ ë””ë²„ê¹…ìš© (ë¹Œë“œ ì‹œ ì œì™¸ ê°€ëŠ¥)
+    #endregion
+
+    #region 2. Dependencies (ì™¸ë¶€ ì˜ì¡´ì„±)
+    [Header("Managers & Controllers")]
+    // BattleManager: ì™¸ë¶€ì—ì„œëŠ” í”„ë¡œí¼í‹°ë¡œ ì ‘ê·¼
+    [SerializeField] private BattleManager battleManager;
+    public BattleManager Battle => battleManager;
+
+    // ë‚´ë¶€ ìºì‹±ìš© ì»¨íŠ¸ë¡¤ëŸ¬
+    private UnitStateController unitStateController;
+    private StatusController statusController;
+    #endregion
+
+    #region 3. Runtime Status (ì‹¤ì‹œê°„ ì „íˆ¬ ìƒíƒœ)
+    //Vital Stats
+    public float HP { get; private set; }
+    public float MP { get; private set; }
+    public float Rage { get; private set; }
+    public bool IsRetreated { get; private set; } = false; // ë„ì£¼ ì—¬ë¶€
+
+    [Header("Map Position")]
+    public Tilemap CurrentMap;      // í˜„ì¬ ìœ„ì¹˜í•œ íƒ€ì¼ë§µ
+    public Vector3Int Cell { get; private set; } // ê·¸ë¦¬ë“œ ì¢Œí‘œ
+
+    // ì†ì„± ì €í•­ í…Œì´ë¸” (ëŸ°íƒ€ì„ ë³€ë™ ê°€ëŠ¥ì„± ê³ ë ¤í•˜ì—¬ êµ¬ì¡°ì²´ ë°°ì—´ ìœ ì§€)
+    [System.Serializable]
+    public struct AttrMod { public AttackAttr attr; public float mult; }
+    public AttrMod[] resistTable;
+    #endregion
+
+    #region 4. ATB System (í„´ ê´€ë¦¬ ì‹œìŠ¤í…œ)
+    [Header("ATB Settings")]
+    [NonSerialized] public float ATB = 0f;
+    public float MaxATB { get; private set; } = 100f;
+    public float Overfill { get; private set; } = 0f; // í„´ ì´ˆê³¼ë¶„ (ìš°ì„ ê¶Œ ê²°ì •ìš©)
+
+    [SerializeField] private float speedMultiplier = 1.0f;  // ì†ë„ ê³„ìˆ˜
+
+    // ATB ê³„ì‚° í”„ë¡œí¼í‹°
+    public bool IsTurnReady => ATB >= MaxATB;
+    public float ATBProgress => Mathf.Clamp01(ATB / MaxATB);
+    public float atbPerSecond
+    {
+        get
+        {
+            // í˜„ì¬ AGI ê°€ì ¸ì˜¤ê¸° (0 ë°©ì§€)
+            float currentAgi = Mathf.Max(0.1f, EffectiveAGI);
+
+            // ìµœì¢… ì†ë„ ê³„ì‚° (ì„ í˜• ë¹„ë¡€)
+            float finalSpeed = currentAgi * speedMultiplier;
+
+            // ë„ˆë¬´ ë¹¨ë¼ì„œ ê²Œì„ì´ ê³ ì¥ë‚˜ëŠ” ê²ƒë§Œ ë°©ì§€ (ìµœì†Œ 0.1, ìµœëŒ€ 5000 ë“± ë„‰ë„‰í•˜ê²Œ)
+            return Mathf.Clamp(finalSpeed, 1f, 10000f);
+        }
+    }
+
+    // ë‚´ë¶€ ì—°ì‚°ìš© ë³€ìˆ˜
+    private float _agiMinRef, _agiMaxRef;
+    #endregion
+
+    #region 5. Visuals & Animation (ë¹„ì£¼ì–¼)
+    [Header("Visual Components")]
+    [SerializeField] private Animator animator;
+    [SerializeField] private SpriteRenderer spriteRenderer;
+
+    [Header("Animation Settings")]
+    [SerializeField] private float moveDuration = 0.18f; // ì´ë™ ì—°ì¶œ ì‹œê°„
+    [SerializeField] private float defaultAnimEndTimeout = 8f; // ì• ë‹ˆë©”ì´ì…˜ ê°•ì œ ì¢…ë£Œ íƒ€ì„ì•„ì›ƒ
+    private const float MinTimeout = 0.25f;
+
+    // ì• ë‹ˆë©”ì´ì…˜ ì´ë²¤íŠ¸ ì½œë°± (Action)
+    public Action OnAttackImpact;  // íƒ€ê²© ì‹œì  (ë°ë¯¸ì§€ ì ìš©)
+    public Action OnAttackEnded;   // ëª¨ì…˜ ì¢…ë£Œ ì‹œì 
+    #endregion
+
+    #region 6. Internal Logic & Cache (ë‚´ë¶€ ë¡œì§ìš©)
+    // íŒ¨ì‹œë¸Œ ê´€ë¦¬
+    private readonly List<PassiveAsset> _activePassives = new();
+    private int _passiveBDYBonus = 0;
+
+    // ìŠ¤íƒ¯ ìºì‹± í”Œë˜ê·¸
+    private bool _statCacheDirty = true;
+    #endregion
+
+    #region 7. Events (ì™¸ë¶€ ì•Œë¦¼ìš©)
+    // ìƒíƒœ ë³€í™” ì´ë²¤íŠ¸
+    public event Action<int> OnDamaged;       // í”¼ê²© ì‹œ
+    public event Action<BattleUnit> OnDied;   // ì‚¬ë§ ì‹œ
+    public event Action<BattleUnit> OnRetreated; // ë„ì£¼ ì‹œ
+
+    // í–‰ë™ ë° ì´ë™ ì´ë²¤íŠ¸
+    public event Action<BattleUnit, Tilemap, Vector3Int, Vector3Int> OnMoved; // ì´ë™ ì™„ë£Œ ì‹œ
+    public static event Action<BattleUnit> OnAnyMoved; // (Static) ëˆ„êµ°ê°€ ì´ë™í–ˆì„ ë•Œ
+
+    // ì „íˆ¬ ë¡œì§ ì´ë²¤íŠ¸
+    public event Action<BattleUnit, BattleUnit, int, SkillAsset> OnDealtDamage; // í”¼í•´ë¥¼ ì…í˜”ì„ ë•Œ (íŠ¸ë¦¬ê±°ìš©)
+    public event Action<SkillAsset> OnSkillUsed; // ìŠ¤í‚¬ ì‚¬ìš© ì‹œ
+
+    // ì´ë²¤íŠ¸ í˜¸ì¶œ í—¬í¼
+    public void NotifySkillUsed(SkillAsset skill) => OnSkillUsed?.Invoke(skill);
+    #endregion
+
+    #region 8. State-based Stat System (ìŠ¤íƒ¯ ë° ìƒíƒœ ê³„ì‚° ì‹œìŠ¤í…œ)
+
+    // ========================================================================
+    // [1] Calculation Structs (ë‚´ë¶€ ì—°ì‚°ìš© êµ¬ì¡°ì²´)
+    // ========================================================================
+
+    // ê°ì¢… ë°°ìœ¨(Multiplier)ê³¼ ê°€ì‚°ì¹˜(Add)ë¥¼ ëª¨ì•„ë‘” êµ¬ì¡°ì²´
+    private struct StatMult
+    {
+        public float str, clv, mnd, agi, ins;
+        public int hpAdd, mpAdd;
+        public float hostilityGain, hostilityDecay;
+        public float hostilityGenerationMultiplier;
+
+        // ì´ˆê¸°ê°’ (ë°°ìœ¨ì€ 1.0, ê°€ì‚°ì¹˜ëŠ” 0)
+        public static StatMult Identity => new StatMult
+        {
+            str = 1f,
+            clv = 1f,
+            agi = 1f,
+            ins = 1f,
+            mnd = 1f,
+            hpAdd = 0,
+            mpAdd = 0,
+            hostilityGenerationMultiplier = 1.0f
+        };
+
+        // ìƒíƒœ ì´ìƒ(State) ì ìš©
+        public void Apply(StateStatModifierDB.Entry e)
+        {
+            if (e == null) return;
+            str *= Mathf.Max(0f, e.atkMultiplier);
+            clv *= Mathf.Max(0f, e.magMultiplier);
+            agi *= Mathf.Max(0f, e.agiMultiplier);
+            ins *= Mathf.Max(0f, e.insMultiplier);
+            hpAdd += e.hpFlatAdd;
+            mpAdd += e.mpFlatAdd;
+            hostilityGenerationMultiplier *= Mathf.Max(0f, e.hostilityStatMultiplier);
+        }
+
+        // ë²„í”„(Buff) ì ìš©
+        public void ApplyBuff(StateStatModifierDB.BuffEntry e)
+        {
+            if (e == null) return;
+            str *= e.atkMultiplier;
+            clv *= e.magMultiplier;
+            agi *= e.agiMultiplier;
+            ins *= e.insMultiplier;
+            hpAdd += e.hpFlatAdd;
+            mpAdd += e.mpFlatAdd;
+            hostilityGenerationMultiplier *= e.hostilityStatMultiplier;
+        }
+    }
+
+    // ìŠ¤íƒ¯ ë³€í™” ì¶”ì ìš© ìŠ¤ëƒ…ìƒ· (ë””ë²„ê¹…ìš©)
+    private struct StatSnapshot
+    {
+        public float MaxHP, MaxMP;
+        public float PhysicalDamage, MagicDamage;
+        public float EffectiveAGI, EffectiveINS;
+        public float CritChance;
+
+        public static StatSnapshot From(BattleUnit u)
+        {
+            return new StatSnapshot
+            {
+                MaxHP = u.MaxHP,
+                MaxMP = u.MaxMP,
+                PhysicalDamage = u.STR,
+                MagicDamage = u.CLV,
+                EffectiveAGI = u.EffectiveAGI,
+                EffectiveINS = u.INS,
+                CritChance = u.CritChance,
+            };
+        }
+    }
+
+    // ========================================================================
+    // [2] Caching & Core Logic (ìºì‹± ë° í•µì‹¬ ê³„ì‚°)
+    // ========================================================================
+
+    private StatMult _cachedMult = StatMult.Identity;
+    private StatSnapshot _lastSnapshot;
+    private bool _hasSnapshot = false;
+
+    // ë°°ìœ¨ ê³„ì‚° í”„ë¡œí¼í‹° (ìºì‹± ì ìš©)
+    private StatMult Mult
+    {
+        get
+        {
+            if (_statCacheDirty)
+            {
+                _cachedMult = StatMult.Identity;
+                if (unitStateController != null && stateStatDB != null)
+                {
+                    // 1. ìƒíƒœ(State) ë°°ìˆ˜ ì ìš©
+                    foreach (var s in unitStateController.GetAll())
+                    {
+                        var entry = stateStatDB.Get(s);
+                        if (entry != null) _cachedMult.Apply(entry);
+                    }
+
+                    // 2. ë²„í”„(Buff) ë°°ìˆ˜ ì ìš©
+                    foreach (var b in unitStateController.GetAllBuffs())
+                    {
+                        var buffEntry = stateStatDB.GetBuff(b);
+                        if (buffEntry != null) _cachedMult.ApplyBuff(buffEntry);
+                    }
+                }
+                _statCacheDirty = false;
+            }
+            return _cachedMult;
+        }
+    }
+
+    // ìŠ¤íƒ¯ ìºì‹œ ì´ˆê¸°í™” (ìƒíƒœ ë³€í™” ì‹œ í˜¸ì¶œ)
+    public void InvalidateStatCache()
+    {
+        _statCacheDirty = true;
+
+        // ìµœëŒ€ì¹˜ê°€ ì¤„ì–´ë“¤ ë• í˜„ì¬ê°’ë„ ì¦‰ì‹œ ë§ì¶°ì¤Œ (Clamping)
+        HP = Mathf.Min(HP, MaxHP);
+        MP = Mathf.Min(MP, MaxMP);
+        Rage = Mathf.Min(Rage, MaxRage);
+
+        // ë””ë²„ê·¸ ëª¨ë“œì¼ ë•Œë§Œ ë¡œê·¸ ì¶œë ¥ (ì„±ëŠ¥ ë¶€í•˜ ë°©ì§€)
+        if (debugLogStats)
+        {
+            // ìƒˆ ê°’ ê³„ì‚° ê°•ì œ (Mult ì¬ê³„ì‚° ìœ ë„)
+            var _ = Mult;
+            var newSnap = StatSnapshot.From(this);
+
+            if (!_hasSnapshot)
+            {
+                _lastSnapshot = newSnap;
+                _hasSnapshot = true;
+                Debug.Log($"[STAT] {name} ì´ˆê¸° ìŠ¤ëƒ…ìƒ·: HP={HP}/{newSnap.MaxHP}, ATK={newSnap.PhysicalDamage}, AGI={newSnap.EffectiveAGI:F2}");
+            }
+            else
+            {
+                CompareAndLogSnapshot(_lastSnapshot, newSnap);
+                _lastSnapshot = newSnap;
+            }
+        }
+    }
+
+    private void CompareAndLogSnapshot(StatSnapshot oldSnap, StatSnapshot newSnap)
+    {
+        if (newSnap.MaxHP != oldSnap.MaxHP) Debug.Log($"[STATÎ”] {name} MaxHP: {oldSnap.MaxHP} -> {newSnap.MaxHP}");
+        if (newSnap.PhysicalDamage != oldSnap.PhysicalDamage) Debug.Log($"[STATÎ”] {name} STR: {oldSnap.PhysicalDamage} -> {newSnap.PhysicalDamage}");
+        if (Mathf.Abs(newSnap.EffectiveAGI - oldSnap.EffectiveAGI) > 0.001f) Debug.Log($"[STATÎ”] {name} AGI: {oldSnap.EffectiveAGI:F2} -> {newSnap.EffectiveAGI:F2}");
+        // í•„ìš”í•œ í•­ëª© ì¶”ê°€ ê°€ëŠ¥
+    }
+
+    // ========================================================================
+    // [3] Public Stat Properties (ìµœì¢… ìŠ¤íƒ¯ ë°˜í™˜)
+    // ========================================================================
+
+    // ê¸°ë³¸ 6ëŒ€ ìŠ¤íƒ¯ (Data * Mult)
+    public float STR => Mathf.Max(0f, data.baseSTR * Mult.str);
+    public float CLV => Mathf.Max(0f, data.baseCLV * Mult.clv);
+    public float MND => Mathf.Max(0, data.baseMND * Mult.mnd); // (* Mult.mndë¡œ ìˆ˜ì •: êµ¬ì¡°ì²´ ë¡œì§ê³¼ ì¼ì¹˜)
+    public float INS => Mathf.Max(0, data.baseINS * Mult.ins);
+
+    // ì‹ ì²´(BDY)ëŠ” íŒ¨ì‹œë¸Œ ë³´ë„ˆìŠ¤ ê°€ì‚° ë°©ì‹
+    public float BDY => Mathf.Max(0, data.baseBDY + _passiveBDYBonus);
+    public float EffectiveAGI
+    {
+        get
+        {
+            if (data == null) return 0f;
+
+            // 1. ê¸°ì¡´ StatusController ë°°ìœ¨ (Awakeì—ì„œ ìºì‹±ëœ statusController ì‚¬ìš©)
+            float scMul = (statusController != null) ? statusController.GetAgilityMultiplier() : 1f;
+
+            // 2. ì‹ ê·œ DB ì‹œìŠ¤í…œ ë°°ìœ¨ (Mult.agiì— ì´ë¯¸ ìºì‹±ë˜ì–´ ìˆìŒ)
+            float dbMul = Mult.agi;
+
+            // 3. íŒ¨ì‹œë¸Œ ë° ìµœì¢… ì—°ì‚°
+            return Mathf.Max(0f, data.baseAGI * scMul * dbMul * _passiveAgilityMultiplier);
+        }
+    }
+
+    // ë¯¼ì²©(AGI)ì€ íŒ¨ì‹œë¸Œ ìŠ¹ìˆ˜ ì¶”ê°€ ì ìš©
+    private float _passiveAgilityMultiplier = 1f;
+
+    // íŒŒìƒ ìŠ¤íƒ¯ (MaxHP, MaxMP, MaxRage)
+    public float MaxHP
+    {
+        get
+        {
+            float fromBody = BDY * 3f;
+            float fromStr = STR;
+            float buffAdd = Mult.hpAdd;
+            return Mathf.Max(1, Mathf.FloorToInt(fromBody + fromStr + buffAdd));
+        }
+    }
+
+    public float MaxMP
+    {
+        get
+        {
+            // (ì£¼ì˜: Mult.mpAdd ì‚¬ìš©)
+            float raw = (MND * 3f) + CLV + Mult.mpAdd;
+            return Mathf.Max(0, Mathf.FloorToInt(raw));
+        }
+    }
+
+    public float MaxRage
+    {
+        get
+        {
+            // 6ëŒ€ ìŠ¤íƒ¯ ì´í•©
+            return Mathf.Max(0f, STR + CLV + EffectiveAGI + BDY + MND + INS);
+        }
+    }
+
+    public float CritChance => data.baseINS * Mult.ins * 0.01f;  // ì˜ˆ: INS 30 â†’ 30%
+
+    // ========================================================================
+    // [4] Helper Methods (Rage, Hostility ì¡°ì‘)
+    // ========================================================================
+
+    // --- Rage ---
+    public void AddRage(float amount)
+    {
+        if (Mathf.Approximately(amount, 0f)) return;
+        float before = Rage;
+        Rage = Mathf.Clamp(before + amount, 0f, MaxRage);
+        if (debugLogStats) Debug.Log($"[RAGE] {name}: {before:F1} -> {Rage:F1} ({amount:+#;-#;0})");
+    }
+
+    public void ReduceRageByRatio(float ratio)
+    {
+        if (ratio <= 0f) return;
+        float amount = Rage * Mathf.Clamp01(ratio);
+        Rage = Mathf.Clamp(Rage - amount, 0f, MaxRage);
+    }
+
+    // --- Hostility (ì ëŒ€ê°) ---
+    public float Hostility { get; private set; } = 1.0f;
+    public float HostilityGenerationMultiplier => Mult.hostilityGenerationMultiplier;
+
+    public void AddHostility(float amount)
+    {
+        if (amount > 0f) amount *= HostilityGenerationMultiplier; // ì ëŒ€ê° ìƒì„± ë°°ìœ¨ ì ìš©
+        Hostility = Mathf.Max(0f, Hostility + amount);
+    }
+
+    public void ResetHostility() => Hostility = 1.0f;
+
+    // --- Utils ---
+    public void SetPassiveAgilityMultiplier(float multiplier)
+    {
+        _passiveAgilityMultiplier = Mathf.Max(0f, multiplier);
+        InvalidateStatCache(); // AGI ë³€ê²½ ì‹œ ìºì‹œ ê°±ì‹ 
+
+        // ë§Œì•½ ATB ì‹œìŠ¤í…œì´ ì´ ê°’ì„ ìºì‹±í•˜ê³  ìˆë‹¤ë©´ ì•Œë¦¼ í•„ìš” (ì˜ˆ: ATBTurnController.RefreshUnits())
+    }
+
+    #endregion
+
+    #region Unity Callbacks
+    void Awake()
+    {
+        if (!animator) animator = GetComponent<Animator>();
+        if (!spriteRenderer) spriteRenderer = GetComponent<SpriteRenderer>();
+
+        unitStateController = GetComponent<UnitStateController>();
+        // ìƒíƒœ ë³€ê²½ ì‹œ ìºì‹œ ë¬´íš¨í™”(ì´ë²¤íŠ¸ê°€ ìˆë‹¤ë©´ êµ¬ë…)
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged += InvalidateStatCache;
+            unitStateController.OnBuffsChanged += InvalidateStatCache; // ìºì‹œ ë¬´íš¨í™”
+
+            // ATB ì¬ê³„ì‚°ë„ ì—°ê²°
+            unitStateController.OnStatesChanged += RecomputeATBFromRefs;
+            unitStateController.OnBuffsChanged += RecomputeATBFromRefs;
+        }
+
+        ApplyData(); // ë°ì´í„° ë°˜ì˜(HP/MP ì´ˆê¸°í™” í¬í•¨)
+    }
+    void OnEnable()
+    {
+        if (battleManager == null) battleManager = FindObjectOfType<BattleManager>();
+        if (battleManager != null) battleManager.OnWaveStarted += HandleWaveStarted;
+    }
+
+    void OnDestroy()
+    {
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged -= InvalidateStatCache;
+            unitStateController.OnBuffsChanged -= InvalidateStatCache;
+
+            unitStateController.OnStatesChanged -= RecomputeATBFromRefs;
+            unitStateController.OnBuffsChanged -= RecomputeATBFromRefs;
+        }
+        if (BattleManager.Instance != null)
+        {
+            BattleManager.Instance.OnWaveStarted -= HandleWaveStarted;
+        }
+    }
+
+    void Start()
+    {
+        if (CurrentMap == null && BattleMapManager.Instance != null)
+        {
+            var map = (data.team == Team.Player) ? BattleMapManager.Instance.PlayerFloor : BattleMapManager.Instance.EnemyFloor;
+            var cell = map.WorldToCell(transform.position);
+            MoveTo(map, cell);
+        }
+    }
+    #endregion
+
+    #region Data Initialization
+    public void ApplyData()
+    {
+        gameObject.name = data.DisplayName;
+        Hostility = data.baseHostility; // ëŸ°íƒ€ì„ì— ë³€í•˜ëŠ” ê°’ë§Œ ì´ˆê¸°ê°’ ëŒ€ì…
+
+        // ìƒíƒœ ë°˜ì˜ëœ ìµœëŒ€ì¹˜ê°€ í•„ìš”í•˜ë¯€ë¡œ ë¨¼ì € ìºì‹œ ë¬´íš¨í™”
+        InvalidateStatCache();
+
+        // í˜„ì¬ê°’ ì´ˆê¸°í™”/ë³´ì •
+        HP = Mathf.Clamp(HP == 0 ? MaxHP : HP, 0, MaxHP);
+        MP = Mathf.Clamp(MP == 0 ? MaxMP : MP, 0, MaxMP);
+        Rage = Mathf.Clamp(Rage, 0, MaxRage);
+    }
+    #endregion
+
+    public void InitPassives(BattleManager _battlemanager)
+    {
+        _activePassives.Clear();
+
+        if (data == null || data.passives == null) return;
+
+        foreach (var passives in data.passives)
+        {
+            if (passives == null) continue;
+            if (!passives.unlockedByDefault) continue; // ì¶”í›„ í•´ê¸ˆ ì¡°ê±´ ì²´í¬ ì§€ì 
+
+            _activePassives.Add(passives);
+            passives.OnAttach(this, _battlemanager);
+        }
+    }
+
+    public void InitializeATB(float minAGI, float maxAGI)
+    {
+        _agiMinRef = minAGI;
+        _agiMaxRef = maxAGI;
+    }
+
+    // ë²„í”„/ìƒíƒœ ë³€ê²½ ì‹œ ë¶ˆëŸ¬ì¤„ í—¬í¼
+    void RecomputeATBFromRefs()
+    {
+        if (_agiMaxRef <= _agiMinRef + 0.001f) return;
+        // ê°™ì€ ê¸°ì¤€ìœ¼ë¡œ ë‹¤ì‹œ ê³„ì‚°(EffectiveAGIê°€ ë‹¬ë¼ì¡Œìœ¼ë‹ˆ atbPerSecondê°€ ê°±ì‹ ë¨)
+        InitializeATB(_agiMinRef, _agiMaxRef);
+    }
+
+    public void UpdateATB(float deltaTime)
+    {
+        if (IsDead || IsTurnReady) return; // ì‚¬ë§ ë˜ëŠ” ì´ë¯¸ ì¤€ë¹„ ì™„ë£Œ
+
+        float gain = atbPerSecond * deltaTime;
+        float raw = ATB + gain;           // í´ë¨í”„ ì „ ì›ì‹œê°’
+
+        // ì´ë²ˆ í”„ë ˆì„ì— 100%ë¥¼ ë„˜ê²¼ë‹¤ë©´, ë„˜ê¸´ ë§Œí¼ì„ Overfillì— ë³´ê´€
+        if (raw >= 100f)
+            Overfill = raw - 100f;
+        else
+            Overfill = 0f;
+
+        ATB = Mathf.Min(100f, raw);
+    }
+
+    public void AddBodyBonusFromPassive(int delta)
+    {
+        _passiveBDYBonus += delta;
+        // BDYê°€ ë°”ë€Œë©´ MaxHPë„ ë‹¤ì‹œ ê³„ì‚°ë˜ë„ë¡ ìºì‹œ ê°±ì‹ 
+        InvalidateStatCache();
+    }
+
+    // í„´ì´ ëë‚¬ì„ ë•Œ ATB ì´ˆê¸°í™”
+    public void ResetATB()
+    {
+        ATB = 0f;
+        Overfill = 0f; // ë™ì‹œí„´ ìš°ì„ ìˆœìœ„ ì”ì—¬ê°’ë„ ì´ˆê¸°í™”
+    }
+
+    // ì™¸ë¶€ì—ì„œ íŒ¨ì‹œë¸Œ on/off í•  ë•Œ ì‚¬ìš© (ì˜ˆ: í•´ê¸ˆ ì¡°ê±´ ë‹¬ì„± ì‹œ ì¼œê¸°)
+    public void SetPassiveEnabled(PassiveAsset _passives, bool enabled, BattleManager _battlemanager)
+    {
+        if (_passives == null) return;
+
+        bool has = _activePassives.Contains(_passives);
+
+        if (enabled && !has)
+        {
+            _activePassives.Add(_passives);
+            _passives.OnAttach(this, _battlemanager);
+        }
+        else if (!enabled && has)
+        {
+            _activePassives.Remove(_passives);
+            _passives.OnDetach(this, _battlemanager);
+        }
+    }
+
+    #region Skill Cooldowns
+    // === Skill Cooldowns (per unit) ===
+    private readonly Dictionary<SkillAsset, int> _cooldowns = new();
+
+    public bool IsSkillOnCooldown(SkillAsset s)
+    {
+        var key = GetCooldownKey(s);
+        return key != null && _cooldowns.TryGetValue(key, out var left) && left > 0;
+    }
+
+    public int GetCooldownRemaining(SkillAsset s)
+    {
+        var key = GetCooldownKey(s);
+        return key != null && _cooldowns.TryGetValue(key, out var left)
+            ? Mathf.Max(0, left)
+            : 0;
+    }
+
+    public void ApplyCooldown(SkillAsset s)
+    {
+        var key = GetCooldownKey(s);
+        if (key == null) return;
+
+        // í›ˆë ¨ ë“±ì„ ë°˜ì˜í•œ ì‹¤ì œ ì¿¨ë‹¤ìš´ í„´ìˆ˜
+        int cd = Mathf.Max(0, s.GetEffectiveCooldownTurns(this));
+        if (cd <= 0)
+        {
+            _cooldowns.Remove(key);
+            return;
+        }
+
+        _cooldowns[key] = cd;
+    }
+
+    // ìì‹ ì˜ í„´ì´ ëë‚  ë•Œ 1ì”© ê°ì†Œ
+    public void TickAllCooldowns()
+    {
+        var keys = new List<SkillAsset>(_cooldowns.Keys);
+        foreach (var k in keys)
+        {
+            _cooldowns[k] = Mathf.Max(0, _cooldowns[k] - 1);
+            if (_cooldowns[k] == 0) _cooldowns.Remove(k);
+        }
+    }
+
+    private SkillAsset GetCooldownKey(SkillAsset s)
+    {
+        if (s == null) return null;
+
+        // ì´ë¯¸ ë“±ë¡ëœ ê²ƒ ì¤‘ ê°™ì€ legacyIdë¥¼ ê°€ì§„ ì• ê°€ ìˆìœ¼ë©´ ê·¸ê±¸ ê³µìš© í‚¤ë¡œ ì‚¬ìš©
+        foreach (var key in _cooldowns.Keys)
+        {
+            if (key != null && key.legacyId == s.legacyId)
+                return key;
+        }
+
+        // 2) ì•„ì§ ì—†ìœ¼ë©´ ì´ë²ˆ ìŠ¤í‚¬ ìì‹ ì„ í‚¤ë¡œ ì‚¬ìš©
+        return s;
+    }
+    #endregion
+
+    #region Movement
+    /// <summary>
+    /// ì£¼ì–´ì§„ ìŠ¤í‚¬ì— ëŒ€í•´, ì´ ìœ ë‹›ì´ ì‚¬ìš©í•  ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë¦¬ê±° ì´ë¦„ì„ ê²°ì •í•©ë‹ˆë‹¤.
+    /// ìš°ì„ ìˆœìœ„: UnitData.skillAnimBindings â†’ SkillAsset.animTriggerOverride â†’ animKind ê¸°ë³¸ê°’
+    /// </summary>
+    public string GetAnimTriggerForSkill(SkillAsset skill)
+    {
+        if (skill == null)
+            return "Skill_1";
+
+        // 1) UnitDataì— ìœ ë‹›ë³„ ë§¤í•‘ì´ ìˆìœ¼ë©´ ìš°ì„  ì‚¬ìš©
+        if (data != null && data.skillAnimBindings != null)
+        {
+            foreach (var b in data.skillAnimBindings)
+            {
+                if (b.skillId == skill.legacyId && !string.IsNullOrEmpty(b.triggerName))
+                    return b.triggerName;
+            }
+        }
+
+        // 2) ìŠ¤í‚¬ ìì²´ì—ì„œ ì˜¤ë²„ë¼ì´ë“œ ì§€ì •ëœ ê²½ìš°
+        if (!string.IsNullOrEmpty(skill.animTriggerOverride))
+            return skill.animTriggerOverride;
+
+        // 3) animKind ì— ë”°ë¥¸ ê¸°ë³¸ê°’
+        switch (skill.animKind)
+        {
+            case SkillAnimKind.SelfCast:
+                // ìê¸° ê°•í™”ìš© ìºìŠ¤íŒ… íŠ¸ë¦¬ê±° (Animatorì— ë”°ë¼ ì´ë¦„ ë‹¤ë¥¼ ìˆ˜ ìˆìŒ)
+                return "Casting";
+            case SkillAnimKind.None:
+            case SkillAnimKind.Special:
+            case SkillAnimKind.Melee:
+            case SkillAnimKind.Ranged:
+                return "Skill_1";
+            default:
+                return "Skill_1";
+        }
+    }
+
+    public IEnumerator AnimateMoveTo(Tilemap map, Vector3Int toCell)
+    {
+        Vector3 fromW = transform.position;
+        Vector3 toW = map.GetCellCenterWorld(toCell);
+
+        if (animator) animator.SetBool("Move", true);
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / Mathf.Max(0.01f, moveDuration);
+            transform.position = Vector3.Lerp(fromW, toW, t);
+            yield return null;
+        }
+
+        transform.position = toW; // ì…€ ìŠ¤ëƒ…/ìƒíƒœ ê°±ì‹ 
+        MoveTo(map, toCell);
+
+        if (animator) animator.SetBool("Move", false);
+    }
+    public void PlayTrigger(string triggerName)
+    {
+        if (!animator || string.IsNullOrEmpty(triggerName)) return;
+        animator.ResetTrigger(triggerName);
+        animator.SetTrigger(triggerName);
+    }
+
+    public void Bind(Tilemap map, Vector3Int startCell)
+    {
+        CurrentMap = map;
+        Cell = startCell;
+        transform.position = map.GetCellCenterWorld(startCell);
+    }
+
+    public void MoveTo(Tilemap map, Vector3Int toCell)
+    {
+        Tilemap fromMap = CurrentMap;
+        Vector3Int fromCell = Cell;
+
+        CurrentMap = map;
+        Cell = toCell;
+        transform.position = map.GetCellCenterWorld(toCell);
+
+        // ì¸ìŠ¤í„´ìŠ¤ ì´ë²¤íŠ¸
+        OnMoved?.Invoke(this, fromMap, fromCell, toCell);
+        // ì „ì—­ ì´ë²¤íŠ¸ (íŒ¨ì‹œë¸Œë“¤ì´ ë“£ëŠ” ìš©ë„)
+        OnAnyMoved?.Invoke(this);
+    }
+
+    void HandleWaveStarted()
+    {
+        ResetHostility();   //ì ì˜ ì´ˆê¸°í™”
+#if UNITY_EDITOR
+        AddRage(9999f);
+#endif
+    }
+    #endregion
+
+    #region Attack
+    public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride)
+     => AnimateAttack(target, triggerOverride, null);
+
+    public IEnumerator AnimateAttack(BattleUnit target, string triggerOverride, float? timeoutOverride)
+    {
+        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Skill_1" : triggerOverride;
+        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "Skill_1(Override)");
+    }
+
+    public IEnumerator AnimateRanged(string triggerOverride)
+     => AnimateRanged(triggerOverride, null);
+
+    public IEnumerator AnimateRanged(string triggerOverride, float? timeoutOverride)
+    {
+        string trigger = string.IsNullOrEmpty(triggerOverride) ? "Ranged" : triggerOverride;
+        yield return PlayTriggerAndWaitEnd(trigger, timeoutOverride, "Ranged(Override)");
+    }
+
+    public IEnumerator AnimateShootWeb()
+    {
+        // ê¸°ì¡´ ë¡œì§ ìœ ì§€: ShootWeb ìˆìœ¼ë©´ ShootWeb, ì—†ìœ¼ë©´ Ranged
+        string trigger = HasParam("ShootWeb") ? "ShootWeb" : "Ranged";
+        yield return PlayTriggerAndWaitEnd(trigger, null, "ShootWeb");
+    }
+
+    //ì í”„ ì• ë‹ˆë©”ì´ì…˜ ë° ê¸°ëŠ¥
+    public IEnumerator AnimateJumpToWorld(
+    Vector3 toWorld,
+    float? durationOverride = null,         // ì‹œê°„ì„ ì§ì ‘ ì§€ì •
+    float? speedUnitsPerSec = null,         // ë˜ëŠ” ì†ë„ë¡œ ì§€ì •(ê±°ë¦¬/ì†ë„ = ì‹œê°„)
+    float arcHeight = 0.15f)
+    {
+        Vector3 from = transform.position;
+        float distance = Vector3.Distance(from, toWorld);
+        float duration = durationOverride ?? (speedUnitsPerSec.HasValue
+            ? distance / Mathf.Max(0.01f, speedUnitsPerSec.Value)
+            : 0.18f); // ê¸°ë³¸ê°’
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / Mathf.Max(0.01f, duration);
+            float arc = Mathf.Sin(t * Mathf.PI) * arcHeight;
+            transform.position = Vector3.Lerp(from, toWorld, t) + new Vector3(0f, arc, 0f);
+            yield return null;
+        }
+    }
+
+    public void SetCasting(bool on) //ìºìŠ¤íŒ… ì• ë‹ˆë©”ì´ì…˜ ì‹¤í–‰
+    {
+        if (animator) animator.SetBool("Casting", on);
+    }
+
+    bool HasParam(string name)
+    {
+        if (!animator) return false;
+        foreach (var p in animator.parameters) if (p.name == name) return true;
+        return false;
+    }
+    #endregion
+
+    public bool HasMP(int cost) => cost <= 0 || MP >= cost;
+    public bool TryConsumeMP(int cost)
+    {
+        if (cost <= 0) return true;
+        if (MP < cost) return false;
+        MP = Mathf.Max(0, MP - cost);
+        return true;
+    }
+    public void GainMP(int amount)
+    {
+        int MPInt = Mathf.FloorToInt(amount);
+        if (MPInt <= 0)
+            return;
+
+        float before = MP;
+        int maxThrPer = Mathf.FloorToInt(MaxMP * 0.3f);
+
+        MP = Mathf.Min(MaxMP, MP + MPInt);
+    }
+
+    public bool HasRage(int amount) => amount <= 0 || Rage >= amount;
+    public bool TryConsumeRage(int amount)
+    {
+        if (amount <= 0) return true;
+        if (Rage < amount) return false;
+        Rage = Mathf.Max(0f, Rage - amount);
+        return true;
+    }
+    public bool HasResource(SkillCostResource res, int amount)
+    {
+        return res switch
+        {
+            SkillCostResource.MP => HasMP(amount),
+            SkillCostResource.Rage => HasRage(amount),
+            _ => true
+        };
+    }
+    public bool TryConsumeResource(SkillCostResource res, int amount)
+    {
+        return res switch
+        {
+            SkillCostResource.MP => TryConsumeMP(amount),
+            SkillCostResource.Rage => TryConsumeRage(amount),
+            _ => true
+        };
+    }
+
+    public void Retreat()
+    {
+        if (IsRetreated || IsDead) return;
+        IsRetreated = true;
+        OnRetreated?.Invoke(this);
+    }
+
+    #region Hit / Death
+    public void PlayHit()
+    {
+        if (animator) animator.SetTrigger("Hit"); // Hit ì• ë‹ˆë©”ì´ì…˜ ì¶”ê°€ ì‹œ ì‚¬ìš©
+    }
+
+    public IEnumerator PlayDieAndWait(float maxWait = 1.5f)
+    {
+        if (animator)
+        {
+            if (data.team == Team.Player)
+                animator.SetTrigger("Die");
+        }
+        yield return new WaitForSeconds(maxWait); // ê°„ë‹¨ ëŒ€ê¸°
+    }
+    #endregion
+
+    #region Damage / Heal
+    public bool IsDead => HP <= 0;
+
+    public void TakeDamage(int amount)
+    {
+        HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
+        OnDamaged?.Invoke(amount);
+
+        int dmg = Mathf.Max(0, amount);
+        HP = Mathf.Max(HP - dmg, 0);
+        OnDamaged?.Invoke(dmg);
+
+        // FloatingText (Damage)
+        if (dmg > 0)
+        {
+            var pos = transform.position + Vector3.up * 0.15f;
+            // TMP RichTextë¡œ ë¹¨ê°„ìƒ‰ ì¶œë ¥
+            FloatingTextManager.Instance?.Spawn(pos, $"<color=#FF0000>{dmg}</color>");
+        }
+
+        if (HP == 0) //ì£½ì—ˆì„ ì‹œ
+        {
+            if (animator && Team.Player == data.team) animator.SetBool("hurt", false);
+            OnDied?.Invoke(this);
+        }
+        else if (HP <= (MaxHP * 0.3f)) // ìµœëŒ€ì²´ë ¥ì˜ 30% Hpë³´ë‹¤ ì‘ê±°ë‚˜ ê°™ì„ ë•Œ
+        {
+            if (animator) animator.SetBool("hurt", true);
+        }
+
+        Debug.Log($"Damaged: {name} damage={amount}");
+    }
+    public void HealPercent(float ratio)
+    {
+        ratio = Mathf.Clamp01(ratio);
+        int amount = Mathf.FloorToInt(MaxHP * ratio);
+        Heal(amount);
+    }
+
+    public void Heal(float amount)
+    {
+        int healInt = Mathf.FloorToInt(amount);
+        if (healInt <= 0)
+            return;
+
+        float before = HP;
+        int maxThrPer = Mathf.FloorToInt(MaxHP * 0.3f);
+
+        HP = Mathf.Min((int)MaxHP, HP + healInt);
+
+        // íšŒë³µ í›„ ìœ„í—˜ ìƒíƒœì—ì„œ ë²—ì–´ë‚¬ìœ¼ë©´ Warning ë”
+        if (HP > maxThrPer && animator)
+            animator.SetBool("hurt", false);
+
+        // í•„ìš”í•˜ë©´ ë””ë²„ê·¸ ë¡œê·¸
+        //Debug.Log($"{name} Heal +{HP - before} â†’ {HP}/{MaxHP}");
+    }
+    #endregion
+
+    public int GetTrainingRouteIndex(SkillAsset skill)
+    {
+        if (Battle == null || Battle.Training == null || data == null || skill == null)
+            return -1;
+
+        var db = Battle.Training;
+
+        // 1) legacyId ê·¸ë£¹ ê¸°ì¤€ ì¡°íšŒ
+        if (skill.legacyId != SkillId.None)
+        {
+            int r = db.GetRouteByLegacy(data, skill.legacyId);
+            if (r >= 0) return r;
+        }
+
+        // 2) fallback: ê°œë³„ ìŠ¤í‚¬ ê¸°ì¤€ ì¡°íšŒ
+        return db.GetRoute(data, skill);
+    }
+    //íŒ¨ì‹œë¸Œ ì„¤ëª… í˜¸ì¶œ
+    public void AnnouncePassive(string passiveName)
+    {
+        Battle?.EmitPassiveLabelAutoClear(this, passiveName, 1.0f);
+    }
+
+    #region Animation Events
+    // Attack í´ë¦½ì˜ ì„íŒ©íŠ¸ í”„ë ˆì„ì—ì„œ í˜¸ì¶œ
+    public void AnimEvent_AttackImpact() => OnAttackImpact?.Invoke();
+
+    // Attack í´ë¦½ ëì—ì„œ í˜¸ì¶œ(ë˜ëŠ” íŠ¸ëœì§€ì…˜ Exit ì´ë²¤íŠ¸)
+    public void AnimEvent_AttackEnd() => OnAttackEnded?.Invoke();
+    #endregion
+
+    /// ì´ ìœ ë‹›ì´ í”¼í•´ë¥¼ ì„±ê³µì ìœ¼ë¡œ ê°€í–ˆì„ ë•Œ í˜¸ì¶œí•´, íŒ¨ì‹œë¸Œ ë“± ë¦¬ìŠ¤ë„ˆì—ê²Œ ì•Œë¦°ë‹¤.
+    /// ë°˜ë“œì‹œ BattleUnit ì™¸ë¶€ì—ì„  ì´ ë©”ì„œë“œë§Œ í˜¸ì¶œí•˜ê³ , ì´ë²¤íŠ¸ë¥¼ ì§ì ‘ Invokeí•˜ì§€ ë§ ê²ƒ.
+    public void NotifyDealtDamage(BattleUnit victim, int damage, SkillAsset source)
+    {
+        OnDealtDamage?.Invoke(this, victim, damage, source);
+    }
+
+    private IEnumerator PlayTriggerAndWaitEnd(string trigger, float? timeoutOverride, string debugTag)
+    {
+        if (!animator)
+            yield break;
+
+        if (string.IsNullOrEmpty(trigger))
+            trigger = "Skill_1";
+
+        bool ended = false;
+        Action onEnd = () => ended = true;
+        OnAttackEnded += onEnd;
+
+        animator.ResetTrigger(trigger);  // ì„ íƒ: íŠ¸ë¦¬ê±° ê¼¬ì„ ë°©ì§€(í”„ë¡œì íŠ¸ ì „ë°˜ ì˜í–¥ ë‚®ìŒ)
+        animator.SetTrigger(trigger);
+
+        float timeout = Mathf.Max(MinTimeout, timeoutOverride ?? defaultAnimEndTimeout);
+
+        yield return null;
+
+        while (!ended && timeout > 0f)
+        {
+            timeout -= Time.deltaTime;
+
+            // ì´ë²¤íŠ¸ê°€ ëˆ„ë½ë˜ì—ˆë”ë¼ë„, í˜„ì¬ ì¬ìƒ ì¤‘ì¸ ì• ë‹ˆë©”ì´ì…˜ì´ ëë‚¬ë‹¤ë©´ ì¢…ë£Œ ì²˜ë¦¬
+            var stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+
+            // íƒœê·¸(Tag)ë¥¼ ì“°ê±°ë‚˜, ë‹¨ìˆœíˆ "Attack"ì´ë‚˜ "Casting" ë“± í•µì‹¬ ë™ì‘ ì¤‘ì¸ì§€ ì²´í¬
+            // ì—¬ê¸°ì„œëŠ” ì§„í–‰ë„ê°€ 1.0(100%)ì„ ë„˜ì—ˆê³ , Loopê°€ ì•„ë‹Œ ê²½ìš° ê°•ì œ ì¢…ë£Œ
+            if (stateInfo.normalizedTime >= 1.0f && !stateInfo.loop)
+            {
+                // íŠ¸ëœì§€ì…˜ ì¤‘ì´ ì•„ë‹ ë•Œë§Œ ì²´í¬ (íŠ¸ëœì§€ì…˜ ì¤‘ì—ëŠ” ì´ì „/ë‹¤ìŒ ìƒíƒœê°€ ì„ì„)
+                if (!animator.IsInTransition(0))
+                {
+                    // Debug.Log($"[SafetyBreak] {name} ì• ë‹ˆë©”ì´ì…˜ ì¢…ë£Œ ê°ì§€ë˜ì–´ ê°•ì œ ë„˜ê¹€.");
+                    ended = true;
+                }
+            }
+            yield return null;
+        }
+
+        OnAttackEnded -= onEnd;
+
+        if (!ended)
+        {
+            // watchdog ë°œë™: "End ì´ë²¤íŠ¸ ëˆ„ë½/ì „ì´ ë¬¸ì œ"ë¥¼ ì‹¤ì œë¡œ ì¡ì•„ë‚´ê¸° ìœ„í•œ ê²½ê³ 
+            var state = animator.GetCurrentAnimatorStateInfo(0);
+            Debug.LogWarning(
+                $"[AnimTimeout] Unit='{name}', Trigger='{trigger}', Tag='{debugTag}', " +
+                $"StateHash={state.shortNameHash}, NormalizedTime={state.normalizedTime:F2}. " +
+                $"Check AnimationEvent 'AnimEvent_AttackEnd' on the clip and transitions.");
+        }
+    }
+}

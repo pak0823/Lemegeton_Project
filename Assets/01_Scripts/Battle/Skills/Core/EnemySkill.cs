@@ -1,158 +1,158 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/Skills/Enemy/Template", fileName = "SKILL_Template")]
-public class EnemySkill : SkillAsset
-{
-    // AreaShapes ±â¹İ ÇÁ¸®¼Â (·¹°Å½Ã¿¡ ´ëÀÀ)
-    public enum AreaPresetEnemy
-    {
-        Single,
-        Horizontal3,           // °¡·Î 3Ä­
-        Vertical3,             // ¼¼·Î 3Ä­
-        Ring1_WithCenter,      // ¹İ°æ1(Áß½É Æ÷ÇÔ)
-        Donut1_NoCenter,       // ¹İ°æ1(Áß½É Á¦¿Ü: ÀÌ¿ô 6Ä­)
-        DiagU3_NE,             // ´ë°¢ 3Ä­(NEÃà)
-        DiagU3_NW,             // ´ë°¢ 3Ä­(NWÃà)
-        DiagU7_NE,             // ´ë°¢ 7Ä­(NEÃà)
-        DiagU7_NW,             // ´ë°¢ 7Ä­(NWÃà)
-        FanForwardR1           // Àü¹æ ºÎÃ¤²Ã(¹İ°æ1, Á¤¸é+ÁÂ¿ì 3Ä­)
-    }
-
-    [Header("Area Preset (AreaShapes)")]
-    public AreaPresetEnemy areaPreset = AreaPresetEnemy.Single;
-
-    [Tooltip("Diag °è¿­¿¡¼­ NEÃàÀ» ¾µÁö ¿©ºÎ")]
-    public bool diagUseNEAxis = true;
-
-    [Header("Casting Suppression")]
-    [Range(0, 3)] public int suppressionRequired = 0;  // 0ÀÌ¸é ±âÁ¸Ã³·³ Áï½Ã Äµ½½
-
-    /// <summary>
-    /// ¹Ì¸®º¸±â/ÆÇÁ¤¿ë ¹üÀ§ ¼¿ ¹İÈ¯(ÇÁ¸®¼Â¿¡ µû¶ó AreaShapes·Î À§ÀÓ)
-    /// - ÁÖÀÇ: FanForwardR1Àº Á¤¸éÀÌ ÇÊ¿äÇÏ¹Ç·Î ¿©±â¼± ¿øÇü(È¤Àº Áß½É)·Î ´Ü¼øÈ­ÇÏ°í,
-    ///   ½ÇÁ¦ Resolve¿¡¼­ Á¤¸éÀ» °è»êÇØ Á¤È®ÇÑ ¹üÀ§¸¦ »ç¿ëÇÑ´Ù.
-    /// </summary>
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
-    {
-        switch (areaPreset)
-        {
-            case AreaPresetEnemy.Single:
-                yield return originCell; yield break;
-
-            case AreaPresetEnemy.Horizontal3:
-                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineHorizontal, true))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.Vertical3:
-                foreach (var c in AreaShapes.LineVertical3(originCell))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.Ring1_WithCenter:
-                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.Ring, false))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.Donut1_NoCenter:
-                foreach (var c in AreaShapes.DonutRadius1(originCell))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.DiagU3_NE:
-                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU3, true))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.DiagU3_NW:
-                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU3, false))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.DiagU7_NE:
-                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU7, true))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.DiagU7_NW:
-                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU7, false))
-                    yield return c;
-                yield break;
-
-            case AreaPresetEnemy.FanForwardR1:
-                // ÇÁ¸®ºä ´Ü°è¿¡¼± Á¤¸é Á¤º¸°¡ ¾øÀ» ¼ö ÀÖÀ¸¹Ç·Î ¾ÈÀüÇÏ°Ô Áß½É¸¸, ¶Ç´Â ¸µ1 µîÀ¸·Î °£´Ü Ç¥½Ã
-                // ÇÊ¿äÇÏ¸é ¸µ1 Ç¥½Ã°¡ ´õ Ä£ÀıÇÔ:
-                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.Ring, false))
-                    yield return c;
-                yield break;
-        }
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (_battlemanager == null || _caster == null || _target == null) yield break;
-
-        var map = _target.CurrentMap;
-        var origin = _target.Cell;
-
-        var area = GetAreaCellsForContext(map, origin, _caster, _target);
-        var victims = _battlemanager.Grid.GetUnitsInArea(map, area);
-        _battlemanager.ExecuteSkillDamage(_caster, victims, this, map, origin); // Áß¾Ó °æ·Î(ÇÇÇØ+Àû´ë°¨)
-        yield return null;
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        if (_battlemanager == null || map == null || caster == null) yield break;
-
-        // Å¸ÀÏ ÁöÁ¤ÇüÀº Á¤¸éÀ» caster¡æoriginÀ¸·Î °è»ê
-        var area = GetAreaCellsForContext(map, originCell, caster, null);
-        var victims = _battlemanager.Grid.GetUnitsInArea(map, area);
-        _battlemanager.ExecuteSkillDamage(caster, victims, this, map, originCell);
-        yield return null;
-    }
-
-    // --------- helpers ---------
-
-    IEnumerable<Vector3Int> GetAreaCellsForContext(Tilemap map, Vector3Int originCell, BattleUnit caster, BattleUnit targetOrNull)
-    {
-        if (areaPreset != AreaPresetEnemy.FanForwardR1)
-            return GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell)); // À§ ÇÁ¸®¼Â À§ÀÓ »ç¿ë
-
-        // FanForwardR1: Á¤¸é ÃßÃâ ÈÄ AreaShapes.FanForwardR1 »ç¿ë
-        // Á¤¸é = caster¡ætarget(À¯´ÖÇü) ¶Ç´Â caster¡æorigin(Å¸ÀÏÇü)
-        Vector3 casterW = caster != null ? caster.transform.position : map.GetCellCenterWorld(originCell);
-        Vector3 aimW = (targetOrNull != null)
-            ? targetOrNull.transform.position
-            : map.GetCellCenterWorld(originCell);
-
-        Vector2 aim = (aimW - casterW);
-        if (aim.sqrMagnitude < 1e-6f) aim = Vector2.right;
-        aim.Normalize();
-
-        // ¿ùµå¿¡¼­ °¡Àå °¡±î¿î axial 6¹æÀ» °í¸§
-        var axialDirs = new[]
-        {
-            new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
-            new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
-        };
-
-        // Grid È¸Àü °í·Á(ÇÊ¿ä½Ã map.layoutGrid.transform.right/up »ç¿ëÇÏ´Â °Íµµ °¡´É)
-        Vector2 right = Vector2.right;
-        Vector2 up = Vector2.up;
-
-        int best = 0; float bestDot = float.NegativeInfinity;
-        for (int i = 0; i < axialDirs.Length; i++)
-        {
-            Vector2 dirW = axialDirs[i].x * right + axialDirs[i].y * up;
-            float d = Vector2.Dot(aim, dirW.normalized);
-            if (d > bestDot) { bestDot = d; best = i; }
-        }
-
-        return AreaShapes.FanForwardR1(originCell, axialDirs[best]);
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/Skills/Enemy/Template", fileName = "SKILL_Template")]
+public class EnemySkill : SkillAsset
+{
+    // AreaShapes ê¸°ë°˜ í”„ë¦¬ì…‹ (ë ˆê±°ì‹œì— ëŒ€ì‘)
+    public enum AreaPresetEnemy
+    {
+        Single,
+        Horizontal3,           // ê°€ë¡œ 3ì¹¸
+        Vertical3,             // ì„¸ë¡œ 3ì¹¸
+        Ring1_WithCenter,      // ë°˜ê²½1(ì¤‘ì‹¬ í¬í•¨)
+        Donut1_NoCenter,       // ë°˜ê²½1(ì¤‘ì‹¬ ì œì™¸: ì´ì›ƒ 6ì¹¸)
+        DiagU3_NE,             // ëŒ€ê° 3ì¹¸(NEì¶•)
+        DiagU3_NW,             // ëŒ€ê° 3ì¹¸(NWì¶•)
+        DiagU7_NE,             // ëŒ€ê° 7ì¹¸(NEì¶•)
+        DiagU7_NW,             // ëŒ€ê° 7ì¹¸(NWì¶•)
+        FanForwardR1           // ì „ë°© ë¶€ì±„ê¼´(ë°˜ê²½1, ì •ë©´+ì¢Œìš° 3ì¹¸)
+    }
+
+    [Header("Area Preset (AreaShapes)")]
+    public AreaPresetEnemy areaPreset = AreaPresetEnemy.Single;
+
+    [Tooltip("Diag ê³„ì—´ì—ì„œ NEì¶•ì„ ì“¸ì§€ ì—¬ë¶€")]
+    public bool diagUseNEAxis = true;
+
+    [Header("Casting Suppression")]
+    [Range(0, 3)] public int suppressionRequired = 0;  // 0ì´ë©´ ê¸°ì¡´ì²˜ëŸ¼ ì¦‰ì‹œ ìº”ìŠ¬
+
+    /// <summary>
+    /// ë¯¸ë¦¬ë³´ê¸°/íŒì •ìš© ë²”ìœ„ ì…€ ë°˜í™˜(í”„ë¦¬ì…‹ì— ë”°ë¼ AreaShapesë¡œ ìœ„ì„)
+    /// - ì£¼ì˜: FanForwardR1ì€ ì •ë©´ì´ í•„ìš”í•˜ë¯€ë¡œ ì—¬ê¸°ì„  ì›í˜•(í˜¹ì€ ì¤‘ì‹¬)ë¡œ ë‹¨ìˆœí™”í•˜ê³ ,
+    ///   ì‹¤ì œ Resolveì—ì„œ ì •ë©´ì„ ê³„ì‚°í•´ ì •í™•í•œ ë²”ìœ„ë¥¼ ì‚¬ìš©í•œë‹¤.
+    /// </summary>
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    {
+        switch (areaPreset)
+        {
+            case AreaPresetEnemy.Single:
+                yield return originCell; yield break;
+
+            case AreaPresetEnemy.Horizontal3:
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineHorizontal, true))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.Vertical3:
+                foreach (var c in AreaShapes.LineVertical3(originCell))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.Ring1_WithCenter:
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.Ring, false))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.Donut1_NoCenter:
+                foreach (var c in AreaShapes.DonutRadius1(originCell))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU3_NE:
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU3, true))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU3_NW:
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU3, false))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU7_NE:
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU7, true))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.DiagU7_NW:
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.LineDiagU7, false))
+                    yield return c;
+                yield break;
+
+            case AreaPresetEnemy.FanForwardR1:
+                // í”„ë¦¬ë·° ë‹¨ê³„ì—ì„  ì •ë©´ ì •ë³´ê°€ ì—†ì„ ìˆ˜ ìˆìœ¼ë¯€ë¡œ ì•ˆì „í•˜ê²Œ ì¤‘ì‹¬ë§Œ, ë˜ëŠ” ë§1 ë“±ìœ¼ë¡œ ê°„ë‹¨ í‘œì‹œ
+                // í•„ìš”í•˜ë©´ ë§1 í‘œì‹œê°€ ë” ì¹œì ˆí•¨:
+                foreach (var c in AreaShapes.GetCells(originCell, AreaPreset.Ring, false))
+                    yield return c;
+                yield break;
+        }
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (_battlemanager == null || _caster == null || _target == null) yield break;
+
+        var map = _target.CurrentMap;
+        var origin = _target.Cell;
+
+        var area = GetAreaCellsForContext(map, origin, _caster, _target);
+        var victims = _battlemanager.Grid.GetUnitsInArea(map, area);
+        _battlemanager.ExecuteSkillDamage(_caster, victims, this, map, origin); // ì¤‘ì•™ ê²½ë¡œ(í”¼í•´+ì ëŒ€ê°)
+        yield return null;
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        if (_battlemanager == null || map == null || caster == null) yield break;
+
+        // íƒ€ì¼ ì§€ì •í˜•ì€ ì •ë©´ì„ casterâ†’originìœ¼ë¡œ ê³„ì‚°
+        var area = GetAreaCellsForContext(map, originCell, caster, null);
+        var victims = _battlemanager.Grid.GetUnitsInArea(map, area);
+        _battlemanager.ExecuteSkillDamage(caster, victims, this, map, originCell);
+        yield return null;
+    }
+
+    // --------- helpers ---------
+
+    IEnumerable<Vector3Int> GetAreaCellsForContext(Tilemap map, Vector3Int originCell, BattleUnit caster, BattleUnit targetOrNull)
+    {
+        if (areaPreset != AreaPresetEnemy.FanForwardR1)
+            return GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell)); // ìœ„ í”„ë¦¬ì…‹ ìœ„ì„ ì‚¬ìš©
+
+        // FanForwardR1: ì •ë©´ ì¶”ì¶œ í›„ AreaShapes.FanForwardR1 ì‚¬ìš©
+        // ì •ë©´ = casterâ†’target(ìœ ë‹›í˜•) ë˜ëŠ” casterâ†’origin(íƒ€ì¼í˜•)
+        Vector3 casterW = caster != null ? caster.transform.position : map.GetCellCenterWorld(originCell);
+        Vector3 aimW = (targetOrNull != null)
+            ? targetOrNull.transform.position
+            : map.GetCellCenterWorld(originCell);
+
+        Vector2 aim = (aimW - casterW);
+        if (aim.sqrMagnitude < 1e-6f) aim = Vector2.right;
+        aim.Normalize();
+
+        // ì›”ë“œì—ì„œ ê°€ì¥ ê°€ê¹Œìš´ axial 6ë°©ì„ ê³ ë¦„
+        var axialDirs = new[]
+        {
+            new Vector2Int( 1, 0), new Vector2Int( 1,-1), new Vector2Int( 0,-1),
+            new Vector2Int(-1, 0), new Vector2Int(-1, 1), new Vector2Int( 0, 1),
+        };
+
+        // Grid íšŒì „ ê³ ë ¤(í•„ìš”ì‹œ map.layoutGrid.transform.right/up ì‚¬ìš©í•˜ëŠ” ê²ƒë„ ê°€ëŠ¥)
+        Vector2 right = Vector2.right;
+        Vector2 up = Vector2.up;
+
+        int best = 0; float bestDot = float.NegativeInfinity;
+        for (int i = 0; i < axialDirs.Length; i++)
+        {
+            Vector2 dirW = axialDirs[i].x * right + axialDirs[i].y * up;
+            float d = Vector2.Dot(aim, dirW.normalized);
+            if (d > bestDot) { bestDot = d; best = i; }
+        }
+
+        return AreaShapes.FanForwardR1(originCell, axialDirs[best]);
+    }
+}

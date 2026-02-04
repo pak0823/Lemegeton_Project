@@ -1,14 +1,14 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Waves/Wave Set")]
-public class WaveSet : ScriptableObject
-{
-    [System.Serializable]
-    public class WaveDef
-    {
-        public GameObject enemyLayoutPrefab; // Àû À¯´ÖµéÀ» ¹Ì¸® ¹èÄ¡ÇØ µĞ ÇÁ¸®ÆÕ(ÀÚ½Ä¿¡ BattleUnit)
-        public string label;                 // (¿É¼Ç) ¡°Á¤¿¹ Á¤Âû´ë¡± µî
-    }
-    public List<WaveDef> waves = new();
-}
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Waves/Wave Set")]
+public class WaveSet : ScriptableObject
+{
+    [System.Serializable]
+    public class WaveDef
+    {
+        public GameObject enemyLayoutPrefab; // ì  ìœ ë‹›ë“¤ì„ ë¯¸ë¦¬ ë°°ì¹˜í•´ ë‘” í”„ë¦¬íŒ¹(ìì‹ì— BattleUnit)
+        public string label;                 // (ì˜µì…˜) â€œì •ì˜ˆ ì •ì°°ëŒ€â€ ë“±
+    }
+    public List<WaveDef> waves = new();
+}

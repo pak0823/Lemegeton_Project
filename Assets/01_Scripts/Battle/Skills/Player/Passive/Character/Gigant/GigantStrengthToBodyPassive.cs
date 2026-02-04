@@ -1,69 +1,69 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-/// <summary>
-/// ÇöÀç À¯´ÖÀÇ ±Ù·Â¿¡ ºñ·ÊÇØ¼­ ½ÅÃ¼(BDY)¸¦ ¿Ã·ÁÁÖ´Â ÆĞ½Ãºê.
-/// ¿¹: ratio = 0.2 ÀÌ°í PhysicalDamage = 50 ÀÌ¸é, BDY +10.
-/// BDY°¡ HP °ø½Ä¿¡ ¹İ¿µµÇ¾î ÀÖ´Ù¸é MaxHPµµ ÀÚµ¿À¸·Î Áõ°¡.
-/// </summary>
-[CreateAssetMenu(menuName = "Battle/Passives/Gigant/Passive_1", fileName = "Passive_StrengthToBody")]
-public class GigantStrengthToBodyPassive : PassiveAsset
-{
-    [Header("Config")]
-    [Tooltip("±Ù·Â ¡æ ½ÅÃ¼ ÀüÈ¯ °è¼ö. ¿¹: 0.2 ¸é PhysicalDamage ¡¿ 0.2 ¸¸Å­ BDY Áõ°¡")]
-    [Range(0f, 10f)]
-    public float ratio = 0.2f;
-
-    // SO ÇÏ³ª¸¦ ¿©·¯ À¯´ÖÀÌ °øÀ¯ÇÏ¹Ç·Î, À¯´Öº°·Î Àû¿ëÇÑ BDY º¸³Ê½º¸¦ ±â¾ïÇØ¾ß ÇÔ
-    private readonly Dictionary<BattleUnit, int> _bonusBdyByUnit = new();
-
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null) return;
-
-        // ÇöÀç ±Ù·Â(»óÅÂ/¹öÇÁ±îÁö ¹İ¿µµÈ °ª)À» ±âÁØÀ¸·Î °è»ê
-        float curPhysical = owner.STR;
-        int bonusBDY = Mathf.RoundToInt(curPhysical * ratio);
-
-        if (bonusBDY <= 0)
-            return;
-
-        // ÀÌ¹Ì ºÙ¾îÀÖ´ø °æ¿ì Áßº¹ Àû¿ë ¹æÁö (ÀÌ·Ğ»ó SetPassiveEnabled°¡ ¸·¾ÆÁÖ±ä ÇÔ)
-        if (_bonusBdyByUnit.ContainsKey(owner))
-            return;
-
-        _bonusBdyByUnit[owner] = bonusBDY;
-
-        // BDY Áõ°¡ Àü HP ±âÁØ ±â·Ï
-        float oldMaxHP = owner.MaxHP;
-        float oldHP = owner.HP;
-
-        // BattleUnit ÂÊ¿¡ BDY º¸³Ê½º¸¦ ´õÇØÁÖ´Â helper¸¦ µû·Î µÎ°í È£Ãâ
-        owner.AddBodyBonusFromPassive(bonusBDY);
-
-        // BDY Áõ°¡ ÈÄ »õ·Î¿î MaxHP °è»êµÊ
-        float newMaxHP = owner.MaxHP;
-
-        // Áõ°¡ÇÑ ¸¸Å­ ÇöÀç HPµµ ¿Ã·ÁÁÜ
-        float deltaHP = newMaxHP - oldMaxHP;
-        if (deltaHP > 0)
-        {
-            owner.Heal(deltaHP); // ³»ºÎÀûÀ¸·Î MaxHP ³ÑÁö ¾ÊÀ½
-        }
-
-        // ÆĞ½Ãºê ¹ßµ¿ ¶óº§ (ShootingInsightPassive¿¡¼­ ¾²´ø °Í°ú µ¿ÀÏ ÆĞÅÏ)
-        owner.AnnouncePassive(displayName);
-    }
-
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null) return;
-
-        if (_bonusBdyByUnit.TryGetValue(owner, out int bonusBDY))
-        {
-            // ºÙÀÏ ¶§ ´õÇß´ø ¸¸Å­ »©¼­ ¿ø»óº¹±¸
-            owner.AddBodyBonusFromPassive(-bonusBDY);
-            _bonusBdyByUnit.Remove(owner);
-        }
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// í˜„ì¬ ìœ ë‹›ì˜ ê·¼ë ¥ì— ë¹„ë¡€í•´ì„œ ì‹ ì²´(BDY)ë¥¼ ì˜¬ë ¤ì£¼ëŠ” íŒ¨ì‹œë¸Œ.
+/// ì˜ˆ: ratio = 0.2 ì´ê³  PhysicalDamage = 50 ì´ë©´, BDY +10.
+/// BDYê°€ HP ê³µì‹ì— ë°˜ì˜ë˜ì–´ ìˆë‹¤ë©´ MaxHPë„ ìë™ìœ¼ë¡œ ì¦ê°€.
+/// </summary>
+[CreateAssetMenu(menuName = "Battle/Passives/Gigant/Passive_1", fileName = "Passive_StrengthToBody")]
+public class GigantStrengthToBodyPassive : PassiveAsset
+{
+    [Header("Config")]
+    [Tooltip("ê·¼ë ¥ â†’ ì‹ ì²´ ì „í™˜ ê³„ìˆ˜. ì˜ˆ: 0.2 ë©´ PhysicalDamage Ã— 0.2 ë§Œí¼ BDY ì¦ê°€")]
+    [Range(0f, 10f)]
+    public float ratio = 0.2f;
+
+    // SO í•˜ë‚˜ë¥¼ ì—¬ëŸ¬ ìœ ë‹›ì´ ê³µìœ í•˜ë¯€ë¡œ, ìœ ë‹›ë³„ë¡œ ì ìš©í•œ BDY ë³´ë„ˆìŠ¤ë¥¼ ê¸°ì–µí•´ì•¼ í•¨
+    private readonly Dictionary<BattleUnit, int> _bonusBdyByUnit = new();
+
+    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null) return;
+
+        // í˜„ì¬ ê·¼ë ¥(ìƒíƒœ/ë²„í”„ê¹Œì§€ ë°˜ì˜ëœ ê°’)ì„ ê¸°ì¤€ìœ¼ë¡œ ê³„ì‚°
+        float curPhysical = owner.STR;
+        int bonusBDY = Mathf.RoundToInt(curPhysical * ratio);
+
+        if (bonusBDY <= 0)
+            return;
+
+        // ì´ë¯¸ ë¶™ì–´ìˆë˜ ê²½ìš° ì¤‘ë³µ ì ìš© ë°©ì§€ (ì´ë¡ ìƒ SetPassiveEnabledê°€ ë§‰ì•„ì£¼ê¸´ í•¨)
+        if (_bonusBdyByUnit.ContainsKey(owner))
+            return;
+
+        _bonusBdyByUnit[owner] = bonusBDY;
+
+        // BDY ì¦ê°€ ì „ HP ê¸°ì¤€ ê¸°ë¡
+        float oldMaxHP = owner.MaxHP;
+        float oldHP = owner.HP;
+
+        // BattleUnit ìª½ì— BDY ë³´ë„ˆìŠ¤ë¥¼ ë”í•´ì£¼ëŠ” helperë¥¼ ë”°ë¡œ ë‘ê³  í˜¸ì¶œ
+        owner.AddBodyBonusFromPassive(bonusBDY);
+
+        // BDY ì¦ê°€ í›„ ìƒˆë¡œìš´ MaxHP ê³„ì‚°ë¨
+        float newMaxHP = owner.MaxHP;
+
+        // ì¦ê°€í•œ ë§Œí¼ í˜„ì¬ HPë„ ì˜¬ë ¤ì¤Œ
+        float deltaHP = newMaxHP - oldMaxHP;
+        if (deltaHP > 0)
+        {
+            owner.Heal(deltaHP); // ë‚´ë¶€ì ìœ¼ë¡œ MaxHP ë„˜ì§€ ì•ŠìŒ
+        }
+
+        // íŒ¨ì‹œë¸Œ ë°œë™ ë¼ë²¨ (ShootingInsightPassiveì—ì„œ ì“°ë˜ ê²ƒê³¼ ë™ì¼ íŒ¨í„´)
+        owner.AnnouncePassive(displayName);
+    }
+
+    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null) return;
+
+        if (_bonusBdyByUnit.TryGetValue(owner, out int bonusBDY))
+        {
+            // ë¶™ì¼ ë•Œ ë”í–ˆë˜ ë§Œí¼ ë¹¼ì„œ ì›ìƒë³µêµ¬
+            owner.AddBodyBonusFromPassive(-bonusBDY);
+            _bonusBdyByUnit.Remove(owner);
+        }
+    }
+}

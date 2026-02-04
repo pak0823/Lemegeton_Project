@@ -1,200 +1,200 @@
-using Project.UI;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class CampOptionPage : MonoBehaviour
-{
-    [Header("Buttons")]
-    [SerializeField] private Button resumeButton; // °ÔÀÓÀ¸·Î µ¹¾Æ°¡±â (Ä·ÇÁ ´İ±â)
-    [SerializeField] private Button titleButton;  // Å¸ÀÌÆ² È­¸éÀ¸·Î
-    [SerializeField] private Button quitButton;   // °ÔÀÓ Á¾·á
-
-    [Header("Focus Container")]
-    [SerializeField] private RectTransform buttonsContainer; // ¹öÆ°µéÀÌ ¸ğ¿©ÀÖ´Â ºÎ¸ğ (ButtonList)
-    [SerializeField] private bool autoCollect = true;        // ÀÚ½Ä ¹öÆ° ÀÚµ¿ ¼öÁı ¿©ºÎ
-    [SerializeField] private bool excludeResumeFromFocus = false; // "µ¹¾Æ°¡±â" ¹öÆ°À» Æ÷Ä¿½º¿¡¼­ »¬Áö ¿©ºÎ
-
-    [Header("Focus Arrow")]
-    [SerializeField] private RectTransform focusArrow;              // È­»ìÇ¥ ÀÌ¹ÌÁö
-    [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f); // È­»ìÇ¥ À§Ä¡ ¿ÀÇÁ¼Â
-
-    [Header("Key bindings")]
-    private KeyCode upKey = KeyCode.W;
-    private KeyCode downKey = KeyCode.S;
-    private KeyCode submitKey = KeyCode.E;      // ¼±ÅÃ
-    private KeyCode submit_V2Key = KeyCode.Return;
-    private KeyCode cancelKey = KeyCode.Q;      // Ãë¼Ò(µÚ·Î°¡±â)
-
-    private readonly List<Button> focusButtons = new List<Button>();
-    private int focusIndex = 0;
-
-    // ÀÌ ÄÄÆ÷³ÍÆ®°¡ ÄÑÁú ¶§¸¶´Ù(ÅÇÀÌ ¼±ÅÃµÉ ¶§¸¶´Ù) ½ÇÇàµÊ
-    private void OnEnable()
-    {
-        // 1. ¹öÆ° ¸ñ·Ï °»½Å
-        RebuildFocusList();
-
-        // 2. ·¹ÀÌ¾Æ¿ô ¾ÈÁ¤È­ ÈÄ Æ÷Ä¿½º ÃÊ±âÈ­
-        StartCoroutine(ReinitFocusNextFrame());
-    }
-
-    private void OnDisable()
-    {
-        // ÆäÀÌÁö ²¨Áú ¶§ È­»ìÇ¥µµ ¼û±è
-        if (focusArrow) focusArrow.gameObject.SetActive(false);
-    }
-
-    private void Start()
-    {
-        // ¹öÆ° ÀÌº¥Æ® ¿¬°á
-        if (resumeButton)
-            resumeButton.onClick.AddListener(OnBtnResume);
-
-        if (titleButton)
-            titleButton.onClick.AddListener(OnBtnReturnTitle);
-
-        if (quitButton)
-            quitButton.onClick.AddListener(OnBtnQuitGame);
-
-        // È­»ìÇ¥ ºÎ¸ğ ¼³Á¤ (¾ÈÀüÀåÄ¡)
-        if (focusArrow && buttonsContainer && focusArrow.parent != buttonsContainer)
-            focusArrow.SetParent(buttonsContainer, worldPositionStays: false);
-    }
-
-    private void Update()
-    {
-        // ÆäÀÌÁö°¡ ÄÑÁ® ÀÖÀ» ¶§¸¸ ÀÔ·Â ¹ŞÀ½
-        // (CampUIManager°¡ ÄÑÁ® ÀÖ¾îµµ ´Ù¸¥ ÅÇÀÌ¸é ÀÌ ¿ÀºêÁ§Æ®´Â ºñÈ°¼º »óÅÂ¶ó Update ¾È µ¼ -> ¾ÈÀüÇÔ)
-
-        // À§¾Æ·¡ ÀÌµ¿
-        if (Input.GetKeyDown(upKey)) MoveFocus(-1);
-        if (Input.GetKeyDown(downKey)) MoveFocus(+1);
-
-        // ¼±ÅÃ (E / Enter)
-        if (Input.GetKeyDown(submitKey) || Input.GetKeyDown(submit_V2Key))
-        {
-            var b = GetFocusedButton();
-            if (b != null && b.interactable) b.onClick.Invoke();
-        }
-
-        // Ãë¼Ò (Q) -> Ä·ÇÁ ¸Ş´º ´İ±â
-        if (Input.GetKeyDown(cancelKey))
-        {
-            OnBtnResume();
-        }
-    }
-
-    // --- ±â´É ±¸Çö ---
-
-    public void OnBtnResume()
-    {
-        // "µ¹¾Æ°¡±â" ´©¸£¸é Ä·ÇÁ Ã¢ ÀÚÃ¼¸¦ ´İÀ½
-        if (CampUIManager.Instance != null)
-            CampUIManager.Instance.Hide();
-    }
-
-    public void OnBtnReturnTitle()
-    {
-        // Å¸ÀÌÆ²·Î ÀÌµ¿
-        // ÀÏ½ÃÁ¤Áö ÇØÁ¦´Â CampUIManager°¡ ´İÈú ¶§ ÇÏ°Å³ª, ¾À ÀüÈ¯ ½Ã Ç®¸®µµ·Ï Ã³¸®
-        GameSpeedController.Instance?.ReleasePause();
-
-        // Ä·ÇÁ UI °­Á¦ ´İ±â (»óÅÂ ÃÊ±âÈ­)
-        if (CampUIManager.Instance != null)
-            CampUIManager.Instance.Hide();
-
-        SceneTransitionManager.Instance.FadeToScene("TitleScene");
-    }
-
-    public void OnBtnQuitGame()
-    {
-        Application.Quit();
-#if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-#endif
-    }
-
-    // --- Æ÷Ä¿½º ·ÎÁ÷ (±âÁ¸ À¯Áö) ---
-
-    void RebuildFocusList()
-    {
-        focusButtons.Clear();
-        if (!buttonsContainer) return;
-
-        if (autoCollect)
-        {
-            var found = buttonsContainer.GetComponentsInChildren<Button>(false) // È°¼º °´Ã¼¸¸
-                        .Where(b => b != null && b.interactable)
-                        .OrderBy(b => b.transform.GetSiblingIndex()) // ¼ø¼­´ë·Î Á¤·Ä
-                        .ToList();
-
-            if (excludeResumeFromFocus && resumeButton)
-                found.Remove(resumeButton);
-
-            focusButtons.AddRange(found);
-        }
-
-        // ÀÎµ¦½º ÃÊ±âÈ­
-        focusIndex = 0;
-    }
-
-    IEnumerator ReinitFocusNextFrame()
-    {
-        yield return null; // ÇÑ ÇÁ·¹ÀÓ ´ë±â (UI ·¹ÀÌ¾Æ¿ô °»½Å ´ë±â)
-        RebuildFocusList();
-
-        if (focusButtons.Count > 0)
-        {
-            SetFocus(0);
-        }
-        else
-        {
-            if (focusArrow) focusArrow.gameObject.SetActive(false);
-        }
-    }
-
-    void MoveFocus(int delta)
-    {
-        if (focusButtons.Count == 0) return;
-
-        int newIndex = Mathf.Clamp(focusIndex + delta, 0, focusButtons.Count - 1);
-        if (newIndex != focusIndex)
-        {
-            SetFocus(newIndex);
-        }
-    }
-
-    void SetFocus(int index)
-    {
-        focusIndex = index;
-        UpdateArrowPosition();
-    }
-
-    Button GetFocusedButton()
-    {
-        if (focusButtons.Count == 0) return null;
-        return focusButtons[focusIndex];
-    }
-
-    void UpdateArrowPosition()
-    {
-        if (!focusArrow || focusButtons.Count == 0) return;
-
-        var targetBtn = GetFocusedButton();
-        if (!targetBtn)
-        {
-            focusArrow.gameObject.SetActive(false);
-            return;
-        }
-
-        // È­»ìÇ¥ ÄÑ°í À§Ä¡ ÀÌµ¿
-        if (!focusArrow.gameObject.activeSelf)
-            focusArrow.gameObject.SetActive(true);
-
-        var targetRect = targetBtn.transform as RectTransform;
-        focusArrow.anchoredPosition = targetRect.anchoredPosition + arrowOffset;
-    }
+using Project.UI;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class CampOptionPage : MonoBehaviour
+{
+    [Header("Buttons")]
+    [SerializeField] private Button resumeButton; // ê²Œì„ìœ¼ë¡œ ëŒì•„ê°€ê¸° (ìº í”„ ë‹«ê¸°)
+    [SerializeField] private Button titleButton;  // íƒ€ì´í‹€ í™”ë©´ìœ¼ë¡œ
+    [SerializeField] private Button quitButton;   // ê²Œì„ ì¢…ë£Œ
+
+    [Header("Focus Container")]
+    [SerializeField] private RectTransform buttonsContainer; // ë²„íŠ¼ë“¤ì´ ëª¨ì—¬ìˆëŠ” ë¶€ëª¨ (ButtonList)
+    [SerializeField] private bool autoCollect = true;        // ìì‹ ë²„íŠ¼ ìë™ ìˆ˜ì§‘ ì—¬ë¶€
+    [SerializeField] private bool excludeResumeFromFocus = false; // "ëŒì•„ê°€ê¸°" ë²„íŠ¼ì„ í¬ì»¤ìŠ¤ì—ì„œ ëº„ì§€ ì—¬ë¶€
+
+    [Header("Focus Arrow")]
+    [SerializeField] private RectTransform focusArrow;              // í™”ì‚´í‘œ ì´ë¯¸ì§€
+    [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f); // í™”ì‚´í‘œ ìœ„ì¹˜ ì˜¤í”„ì…‹
+
+    [Header("Key bindings")]
+    private KeyCode upKey = KeyCode.W;
+    private KeyCode downKey = KeyCode.S;
+    private KeyCode submitKey = KeyCode.E;      // ì„ íƒ
+    private KeyCode submit_V2Key = KeyCode.Return;
+    private KeyCode cancelKey = KeyCode.Q;      // ì·¨ì†Œ(ë’¤ë¡œê°€ê¸°)
+
+    private readonly List<Button> focusButtons = new List<Button>();
+    private int focusIndex = 0;
+
+    // ì´ ì»´í¬ë„ŒíŠ¸ê°€ ì¼œì§ˆ ë•Œë§ˆë‹¤(íƒ­ì´ ì„ íƒë  ë•Œë§ˆë‹¤) ì‹¤í–‰ë¨
+    private void OnEnable()
+    {
+        // 1. ë²„íŠ¼ ëª©ë¡ ê°±ì‹ 
+        RebuildFocusList();
+
+        // 2. ë ˆì´ì•„ì›ƒ ì•ˆì •í™” í›„ í¬ì»¤ìŠ¤ ì´ˆê¸°í™”
+        StartCoroutine(ReinitFocusNextFrame());
+    }
+
+    private void OnDisable()
+    {
+        // í˜ì´ì§€ êº¼ì§ˆ ë•Œ í™”ì‚´í‘œë„ ìˆ¨ê¹€
+        if (focusArrow) focusArrow.gameObject.SetActive(false);
+    }
+
+    private void Start()
+    {
+        // ë²„íŠ¼ ì´ë²¤íŠ¸ ì—°ê²°
+        if (resumeButton)
+            resumeButton.onClick.AddListener(OnBtnResume);
+
+        if (titleButton)
+            titleButton.onClick.AddListener(OnBtnReturnTitle);
+
+        if (quitButton)
+            quitButton.onClick.AddListener(OnBtnQuitGame);
+
+        // í™”ì‚´í‘œ ë¶€ëª¨ ì„¤ì • (ì•ˆì „ì¥ì¹˜)
+        if (focusArrow && buttonsContainer && focusArrow.parent != buttonsContainer)
+            focusArrow.SetParent(buttonsContainer, worldPositionStays: false);
+    }
+
+    private void Update()
+    {
+        // í˜ì´ì§€ê°€ ì¼œì ¸ ìˆì„ ë•Œë§Œ ì…ë ¥ ë°›ìŒ
+        // (CampUIManagerê°€ ì¼œì ¸ ìˆì–´ë„ ë‹¤ë¥¸ íƒ­ì´ë©´ ì´ ì˜¤ë¸Œì íŠ¸ëŠ” ë¹„í™œì„± ìƒíƒœë¼ Update ì•ˆ ë” -> ì•ˆì „í•¨)
+
+        // ìœ„ì•„ë˜ ì´ë™
+        if (Input.GetKeyDown(upKey)) MoveFocus(-1);
+        if (Input.GetKeyDown(downKey)) MoveFocus(+1);
+
+        // ì„ íƒ (E / Enter)
+        if (Input.GetKeyDown(submitKey) || Input.GetKeyDown(submit_V2Key))
+        {
+            var b = GetFocusedButton();
+            if (b != null && b.interactable) b.onClick.Invoke();
+        }
+
+        // ì·¨ì†Œ (Q) -> ìº í”„ ë©”ë‰´ ë‹«ê¸°
+        if (Input.GetKeyDown(cancelKey))
+        {
+            OnBtnResume();
+        }
+    }
+
+    // --- ê¸°ëŠ¥ êµ¬í˜„ ---
+
+    public void OnBtnResume()
+    {
+        // "ëŒì•„ê°€ê¸°" ëˆ„ë¥´ë©´ ìº í”„ ì°½ ìì²´ë¥¼ ë‹«ìŒ
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.Hide();
+    }
+
+    public void OnBtnReturnTitle()
+    {
+        // íƒ€ì´í‹€ë¡œ ì´ë™
+        // ì¼ì‹œì •ì§€ í•´ì œëŠ” CampUIManagerê°€ ë‹«í ë•Œ í•˜ê±°ë‚˜, ì”¬ ì „í™˜ ì‹œ í’€ë¦¬ë„ë¡ ì²˜ë¦¬
+        GameSpeedController.Instance?.ReleasePause();
+
+        // ìº í”„ UI ê°•ì œ ë‹«ê¸° (ìƒíƒœ ì´ˆê¸°í™”)
+        if (CampUIManager.Instance != null)
+            CampUIManager.Instance.Hide();
+
+        SceneTransitionManager.Instance.FadeToScene("TitleScene");
+    }
+
+    public void OnBtnQuitGame()
+    {
+        Application.Quit();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
+    }
+
+    // --- í¬ì»¤ìŠ¤ ë¡œì§ (ê¸°ì¡´ ìœ ì§€) ---
+
+    void RebuildFocusList()
+    {
+        focusButtons.Clear();
+        if (!buttonsContainer) return;
+
+        if (autoCollect)
+        {
+            var found = buttonsContainer.GetComponentsInChildren<Button>(false) // í™œì„± ê°ì²´ë§Œ
+                        .Where(b => b != null && b.interactable)
+                        .OrderBy(b => b.transform.GetSiblingIndex()) // ìˆœì„œëŒ€ë¡œ ì •ë ¬
+                        .ToList();
+
+            if (excludeResumeFromFocus && resumeButton)
+                found.Remove(resumeButton);
+
+            focusButtons.AddRange(found);
+        }
+
+        // ì¸ë±ìŠ¤ ì´ˆê¸°í™”
+        focusIndex = 0;
+    }
+
+    IEnumerator ReinitFocusNextFrame()
+    {
+        yield return null; // í•œ í”„ë ˆì„ ëŒ€ê¸° (UI ë ˆì´ì•„ì›ƒ ê°±ì‹  ëŒ€ê¸°)
+        RebuildFocusList();
+
+        if (focusButtons.Count > 0)
+        {
+            SetFocus(0);
+        }
+        else
+        {
+            if (focusArrow) focusArrow.gameObject.SetActive(false);
+        }
+    }
+
+    void MoveFocus(int delta)
+    {
+        if (focusButtons.Count == 0) return;
+
+        int newIndex = Mathf.Clamp(focusIndex + delta, 0, focusButtons.Count - 1);
+        if (newIndex != focusIndex)
+        {
+            SetFocus(newIndex);
+        }
+    }
+
+    void SetFocus(int index)
+    {
+        focusIndex = index;
+        UpdateArrowPosition();
+    }
+
+    Button GetFocusedButton()
+    {
+        if (focusButtons.Count == 0) return null;
+        return focusButtons[focusIndex];
+    }
+
+    void UpdateArrowPosition()
+    {
+        if (!focusArrow || focusButtons.Count == 0) return;
+
+        var targetBtn = GetFocusedButton();
+        if (!targetBtn)
+        {
+            focusArrow.gameObject.SetActive(false);
+            return;
+        }
+
+        // í™”ì‚´í‘œ ì¼œê³  ìœ„ì¹˜ ì´ë™
+        if (!focusArrow.gameObject.activeSelf)
+            focusArrow.gameObject.SetActive(true);
+
+        var targetRect = targetBtn.transform as RectTransform;
+        focusArrow.anchoredPosition = targetRect.anchoredPosition + arrowOffset;
+    }
 }

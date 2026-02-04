@@ -1,244 +1,244 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public class InteractionHintUI : MonoBehaviour
-{
-    public static InteractionHintUI Instance { get; private set; }
-
-    [Header("Follow")]
-    [SerializeField] Transform followTarget;   // ∫∏≈Î Player
-    [SerializeField] Camera cam;
-
-    [Header("Root")]
-    [SerializeField] CanvasGroup group;
-
-    [Header("Survey")]
-    [SerializeField] GameObject surveyRoot;
-    [SerializeField] RectTransform surveyRect;
-    [SerializeField] Text surveyLabel;
-    [SerializeField] Vector2 defaultSurveyOffset = new Vector2(60f, 0f); // ±‚∫ª »˘∆Æ ¿ßƒ°
-    Vector2 _surveyOffset;   // «ˆ¿Á ¿˚øÎ¡ﬂ
-
-    [Header("Communication")]
-    [SerializeField] GameObject commRoot;
-    [SerializeField] Text commLabel;
-    [SerializeField] RectTransform commRect;
-    [SerializeField] Vector2 defaultCommOffset = new Vector2(0f, 80f);  // ±‚∫ª »˘∆Æ ¿ßƒ°
-    Vector2 _commOffset;     // «ˆ¿Á ¿˚øÎ¡ﬂ
-
-    [Header("Cancel")]
-    [SerializeField] GameObject cancelRoot;
-    [SerializeField] Text cancelLabel;
-    [SerializeField] RectTransform cancelRect;
-    [SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // ±‚∫ª »˘∆Æ ¿ßƒ°
-    Vector2 _cancelOffset;   // «ˆ¿Á ¿˚øÎ¡ﬂ
-
-    RectTransform rootRect;
-    Canvas rootCanvas;
-
-    public void ShowSurveyAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowSurvey(); }
-    public void ShowSurveyAt(Transform t, string label)
-    {
-        BindFollow(t);
-        SetOffsetsFrom(t);
-
-        if (surveyLabel) surveyLabel.text = label;
-        if (surveyRoot) surveyRoot.SetActive(true);
-
-        // « ø‰ Ω√ ±‚¡∏ comm/cancel ªÛ≈¬¥¬ »£√‚«œ¥¬ ¬ ø°º≠ ¡¶æÓ
-        ShowRoot();
-    }
-
-    public void ShowCommunicationAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowCommunication(); }
-    public void ShowCommunicationAt(Transform t, string label)
-    {
-        BindFollow(t);
-        SetOffsetsFrom(t);
-
-        if (commLabel) commLabel.text = label;
-        if (commRoot) commRoot.SetActive(true);
-
-        ShowRoot();
-    }
-    public void ShowCancelAt(Transform t) { BindFollow(t);SetOffsetsFrom(t); ShowCancel(); }
-    public void ShowBothAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowBoth(); }
-
-    void Awake()
-    {
-        if(Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-
-            rootRect = transform as RectTransform;
-        rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
-        if (!cam) cam = FindAnyObjectByType<Camera>();
-        HideAll();
-        _surveyOffset = defaultSurveyOffset;
-        _commOffset = defaultCommOffset;
-        _cancelOffset = defaultCancelOffset;
-    }
-
-    void LateUpdate()
-    {
-        if (!group || group.alpha <= 0f || !followTarget || !cam) return;
-
-        var sp = cam.WorldToScreenPoint(followTarget.position);
-
-        if (!rootRect) rootRect = transform as RectTransform;
-        if (!rootCanvas) rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
-
-        if (rootCanvas && rootRect)
-        {
-            if (rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
-            {
-                // ø¿πˆ∑π¿Ã: Ω∫≈©∏∞ ¡¬«• ±◊¥Î∑Œ
-                rootRect.position = sp;
-            }
-            else
-            {
-                // ƒ´∏ﬁ∂Û/ø˘µÂ Ω∫∆‰¿ÃΩ∫: ∑Œƒ√ æﬁƒø ¡¬«•∑Œ ∫Ø»Ø
-                RectTransform canvasRect = rootCanvas.transform as RectTransform;
-                Vector2 lp;
-                RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                    canvasRect, sp,
-                    rootCanvas.renderMode == RenderMode.ScreenSpaceCamera ? rootCanvas.worldCamera : cam,
-                    out lp);
-                rootRect.anchoredPosition = lp;
-            }
-        }
-
-        // ≈∞∫∞ ø¿«¡º¬¿∫ ±‚¡∏√≥∑≥ ¿Ø¡ˆ
-        if (surveyRoot && surveyRoot.activeSelf && surveyRect) surveyRect.anchoredPosition = _surveyOffset;
-        if (commRoot && commRoot.activeSelf && commRect) commRect.anchoredPosition = _commOffset;
-        if (cancelRoot && cancelRoot.activeSelf && cancelRect) cancelRect.anchoredPosition = _cancelOffset;
-    }
-    void SetOffsetsFrom(Transform t)
-    {
-        // øÏº± ∞≥√º¿« HintAnchor∞° ¿÷¿∏∏È ±◊∞Õ¿ª ªÁøÎ
-        var anchor = t ? t.GetComponent<HintAnchor>() : null;
-        if (anchor)
-        {
-            _surveyOffset = anchor.surveyOffset;
-            _commOffset = anchor.commOffset;
-            _cancelOffset = anchor.cancelOffset;    //surveyOffset∞˙ ∞∞¿∫ ¿ßƒ°∏¶ ªÁøÎ«œ±‚ø° ±◊¥Î∑Œ ªÁøÎ
-            return;
-        }
-        // æ¯¿∏∏È ±‚∫ª∞™
-        _surveyOffset = defaultSurveyOffset;
-        _commOffset = defaultCommOffset;
-        _cancelOffset = defaultCancelOffset;
-    }
-
-    public void SetOffsets(Vector2? survey = null, Vector2? comm = null)
-    {
-        _surveyOffset = survey ?? defaultSurveyOffset;
-        _commOffset = comm ?? defaultCommOffset;
-        _cancelOffset = survey ?? defaultCancelOffset;
-    }
-
-    void ResetOffsets()
-    {
-        _surveyOffset = defaultSurveyOffset;
-        _commOffset = defaultCommOffset;
-        _cancelOffset = defaultCancelOffset;
-    }
-
-    public void BindFollow(Transform t) => followTarget = t;
-
-    public void ShowSurvey()
-    {
-        if (surveyLabel) surveyLabel.text = "¡∂ªÁ";
-        if (surveyRoot) surveyRoot.SetActive(true);
-        ShowRoot();
-    }
-    public void ShowCommunication()
-    {
-        if (commLabel) commLabel.text = "∞¸¬˚";
-        if (commRoot) commRoot.SetActive(true);
-        ShowRoot();
-    }
-    public void ShowCancel()
-    {
-        if (cancelLabel) cancelLabel.text = "√Îº“";
-        if (cancelRoot) cancelRoot.SetActive(true);
-        ShowRoot();
-    }
-
-    public void ShowBoth()
-    {
-        ShowSurvey();   //¡∂ªÁ
-        ShowCommunication();    //∞¸¬˚
-    }
-
-    public void HideBoth()
-    {
-        HideSurvey();
-        HideCommunication();
-    }
-
-    public void ShowPushCancelAt(Transform t)
-    {
-        BindFollow(t);
-        SetOffsetsFrom(t);
-
-        // Survey πˆ∆∞¿ª "π–±‚"∑Œ ¿ÁªÁøÎ
-        if (surveyLabel) surveyLabel.text = "π–±‚";
-        if (surveyRoot) surveyRoot.SetActive(true);
-
-        // Communication¿∫ º˚±Ë(2πˆ∆∞∏∏)
-        if (commRoot) commRoot.SetActive(false);
-
-        // Cancel¿∫ ƒ‘
-        if (cancelLabel) cancelLabel.text = "√Îº“";
-        if (cancelRoot) cancelRoot.SetActive(true);
-
-        ShowRoot();
-    }
-
-    public void ResetSurveyLabel()
-    {
-        if (surveyLabel) surveyLabel.text = "¡∂ªÁ";
-    }
-
-    public void HideSurvey() { if (surveyRoot) surveyRoot.SetActive(false); TryHideRoot(); }
-    public void HideCommunication() { if (commRoot) commRoot.SetActive(false); TryHideRoot(); }
-    public void HideCancel() { if (cancelRoot) cancelRoot.SetActive(false);TryHideRoot(); }
-    public void HideAll()
-    {
-        if (surveyRoot) surveyRoot.SetActive(false);
-        if (commRoot) commRoot.SetActive(false);
-        if (cancelRoot) cancelRoot.SetActive(false);
-        if (group) { group.alpha = 0f; group.blocksRaycasts = false; group.interactable = false; }
-        ResetOffsets();
-    }
-
-    void ShowRoot()
-    {
-        if (!group) return;
-        group.alpha = 1f; 
-        group.blocksRaycasts = true; 
-        group.interactable = true;
-    }
-    void TryHideRoot()
-    {
-        if (!group) return;
-        bool any = (surveyRoot && surveyRoot.activeSelf) || (commRoot && commRoot.activeSelf) || (cancelRoot && cancelRoot.activeSelf);
-        if (!any) HideAll();
-    }
-
-    // === UI πˆ∆∞ø°º≠ »£√‚«“ ¿Ã∫•∆Æ ===
-    public void OnClickSurveyButton()
-    {
-        PlayerMovement.Instance?.OnClickSurveyButton();
-    }
-
-    public void OnClickCommunicationButton()
-    {
-        PlayerMovement.Instance?.OnClickCommunicationButton();
-    }
-
-    public void OnClickCancelButton()
-    {
-        PlayerMovement.Instance?.OnClickCancelButton();
-    }
-}
+using UnityEngine;
+using UnityEngine.UI;
+
+public class InteractionHintUI : MonoBehaviour
+{
+    public static InteractionHintUI Instance { get; private set; }
+
+    [Header("Follow")]
+    [SerializeField] Transform followTarget;   // Î≥¥ÌÜµ Player
+    [SerializeField] Camera cam;
+
+    [Header("Root")]
+    [SerializeField] CanvasGroup group;
+
+    [Header("Survey")]
+    [SerializeField] GameObject surveyRoot;
+    [SerializeField] RectTransform surveyRect;
+    [SerializeField] Text surveyLabel;
+    [SerializeField] Vector2 defaultSurveyOffset = new Vector2(60f, 0f); // Í∏∞Î≥∏ ÌûåÌä∏ ÏúÑÏπò
+    Vector2 _surveyOffset;   // ÌòÑÏû¨ Ï†ÅÏö©Ï§ë
+
+    [Header("Communication")]
+    [SerializeField] GameObject commRoot;
+    [SerializeField] Text commLabel;
+    [SerializeField] RectTransform commRect;
+    [SerializeField] Vector2 defaultCommOffset = new Vector2(0f, 80f);  // Í∏∞Î≥∏ ÌûåÌä∏ ÏúÑÏπò
+    Vector2 _commOffset;     // ÌòÑÏû¨ Ï†ÅÏö©Ï§ë
+
+    [Header("Cancel")]
+    [SerializeField] GameObject cancelRoot;
+    [SerializeField] Text cancelLabel;
+    [SerializeField] RectTransform cancelRect;
+    [SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // Í∏∞Î≥∏ ÌûåÌä∏ ÏúÑÏπò
+    Vector2 _cancelOffset;   // ÌòÑÏû¨ Ï†ÅÏö©Ï§ë
+
+    RectTransform rootRect;
+    Canvas rootCanvas;
+
+    public void ShowSurveyAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowSurvey(); }
+    public void ShowSurveyAt(Transform t, string label)
+    {
+        BindFollow(t);
+        SetOffsetsFrom(t);
+
+        if (surveyLabel) surveyLabel.text = label;
+        if (surveyRoot) surveyRoot.SetActive(true);
+
+        // ÌïÑÏöî Ïãú Í∏∞Ï°¥ comm/cancel ÏÉÅÌÉúÎäî Ìò∏Ï∂úÌïòÎäî Ï™ΩÏóêÏÑú Ï†úÏñ¥
+        ShowRoot();
+    }
+
+    public void ShowCommunicationAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowCommunication(); }
+    public void ShowCommunicationAt(Transform t, string label)
+    {
+        BindFollow(t);
+        SetOffsetsFrom(t);
+
+        if (commLabel) commLabel.text = label;
+        if (commRoot) commRoot.SetActive(true);
+
+        ShowRoot();
+    }
+    public void ShowCancelAt(Transform t) { BindFollow(t);SetOffsetsFrom(t); ShowCancel(); }
+    public void ShowBothAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowBoth(); }
+
+    void Awake()
+    {
+        if(Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+
+            rootRect = transform as RectTransform;
+        rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
+        if (!cam) cam = FindAnyObjectByType<Camera>();
+        HideAll();
+        _surveyOffset = defaultSurveyOffset;
+        _commOffset = defaultCommOffset;
+        _cancelOffset = defaultCancelOffset;
+    }
+
+    void LateUpdate()
+    {
+        if (!group || group.alpha <= 0f || !followTarget || !cam) return;
+
+        var sp = cam.WorldToScreenPoint(followTarget.position);
+
+        if (!rootRect) rootRect = transform as RectTransform;
+        if (!rootCanvas) rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
+
+        if (rootCanvas && rootRect)
+        {
+            if (rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            {
+                // Ïò§Î≤ÑÎ†àÏù¥: Ïä§ÌÅ¨Î¶∞ Ï¢åÌëú Í∑∏ÎåÄÎ°ú
+                rootRect.position = sp;
+            }
+            else
+            {
+                // Ïπ¥Î©îÎùº/ÏõîÎìú Ïä§ÌéòÏù¥Ïä§: Î°úÏª¨ ÏïµÏª§ Ï¢åÌëúÎ°ú Î≥ÄÌôò
+                RectTransform canvasRect = rootCanvas.transform as RectTransform;
+                Vector2 lp;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    canvasRect, sp,
+                    rootCanvas.renderMode == RenderMode.ScreenSpaceCamera ? rootCanvas.worldCamera : cam,
+                    out lp);
+                rootRect.anchoredPosition = lp;
+            }
+        }
+
+        // ÌÇ§Î≥Ñ Ïò§ÌîÑÏÖãÏùÄ Í∏∞Ï°¥Ï≤òÎüº Ïú†ÏßÄ
+        if (surveyRoot && surveyRoot.activeSelf && surveyRect) surveyRect.anchoredPosition = _surveyOffset;
+        if (commRoot && commRoot.activeSelf && commRect) commRect.anchoredPosition = _commOffset;
+        if (cancelRoot && cancelRoot.activeSelf && cancelRect) cancelRect.anchoredPosition = _cancelOffset;
+    }
+    void SetOffsetsFrom(Transform t)
+    {
+        // Ïö∞ÏÑ† Í∞úÏ≤¥Ïùò HintAnchorÍ∞Ä ÏûàÏúºÎ©¥ Í∑∏Í≤ÉÏùÑ ÏÇ¨Ïö©
+        var anchor = t ? t.GetComponent<HintAnchor>() : null;
+        if (anchor)
+        {
+            _surveyOffset = anchor.surveyOffset;
+            _commOffset = anchor.commOffset;
+            _cancelOffset = anchor.cancelOffset;    //surveyOffsetÍ≥º Í∞ôÏùÄ ÏúÑÏπòÎ•º ÏÇ¨Ïö©ÌïòÍ∏∞Ïóê Í∑∏ÎåÄÎ°ú ÏÇ¨Ïö©
+            return;
+        }
+        // ÏóÜÏúºÎ©¥ Í∏∞Î≥∏Í∞í
+        _surveyOffset = defaultSurveyOffset;
+        _commOffset = defaultCommOffset;
+        _cancelOffset = defaultCancelOffset;
+    }
+
+    public void SetOffsets(Vector2? survey = null, Vector2? comm = null)
+    {
+        _surveyOffset = survey ?? defaultSurveyOffset;
+        _commOffset = comm ?? defaultCommOffset;
+        _cancelOffset = survey ?? defaultCancelOffset;
+    }
+
+    void ResetOffsets()
+    {
+        _surveyOffset = defaultSurveyOffset;
+        _commOffset = defaultCommOffset;
+        _cancelOffset = defaultCancelOffset;
+    }
+
+    public void BindFollow(Transform t) => followTarget = t;
+
+    public void ShowSurvey()
+    {
+        if (surveyLabel) surveyLabel.text = "Ï°∞ÏÇ¨";
+        if (surveyRoot) surveyRoot.SetActive(true);
+        ShowRoot();
+    }
+    public void ShowCommunication()
+    {
+        if (commLabel) commLabel.text = "Í¥ÄÏ∞∞";
+        if (commRoot) commRoot.SetActive(true);
+        ShowRoot();
+    }
+    public void ShowCancel()
+    {
+        if (cancelLabel) cancelLabel.text = "Ï∑®ÏÜå";
+        if (cancelRoot) cancelRoot.SetActive(true);
+        ShowRoot();
+    }
+
+    public void ShowBoth()
+    {
+        ShowSurvey();   //Ï°∞ÏÇ¨
+        ShowCommunication();    //Í¥ÄÏ∞∞
+    }
+
+    public void HideBoth()
+    {
+        HideSurvey();
+        HideCommunication();
+    }
+
+    public void ShowPushCancelAt(Transform t)
+    {
+        BindFollow(t);
+        SetOffsetsFrom(t);
+
+        // Survey Î≤ÑÌäºÏùÑ "Î∞ÄÍ∏∞"Î°ú Ïû¨ÏÇ¨Ïö©
+        if (surveyLabel) surveyLabel.text = "Î∞ÄÍ∏∞";
+        if (surveyRoot) surveyRoot.SetActive(true);
+
+        // CommunicationÏùÄ Ïà®ÍπÄ(2Î≤ÑÌäºÎßå)
+        if (commRoot) commRoot.SetActive(false);
+
+        // CancelÏùÄ Ïº¨
+        if (cancelLabel) cancelLabel.text = "Ï∑®ÏÜå";
+        if (cancelRoot) cancelRoot.SetActive(true);
+
+        ShowRoot();
+    }
+
+    public void ResetSurveyLabel()
+    {
+        if (surveyLabel) surveyLabel.text = "Ï°∞ÏÇ¨";
+    }
+
+    public void HideSurvey() { if (surveyRoot) surveyRoot.SetActive(false); TryHideRoot(); }
+    public void HideCommunication() { if (commRoot) commRoot.SetActive(false); TryHideRoot(); }
+    public void HideCancel() { if (cancelRoot) cancelRoot.SetActive(false);TryHideRoot(); }
+    public void HideAll()
+    {
+        if (surveyRoot) surveyRoot.SetActive(false);
+        if (commRoot) commRoot.SetActive(false);
+        if (cancelRoot) cancelRoot.SetActive(false);
+        if (group) { group.alpha = 0f; group.blocksRaycasts = false; group.interactable = false; }
+        ResetOffsets();
+    }
+
+    void ShowRoot()
+    {
+        if (!group) return;
+        group.alpha = 1f; 
+        group.blocksRaycasts = true; 
+        group.interactable = true;
+    }
+    void TryHideRoot()
+    {
+        if (!group) return;
+        bool any = (surveyRoot && surveyRoot.activeSelf) || (commRoot && commRoot.activeSelf) || (cancelRoot && cancelRoot.activeSelf);
+        if (!any) HideAll();
+    }
+
+    // === UI Î≤ÑÌäºÏóêÏÑú Ìò∏Ï∂úÌï† Ïù¥Î≤§Ìä∏ ===
+    public void OnClickSurveyButton()
+    {
+        PlayerMovement.Instance?.OnClickSurveyButton();
+    }
+
+    public void OnClickCommunicationButton()
+    {
+        PlayerMovement.Instance?.OnClickCommunicationButton();
+    }
+
+    public void OnClickCancelButton()
+    {
+        PlayerMovement.Instance?.OnClickCancelButton();
+    }
+}

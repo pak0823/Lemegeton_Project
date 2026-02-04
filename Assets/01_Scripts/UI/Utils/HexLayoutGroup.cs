@@ -1,89 +1,89 @@
-using UnityEngine;
-using UnityEngine.UI;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
-public class HexLayoutGroup : MonoBehaviour
-{
-    [Header("¼³Á¤")]
-    public float tileSize = 80f;     // Å¸ÀÏ Å©±â (º¯°æÇÏ¸é Width/Heightµµ ¹Ù²ñ)
-    public float xSpacing = 80f;     // °¡·Î °£°İ (º¸Åë Å¸ÀÏ Å©±â¶û ºñ½ÁÇÏ°Ô)
-    public float ySpacing = 70f;     // ¼¼·Î °£°İ (Å¸ÀÏ Å©±âº¸´Ù Á» ÀÛ°Ô, °ãÄ¡°Ô)
-
-    [Header("Å¸ÀÏµé (ÀÚµ¿ ÇÒ´çµÊ)")]
-    public RectTransform[] hexTiles;
-
-    // 3-4-5-4-3 ±¸Á¶ÀÇ °¢ ÁÙº° °³¼ö
-    private readonly int[] rows = new int[] { 3, 4, 5, 4, 3 };
-
-    // ÀÎ½ºÆåÅÍ¿¡¼­ ¹öÆ° ´©¸£°Å³ª °ª ¹Ù²Ü ¶§ ½ÇÇà
-    public void AlignNodes()
-    {
-        if (transform.childCount == 0) return;
-
-        // ÀÚ½Äµé °¡Á®¿À±â (ÀÌ¸§ ¼ø¼­´ë·Î Á¤·ÄµÇ¾ú´Ù°í °¡Á¤)
-        hexTiles = new RectTransform[transform.childCount];
-        for (int i = 0; i < transform.childCount; i++)
-        {
-            hexTiles[i] = transform.GetChild(i) as RectTransform;
-
-            // Å¸ÀÏ Å©±â °­Á¦ Àû¿ë (¿øÄ¡ ¾ÊÀ¸¸é ÀÌ µÎ ÁÙ »èÁ¦)
-            hexTiles[i].sizeDelta = new Vector2(tileSize, tileSize);
-        }
-
-        int currentIndex = 0;
-
-        // Áß¾Ó ±âÁØÁ¡ Àâ±â (5ÁÙÀÌ´Ï±î 0,1,2,3,4 Áß 2¹ø ÁÙÀÌ Áß¾Ó)
-        // ¼¼·Î À§Ä¡ °è»ê: (Çà ¹øÈ£ - 2) * ySpacing
-        // ±Ùµ¥ 0¹ø ÁÙÀÌ ¸Ç À§¿©¾ß ÇÏ´Ï±î YÃàÀº ¹İ´ë·Î °¡¾ß ÇÔ.
-
-        for (int r = 0; r < rows.Length; r++)
-        {
-            int countInRow = rows[r];
-
-            // ÀÌ ÁÙÀÇ ½ÃÀÛ X ÁÂÇ¥ °è»ê (Áß¾Ó Á¤·Ä)
-            // °³¼ö°¡ 3°³¸é: -1, 0, 1 (°£°İ °öÇÏ±â)
-            // °³¼ö°¡ 4°³¸é: -1.5, -0.5, 0.5, 1.5
-            float startX = -((countInRow - 1) * xSpacing) / 2f;
-
-            // Y ÁÂÇ¥: Áß¾Ó(2Çà)À» 0À¸·Î ±âÁØ ÀâÀ½. À§´Â +, ¾Æ·¡´Â -
-            // 0Çà(3°³): y = +2Ä­
-            // 4Çà(3°³): y = -2Ä­
-            float posY = (2 - r) * ySpacing;
-
-            for (int c = 0; c < countInRow; c++)
-            {
-                if (currentIndex >= hexTiles.Length) break;
-
-                float posX = startX + (c * xSpacing);
-
-                RectTransform tile = hexTiles[currentIndex];
-
-                // ¾ŞÄ¿°¡ Middle-Center¶ó°í °¡Á¤ÇÏ°í ÁÂÇ¥ ²ÈÀ½
-                tile.anchoredPosition = new Vector2(posX, posY);
-
-                currentIndex++;
-            }
-        }
-    }
-}
-
-#if UNITY_EDITOR
-[CustomEditor(typeof(HexLayoutGroup))]
-public class HexLayoutGroupEditor : Editor
-{
-    public override void OnInspectorGUI()
-    {
-        base.OnInspectorGUI();
-
-        HexLayoutGroup script = (HexLayoutGroup)target;
-
-        GUILayout.Space(10);
-        if (GUILayout.Button("Á¤·Ä ¸ÂÃß±â (Align)"))
-        {
-            script.AlignNodes();
-        }
-    }
-}
+using UnityEngine;
+using UnityEngine.UI;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+public class HexLayoutGroup : MonoBehaviour
+{
+    [Header("ì„¤ì •")]
+    public float tileSize = 80f;     // íƒ€ì¼ í¬ê¸° (ë³€ê²½í•˜ë©´ Width/Heightë„ ë°”ë€œ)
+    public float xSpacing = 80f;     // ê°€ë¡œ ê°„ê²© (ë³´í†µ íƒ€ì¼ í¬ê¸°ë‘ ë¹„ìŠ·í•˜ê²Œ)
+    public float ySpacing = 70f;     // ì„¸ë¡œ ê°„ê²© (íƒ€ì¼ í¬ê¸°ë³´ë‹¤ ì¢€ ì‘ê²Œ, ê²¹ì¹˜ê²Œ)
+
+    [Header("íƒ€ì¼ë“¤ (ìë™ í• ë‹¹ë¨)")]
+    public RectTransform[] hexTiles;
+
+    // 3-4-5-4-3 êµ¬ì¡°ì˜ ê° ì¤„ë³„ ê°œìˆ˜
+    private readonly int[] rows = new int[] { 3, 4, 5, 4, 3 };
+
+    // ì¸ìŠ¤í™í„°ì—ì„œ ë²„íŠ¼ ëˆ„ë¥´ê±°ë‚˜ ê°’ ë°”ê¿€ ë•Œ ì‹¤í–‰
+    public void AlignNodes()
+    {
+        if (transform.childCount == 0) return;
+
+        // ìì‹ë“¤ ê°€ì ¸ì˜¤ê¸° (ì´ë¦„ ìˆœì„œëŒ€ë¡œ ì •ë ¬ë˜ì—ˆë‹¤ê³  ê°€ì •)
+        hexTiles = new RectTransform[transform.childCount];
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            hexTiles[i] = transform.GetChild(i) as RectTransform;
+
+            // íƒ€ì¼ í¬ê¸° ê°•ì œ ì ìš© (ì›ì¹˜ ì•Šìœ¼ë©´ ì´ ë‘ ì¤„ ì‚­ì œ)
+            hexTiles[i].sizeDelta = new Vector2(tileSize, tileSize);
+        }
+
+        int currentIndex = 0;
+
+        // ì¤‘ì•™ ê¸°ì¤€ì  ì¡ê¸° (5ì¤„ì´ë‹ˆê¹Œ 0,1,2,3,4 ì¤‘ 2ë²ˆ ì¤„ì´ ì¤‘ì•™)
+        // ì„¸ë¡œ ìœ„ì¹˜ ê³„ì‚°: (í–‰ ë²ˆí˜¸ - 2) * ySpacing
+        // ê·¼ë° 0ë²ˆ ì¤„ì´ ë§¨ ìœ„ì—¬ì•¼ í•˜ë‹ˆê¹Œ Yì¶•ì€ ë°˜ëŒ€ë¡œ ê°€ì•¼ í•¨.
+
+        for (int r = 0; r < rows.Length; r++)
+        {
+            int countInRow = rows[r];
+
+            // ì´ ì¤„ì˜ ì‹œì‘ X ì¢Œí‘œ ê³„ì‚° (ì¤‘ì•™ ì •ë ¬)
+            // ê°œìˆ˜ê°€ 3ê°œë©´: -1, 0, 1 (ê°„ê²© ê³±í•˜ê¸°)
+            // ê°œìˆ˜ê°€ 4ê°œë©´: -1.5, -0.5, 0.5, 1.5
+            float startX = -((countInRow - 1) * xSpacing) / 2f;
+
+            // Y ì¢Œí‘œ: ì¤‘ì•™(2í–‰)ì„ 0ìœ¼ë¡œ ê¸°ì¤€ ì¡ìŒ. ìœ„ëŠ” +, ì•„ë˜ëŠ” -
+            // 0í–‰(3ê°œ): y = +2ì¹¸
+            // 4í–‰(3ê°œ): y = -2ì¹¸
+            float posY = (2 - r) * ySpacing;
+
+            for (int c = 0; c < countInRow; c++)
+            {
+                if (currentIndex >= hexTiles.Length) break;
+
+                float posX = startX + (c * xSpacing);
+
+                RectTransform tile = hexTiles[currentIndex];
+
+                // ì•µì»¤ê°€ Middle-Centerë¼ê³  ê°€ì •í•˜ê³  ì¢Œí‘œ ê½‚ìŒ
+                tile.anchoredPosition = new Vector2(posX, posY);
+
+                currentIndex++;
+            }
+        }
+    }
+}
+
+#if UNITY_EDITOR
+[CustomEditor(typeof(HexLayoutGroup))]
+public class HexLayoutGroupEditor : Editor
+{
+    public override void OnInspectorGUI()
+    {
+        base.OnInspectorGUI();
+
+        HexLayoutGroup script = (HexLayoutGroup)target;
+
+        GUILayout.Space(10);
+        if (GUILayout.Button("ì •ë ¬ ë§ì¶”ê¸° (Align)"))
+        {
+            script.AlignNodes();
+        }
+    }
+}
 #endif

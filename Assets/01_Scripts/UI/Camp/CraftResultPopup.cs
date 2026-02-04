@@ -1,63 +1,63 @@
-using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.UI;
-using UnityEngine.ResourceManagement.AsyncOperations;
-
-public class CraftResultPopup : MonoBehaviour
-{
-    [Header("UI References")]
-    [SerializeField] private Image resultIcon;
-    [SerializeField] private Text itemNameText;
-    [SerializeField] private Text itemTypeText; // µµ±¸ or Àåºñ
-    [SerializeField] private Button closeButton; // ¹è°æ ÀüÃ¼ È¤Àº ´İ±â ¹öÆ°
-
-    private AsyncOperationHandle<Sprite> _handle;
-
-    private void Start()
-    {
-        // ´İ±â ¹öÆ°(¶Ç´Â ¹è°æ) ´©¸£¸é Ã¢ ²¨Áö°Ô ¼³Á¤
-        if (closeButton != null)
-        {
-            closeButton.onClick.AddListener(ClosePopup);
-        }
-
-        // ½ÃÀÛÇÒ ¶© ²¨µÒ
-        gameObject.SetActive(false);
-    }
-    private void OnDestroy()
-    {
-        if (_handle.IsValid()) Addressables.Release(_handle);
-    }
-
-    public void Show(ItemData item)
-    {
-        if (item == null) return;
-        if (_handle.IsValid()) Addressables.Release(_handle);
-
-        // µ¥ÀÌÅÍ ¼¼ÆÃ
-        _handle = Addressables.LoadAssetAsync<Sprite>(item.GetAtlasKey());
-        _handle.Completed += h => {
-            if (h.Status == AsyncOperationStatus.Succeeded) resultIcon.sprite = h.Result;
-        };
-
-        itemNameText.text = $"[{item.itemName}]";
-
-        // Å¸ÀÔ ÅØ½ºÆ® (enumÀ» ÇÑ±Û·Î º¯È¯)
-        string typeString = "";
-        switch (item.itemType)
-        {
-            case ItemType.Material: typeString = "Àç·á"; break;
-            case ItemType.Consumable: typeString = "µµ±¸"; break;
-            case ItemType.Equipment: typeString = "Àåºñ"; break;
-        }
-        itemTypeText.text = typeString;
-
-        // ÆË¾÷ ÄÑ±â
-        gameObject.SetActive(true);
-    }
-
-    public void ClosePopup()
-    {
-        gameObject.SetActive(false);
-    }
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.UI;
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+public class CraftResultPopup : MonoBehaviour
+{
+    [Header("UI References")]
+    [SerializeField] private Image resultIcon;
+    [SerializeField] private Text itemNameText;
+    [SerializeField] private Text itemTypeText; // ë„êµ¬ or ì¥ë¹„
+    [SerializeField] private Button closeButton; // ë°°ê²½ ì „ì²´ í˜¹ì€ ë‹«ê¸° ë²„íŠ¼
+
+    private AsyncOperationHandle<Sprite> _handle;
+
+    private void Start()
+    {
+        // ë‹«ê¸° ë²„íŠ¼(ë˜ëŠ” ë°°ê²½) ëˆ„ë¥´ë©´ ì°½ êº¼ì§€ê²Œ ì„¤ì •
+        if (closeButton != null)
+        {
+            closeButton.onClick.AddListener(ClosePopup);
+        }
+
+        // ì‹œì‘í•  ë• êº¼ë‘ 
+        gameObject.SetActive(false);
+    }
+    private void OnDestroy()
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
+    }
+
+    public void Show(ItemData item)
+    {
+        if (item == null) return;
+        if (_handle.IsValid()) Addressables.Release(_handle);
+
+        // ë°ì´í„° ì„¸íŒ…
+        _handle = Addressables.LoadAssetAsync<Sprite>(item.GetAtlasKey());
+        _handle.Completed += h => {
+            if (h.Status == AsyncOperationStatus.Succeeded) resultIcon.sprite = h.Result;
+        };
+
+        itemNameText.text = $"[{item.itemName}]";
+
+        // íƒ€ì… í…ìŠ¤íŠ¸ (enumì„ í•œê¸€ë¡œ ë³€í™˜)
+        string typeString = "";
+        switch (item.itemType)
+        {
+            case ItemType.Material: typeString = "ì¬ë£Œ"; break;
+            case ItemType.Consumable: typeString = "ë„êµ¬"; break;
+            case ItemType.Equipment: typeString = "ì¥ë¹„"; break;
+        }
+        itemTypeText.text = typeString;
+
+        // íŒì—… ì¼œê¸°
+        gameObject.SetActive(true);
+    }
+
+    public void ClosePopup()
+    {
+        gameObject.SetActive(false);
+    }
 }

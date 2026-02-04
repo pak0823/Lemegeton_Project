@@ -1,44 +1,44 @@
-using System.Linq;
-using UnityEngine;
-
-public class ExplorationPersistId : MonoBehaviour
-{
-    [SerializeField] private string id;
-    public string Id => id;
-
-#if UNITY_EDITOR
-    private void Reset()
-    {
-        if (string.IsNullOrEmpty(id))
-            id = System.Guid.NewGuid().ToString("N");
-    }
-#endif
-
-    private void Awake()
-    {
-        if (string.IsNullOrEmpty(id))
-            id = System.Guid.NewGuid().ToString("N");
-    }
-
-#if UNITY_EDITOR
-    private void OnValidate()
-    {
-        if (Application.isPlaying) return;
-        if (string.IsNullOrEmpty(id))
-            id = System.Guid.NewGuid().ToString("N");
-
-        // ∞∞¿∫ ∏ (∑Á∆Æ) æ∆∑°ø°º≠ ¡ﬂ∫π ∞ÀªÁ
-        var root = transform;
-        while (root.parent != null) root = root.parent;
-
-        var all = root.GetComponentsInChildren<ExplorationPersistId>(true);
-        if (all.Count(x => x != this && x.id == id) > 0)
-        {
-            // ¡ﬂ∫π¿Ã∏È ªı∑Œ πﬂ±ﬁ
-            id = System.Guid.NewGuid().ToString("N");
-        }
-    }
-#endif
-
-    public void OverrideIdForRestore(string newId) => id = newId;
-}
+using System.Linq;
+using UnityEngine;
+
+public class ExplorationPersistId : MonoBehaviour
+{
+    [SerializeField] private string id;
+    public string Id => id;
+
+#if UNITY_EDITOR
+    private void Reset()
+    {
+        if (string.IsNullOrEmpty(id))
+            id = System.Guid.NewGuid().ToString("N");
+    }
+#endif
+
+    private void Awake()
+    {
+        if (string.IsNullOrEmpty(id))
+            id = System.Guid.NewGuid().ToString("N");
+    }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        if (Application.isPlaying) return;
+        if (string.IsNullOrEmpty(id))
+            id = System.Guid.NewGuid().ToString("N");
+
+        // Í∞ôÏùÄ Îßµ(Î£®Ìä∏) ÏïÑÎûòÏóêÏÑú Ï§ëÎ≥µ Í≤ÄÏÇ¨
+        var root = transform;
+        while (root.parent != null) root = root.parent;
+
+        var all = root.GetComponentsInChildren<ExplorationPersistId>(true);
+        if (all.Count(x => x != this && x.id == id) > 0)
+        {
+            // Ï§ëÎ≥µÏù¥Î©¥ ÏÉàÎ°ú Î∞úÍ∏â
+            id = System.Guid.NewGuid().ToString("N");
+        }
+    }
+#endif
+
+    public void OverrideIdForRestore(string newId) => id = newId;
+}

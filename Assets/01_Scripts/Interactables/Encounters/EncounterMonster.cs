@@ -1,21 +1,21 @@
-using UnityEngine;
-
-public class EncounterMonster : MonoBehaviour
-{
-    [SerializeField] private bool destroyOnTrigger = true;
-    public bool IsActive { get; private set; } = true;
-
-    public void MarkConsumed()
-    {
-        if (!IsActive) return;
-        IsActive = false;
-
-        if (destroyOnTrigger)
-            gameObject.SetActive(false); // ¶Ç´Â Destroy(gameObject)
-        else
-        {
-            // ³ªÁß¿¡ "»ç¿ëµÈ ¸®¼Ò½º"·Î ¿ÜÇü¸¸ ±³Ã¼ÇÏ°í Å¬¸¯/Ãæµ¹¸¸ ¸·±â µî
-            var col = GetComponent<Collider2D>(); if (col) col.enabled = false;
-        }
-    }
-}
+using UnityEngine;
+
+public class EncounterMonster : MonoBehaviour
+{
+    [SerializeField] private bool destroyOnTrigger = true;
+    public bool IsActive { get; private set; } = true;
+
+    public void MarkConsumed()
+    {
+        if (!IsActive) return;
+        IsActive = false;
+
+        if (destroyOnTrigger)
+            gameObject.SetActive(false); // ë˜ëŠ” Destroy(gameObject)
+        else
+        {
+            // ë‚˜ì¤‘ì— "ì‚¬ìš©ëœ ë¦¬ì†ŒìŠ¤"ë¡œ ì™¸í˜•ë§Œ êµì²´í•˜ê³  í´ë¦­/ì¶©ëŒë§Œ ë§‰ê¸° ë“±
+            var col = GetComponent<Collider2D>(); if (col) col.enabled = false;
+        }
+    }
+}

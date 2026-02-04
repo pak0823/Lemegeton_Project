@@ -1,43 +1,43 @@
-// StackableStatusVisualDB.cs
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Visuals/Stackable Status Visual DB", fileName = "StackableStatusVisualDB")]
-public class StackableStatusVisualDB : ScriptableObject
-{
-    [Serializable]
-    public class Entry
-    {
-        public StatusId id;        // ¿¹: Slow
-        public Sprite icon;        // Ç¥½Ã ¾ÆÀÌÄÜ
-        public Color tint = Color.white;
-        public int sortOrder = 0;  // ³·À»¼ö·Ï ¾ÕÂÊ
-        public bool showStacks = true;
-        public bool showTurns = true;
-        public string displayName; // ÅøÆÁ/´ëÃ¼ÅØ½ºÆ®
-    }
-
-    [SerializeField] private List<Entry> entries = new();
-    private Dictionary<StatusId, Entry> _map;
-
-    void OnEnable() => Rebuild();
-#if UNITY_EDITOR
-    void OnValidate() => Rebuild();
-#endif
-
-    void Rebuild()
-    {
-        _map = new Dictionary<StatusId, Entry>(entries.Count);
-        foreach (var e in entries) _map[e.id] = e;
-    }
-
-    public Entry Get(StatusId id)
-    {
-        if (_map == null) Rebuild();
-        _map.TryGetValue(id, out var e);
-        return e;
-    }
-
-    public int GetSortOrder(StatusId id) => Get(id)?.sortOrder ?? 0;
-}
+// StackableStatusVisualDB.cs
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Visuals/Stackable Status Visual DB", fileName = "StackableStatusVisualDB")]
+public class StackableStatusVisualDB : ScriptableObject
+{
+    [Serializable]
+    public class Entry
+    {
+        public StatusId id;        // ì˜ˆ: Slow
+        public Sprite icon;        // í‘œì‹œ ì•„ì´ì½˜
+        public Color tint = Color.white;
+        public int sortOrder = 0;  // ë‚®ì„ìˆ˜ë¡ ì•ìª½
+        public bool showStacks = true;
+        public bool showTurns = true;
+        public string displayName; // íˆ´íŒ/ëŒ€ì²´í…ìŠ¤íŠ¸
+    }
+
+    [SerializeField] private List<Entry> entries = new();
+    private Dictionary<StatusId, Entry> _map;
+
+    void OnEnable() => Rebuild();
+#if UNITY_EDITOR
+    void OnValidate() => Rebuild();
+#endif
+
+    void Rebuild()
+    {
+        _map = new Dictionary<StatusId, Entry>(entries.Count);
+        foreach (var e in entries) _map[e.id] = e;
+    }
+
+    public Entry Get(StatusId id)
+    {
+        if (_map == null) Rebuild();
+        _map.TryGetValue(id, out var e);
+        return e;
+    }
+
+    public int GetSortOrder(StatusId id) => Get(id)?.sortOrder ?? 0;
+}

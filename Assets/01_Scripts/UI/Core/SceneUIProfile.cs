@@ -1,28 +1,28 @@
-using UnityEngine;
-
-namespace Project.UI
-{
-    [CreateAssetMenu(menuName = "UI/Scene UI Profile", fileName = "SceneUIProfile_XXX")]
-    public class SceneUIProfile : ScriptableObject
-    {
-        [Header("Toggle Modules")]
-        public bool showHud;
-        public bool showTurnBar;
-        public bool showSkillPanel;
-        public bool showActionPanel;
-        public bool showTimerUI;
-        public bool showExplorationResetUi; // TestUi
-        public bool showTitleMenu; // Title Àü¿ë ¸Þ´º Ç¥½Ã
-        public bool showOptionsMenu; // °ø¿ë ¿É¼Ç/ÀÏ½ÃÁ¤Áö ¸Þ´º
-
-        [Header("Common Options")]
-        public bool pauseAvailable = true;
-
-        [Header("(Optional) Theme / Visuals")]
-        public Color? themeAccentColor = null; // keep null => unchanged
-        public Font themeFont;                 // optional
-
-        [Header("(Optional) Input Hints")]
-        public KeyCode pauseKey = KeyCode.Escape;
-    }
+using UnityEngine;
+
+namespace Project.UI
+{
+    [CreateAssetMenu(menuName = "UI/Scene UI Profile", fileName = "SceneUIProfile_XXX")]
+    public class SceneUIProfile : ScriptableObject
+    {
+        [Header("Toggle Modules")]
+        public bool showHud;
+        public bool showTurnBar;
+        public bool showSkillPanel;
+        public bool showActionPanel;
+        public bool showTimerUI;
+        public bool showExplorationResetUi; // TestUi
+        public bool showTitleMenu; // Title ì „ìš© ë©”ë‰´ í‘œì‹œ
+        public bool showOptionsMenu; // ê³µìš© ì˜µì…˜/ì¼ì‹œì •ì§€ ë©”ë‰´
+
+        [Header("Common Options")]
+        public bool pauseAvailable = true;
+
+        [Header("(Optional) Theme / Visuals")]
+        public Color? themeAccentColor = null; // keep null => unchanged
+        public Font themeFont;                 // optional
+
+        [Header("(Optional) Input Hints")]
+        public KeyCode pauseKey = KeyCode.Escape;
+    }
 }

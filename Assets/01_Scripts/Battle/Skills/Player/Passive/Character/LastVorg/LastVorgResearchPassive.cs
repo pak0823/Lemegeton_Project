@@ -1,86 +1,86 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Passives/LastVorg/Passive_1",
-                 fileName = "Passive_LastVorgResearch")]
-public class LastVorgResearchPassive : PassiveAsset
-{
-    [Header("Settings")]
-    public int maxStacks = 3; // ¿¬±¸ ¿Ï·á ±âÁØ ½ºÅÃ
-    public StatusId researchStatusId = StatusId.Research; // ¿¬±¸ »óÅÂ ID
-
-    // BattleUnit.NotifySkillUsed¿¡ ÀÇÇØ È£ÃâµÊ
-    private void HandleSkillUsed(SkillAsset skill)
-    {
-        // ÇöÀç ÀÌº¥Æ®¸¦ ¹ß»ı½ÃÅ² À¯´Ö ±¸ÇÏ±â (ÀÌº¥Æ® ±¸µ¶ ¹æ½ÄÀÌ¹Ç·Î sender°¡ ÇÊ¿äÇÏÁö¸¸, 
-        // ¿©±â¼± delegate ±¸Á¶»ó owner¸¦ Å¬·ÎÀú·Î Àâ°Å³ª, ÀÌº¥Æ®¸¦ owner ¸â¹ö·Î »ç¿ë Áß)
-        // À§ OnAttach ±¸Á¶»ó owner º¯¼ö´Â Ä¸Ã³µÇÁö ¾ÊÀ¸¹Ç·Î, 
-        // BattleUnit¿¡ ÀÌº¥Æ®¸¦ ¿¬°áÇÒ ¶§, ÇÚµé·¯ ¸Ş¼­µå ³»ºÎ¿¡¼­ owner¸¦ Æ¯Á¤ÇÏ±â ¾î·Æ½À´Ï´Ù.
-        // µû¶ó¼­, ¾Æ·¡¿Í °°ÀÌ ·±Å¸ÀÓ µñ¼Å³Ê¸®¸¦ »ç¿ëÇÏ°Å³ª, ÀÌº¥Æ®¸¦ (SkillAsset) -> (BattleUnit, SkillAsset)À¸·Î È®ÀåÇØ¾ß ÇÕ´Ï´Ù.
-        // ÇÏÁö¸¸ ±âÁ¸ ±¸Á¶¸¦ ÃÖ¼ÒÇÑÀ¸·Î °Çµå¸®±â À§ÇØ, OnAttach ½ÃÁ¡¿¡ ¶÷´Ù·Î ¿¬°áÇÕ´Ï´Ù.
-    }
-
-    // ¼öÁ¤µÈ OnAttach / OnDetach ·ÎÁ÷ (Owner Ä¸Ã³¸¦ À§ÇØ)
-    // ScriptableObject´Â °øÀ¯ ÀÚ¿øÀÌ¹Ç·Î, ·±Å¸ÀÓ »óÅÂ(¾î¶² À¯´ÖÀÌ ±¸µ¶Çß´ÂÁö)¸¦ º°µµ °ü¸®ÇØ¾ß ÇÕ´Ï´Ù.
-    // ShootingInsightPassive Ã³·³ µñ¼Å³Ê¸®¸¦ ¾²°Å³ª, ¶÷´Ù Ä¸Ã³¸¦ ¾µ ¼ö ÀÖÀ¸³ª ¸Ş¸ğ¸® ´©¼ö ¹æÁö¸¦ À§ÇØ µñ¼Å³Ê¸®°¡ ¾ÈÀüÇÕ´Ï´Ù.
-
-    private Dictionary<BattleUnit, System.Action<SkillAsset>> _handlers = new Dictionary<BattleUnit, System.Action<SkillAsset>>();
-
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null) return;
-
-        // ÇÚµé·¯ »ı¼º (Å¬·ÎÀú·Î owner Ä¸Ã³)
-        System.Action<SkillAsset> handler = (skill) => OnUnitUsedSkill(owner, skill);
-
-        if (!_handlers.ContainsKey(owner))
-        {
-            _handlers.Add(owner, handler);
-            owner.OnSkillUsed += handler;
-        }
-    }
-
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null) return;
-
-        if (_handlers.TryGetValue(owner, out var handler))
-        {
-            owner.OnSkillUsed -= handler;
-            _handlers.Remove(owner);
-        }
-    }
-
-    private void OnUnitUsedSkill(BattleUnit owner, SkillAsset skill)
-    {
-        // "¿¬±¸ ±â¼ú"ÀÎÁö È®ÀÎ (SelfStateSkill Å¸ÀÔ Ã¼Å©)
-        // ¸¸¾à Æ¯Á¤ SelfStateSkill¸¸ ÇØ´çµÈ´Ù¸é º°µµ ÇÊÅÍ¸µ ÇÊ¿ä (¿©±â¼± ¸ğµç SelfStateSkill ´ë»ó)
-        if (skill is SelfStateSkill)
-        {
-            var statusCtrl = owner.GetComponent<StatusController>();
-            if (statusCtrl == null) return;
-
-            int currentStacks = statusCtrl.GetStacks(researchStatusId);
-
-            if (currentStacks >= maxStacks)
-            {
-                // 3½ºÅÃ »óÅÂ¿¡¼­ »ç¿ëÇÔ -> ½ºÅÃ ¸ğµÎ Á¦°Å (ÃÊ±âÈ­)
-                Debug.Log($"[Research] {owner.name}: ¿¬±¸ ¿Ï·á »óÅÂ¿¡¼­ ±â¼ú »ç¿ë. ½ºÅÃ ÃÊ±âÈ­.");
-                statusCtrl.SetStacks(researchStatusId, 0);
-            }
-            else
-            {
-                // 3½ºÅÃ ¹Ì¸¸ -> ½ºÅÃ +1
-                int nextStack = currentStacks + 1;
-                Debug.Log($"[Research] {owner.name}: ¿¬±¸ ÁøÇà ({nextStack}/{maxStacks})");
-                statusCtrl.SetStacks(researchStatusId, nextStack);
-
-                // ¸¸¾à 3½ºÅÃ µµ´Ş ½Ã ¾Ë¸²ÀÌ ÇÊ¿äÇÏ¸é ¿©±â¼­ Ã³¸®
-                if (nextStack == maxStacks)
-                {
-                    owner.AnnouncePassive("¿¬±¸ ¿Ï·á"); // "ºñ¿ë 0" »óÅÂ µ¹ÀÔ ¾Ë¸²
-                }
-            }
-        }
-    }
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Passives/LastVorg/Passive_1",
+                 fileName = "Passive_LastVorgResearch")]
+public class LastVorgResearchPassive : PassiveAsset
+{
+    [Header("Settings")]
+    public int maxStacks = 3; // ì—°êµ¬ ì™„ë£Œ ê¸°ì¤€ ìŠ¤íƒ
+    public StatusId researchStatusId = StatusId.Research; // ì—°êµ¬ ìƒíƒœ ID
+
+    // BattleUnit.NotifySkillUsedì— ì˜í•´ í˜¸ì¶œë¨
+    private void HandleSkillUsed(SkillAsset skill)
+    {
+        // í˜„ì¬ ì´ë²¤íŠ¸ë¥¼ ë°œìƒì‹œí‚¨ ìœ ë‹› êµ¬í•˜ê¸° (ì´ë²¤íŠ¸ êµ¬ë… ë°©ì‹ì´ë¯€ë¡œ senderê°€ í•„ìš”í•˜ì§€ë§Œ, 
+        // ì—¬ê¸°ì„  delegate êµ¬ì¡°ìƒ ownerë¥¼ í´ë¡œì €ë¡œ ì¡ê±°ë‚˜, ì´ë²¤íŠ¸ë¥¼ owner ë©¤ë²„ë¡œ ì‚¬ìš© ì¤‘)
+        // ìœ„ OnAttach êµ¬ì¡°ìƒ owner ë³€ìˆ˜ëŠ” ìº¡ì²˜ë˜ì§€ ì•Šìœ¼ë¯€ë¡œ, 
+        // BattleUnitì— ì´ë²¤íŠ¸ë¥¼ ì—°ê²°í•  ë•Œ, í•¸ë“¤ëŸ¬ ë©”ì„œë“œ ë‚´ë¶€ì—ì„œ ownerë¥¼ íŠ¹ì •í•˜ê¸° ì–´ë µìŠµë‹ˆë‹¤.
+        // ë”°ë¼ì„œ, ì•„ë˜ì™€ ê°™ì´ ëŸ°íƒ€ì„ ë”•ì…”ë„ˆë¦¬ë¥¼ ì‚¬ìš©í•˜ê±°ë‚˜, ì´ë²¤íŠ¸ë¥¼ (SkillAsset) -> (BattleUnit, SkillAsset)ìœ¼ë¡œ í™•ì¥í•´ì•¼ í•©ë‹ˆë‹¤.
+        // í•˜ì§€ë§Œ ê¸°ì¡´ êµ¬ì¡°ë¥¼ ìµœì†Œí•œìœ¼ë¡œ ê±´ë“œë¦¬ê¸° ìœ„í•´, OnAttach ì‹œì ì— ëŒë‹¤ë¡œ ì—°ê²°í•©ë‹ˆë‹¤.
+    }
+
+    // ìˆ˜ì •ëœ OnAttach / OnDetach ë¡œì§ (Owner ìº¡ì²˜ë¥¼ ìœ„í•´)
+    // ScriptableObjectëŠ” ê³µìœ  ìì›ì´ë¯€ë¡œ, ëŸ°íƒ€ì„ ìƒíƒœ(ì–´ë–¤ ìœ ë‹›ì´ êµ¬ë…í–ˆëŠ”ì§€)ë¥¼ ë³„ë„ ê´€ë¦¬í•´ì•¼ í•©ë‹ˆë‹¤.
+    // ShootingInsightPassive ì²˜ëŸ¼ ë”•ì…”ë„ˆë¦¬ë¥¼ ì“°ê±°ë‚˜, ëŒë‹¤ ìº¡ì²˜ë¥¼ ì“¸ ìˆ˜ ìˆìœ¼ë‚˜ ë©”ëª¨ë¦¬ ëˆ„ìˆ˜ ë°©ì§€ë¥¼ ìœ„í•´ ë”•ì…”ë„ˆë¦¬ê°€ ì•ˆì „í•©ë‹ˆë‹¤.
+
+    private Dictionary<BattleUnit, System.Action<SkillAsset>> _handlers = new Dictionary<BattleUnit, System.Action<SkillAsset>>();
+
+    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null) return;
+
+        // í•¸ë“¤ëŸ¬ ìƒì„± (í´ë¡œì €ë¡œ owner ìº¡ì²˜)
+        System.Action<SkillAsset> handler = (skill) => OnUnitUsedSkill(owner, skill);
+
+        if (!_handlers.ContainsKey(owner))
+        {
+            _handlers.Add(owner, handler);
+            owner.OnSkillUsed += handler;
+        }
+    }
+
+    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null) return;
+
+        if (_handlers.TryGetValue(owner, out var handler))
+        {
+            owner.OnSkillUsed -= handler;
+            _handlers.Remove(owner);
+        }
+    }
+
+    private void OnUnitUsedSkill(BattleUnit owner, SkillAsset skill)
+    {
+        // "ì—°êµ¬ ê¸°ìˆ "ì¸ì§€ í™•ì¸ (SelfStateSkill íƒ€ì… ì²´í¬)
+        // ë§Œì•½ íŠ¹ì • SelfStateSkillë§Œ í•´ë‹¹ëœë‹¤ë©´ ë³„ë„ í•„í„°ë§ í•„ìš” (ì—¬ê¸°ì„  ëª¨ë“  SelfStateSkill ëŒ€ìƒ)
+        if (skill is SelfStateSkill)
+        {
+            var statusCtrl = owner.GetComponent<StatusController>();
+            if (statusCtrl == null) return;
+
+            int currentStacks = statusCtrl.GetStacks(researchStatusId);
+
+            if (currentStacks >= maxStacks)
+            {
+                // 3ìŠ¤íƒ ìƒíƒœì—ì„œ ì‚¬ìš©í•¨ -> ìŠ¤íƒ ëª¨ë‘ ì œê±° (ì´ˆê¸°í™”)
+                Debug.Log($"[Research] {owner.name}: ì—°êµ¬ ì™„ë£Œ ìƒíƒœì—ì„œ ê¸°ìˆ  ì‚¬ìš©. ìŠ¤íƒ ì´ˆê¸°í™”.");
+                statusCtrl.SetStacks(researchStatusId, 0);
+            }
+            else
+            {
+                // 3ìŠ¤íƒ ë¯¸ë§Œ -> ìŠ¤íƒ +1
+                int nextStack = currentStacks + 1;
+                Debug.Log($"[Research] {owner.name}: ì—°êµ¬ ì§„í–‰ ({nextStack}/{maxStacks})");
+                statusCtrl.SetStacks(researchStatusId, nextStack);
+
+                // ë§Œì•½ 3ìŠ¤íƒ ë„ë‹¬ ì‹œ ì•Œë¦¼ì´ í•„ìš”í•˜ë©´ ì—¬ê¸°ì„œ ì²˜ë¦¬
+                if (nextStack == maxStacks)
+                {
+                    owner.AnnouncePassive("ì—°êµ¬ ì™„ë£Œ"); // "ë¹„ìš© 0" ìƒíƒœ ëŒì… ì•Œë¦¼
+                }
+            }
+        }
+    }
 }

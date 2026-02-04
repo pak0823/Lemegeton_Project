@@ -1,11 +1,11 @@
-// DebuffData.cs
-using UnityEngine;
-
-[CreateAssetMenu(fileName = "DebuffData", menuName = "Game/DebuffData")]
-public class DebuffData : ScriptableObject
-{
-    public DebuffType debuffType;      // µğ¹öÇÁ Á¾·ù
-    public float duration;             // Áö¼Ó ½Ã°£ (ÃÊ)
-    public float magnitude;            // È¿°ú °­µµ (¿¹: ´À·ÁÁö´Â ºñÀ²)
-    public GameObject effectPrefab;    // µğ¹öÇÁ ½Ã Àç»ıÇÒ VFX
+// DebuffData.cs
+using UnityEngine;
+
+[CreateAssetMenu(fileName = "DebuffData", menuName = "Game/DebuffData")]
+public class DebuffData : ScriptableObject
+{
+    public DebuffType debuffType;      // ë””ë²„í”„ ì¢…ë¥˜
+    public float duration;             // ì§€ì† ì‹œê°„ (ì´ˆ)
+    public float magnitude;            // íš¨ê³¼ ê°•ë„ (ì˜ˆ: ëŠë ¤ì§€ëŠ” ë¹„ìœ¨)
+    public GameObject effectPrefab;    // ë””ë²„í”„ ì‹œ ì¬ìƒí•  VFX
 }

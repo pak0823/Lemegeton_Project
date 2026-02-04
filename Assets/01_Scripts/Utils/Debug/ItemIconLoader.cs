@@ -1,28 +1,28 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.AddressableAssets; // ÇÊ¼ö
-using UnityEngine.ResourceManagement.AsyncOperations;
-
-public class ItemIconLoader : MonoBehaviour
-{
-    public Image targetImage;
-
-    public void LoadIcon(ItemData data)
-    {
-        // ÃÖÁ¾ Å° »ı¼º: "ItemAtlas[item_bottle]" 
-        string fullKey = data.GetAtlasKey();
-
-        // Addressables¸¦ ÅëÇÑ ºñµ¿±â ·Îµå
-        Addressables.LoadAssetAsync<Sprite>(fullKey).Completed += (handle) =>
-        {
-            if (handle.Status == AsyncOperationStatus.Succeeded)
-            {
-                targetImage.sprite = handle.Result;
-            }
-            else
-            {
-                Debug.LogError($"¾ÆÀÌÄÜ ·Îµå ½ÇÆĞ: {fullKey}");
-            }
-        };
-    }
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.AddressableAssets; // í•„ìˆ˜
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+public class ItemIconLoader : MonoBehaviour
+{
+    public Image targetImage;
+
+    public void LoadIcon(ItemData data)
+    {
+        // ìµœì¢… í‚¤ ìƒì„±: "ItemAtlas[item_bottle]" 
+        string fullKey = data.GetAtlasKey();
+
+        // Addressablesë¥¼ í†µí•œ ë¹„ë™ê¸° ë¡œë“œ
+        Addressables.LoadAssetAsync<Sprite>(fullKey).Completed += (handle) =>
+        {
+            if (handle.Status == AsyncOperationStatus.Succeeded)
+            {
+                targetImage.sprite = handle.Result;
+            }
+            else
+            {
+                Debug.LogError($"ì•„ì´ì½˜ ë¡œë“œ ì‹¤íŒ¨: {fullKey}");
+            }
+        };
+    }
 }

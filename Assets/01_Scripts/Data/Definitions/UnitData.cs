@@ -1,57 +1,57 @@
-using UnityEngine;
-
-public enum ISBOSS { None, Boss }  //º¸½º ±¸º°
-
-[CreateAssetMenu(menuName = "Battle/UnitData", fileName = "UnitData")]
-public class UnitData : ScriptableObject
-{
-    [Header("Unique ID")]
-    public int unitID;
-
-    [Header("Name")]
-    public string DisplayName;
-    
-    [Header("Attributes")]
-    public int baseSTR = 0;  //±Ù·Â
-    public int baseCLV = 0; //ÃÑ¸í
-    public int baseAGI = 0; //¹ÎÃ¸
-    public int baseBDY=0;   //½ÅÃ¼
-    public int baseMND=0;   //Á¤½Å
-    public int baseINS = 0; //ÅëÂû
-    public int baseHostility = 0; //ÀûÀÇ
-
-    [Header("Team Check")]
-    public Team team = Team.Player;   // Player / Enemy
-
-    [Header("Boss Check(Enemy Only)")]
-    public ISBOSS isBoss = ISBOSS.None;
-
-    [Header("Animation")]
-    [Tooltip("ÀÌ À¯´ÖÀÌ »ç¿ëÇÏ´Â °¢ ½ºÅ³(legacyId)¿¡ ´ëÇØ, À¯´Ö °íÀ¯ÀÇ ¾Ö´Ï¸ŞÀÌ¼Ç Æ®¸®°Å¸¦ ¸ÅÇÎÇÕ´Ï´Ù.")]
-    public SkillAnimBinding[] skillAnimBindings;
-
-    [Header("Skills (per character)")]
-    public SkillAsset[] skills; // ¿¡µğÅÍ¿¡¼­ Ä³¸¯ÅÍº°·Î ÇÒ´ç
-
-    [Header("Passives (per character)")]
-    public PassiveAsset[] passives; // ÆĞ½Ãºê ½ºÅ³µé (ÇØ±İ ¿©ºÎ´Â ·±Å¸ÀÓ¿¡¼­ °áÁ¤)
-
-    [Header("Bond & Traits")]
-    [Range(0, 60)]
-    public int currentBond = 0; // ÇöÀç À¯´ë ¼öÄ¡ (Max 60)
-    public TraitAsset activeTrait; // ÇöÀç ÀåÂøÁßÀÎ ¼º°İ
-    // ¼º°İ ¸®½ºÆ® (¼ø¼­´ë·Î 10, 30, 60¿¡ ÇØ±İ)
-    public TraitAsset[] traits;
-
-    [Header("UI")]
-    public Sprite UnitIcon; // ATB ¾ÆÀÌÄÜ¿ë ½ºÇÁ¶óÀÌÆ®
-    public Sprite UnitStandImage; // ÁøÇü ¹èÄ¡¿ë ½ºÇÁ¶óÀÌÆ®
-    public GameObject battlePrefab; //ÀüÅõ Àü¿ë ÇÁ¸®ÆÕ
-
-    [System.Serializable]
-    public struct SkillAnimBinding
-    {
-        public SkillId skillId;     // SkillAsset.legacyId ¿Í µ¿ÀÏÇÑ °ª
-        public string triggerName;  // ÀÌ À¯´ÖÀÌ ±× ½ºÅ³À» ¾µ ¶§ »ç¿ëÇÒ ¾Ö´Ï¸ŞÀÌ¼Ç Æ®¸®°Å
-    }
-}
+using UnityEngine;
+
+public enum ISBOSS { None, Boss }  //ë³´ìŠ¤ êµ¬ë³„
+
+[CreateAssetMenu(menuName = "Battle/UnitData", fileName = "UnitData")]
+public class UnitData : ScriptableObject
+{
+    [Header("Unique ID")]
+    public int unitID;
+
+    [Header("Name")]
+    public string DisplayName;
+    
+    [Header("Attributes")]
+    public int baseSTR = 0;  //ê·¼ë ¥
+    public int baseCLV = 0; //ì´ëª…
+    public int baseAGI = 0; //ë¯¼ì²©
+    public int baseBDY=0;   //ì‹ ì²´
+    public int baseMND=0;   //ì •ì‹ 
+    public int baseINS = 0; //í†µì°°
+    public int baseHostility = 0; //ì ì˜
+
+    [Header("Team Check")]
+    public Team team = Team.Player;   // Player / Enemy
+
+    [Header("Boss Check(Enemy Only)")]
+    public ISBOSS isBoss = ISBOSS.None;
+
+    [Header("Animation")]
+    [Tooltip("ì´ ìœ ë‹›ì´ ì‚¬ìš©í•˜ëŠ” ê° ìŠ¤í‚¬(legacyId)ì— ëŒ€í•´, ìœ ë‹› ê³ ìœ ì˜ ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë¦¬ê±°ë¥¼ ë§¤í•‘í•©ë‹ˆë‹¤.")]
+    public SkillAnimBinding[] skillAnimBindings;
+
+    [Header("Skills (per character)")]
+    public SkillAsset[] skills; // ì—ë””í„°ì—ì„œ ìºë¦­í„°ë³„ë¡œ í• ë‹¹
+
+    [Header("Passives (per character)")]
+    public PassiveAsset[] passives; // íŒ¨ì‹œë¸Œ ìŠ¤í‚¬ë“¤ (í•´ê¸ˆ ì—¬ë¶€ëŠ” ëŸ°íƒ€ì„ì—ì„œ ê²°ì •)
+
+    [Header("Bond & Traits")]
+    [Range(0, 60)]
+    public int currentBond = 0; // í˜„ì¬ ìœ ëŒ€ ìˆ˜ì¹˜ (Max 60)
+    public TraitAsset activeTrait; // í˜„ì¬ ì¥ì°©ì¤‘ì¸ ì„±ê²©
+    // ì„±ê²© ë¦¬ìŠ¤íŠ¸ (ìˆœì„œëŒ€ë¡œ 10, 30, 60ì— í•´ê¸ˆ)
+    public TraitAsset[] traits;
+
+    [Header("UI")]
+    public Sprite UnitIcon; // ATB ì•„ì´ì½˜ìš© ìŠ¤í”„ë¼ì´íŠ¸
+    public Sprite UnitStandImage; // ì§„í˜• ë°°ì¹˜ìš© ìŠ¤í”„ë¼ì´íŠ¸
+    public GameObject battlePrefab; //ì „íˆ¬ ì „ìš© í”„ë¦¬íŒ¹
+
+    [System.Serializable]
+    public struct SkillAnimBinding
+    {
+        public SkillId skillId;     // SkillAsset.legacyId ì™€ ë™ì¼í•œ ê°’
+        public string triggerName;  // ì´ ìœ ë‹›ì´ ê·¸ ìŠ¤í‚¬ì„ ì“¸ ë•Œ ì‚¬ìš©í•  ì• ë‹ˆë©”ì´ì…˜ íŠ¸ë¦¬ê±°
+    }
+}

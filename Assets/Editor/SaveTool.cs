@@ -1,13 +1,13 @@
-// ¿¡µğÅÍ Àü¿ë (Scripts/Editor Æú´õ¿¡ ÀúÀå)
-using UnityEditor;
-using UnityEngine;
-
-public class SaveTool
-{
-    [MenuItem("Tools/Clear Save Data")]
-    public static void ClearSave()
-    {
-        PlayerPrefs.DeleteAll();
-        Debug.Log("¼¼ÀÌºê µ¥ÀÌÅÍ »èÁ¦ ¿Ï·á!");
-    }
+// ì—ë””í„° ì „ìš© (Scripts/Editor í´ë”ì— ì €ì¥)
+using UnityEditor;
+using UnityEngine;
+
+public class SaveTool
+{
+    [MenuItem("Tools/Clear Save Data")]
+    public static void ClearSave()
+    {
+        PlayerPrefs.DeleteAll();
+        Debug.Log("ì„¸ì´ë¸Œ ë°ì´í„° ì‚­ì œ ì™„ë£Œ!");
+    }
 }

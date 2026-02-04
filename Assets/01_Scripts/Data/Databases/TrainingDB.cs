@@ -1,208 +1,208 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Training/Training DB", fileName = "TrainingDB")]
-public class TrainingDB : ScriptableObject
-{
-    [Serializable]
-    public class Entry
-    {
-        public UnitData unit;       // ¾î¶² À¯´ÖÀÇ
-        public SkillAsset skill;    // ¾î¶² ½ºÅ³¿¡
-        public int routeIndex;   // -1=¹Ì¼±ÅÃ, 0~2 = ·çÆ®
-        public List<int> unlockedRoutes = new List<int>();  //ÇØ±İµÈ ÀÎµ¦½º¸¦ ÀúÀåÇÏ´Â ¸®½ºÆ®
-    }
-
-    [SerializeField] private List<Entry> entries = new();
-
-    // °Ë»ö ÃÖÀûÈ­¸¦ À§ÇÑ µñ¼Å³Ê¸® Ä³½Ã
-    // Key: (UnitData, SkillAsset), Value: Entry
-    private Dictionary<(UnitData, SkillAsset), Entry> entryCache = new Dictionary<(UnitData, SkillAsset), Entry>();
-
-    // LegacyID °Ë»ö ÃÖÀûÈ­¸¦ À§ÇÑ Ä³½Ã
-    // Key: (UnitData, LegacySkillId), Value: ÀÌ¹Ì µî·ÏµÈ SkillAsset Key
-    private Dictionary<(UnitData, SkillId), SkillAsset> legacyKeyCache = new Dictionary<(UnitData, SkillId), SkillAsset>();
-
-    // Ä³½Ã ÃÊ±âÈ­ ÇÃ·¡±×
-    private bool isInitialized = false;
-
-    // ½Ì±ÛÅÏ ÆĞÅÏ(´Ù¸¥ µ¥¼­ TrainingDB.Instance·Î Á¢±Ù)
-    static TrainingDB _instance;
-    public static TrainingDB Instance => _instance;
-
-    void OnEnable()
-    {
-        _instance = this;
-    }
-
-    // ¸®½ºÆ® ³»¿ëÀ» µñ¼Å³Ê¸®·Î ±¸Ãà
-    private void RebuildCache()
-    {
-        entryCache.Clear();
-        legacyKeyCache.Clear();
-
-        foreach (var entry in entries)
-        {
-            if (entry == null || entry.unit == null || entry.skill == null) continue;
-
-            // ¸ŞÀÎ ¿£Æ®¸® Ä³½Ì
-            if (!entryCache.ContainsKey((entry.unit, entry.skill)))
-            {
-                entryCache.Add((entry.unit, entry.skill), entry);
-            }
-
-            // Legacy ID Ä³½Ì (LegacyId°¡ ÀÖ´Â °æ¿ì)
-            if (entry.skill.legacyId != SkillId.None)
-            {
-                if (!legacyKeyCache.ContainsKey((entry.unit, entry.skill.legacyId)))
-                {
-                    legacyKeyCache.Add((entry.unit, entry.skill.legacyId), entry.skill);
-                }
-            }
-        }
-        isInitialized = true;
-    }
-
-    // Ä³½Ã¸¦ ÀÌ¿ëÇÑ ºü¸¥ °Ë»ö
-    Entry FindEntry(UnitData _unit, SkillAsset _skill)
-    {
-        if (_unit == null || _skill == null) return null;
-        if (!isInitialized) RebuildCache();
-
-        var key = GetTrainingKey(_unit, _skill);
-
-        if (entryCache.TryGetValue((_unit, key), out Entry foundEntry))
-        {
-            return foundEntry;
-        }
-        return null;
-    }
-
-    public int GetRoute(UnitData unit, SkillAsset skill)
-    {
-        var entry = FindEntry(unit, skill);
-        int route = entry != null ? entry.routeIndex : -1;
-
-        return route;
-    }
-
-    public void SetRoute(UnitData _unit, SkillAsset _skill, int _routeIndex)
-    {
-        if (_unit == null || _skill == null) return;
-        _routeIndex = Mathf.Clamp(_routeIndex, -1, 2);
-
-        var key = GetTrainingKey(_unit, _skill);
-        var entry = FindEntry(_unit, _skill);
-
-        if (entry != null)
-        {
-            entry.routeIndex = _routeIndex;
-        }
-        else
-        {
-            // ¾øÀ¸¸é »õ·Î Ãß°¡
-            var newEntry = new Entry
-            {
-                unit = _unit,
-                skill = key,
-                routeIndex = _routeIndex
-            };
-            entries.Add(newEntry);
-
-            // Ä³½Ã °»½Å
-            if (!entryCache.ContainsKey((_unit, key)))
-            {
-                entryCache.Add((_unit, key), newEntry);
-            }
-            if (key.legacyId != SkillId.None && !legacyKeyCache.ContainsKey((_unit, key.legacyId)))
-            {
-                legacyKeyCache.Add((_unit, key.legacyId), key);
-            }
-        }
-    }
-
-    // Ä³½Ã¸¦ È°¿ëÇÑ Key °Ë»ö
-    SkillAsset GetTrainingKey(UnitData _unit, SkillAsset _skill)
-    {
-        if (_unit == null || _skill == null) return _skill;
-
-        // legacyId°¡ ¼³Á¤µÇÁö ¾ÊÀº ½ºÅ³Àº ±×´ë·Î »ç¿ë
-        if (_skill.legacyId == SkillId.None)
-            return _skill;
-
-        // Ä³½Ã¿¡¼­ °°Àº LegacyId¸¦ °¡Áø ±âÁ¸ Å°°¡ ÀÖ´ÂÁö È®ÀÎ
-        if (legacyKeyCache.TryGetValue((_unit, _skill.legacyId), out SkillAsset existingKey))
-        {
-            return existingKey;
-        }
-
-        // ¾øÀ¸¸é ÀÌ¹ø ½ºÅ³ÀÌ Å°°¡ µÊ
-        return _skill;
-    }
-    public int GetRouteByLegacy(UnitData _unit, SkillId _legacyId)
-    {
-        if (_unit == null) return -1;
-        if (_legacyId == SkillId.None) return -1;
-        if (!isInitialized) RebuildCache();
-
-        // Legacy ID·Î µî·ÏµÈ ½ºÅ³ Å°¸¦ Ã£À½
-        if (legacyKeyCache.TryGetValue((_unit, _legacyId), out SkillAsset keySkill))
-        {
-            // ±× Å°·Î ¿£Æ®¸®¸¦ Ã£À½
-            if (entryCache.TryGetValue((_unit, keySkill), out Entry entry))
-            {
-                return entry.routeIndex;
-            }
-        }
-
-        return -1;
-    }
-
-    // ÇØ´ç ÈÆ·ÃÀÌ ÇØ±İµÇ¾ú´ÂÁö È®ÀÎ
-    public bool IsUnlocked(UnitData unit, SkillAsset skill, int routeIndex)
-    {
-        var entry = FindEntry(unit, skill);
-        if (entry == null) return false;
-
-        return entry.unlockedRoutes.Contains(routeIndex);
-    }
-
-    // ÈÆ·Ã ÇØ±İ
-    public void UnlockRoute(UnitData unit, SkillAsset skill, int routeIndex)
-    {
-        var key = GetTrainingKey(unit, skill);
-        var entry = FindEntry(unit, skill);
-
-        if (entry == null)
-        {
-            entry = new Entry { unit = unit, skill = key, routeIndex = -1 };
-            entries.Add(entry);
-
-            // Ä³½Ã °»½Å
-            entryCache.Add((unit, key), entry);
-            if (key.legacyId != SkillId.None && !legacyKeyCache.ContainsKey((unit, key.legacyId)))
-            {
-                legacyKeyCache.Add((unit, key.legacyId), key);
-            }
-        }
-
-        if (!entry.unlockedRoutes.Contains(routeIndex))
-        {
-            entry.unlockedRoutes.Add(routeIndex);
-        }
-    }
-
-    // À¯´Ö ÀüÃ¼ ÃÊ±âÈ­(¸®¼Â ¹öÆ°¿¡¼­ »ç¿ë)
-    public void ClearSelectionsFor(UnitData _unit)
-    {
-        if (_unit == null) return;
-
-        // ¸®½ºÆ®¿¡¼­ Á¦°Å
-        entries.RemoveAll(e => e != null && e.unit == _unit);
-
-        // Ä³½Ã´Â ºÎºĞ »èÁ¦°¡ º¹ÀâÇÏ¹Ç·Î ±×³É Àç±¸Ãà (ÃÊ±âÈ­³ª ¸®¼ÂÀº ºó¹øÇÏÁö ¾ÊÀ¸¹Ç·Î)
-        RebuildCache();
-    }
-}
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Training/Training DB", fileName = "TrainingDB")]
+public class TrainingDB : ScriptableObject
+{
+    [Serializable]
+    public class Entry
+    {
+        public UnitData unit;       // ì–´ë–¤ ìœ ë‹›ì˜
+        public SkillAsset skill;    // ì–´ë–¤ ìŠ¤í‚¬ì—
+        public int routeIndex;   // -1=ë¯¸ì„ íƒ, 0~2 = ë£¨íŠ¸
+        public List<int> unlockedRoutes = new List<int>();  //í•´ê¸ˆëœ ì¸ë±ìŠ¤ë¥¼ ì €ì¥í•˜ëŠ” ë¦¬ìŠ¤íŠ¸
+    }
+
+    [SerializeField] private List<Entry> entries = new();
+
+    // ê²€ìƒ‰ ìµœì í™”ë¥¼ ìœ„í•œ ë”•ì…”ë„ˆë¦¬ ìºì‹œ
+    // Key: (UnitData, SkillAsset), Value: Entry
+    private Dictionary<(UnitData, SkillAsset), Entry> entryCache = new Dictionary<(UnitData, SkillAsset), Entry>();
+
+    // LegacyID ê²€ìƒ‰ ìµœì í™”ë¥¼ ìœ„í•œ ìºì‹œ
+    // Key: (UnitData, LegacySkillId), Value: ì´ë¯¸ ë“±ë¡ëœ SkillAsset Key
+    private Dictionary<(UnitData, SkillId), SkillAsset> legacyKeyCache = new Dictionary<(UnitData, SkillId), SkillAsset>();
+
+    // ìºì‹œ ì´ˆê¸°í™” í”Œë˜ê·¸
+    private bool isInitialized = false;
+
+    // ì‹±ê¸€í„´ íŒ¨í„´(ë‹¤ë¥¸ ë°ì„œ TrainingDB.Instanceë¡œ ì ‘ê·¼)
+    static TrainingDB _instance;
+    public static TrainingDB Instance => _instance;
+
+    void OnEnable()
+    {
+        _instance = this;
+    }
+
+    // ë¦¬ìŠ¤íŠ¸ ë‚´ìš©ì„ ë”•ì…”ë„ˆë¦¬ë¡œ êµ¬ì¶•
+    private void RebuildCache()
+    {
+        entryCache.Clear();
+        legacyKeyCache.Clear();
+
+        foreach (var entry in entries)
+        {
+            if (entry == null || entry.unit == null || entry.skill == null) continue;
+
+            // ë©”ì¸ ì—”íŠ¸ë¦¬ ìºì‹±
+            if (!entryCache.ContainsKey((entry.unit, entry.skill)))
+            {
+                entryCache.Add((entry.unit, entry.skill), entry);
+            }
+
+            // Legacy ID ìºì‹± (LegacyIdê°€ ìˆëŠ” ê²½ìš°)
+            if (entry.skill.legacyId != SkillId.None)
+            {
+                if (!legacyKeyCache.ContainsKey((entry.unit, entry.skill.legacyId)))
+                {
+                    legacyKeyCache.Add((entry.unit, entry.skill.legacyId), entry.skill);
+                }
+            }
+        }
+        isInitialized = true;
+    }
+
+    // ìºì‹œë¥¼ ì´ìš©í•œ ë¹ ë¥¸ ê²€ìƒ‰
+    Entry FindEntry(UnitData _unit, SkillAsset _skill)
+    {
+        if (_unit == null || _skill == null) return null;
+        if (!isInitialized) RebuildCache();
+
+        var key = GetTrainingKey(_unit, _skill);
+
+        if (entryCache.TryGetValue((_unit, key), out Entry foundEntry))
+        {
+            return foundEntry;
+        }
+        return null;
+    }
+
+    public int GetRoute(UnitData unit, SkillAsset skill)
+    {
+        var entry = FindEntry(unit, skill);
+        int route = entry != null ? entry.routeIndex : -1;
+
+        return route;
+    }
+
+    public void SetRoute(UnitData _unit, SkillAsset _skill, int _routeIndex)
+    {
+        if (_unit == null || _skill == null) return;
+        _routeIndex = Mathf.Clamp(_routeIndex, -1, 2);
+
+        var key = GetTrainingKey(_unit, _skill);
+        var entry = FindEntry(_unit, _skill);
+
+        if (entry != null)
+        {
+            entry.routeIndex = _routeIndex;
+        }
+        else
+        {
+            // ì—†ìœ¼ë©´ ìƒˆë¡œ ì¶”ê°€
+            var newEntry = new Entry
+            {
+                unit = _unit,
+                skill = key,
+                routeIndex = _routeIndex
+            };
+            entries.Add(newEntry);
+
+            // ìºì‹œ ê°±ì‹ 
+            if (!entryCache.ContainsKey((_unit, key)))
+            {
+                entryCache.Add((_unit, key), newEntry);
+            }
+            if (key.legacyId != SkillId.None && !legacyKeyCache.ContainsKey((_unit, key.legacyId)))
+            {
+                legacyKeyCache.Add((_unit, key.legacyId), key);
+            }
+        }
+    }
+
+    // ìºì‹œë¥¼ í™œìš©í•œ Key ê²€ìƒ‰
+    SkillAsset GetTrainingKey(UnitData _unit, SkillAsset _skill)
+    {
+        if (_unit == null || _skill == null) return _skill;
+
+        // legacyIdê°€ ì„¤ì •ë˜ì§€ ì•Šì€ ìŠ¤í‚¬ì€ ê·¸ëŒ€ë¡œ ì‚¬ìš©
+        if (_skill.legacyId == SkillId.None)
+            return _skill;
+
+        // ìºì‹œì—ì„œ ê°™ì€ LegacyIdë¥¼ ê°€ì§„ ê¸°ì¡´ í‚¤ê°€ ìˆëŠ”ì§€ í™•ì¸
+        if (legacyKeyCache.TryGetValue((_unit, _skill.legacyId), out SkillAsset existingKey))
+        {
+            return existingKey;
+        }
+
+        // ì—†ìœ¼ë©´ ì´ë²ˆ ìŠ¤í‚¬ì´ í‚¤ê°€ ë¨
+        return _skill;
+    }
+    public int GetRouteByLegacy(UnitData _unit, SkillId _legacyId)
+    {
+        if (_unit == null) return -1;
+        if (_legacyId == SkillId.None) return -1;
+        if (!isInitialized) RebuildCache();
+
+        // Legacy IDë¡œ ë“±ë¡ëœ ìŠ¤í‚¬ í‚¤ë¥¼ ì°¾ìŒ
+        if (legacyKeyCache.TryGetValue((_unit, _legacyId), out SkillAsset keySkill))
+        {
+            // ê·¸ í‚¤ë¡œ ì—”íŠ¸ë¦¬ë¥¼ ì°¾ìŒ
+            if (entryCache.TryGetValue((_unit, keySkill), out Entry entry))
+            {
+                return entry.routeIndex;
+            }
+        }
+
+        return -1;
+    }
+
+    // í•´ë‹¹ í›ˆë ¨ì´ í•´ê¸ˆë˜ì—ˆëŠ”ì§€ í™•ì¸
+    public bool IsUnlocked(UnitData unit, SkillAsset skill, int routeIndex)
+    {
+        var entry = FindEntry(unit, skill);
+        if (entry == null) return false;
+
+        return entry.unlockedRoutes.Contains(routeIndex);
+    }
+
+    // í›ˆë ¨ í•´ê¸ˆ
+    public void UnlockRoute(UnitData unit, SkillAsset skill, int routeIndex)
+    {
+        var key = GetTrainingKey(unit, skill);
+        var entry = FindEntry(unit, skill);
+
+        if (entry == null)
+        {
+            entry = new Entry { unit = unit, skill = key, routeIndex = -1 };
+            entries.Add(entry);
+
+            // ìºì‹œ ê°±ì‹ 
+            entryCache.Add((unit, key), entry);
+            if (key.legacyId != SkillId.None && !legacyKeyCache.ContainsKey((unit, key.legacyId)))
+            {
+                legacyKeyCache.Add((unit, key.legacyId), key);
+            }
+        }
+
+        if (!entry.unlockedRoutes.Contains(routeIndex))
+        {
+            entry.unlockedRoutes.Add(routeIndex);
+        }
+    }
+
+    // ìœ ë‹› ì „ì²´ ì´ˆê¸°í™”(ë¦¬ì…‹ ë²„íŠ¼ì—ì„œ ì‚¬ìš©)
+    public void ClearSelectionsFor(UnitData _unit)
+    {
+        if (_unit == null) return;
+
+        // ë¦¬ìŠ¤íŠ¸ì—ì„œ ì œê±°
+        entries.RemoveAll(e => e != null && e.unit == _unit);
+
+        // ìºì‹œëŠ” ë¶€ë¶„ ì‚­ì œê°€ ë³µì¡í•˜ë¯€ë¡œ ê·¸ëƒ¥ ì¬êµ¬ì¶• (ì´ˆê¸°í™”ë‚˜ ë¦¬ì…‹ì€ ë¹ˆë²ˆí•˜ì§€ ì•Šìœ¼ë¯€ë¡œ)
+        RebuildCache();
+    }
+}

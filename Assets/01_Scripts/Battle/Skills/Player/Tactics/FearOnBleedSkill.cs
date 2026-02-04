@@ -1,190 +1,190 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(
-    menuName = "Battle/Skills/Common/Fear On Bleed",
-    fileName = "FearOnBleedSkill")]
-public class FearOnBleedSkill : SkillAsset
-{
-    [Header("±âº» °øÆ÷ È¿°ú")]
-    [Tooltip("ºÎ¿©ÇÒ °øÆ÷ »óÅÂÀÇ Áö¼Ó ÅÏ ¼ö (±âº» 1ÅÏ)")]
-    public int fearDurationTurns = 1;
-
-    [Header("Á¶°Ç: ÃâÇ÷ÀÌ ÀÖ´Â ´ë»ó¿¡°Ô¸¸ °øÆ÷ ºÎ¿©")]
-    [Tooltip("ÃâÇ÷ »óÅÂ ID (º¸Åë Bleed)")]
-    public StatusId bleedStatusId = StatusId.Bleeding;
-
-    [Tooltip("°øÆ÷ À¯´Ö »óÅÂ ID (º¸Åë UnitStateId.Fear)")]
-    public UnitStateId fearStateId = UnitStateId.Fear;
-
-    [Header("³ª¾à ÁßÃ¸ ºÎ¿© ÈÆ·Ã")]
-    [Tooltip("ÀÌ ·çÆ®ÀÏ ¶§, ´ë»ó¿¡°Ô ³ª¾à ÁßÃ¸À» ºÎ¿©ÇÕ´Ï´Ù.")]
-    public bool trainingApplyWeakness = true;
-    [Range(-1, 2)] public int routeForWeakness = 0;
-    [Tooltip("³ª¾à¿¡ ÇØ´çÇÏ´Â StatusId (ÀÎ½ºÆåÅÍ¿¡¼­ ÁöÁ¤)")]
-    public StatusId weaknessStatusId = StatusId.None;
-    [Tooltip("ºÎ¿©ÇÒ ³ª¾à ÁßÃ¸ ¼ö (±âº» 3)")]
-    public int weaknessStacks = 3;
-
-    [Header("ÀÚ¿ø Àı¾à ÈÆ·Ã")]
-    [Tooltip("ÈÆ·Ã¿¡¼­ ÀÚ¿ø ºñ¿ëÀ» µ¤¾î¾µÁö ¿©ºÎ")]
-    public bool trainingUseCostOverride = false;
-    [Tooltip("ÀÚ¿ø °¨¼Ò°¡ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º, 0 = 1¹ø ·çÆ®)")]
-    [Range(-1, 2)]
-    public int routeForCostOverride = -1;
-    [Tooltip("ÇØ´ç ·çÆ®¿¡¼­ ½ÇÁ¦·Î »ç¿ëÇÒ ÀÚ¿ø ºñ¿ë")]
-    public int trainingCostRoute = 0;
-
-    [Header("´ë»ó ÁöÁ¤ ºÒ°¡ »óÅÂ Á¦°Å ÈÆ·Ã")]
-    [Tooltip("ÀÌ ·çÆ®ÀÏ ¶§, Å¸°ÙÀÇ '´ë»ó ÁöÁ¤ ºÒ°¡' °ü·Ã »óÅÂ¸¦ Á¦°ÅÇÕ´Ï´Ù.")]
-    public bool trainingRemoveUntargetable = true;
-    [Range(-1, 2)] public int routeForRemoveUntargetable = 2;
-
-    [Tooltip("Á¦°ÅÇÒ '´ë»ó ÁöÁ¤ ºÒ°¡' »óÅÂ ¸ñ·Ï (¿¹: Ambush, Isolation µî)")]
-    public UnitStateId[] untargetableStatesToClear;
-
-    // ÀÌ ½ºÅ³Àº ¼±ÅÃ ½Ã ¹Ù·Î ¹ßµ¿(Å¸ÀÏ/À¯´Ö ÁöÁ¤ ¾øÀ½)
-    public bool SelfCastOnSelect => true;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = SkillTargetMode.Unit; }
-#endif
-    void OnEnable() 
-    { 
-        targetMode = SkillTargetMode.Unit;
-        costResource = SkillCostResource.Rage;
-    }
-
-    int GetRoute(BattleUnit _caster)
-    {
-        if (!_caster) return -1;
-        return _caster.GetTrainingRouteIndex(this);
-    }
-
-    // ÇÁ¸®ºä ¹üÀ§ ¾øÀ½ (Àü Àû±º ´ë»óÀ¸·Î µ¿ÀÛ)
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
-    {
-        yield break;
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // Å¸°ÙÀÌ ¾øÀ¸¸é ½ÇÇà ºÒ°¡
-        if (targetUnit == null) yield break;
-
-        // °øÅë À¯´Ö ½ºÅ³ Èå¸§ (Á¢±Ù -> ¾Ö´Ï -> È¿°ú)
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
-    }
-
-    /// <summary>
-    /// - ÇÃ·¹ÀÌ¾î: ¼±ÅÃÇÏÀÚ¸¶ÀÚ SelfCastOnSelect °æ·Î·Î ResolveOnUnit(this, caster, caster) È£Ãâ
-    /// - Àû AI: EnemyTurnRoutine¿¡¼­ ResolveOnUnit(this, enemy, ·£´ıÅ¸°Ù) È£ÃâÇÏÁö¸¸
-    ///   ¿©±â¼­´Â target ÆÄ¶ó¹ÌÅÍ¸¦ ¹«½ÃÇÏ°í "casterÀÇ ¸ğµç »ıÁ¸ Àû"À» ±âÁØÀ¸·Î Ã³¸®
-    /// </summary>
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (!_battlemanager || !_caster) yield break;
-
-        // MP ºñ¿ë °è»ê ¹× Â÷°¨ (ÈÆ·Ã ¹İ¿µ)
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        int route = GetRoute(_caster);
-
-        // === 1) »ıÁ¸ÇÑ Àû À¯´Ö ÀüÃ¼ Á¶È¸ ===
-        var enemies = _battlemanager.GetLivingEnemiesOf(_caster); // ÀÌ¹Ì BattleManager¿¡ ±¸ÇöµÇ¾î ÀÖÀ½:contentReference[oaicite:1]{index=1}
-
-        foreach (var enemy in enemies)
-        {
-            if (enemy == null) continue;
-
-            var sc = enemy.GetComponent<StatusController>();
-            var usc = enemy.GetComponent<UnitStateController>();
-
-            if (sc == null || usc == null) continue;
-
-            // ÃâÇ÷ÀÌ ¾ø´Â ÀûÀº ½ºÅµ
-            if (bleedStatusId == StatusId.None || !sc.Has(bleedStatusId))
-            {
-                continue;
-            }
-
-            // === 2) °øÆ÷ »óÅÂ ºÎ¿© ===
-            if (fearStateId != UnitStateId.None)
-            {
-                int duration = Mathf.Max(1, fearDurationTurns);
-                usc.ApplyForTurns(fearStateId, duration);   // ±âÁ¸¿¡ ¾²´Â ÅÏÁö¼Ó »óÅÂ ºÎ¿© ¸Ş¼­µå¿Í µ¿ÀÏ ÆĞÅÏ:contentReference[oaicite:2]{index=2}
-
-                Debug.Log($"[FearOnBleed] {_caster.name} ¡æ {enemy.name} °øÆ÷ {duration}ÅÏ ºÎ¿© (ÃâÇ÷ º¸À¯).");
-            }
-
-            // === ÈÆ·Ã 1: ³ª¾à ÁßÃ¸ 3, 1ÅÏ ===
-            if (trainingApplyWeakness &&
-                routeForWeakness >= 0 &&
-                route == routeForWeakness &&
-                weaknessStatusId != StatusId.None &&
-                weaknessStacks > 0)
-            {
-                sc.ApplyWithTurnContext(
-                    weaknessStatusId,
-                    weaknessStacks,
-                    1
-                );
-                Debug.Log($"[FearOnBleed][Route1] {enemy.name} ³ª¾à {weaknessStacks}ÁßÃ¸ (1ÅÏ) ºÎ¿©.");
-            }
-
-            // === ÈÆ·Ã 3: '´ë»ó ÁöÁ¤ ºÒ°¡' »óÅÂ Á¦°Å ===
-            if (trainingRemoveUntargetable &&
-                routeForRemoveUntargetable >= 0 &&
-                route == routeForRemoveUntargetable &&
-                untargetableStatesToClear != null)
-            {
-                foreach (var st in untargetableStatesToClear)
-                {
-                    if (st == UnitStateId.None) continue;
-                    usc.Remove(st);
-                }
-
-                Debug.Log($"[FearOnBleed][Route3] {enemy.name} ÀÇ ´ë»ó ÁöÁ¤ ºÒ°¡ »óÅÂ Á¦°Å.");
-            }
-        }
-
-        yield break;
-    }
-
-    // Å¸ÀÏ ´ë»ó ½ºÅ³ÀÌ ¾Æ´Ï¹Ç·Î ¾Æ¹« °Íµµ ¾È ÇÔ
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-    {
-        yield break;
-    }
-
-    public override int GetEffectiveCost(BattleUnit _caster)
-    {
-        int baseCost = base.GetEffectiveCost(_caster);
-        if (!_caster) return baseCost;
-
-        int route = GetRoute(_caster);
-        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
-            return Mathf.Max(0, trainingCostRoute);
-
-        return baseCost;
-    }
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(
+    menuName = "Battle/Skills/Common/Fear On Bleed",
+    fileName = "FearOnBleedSkill")]
+public class FearOnBleedSkill : SkillAsset
+{
+    [Header("ê¸°ë³¸ ê³µí¬ íš¨ê³¼")]
+    [Tooltip("ë¶€ì—¬í•  ê³µí¬ ìƒíƒœì˜ ì§€ì† í„´ ìˆ˜ (ê¸°ë³¸ 1í„´)")]
+    public int fearDurationTurns = 1;
+
+    [Header("ì¡°ê±´: ì¶œí˜ˆì´ ìˆëŠ” ëŒ€ìƒì—ê²Œë§Œ ê³µí¬ ë¶€ì—¬")]
+    [Tooltip("ì¶œí˜ˆ ìƒíƒœ ID (ë³´í†µ Bleed)")]
+    public StatusId bleedStatusId = StatusId.Bleeding;
+
+    [Tooltip("ê³µí¬ ìœ ë‹› ìƒíƒœ ID (ë³´í†µ UnitStateId.Fear)")]
+    public UnitStateId fearStateId = UnitStateId.Fear;
+
+    [Header("ë‚˜ì•½ ì¤‘ì²© ë¶€ì—¬ í›ˆë ¨")]
+    [Tooltip("ì´ ë£¨íŠ¸ì¼ ë•Œ, ëŒ€ìƒì—ê²Œ ë‚˜ì•½ ì¤‘ì²©ì„ ë¶€ì—¬í•©ë‹ˆë‹¤.")]
+    public bool trainingApplyWeakness = true;
+    [Range(-1, 2)] public int routeForWeakness = 0;
+    [Tooltip("ë‚˜ì•½ì— í•´ë‹¹í•˜ëŠ” StatusId (ì¸ìŠ¤í™í„°ì—ì„œ ì§€ì •)")]
+    public StatusId weaknessStatusId = StatusId.None;
+    [Tooltip("ë¶€ì—¬í•  ë‚˜ì•½ ì¤‘ì²© ìˆ˜ (ê¸°ë³¸ 3)")]
+    public int weaknessStacks = 3;
+
+    [Header("ìì› ì ˆì•½ í›ˆë ¨")]
+    [Tooltip("í›ˆë ¨ì—ì„œ ìì› ë¹„ìš©ì„ ë®ì–´ì“¸ì§€ ì—¬ë¶€")]
+    public bool trainingUseCostOverride = false;
+    [Tooltip("ìì› ê°ì†Œê°€ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±, 0 = 1ë²ˆ ë£¨íŠ¸)")]
+    [Range(-1, 2)]
+    public int routeForCostOverride = -1;
+    [Tooltip("í•´ë‹¹ ë£¨íŠ¸ì—ì„œ ì‹¤ì œë¡œ ì‚¬ìš©í•  ìì› ë¹„ìš©")]
+    public int trainingCostRoute = 0;
+
+    [Header("ëŒ€ìƒ ì§€ì • ë¶ˆê°€ ìƒíƒœ ì œê±° í›ˆë ¨")]
+    [Tooltip("ì´ ë£¨íŠ¸ì¼ ë•Œ, íƒ€ê²Ÿì˜ 'ëŒ€ìƒ ì§€ì • ë¶ˆê°€' ê´€ë ¨ ìƒíƒœë¥¼ ì œê±°í•©ë‹ˆë‹¤.")]
+    public bool trainingRemoveUntargetable = true;
+    [Range(-1, 2)] public int routeForRemoveUntargetable = 2;
+
+    [Tooltip("ì œê±°í•  'ëŒ€ìƒ ì§€ì • ë¶ˆê°€' ìƒíƒœ ëª©ë¡ (ì˜ˆ: Ambush, Isolation ë“±)")]
+    public UnitStateId[] untargetableStatesToClear;
+
+    // ì´ ìŠ¤í‚¬ì€ ì„ íƒ ì‹œ ë°”ë¡œ ë°œë™(íƒ€ì¼/ìœ ë‹› ì§€ì • ì—†ìŒ)
+    public bool SelfCastOnSelect => true;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = SkillTargetMode.Unit; }
+#endif
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.Rage;
+    }
+
+    int GetRoute(BattleUnit _caster)
+    {
+        if (!_caster) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
+    // í”„ë¦¬ë·° ë²”ìœ„ ì—†ìŒ (ì „ ì êµ° ëŒ€ìƒìœ¼ë¡œ ë™ì‘)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
+    {
+        yield break;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // íƒ€ê²Ÿì´ ì—†ìœ¼ë©´ ì‹¤í–‰ ë¶ˆê°€
+        if (targetUnit == null) yield break;
+
+        // ê³µí†µ ìœ ë‹› ìŠ¤í‚¬ íë¦„ (ì ‘ê·¼ -> ì• ë‹ˆ -> íš¨ê³¼)
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, targetUnit);
+    }
+
+    /// <summary>
+    /// - í”Œë ˆì´ì–´: ì„ íƒí•˜ìë§ˆì SelfCastOnSelect ê²½ë¡œë¡œ ResolveOnUnit(this, caster, caster) í˜¸ì¶œ
+    /// - ì  AI: EnemyTurnRoutineì—ì„œ ResolveOnUnit(this, enemy, ëœë¤íƒ€ê²Ÿ) í˜¸ì¶œí•˜ì§€ë§Œ
+    ///   ì—¬ê¸°ì„œëŠ” target íŒŒë¼ë¯¸í„°ë¥¼ ë¬´ì‹œí•˜ê³  "casterì˜ ëª¨ë“  ìƒì¡´ ì "ì„ ê¸°ì¤€ìœ¼ë¡œ ì²˜ë¦¬
+    /// </summary>
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (!_battlemanager || !_caster) yield break;
+
+        // MP ë¹„ìš© ê³„ì‚° ë° ì°¨ê° (í›ˆë ¨ ë°˜ì˜)
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        int route = GetRoute(_caster);
+
+        // === 1) ìƒì¡´í•œ ì  ìœ ë‹› ì „ì²´ ì¡°íšŒ ===
+        var enemies = _battlemanager.GetLivingEnemiesOf(_caster); // ì´ë¯¸ BattleManagerì— êµ¬í˜„ë˜ì–´ ìˆìŒ:contentReference[oaicite:1]{index=1}
+
+        foreach (var enemy in enemies)
+        {
+            if (enemy == null) continue;
+
+            var sc = enemy.GetComponent<StatusController>();
+            var usc = enemy.GetComponent<UnitStateController>();
+
+            if (sc == null || usc == null) continue;
+
+            // ì¶œí˜ˆì´ ì—†ëŠ” ì ì€ ìŠ¤í‚µ
+            if (bleedStatusId == StatusId.None || !sc.Has(bleedStatusId))
+            {
+                continue;
+            }
+
+            // === 2) ê³µí¬ ìƒíƒœ ë¶€ì—¬ ===
+            if (fearStateId != UnitStateId.None)
+            {
+                int duration = Mathf.Max(1, fearDurationTurns);
+                usc.ApplyForTurns(fearStateId, duration);   // ê¸°ì¡´ì— ì“°ëŠ” í„´ì§€ì† ìƒíƒœ ë¶€ì—¬ ë©”ì„œë“œì™€ ë™ì¼ íŒ¨í„´:contentReference[oaicite:2]{index=2}
+
+                Debug.Log($"[FearOnBleed] {_caster.name} â†’ {enemy.name} ê³µí¬ {duration}í„´ ë¶€ì—¬ (ì¶œí˜ˆ ë³´ìœ ).");
+            }
+
+            // === í›ˆë ¨ 1: ë‚˜ì•½ ì¤‘ì²© 3, 1í„´ ===
+            if (trainingApplyWeakness &&
+                routeForWeakness >= 0 &&
+                route == routeForWeakness &&
+                weaknessStatusId != StatusId.None &&
+                weaknessStacks > 0)
+            {
+                sc.ApplyWithTurnContext(
+                    weaknessStatusId,
+                    weaknessStacks,
+                    1
+                );
+                Debug.Log($"[FearOnBleed][Route1] {enemy.name} ë‚˜ì•½ {weaknessStacks}ì¤‘ì²© (1í„´) ë¶€ì—¬.");
+            }
+
+            // === í›ˆë ¨ 3: 'ëŒ€ìƒ ì§€ì • ë¶ˆê°€' ìƒíƒœ ì œê±° ===
+            if (trainingRemoveUntargetable &&
+                routeForRemoveUntargetable >= 0 &&
+                route == routeForRemoveUntargetable &&
+                untargetableStatesToClear != null)
+            {
+                foreach (var st in untargetableStatesToClear)
+                {
+                    if (st == UnitStateId.None) continue;
+                    usc.Remove(st);
+                }
+
+                Debug.Log($"[FearOnBleed][Route3] {enemy.name} ì˜ ëŒ€ìƒ ì§€ì • ë¶ˆê°€ ìƒíƒœ ì œê±°.");
+            }
+        }
+
+        yield break;
+    }
+
+    // íƒ€ì¼ ëŒ€ìƒ ìŠ¤í‚¬ì´ ì•„ë‹ˆë¯€ë¡œ ì•„ë¬´ ê²ƒë„ ì•ˆ í•¨
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    {
+        yield break;
+    }
+
+    public override int GetEffectiveCost(BattleUnit _caster)
+    {
+        int baseCost = base.GetEffectiveCost(_caster);
+        if (!_caster) return baseCost;
+
+        int route = GetRoute(_caster);
+        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+            return Mathf.Max(0, trainingCostRoute);
+
+        return baseCost;
+    }
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

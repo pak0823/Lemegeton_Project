@@ -1,44 +1,44 @@
-using UnityEngine;
-
-public abstract class PassiveAsset : ScriptableObject
-{
-    [Header("Display")]
-    public string displayName;
-    [TextArea] public string description;
-
-    [Header("Unlock")]
-    [Tooltip("true¸é ÀüÅõ ½ÃÀÛ ½Ã ÀÚµ¿ È°¼º.")]
-    public bool unlockedByDefault = false;
-
-    // ½Äº°ÀÚ (ÀúÀå ½Ã½ºÅÛ ¿¬µ¿¿ë)
-    public string id => name;
-
-    // ÀÌ¹Ì ÇØ±İµÇ¾ú´ÂÁö È®ÀÎ (SaveData µî°ú ¿¬µ¿ ÇÊ¿ä, Áö±İÀº ÀÓ½Ã·Î PlayerPrefs »ç¿ë)
-    public virtual bool IsUnlocked()
-    {
-        if (unlockedByDefault) return true;
-        // "Passive_ÆĞ½ÃºêÀÌ¸§" Å°°¡ 1ÀÌ¸é ÇØ±İµÈ °ÍÀ¸·Î °£ÁÖ
-        return PlayerPrefs.GetInt($"Passive_{id}", 0) == 1;
-    }
-
-    // ÇØ±İ ÁøÇàµµ (0.0f ~ 1.0f)
-    // ÀÚ½Ä Å¬·¡½º¿¡¼­ ¿À¹ö¶óÀÌµåÇØ¼­ "Àû Ã³Ä¡ ¼ö / 100" µîÀ» ¸®ÅÏÇØ¾ß ÇÔ
-    public virtual float GetProgress()
-    {
-        if (IsUnlocked()) return 1.0f;
-        return 0.0f; // ±âº»°ª
-    }
-    // ÇØ±İ È®Á¤ (Awakened ¹öÆ° ´­·¶À» ¶§ ½ÇÇà)
-    public virtual void Unlock()
-    {
-        PlayerPrefs.SetInt($"Passive_{id}", 1);
-        PlayerPrefs.Save();
-        Debug.Log($"[Passive] {displayName} ÇØ±İ ¿Ï·á!");
-    }
-
-    /// <summary>ÆĞ½Ãºê¸¦ ¼ÒÀ¯ÇÑ À¯´ÖÀÌ ÀüÅõ¿¡ ÁøÀÔÇÒ ¶§ È£Ãâ.</summary>
-    public virtual void OnAttach(BattleUnit owner, BattleManager battle) { }
-
-    /// <summary>ÆĞ½Ãºê ºñÈ°¼ºÈ­/À¯´Ö »ç¸Á/Åğ°¢ µîÀ¸·Î ÇØÁ¦µÉ ¶§ È£Ãâ.</summary>
-    public virtual void OnDetach(BattleUnit owner, BattleManager battle) { }
-}
+using UnityEngine;
+
+public abstract class PassiveAsset : ScriptableObject
+{
+    [Header("Display")]
+    public string displayName;
+    [TextArea] public string description;
+
+    [Header("Unlock")]
+    [Tooltip("trueë©´ ì „íˆ¬ ì‹œì‘ ì‹œ ìë™ í™œì„±.")]
+    public bool unlockedByDefault = false;
+
+    // ì‹ë³„ì (ì €ì¥ ì‹œìŠ¤í…œ ì—°ë™ìš©)
+    public string id => name;
+
+    // ì´ë¯¸ í•´ê¸ˆë˜ì—ˆëŠ”ì§€ í™•ì¸ (SaveData ë“±ê³¼ ì—°ë™ í•„ìš”, ì§€ê¸ˆì€ ì„ì‹œë¡œ PlayerPrefs ì‚¬ìš©)
+    public virtual bool IsUnlocked()
+    {
+        if (unlockedByDefault) return true;
+        // "Passive_íŒ¨ì‹œë¸Œì´ë¦„" í‚¤ê°€ 1ì´ë©´ í•´ê¸ˆëœ ê²ƒìœ¼ë¡œ ê°„ì£¼
+        return PlayerPrefs.GetInt($"Passive_{id}", 0) == 1;
+    }
+
+    // í•´ê¸ˆ ì§„í–‰ë„ (0.0f ~ 1.0f)
+    // ìì‹ í´ë˜ìŠ¤ì—ì„œ ì˜¤ë²„ë¼ì´ë“œí•´ì„œ "ì  ì²˜ì¹˜ ìˆ˜ / 100" ë“±ì„ ë¦¬í„´í•´ì•¼ í•¨
+    public virtual float GetProgress()
+    {
+        if (IsUnlocked()) return 1.0f;
+        return 0.0f; // ê¸°ë³¸ê°’
+    }
+    // í•´ê¸ˆ í™•ì • (Awakened ë²„íŠ¼ ëˆŒë €ì„ ë•Œ ì‹¤í–‰)
+    public virtual void Unlock()
+    {
+        PlayerPrefs.SetInt($"Passive_{id}", 1);
+        PlayerPrefs.Save();
+        Debug.Log($"[Passive] {displayName} í•´ê¸ˆ ì™„ë£Œ!");
+    }
+
+    /// <summary>íŒ¨ì‹œë¸Œë¥¼ ì†Œìœ í•œ ìœ ë‹›ì´ ì „íˆ¬ì— ì§„ì…í•  ë•Œ í˜¸ì¶œ.</summary>
+    public virtual void OnAttach(BattleUnit owner, BattleManager battle) { }
+
+    /// <summary>íŒ¨ì‹œë¸Œ ë¹„í™œì„±í™”/ìœ ë‹› ì‚¬ë§/í‡´ê° ë“±ìœ¼ë¡œ í•´ì œë  ë•Œ í˜¸ì¶œ.</summary>
+    public virtual void OnDetach(BattleUnit owner, BattleManager battle) { }
+}

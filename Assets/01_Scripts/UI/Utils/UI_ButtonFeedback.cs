@@ -1,38 +1,38 @@
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.EventSystems;
-
-public class UI_ButtonFeedback : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
-{
-    [SerializeField] private Text targetText; // »ö±ò ¹Ù²Ü ÅØ½ºÆ®
-    [SerializeField] private Color normalColor = Color.white;
-    [SerializeField] private Color pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f); // È¸»ö
-
-    // ¿ÜºÎ¿¡¼­(ÃÊ±âÈ­ ½Ã) ÅØ½ºÆ® »ö»óÀÌ ¹Ù²ğ ¼ö ÀÖÀ¸¹Ç·Î(ÃÊ·Ï»ö µî), ±âÁØ »ö»óÀ» ¾÷µ¥ÀÌÆ®ÇÏ´Â ÇÔ¼ö
-    public void SetNormalColor(Color color)
-    {
-        normalColor = color;
-        if (targetText) targetText.color = normalColor;
-    }
-
-    public void OnPointerDown(PointerEventData eventData)
-    {
-        if (targetText) targetText.color = pressedColor;
-    }
-
-    public void OnPointerUp(PointerEventData eventData)
-    {
-        if (targetText) targetText.color = normalColor;
-    }
-
-    // ´©¸¥ »óÅÂ·Î ¹ÛÀ¸·Î ³ª°¡¸é ´Ù½Ã ¿ø·¡ »öÀ¸·Î
-    public void OnPointerExit(PointerEventData eventData)
-    {
-        if (targetText) targetText.color = normalColor;
-    }
-
-    private void OnValidate()
-    {
-        if (targetText == null) targetText = GetComponentInChildren<Text>();
-    }
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+
+public class UI_ButtonFeedback : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+{
+    [SerializeField] private Text targetText; // ìƒ‰ê¹” ë°”ê¿€ í…ìŠ¤íŠ¸
+    [SerializeField] private Color normalColor = Color.white;
+    [SerializeField] private Color pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f); // íšŒìƒ‰
+
+    // ì™¸ë¶€ì—ì„œ(ì´ˆê¸°í™” ì‹œ) í…ìŠ¤íŠ¸ ìƒ‰ìƒì´ ë°”ë€” ìˆ˜ ìˆìœ¼ë¯€ë¡œ(ì´ˆë¡ìƒ‰ ë“±), ê¸°ì¤€ ìƒ‰ìƒì„ ì—…ë°ì´íŠ¸í•˜ëŠ” í•¨ìˆ˜
+    public void SetNormalColor(Color color)
+    {
+        normalColor = color;
+        if (targetText) targetText.color = normalColor;
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        if (targetText) targetText.color = pressedColor;
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (targetText) targetText.color = normalColor;
+    }
+
+    // ëˆ„ë¥¸ ìƒíƒœë¡œ ë°–ìœ¼ë¡œ ë‚˜ê°€ë©´ ë‹¤ì‹œ ì›ë˜ ìƒ‰ìœ¼ë¡œ
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        if (targetText) targetText.color = normalColor;
+    }
+
+    private void OnValidate()
+    {
+        if (targetText == null) targetText = GetComponentInChildren<Text>();
+    }
 }

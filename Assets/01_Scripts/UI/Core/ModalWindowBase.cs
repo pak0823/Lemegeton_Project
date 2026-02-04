@@ -1,73 +1,73 @@
-using Unity.VisualScripting.Antlr3.Runtime;
-using UnityEngine;
-
-public abstract class ModalWindowBase : MonoBehaviour, IModalWindow, Project.UI.ISceneUiModule
-{
-    [SerializeField] protected CanvasGroup root;
-    public bool IsOpen { get; private set; }
-    public GameObject Root => gameObject;
-    public virtual int Priority => 0;
-
-    protected virtual void Awake()
-    {
-        // ¾ÈÀü ÃÊ±âÈ­: ´İÈû
-        if (root)
-        {
-            root.alpha = 0f;
-            root.blocksRaycasts = false;
-            root.interactable = false;
-        }
-        else
-        {
-            // ÇÊ¿ä ½Ã ÀÚµ¿ Å½»ö
-            root = GetComponentInChildren<CanvasGroup>(true);
-        }
-    }
-
-    public virtual void Show()
-    {
-        IsOpen = true;
-        if (root) { root.alpha = 1f; root.blocksRaycasts = true; root.interactable = true; }
-        OnShown(); // È®Àå ÈÅ
-    }
-
-    public virtual void Hide()
-    {
-        IsOpen = false;
-        if (root) { root.alpha = 0f; root.blocksRaycasts = false; root.interactable = false; }
-        OnHidden(); // È®Àå ÈÅ
-    }
-
-    public void Toggle()
-    {
-        var m = UiModalManager.Instance;
-        if (m != null) m.Toggle(this);
-        else if (IsOpen) Hide(); else Show();
-    }
-
-    public virtual void OnUiShown()
-    {
-        // ±ÔÄ¢: È°¼ºÈ­ ½Ã "Ç×»ó ´İÈù »óÅÂ"¿¡¼­ ½ÃÀÛ (ÇÊ¿ä ½Ã ´ÙÀ½ ÇÁ·¹ÀÓ º¸Á¤)
-        if (IsOpen) Hide();
-        // ·¹ÀÌ¾Æ¿ô/¾ŞÄ¿°¡ ´Ê°Ô ÀâÈ÷´Â °æ¿ì ´ëºñ(¼±ÅÃ)
-        StartCoroutine(_RepositionNextFrame());
-    }
-    public virtual void OnUiHidden()
-    {
-        // ¿­·Á ÀÖ¾ú´Ù¸é ¹İµå½Ã Á¤¸®
-        if (IsOpen) Hide();
-    }
-
-    /// <summary>Show Á÷ÈÄ¿¡ È®Àå Ã³¸®°¡ ÇÊ¿äÇÒ ¶§ ¿À¹ö¶óÀÌµå.</summary>
-    protected virtual void OnShown() { }
-    /// <summary>Hide Á÷ÈÄ¿¡ È®Àå Ã³¸®°¡ ÇÊ¿äÇÒ ¶§ ¿À¹ö¶óÀÌµå.</summary>
-    protected virtual void OnHidden() { }
-
-    System.Collections.IEnumerator _RepositionNextFrame()
-    {
-        yield return null;
-        // ÇÊ¿ä ½Ã ÀÚ½Ä UIÀÇ ÃÊ±â ¼±ÅÃ/Æ÷Ä¿½º/È­»ìÇ¥ À§Ä¡ º¸Á¤ µîÀ» ¿©±â¼­ Ã³¸®ÇÏµµ·Ï
-        // ÆÄ»ı Å¬·¡½º¿¡¼­ OnShown°ú ÇÔ²² »ç¿ëÇÏ¼¼¿ä.
-    }
-
+using Unity.VisualScripting.Antlr3.Runtime;
+using UnityEngine;
+
+public abstract class ModalWindowBase : MonoBehaviour, IModalWindow, Project.UI.ISceneUiModule
+{
+    [SerializeField] protected CanvasGroup root;
+    public bool IsOpen { get; private set; }
+    public GameObject Root => gameObject;
+    public virtual int Priority => 0;
+
+    protected virtual void Awake()
+    {
+        // ì•ˆì „ ì´ˆê¸°í™”: ë‹«í˜
+        if (root)
+        {
+            root.alpha = 0f;
+            root.blocksRaycasts = false;
+            root.interactable = false;
+        }
+        else
+        {
+            // í•„ìš” ì‹œ ìë™ íƒìƒ‰
+            root = GetComponentInChildren<CanvasGroup>(true);
+        }
+    }
+
+    public virtual void Show()
+    {
+        IsOpen = true;
+        if (root) { root.alpha = 1f; root.blocksRaycasts = true; root.interactable = true; }
+        OnShown(); // í™•ì¥ í›…
+    }
+
+    public virtual void Hide()
+    {
+        IsOpen = false;
+        if (root) { root.alpha = 0f; root.blocksRaycasts = false; root.interactable = false; }
+        OnHidden(); // í™•ì¥ í›…
+    }
+
+    public void Toggle()
+    {
+        var m = UiModalManager.Instance;
+        if (m != null) m.Toggle(this);
+        else if (IsOpen) Hide(); else Show();
+    }
+
+    public virtual void OnUiShown()
+    {
+        // ê·œì¹™: í™œì„±í™” ì‹œ "í•­ìƒ ë‹«íŒ ìƒíƒœ"ì—ì„œ ì‹œì‘ (í•„ìš” ì‹œ ë‹¤ìŒ í”„ë ˆì„ ë³´ì •)
+        if (IsOpen) Hide();
+        // ë ˆì´ì•„ì›ƒ/ì•µì»¤ê°€ ëŠ¦ê²Œ ì¡íˆëŠ” ê²½ìš° ëŒ€ë¹„(ì„ íƒ)
+        StartCoroutine(_RepositionNextFrame());
+    }
+    public virtual void OnUiHidden()
+    {
+        // ì—´ë ¤ ìˆì—ˆë‹¤ë©´ ë°˜ë“œì‹œ ì •ë¦¬
+        if (IsOpen) Hide();
+    }
+
+    /// <summary>Show ì§í›„ì— í™•ì¥ ì²˜ë¦¬ê°€ í•„ìš”í•  ë•Œ ì˜¤ë²„ë¼ì´ë“œ.</summary>
+    protected virtual void OnShown() { }
+    /// <summary>Hide ì§í›„ì— í™•ì¥ ì²˜ë¦¬ê°€ í•„ìš”í•  ë•Œ ì˜¤ë²„ë¼ì´ë“œ.</summary>
+    protected virtual void OnHidden() { }
+
+    System.Collections.IEnumerator _RepositionNextFrame()
+    {
+        yield return null;
+        // í•„ìš” ì‹œ ìì‹ UIì˜ ì´ˆê¸° ì„ íƒ/í¬ì»¤ìŠ¤/í™”ì‚´í‘œ ìœ„ì¹˜ ë³´ì • ë“±ì„ ì—¬ê¸°ì„œ ì²˜ë¦¬í•˜ë„ë¡
+        // íŒŒìƒ í´ë˜ìŠ¤ì—ì„œ OnShownê³¼ í•¨ê»˜ ì‚¬ìš©í•˜ì„¸ìš”.
+    }
+
 }

@@ -10,71 +10,71 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 {
     public enum BackMode
     {
-        W_Only,          // ÇÃ·¹ÀÌ¾î ±âÁØ W·Î¸¸
-        SW_Only,         // ÇÃ·¹ÀÌ¾î ±âÁØ SW·Î¸¸
-        W_or_SW,         // ÇÃ·¹ÀÌ¾î ±âÁØ W ¶Ç´Â SW (ÀûÀº E ¶Ç´Â NE)
+        W_Only,          // í”Œë ˆì´ì–´ ê¸°ì¤€ Wë¡œë§Œ
+        SW_Only,         // í”Œë ˆì´ì–´ ê¸°ì¤€ SWë¡œë§Œ
+        W_or_SW,         // í”Œë ˆì´ì–´ ê¸°ì¤€ W ë˜ëŠ” SW (ì ì€ E ë˜ëŠ” NE)
     }
     enum DirLabel { W, E, SW, NE }
-    // ¼±ÅÃ Áï½Ã ÀÚ±â ÀÚ½Å¿¡°Ô ¹ßµ¿(Å¸°ÙÆÃ ºÒÇÊ¿ä)
+    // ì„ íƒ ì¦‰ì‹œ ìê¸° ìì‹ ì—ê²Œ ë°œë™(íƒ€ê²ŸíŒ… ë¶ˆí•„ìš”)
     public enum DirectionMode
     {
-        // ÆÀ ±âÁØ: Player´Â X-°¡ µÚ/ X+°¡ ¾Õ, Enemy´Â ¹İ´ë
-        TeamBasedBack,   // µÚ·Î ÀÌµ¿(ÈÄÅğ)
-        TeamBasedFront,  // ¾ÕÀ¸·Î ÀÌµ¿(ÀüÁø)
+        // íŒ€ ê¸°ì¤€: PlayerëŠ” X-ê°€ ë’¤/ X+ê°€ ì•, EnemyëŠ” ë°˜ëŒ€
+        TeamBasedBack,   // ë’¤ë¡œ ì´ë™(í›„í‡´)
+        TeamBasedFront,  // ì•ìœ¼ë¡œ ì´ë™(ì „ì§„)
 
-        // ¸Ê Àı´ëÃà ±âÁØ
-        AbsoluteNegativeX, // ¿ŞÂÊÀ¸·Î
-        AbsolutePositiveX, // ¿À¸¥ÂÊÀ¸·Î
+        // ë§µ ì ˆëŒ€ì¶• ê¸°ì¤€
+        AbsoluteNegativeX, // ì™¼ìª½ìœ¼ë¡œ
+        AbsolutePositiveX, // ì˜¤ë¥¸ìª½ìœ¼ë¡œ
     }
 
     [Header("Movement Settings")]
     public BackMode backMode = BackMode.W_or_SW;
     public DirectionMode direction = DirectionMode.TeamBasedBack;
-    [Tooltip("¸Ê °æ°è±îÁö ÃÖ´ë ½ºÄµ Ä­ ¼ö(0 ÀÌÇÏ¸é ¹«Á¦ÇÑ)")]
+    [Tooltip("ë§µ ê²½ê³„ê¹Œì§€ ìµœëŒ€ ìŠ¤ìº” ì¹¸ ìˆ˜(0 ì´í•˜ë©´ ë¬´ì œí•œ)")]
     public int maxScanCells = 0;
-    [Tooltip("´ë½Ã ¿¬Ãâ ¿©ºÎ(¹ÌÃ¼Å© ½Ã ¼ø°£ÀÌµ¿)")]
+    [Tooltip("ëŒ€ì‹œ ì—°ì¶œ ì—¬ë¶€(ë¯¸ì²´í¬ ì‹œ ìˆœê°„ì´ë™)")]
     public bool dashAnimate = false;
-    [Tooltip("´ë½Ã ½Ã°£(ÃÊ)")]
+    [Tooltip("ëŒ€ì‹œ ì‹œê°„(ì´ˆ)")]
     public float dashDuration = 0.12f;
-    [Tooltip("´ë½Ã Æ÷¹°¼± ³ôÀÌ(0ÀÌ¸é Á÷¼±)")]
+    [Tooltip("ëŒ€ì‹œ í¬ë¬¼ì„  ë†’ì´(0ì´ë©´ ì§ì„ )")]
     public float dashArc = 0.0f;
 
     [Header("Animation")]
-    [Tooltip("¾ÕÀ¸·Î ÀÌµ¿ÇÒ ¶§ ¾µ ´ë½Ã Æ®¸®°Å ÀÌ¸§")]
+    [Tooltip("ì•ìœ¼ë¡œ ì´ë™í•  ë•Œ ì“¸ ëŒ€ì‹œ íŠ¸ë¦¬ê±° ì´ë¦„")]
     public string forwardDashTrigger = "DashForward";
 
-    [Tooltip("µÚ·Î ÀÌµ¿(¹é½ºÅÜ)ÇÒ ¶§ ¾µ ´ë½Ã Æ®¸®°Å ÀÌ¸§")]
+    [Tooltip("ë’¤ë¡œ ì´ë™(ë°±ìŠ¤í…)í•  ë•Œ ì“¸ ëŒ€ì‹œ íŠ¸ë¦¬ê±° ì´ë¦„")]
     public string backwardDashTrigger = "DashBack";
 
-    [Tooltip("¾Õ/µÚ ¹æÇâ¿¡ µû¶ó ´Ù¸¥ Æ®¸®°Å¸¦ ¾µÁö ¿©ºÎ")]
+    [Tooltip("ì•/ë’¤ ë°©í–¥ì— ë”°ë¼ ë‹¤ë¥¸ íŠ¸ë¦¬ê±°ë¥¼ ì“¸ì§€ ì—¬ë¶€")]
     public bool useDirectionalDashTrigger = true;
 
     [Header("Training")]
-    [Header("¼Ò¸ğ°ª °¨¼Ò Àû¿ë")]
-    [Tooltip("ÈÆ·Ã¿¡¼­ ÀÚ¿ø ºñ¿ëÀ» µ¤¾î¾µÁö ¿©ºÎ")]
+    [Header("ì†Œëª¨ê°’ ê°ì†Œ ì ìš©")]
+    [Tooltip("í›ˆë ¨ì—ì„œ ìì› ë¹„ìš©ì„ ë®ì–´ì“¸ì§€ ì—¬ë¶€")]
     public bool trainingUseCostOverride = false;
     [Range(-1, 2)]
-    [Tooltip("ÀÌ ½ºÅ³¿¡¼­ ÀÚ¿ø °¨¼Ò°¡ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ¹Ì»ç¿ë)")]
+    [Tooltip("ì´ ìŠ¤í‚¬ì—ì„œ ìì› ê°ì†Œê°€ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¯¸ì‚¬ìš©)")]
     public int routeForCostOverride = 0;
-    [Tooltip("ÈÆ·Ã ½Ã ½ÇÁ¦ ¼Ò¸ğ ÀÚ¿ø")]
+    [Tooltip("í›ˆë ¨ ì‹œ ì‹¤ì œ ì†Œëª¨ ìì›")]
     public int trainingCostRoute = 5;
 
-    [Header("ÀûÀÇ °¨¼Ò Àû¿ë")]
-    [Tooltip("ÇöÀç Àû´ë°¨¿¡¼­ ÀÌ °ª¸¸Å­ Áï½Ã °¨¼Ò (¾ç¼ö ÀÔ·Â)")]
+    [Header("ì ì˜ ê°ì†Œ ì ìš©")]
+    [Tooltip("í˜„ì¬ ì ëŒ€ê°ì—ì„œ ì´ ê°’ë§Œí¼ ì¦‰ì‹œ ê°ì†Œ (ì–‘ìˆ˜ ì…ë ¥)")]
     public float trainingHostilityDeltaRoute = 0.3f;
 
-    [Header("¿¬¼Ó Çàµ¿ Àû¿ë")]
-    [Tooltip("ÀÌ ½ºÅ³ »ç¿ë ÈÄ ÅÏÀ» ¸¶Ä¡Áö ¾ÊÀ½")]
+    [Header("ì—°ì† í–‰ë™ ì ìš©")]
+    [Tooltip("ì´ ìŠ¤í‚¬ ì‚¬ìš© í›„ í„´ì„ ë§ˆì¹˜ì§€ ì•ŠìŒ")]
     public bool trainingFreeActionOnRoute = false;
 
     void OnEnable()
     {
-        targetMode = SkillTargetMode.Tile; // ½Ç¼ö ¹æÁö ±âº»°ª
-        power = 0f;                    // ÇÇÇØ ¾øÀ½
+        targetMode = SkillTargetMode.Tile; // ì‹¤ìˆ˜ ë°©ì§€ ê¸°ë³¸ê°’
+        power = 0f;                    // í”¼í•´ ì—†ìŒ
         school = DamageSchool.Physical;
         costResource = SkillCostResource.Rage;
     }
-    // Ä¿½ºÅÒ ÇÁ¸®ºä & Å¸°Ù ¸Ê Á¦°ø
+    // ì»¤ìŠ¤í…€ í”„ë¦¬ë·° & íƒ€ê²Ÿ ë§µ ì œê³µ
     public IEnumerable<Vector3Int> GetPreviewCells(BattleManager _battlemanager, BattleUnit _caster)
         => (_battlemanager && _caster && _caster.CurrentMap) ? ComputeLandingCandidates(_battlemanager, _caster) : System.Array.Empty<Vector3Int>();
     public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
@@ -86,16 +86,24 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
     public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
     {
-        // Å¸°Ù ¸ÊÀÌ ¾øÀ¸¸é ½ÇÇà ºÒ°¡
+        // íƒ€ê²Ÿ ë§µì´ ì—†ìœ¼ë©´ ì‹¤í–‰ ë¶ˆê°€
         if (targetMap == null) yield break;
 
-        // ÀÚ¿ø ¼Òºñ (Execute¿¡¼­ ÇÑ ¹ø¸¸ ¼öÇà)
+        // 1. íƒ€ì¼ ìœ íš¨ì„± ê²€ì¦ ë¨¼ì € ì‹¤í–‰
+        var valids = new HashSet<Vector3Int>(ComputeLandingCandidates(bm, caster));
+        if (!valids.Contains(targetCell))
+        {
+            // ìœ íš¨í•˜ì§€ ì•Šì€ íƒ€ì¼ í´ë¦­ ì‹œ -> ì·¨ì†Œ ì²˜ë¦¬ (ìì› ì†Œë¹„ X)
+            bm.UnlockSkillConfirm();
+            yield break;
+        }
+
+        // 2. ìì› ì†Œë¹„
         var res = GetCostResource(caster);
         int cost = GetEffectiveCost(caster);
 
         if (cost > 0)
         {
-            // ÀÚ¿ø ºÎÁ· ½Ã ½ÇÇà Ãë¼Ò ¹× ¶ô ÇØÁ¦
             if (!caster.TryConsumeResource(res, cost))
             {
                 bm.UnlockSkillConfirm();
@@ -103,23 +111,23 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             }
         }
 
-        // 2. ÀÌµ¿ ·ÎÁ÷ ½ÇÇà (ResolveOnTile ³»ºÎÀÇ ÀÚ¿ø ¼Ò¸ğ´Â Á¦°ÅµÊ)
+        // 3. ì´ë™ ë¡œì§ ì‹¤í–‰ (ResolveOnTile ë‚´ë¶€ì˜ ê²€ì¦(valids)ì€ ì¤‘ë³µë˜ì§€ë§Œ ìœ ì§€í•´ë„ ë¬´ë°©)
         yield return ResolveOnTile(bm, targetMap, targetCell, caster);
 
-        // 3. Äğ´Ù¿î Àû¿ë
+        // 4. ì¿¨íƒ€ì„ ì ìš©
         caster.ApplyCooldown(this);
 
-        // 4. ¿¬¼Ó Çàµ¿(FreeAction) ÈÆ·Ã È®ÀÎ
+        // 5. ì—°ì† í–‰ë™(FreeAction) í›ˆë ¨ í™•ì¸
         int route = caster.GetTrainingRouteIndex(this);
-        bool isFreeAction = trainingFreeActionOnRoute && route >= 0; // ·çÆ® Ã¼Å© ÇÊ¿äÇÏ¸é Ãß°¡
+        bool isFreeAction = trainingFreeActionOnRoute && route >= 0;
 
         if (isFreeAction)
         {
-            bm.ResetSkillSelectionState(); // ÅÏ Á¾·á ¾È ÇÔ
+            bm.ResetSkillSelectionState(); // í„´ ì¢…ë£Œ ì•ˆ í•¨
         }
         else
         {
-            bm.FinishActionAfterSkill(); // ÅÏ Á¾·á
+            bm.FinishActionAfterSkill(); // í„´ ì¢…ë£Œ
         }
     }
 
@@ -127,61 +135,57 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     {
         if (!_battlemanager || !_caster || !_caster.CurrentMap) yield break;
 
-        // ºñ¿ë Ã¼Å©
+        // ë¹„ìš© ì²´í¬ (Unit ëª¨ë“œìš©)
         var res = GetCostResource(_caster);
         int cost = GetEffectiveCost(_caster);
         if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
 
         var candidates = ComputeLandingCandidates(_battlemanager, _caster).ToList();
         if (candidates.Count == 0) yield break;
-        // ±âº»Àº Ã¹ ÈÄº¸¸¦ »ç¿ë(¿øÇÏ¸é UI¿¡¼­ ¸ÕÀú ¼±ÅÃÇÏ°Ô ÇØ¾ß ÇÔ)
+        // ê¸°ë³¸ì€ ì²« í›„ë³´ë¥¼ ì‚¬ìš©(ì›í•˜ë©´ UIì—ì„œ ë¨¼ì € ì„ íƒí•˜ê²Œ í•´ì•¼ í•¨)
         yield return MoveCasterTo(_battlemanager, _caster, _caster.CurrentMap, candidates[0]);
     }
 
-    // Å¬¸¯µÈ Å¸ÀÏÀÌ ÈÄº¸ Áß ÇÏ³ªÀÏ ¶§¸¸ ÀÌµ¿ ½ÇÇà
+    // í´ë¦­ëœ íƒ€ì¼ì´ í›„ë³´ ì¤‘ í•˜ë‚˜ì¼ ë•Œë§Œ ì´ë™ ì‹¤í–‰
     public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
     {
         if (!_battlemanager || !_caster || !_map) yield break;
 
         var valids = new HashSet<Vector3Int>(ComputeLandingCandidates(_battlemanager, _caster));
         if (!valids.Contains(_originCell))
-            yield break; // ¹Ì¸®º¸±â ¹Û Å¬¸¯ ¹«½Ã
+            yield break; // ë¯¸ë¦¬ë³´ê¸° ë°– í´ë¦­ ë¬´ì‹œ
 
-        // Hostility Áï½Ã °¨¼Ò
+        // Hostility ì¦‰ì‹œ ê°ì†Œ
         int route = _caster.GetTrainingRouteIndex(this);
         if (route == 1 && trainingHostilityDeltaRoute > 0f)
         {
-            float factor = Mathf.Clamp01(trainingHostilityDeltaRoute);   // º¸Åë 0.3
+            float factor = Mathf.Clamp01(trainingHostilityDeltaRoute);   // ë³´í†µ 0.3
             float current = _caster.Hostility;
-            float delta = current * factor;                               // ÇöÀç ÀûÀÇÀÇ 30%
+            float delta = current * factor;                               // í˜„ì¬ ì ì˜ì˜ 30%
 
             if (delta > 0f)
             {
                 _caster.AddHostility(-delta);
-                Debug.Log($"[Training-Dir] {_caster.name} Hostility -{delta} (factor={factor}) ¡æ {_caster.Hostility}");
+                Debug.Log($"[Training-Dir] {_caster.name} Hostility -{delta} (factor={factor}) â†’ {_caster.Hostility}");
             }
         }
 
         yield return MoveCasterTo(_battlemanager, _caster, _map, _originCell);
     }
 
-    // ÇÙ½É ·ÎÁ÷: ÂøÁö ÈÄº¸ °è»ê
+    // í•µì‹¬ ë¡œì§: ì°©ì§€ í›„ë³´ ê³„ì‚°
     IEnumerable<Vector3Int> ComputeLandingCandidates(BattleManager _battlemanager, BattleUnit _caster)
     {
         var map = _caster.CurrentMap;
         var start = _caster.Cell;
-
         var labels = GetDirectionsFor(_caster.data.team, start, direction, backMode);
         var results = new HashSet<Vector3Int>();
 
         foreach (var label in labels)
         {
-            // start¿¡¼­ label ¹æÇâÀ¸·Î Âß ÇÑ ÁÙ(ray)À» ¸¸µç´Ù.
             var ray = CollectRay(map, start, label, maxScanCells);
-            if(ray.Count == 0)
-                continue;
+            if(ray.Count == 0) continue;
 
-            // °¡Àå ¸Õ Ä­ºÎÅÍ °Å²Ù·Î ¿À¸é¼­ ÂøÁö °¡´ÉÇÑ Ä­À» Ã£´Â´Ù.
             Vector3Int landing = start;
             for(int i=ray.Count - 1;i >=0;--i)
             {
@@ -192,11 +196,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
                     break;
                 }
             }
-
-            // ÂøÁö ºÒ°¡´ÉÇÏ°Å³ª, Á¦ÀÚ¸®¶ó¸é ÈÄº¸¿¡¼­ Á¦¿Ü
-            if (landing == start)
-                continue;
-
+            if (landing == start) continue;
             results.Add(landing);
         }
         return results;
@@ -204,37 +204,30 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
     List<Vector3Int> CollectRay(Tilemap _map, Vector3Int _start, DirLabel _label, int _maxcells)
     {
-        //start¿¡¼­ label ¹æÇâÀ¸·Î ÃÖ´ë maxCells¸¸Å­ ½ºÄµÇØ¼­ ±× ¶óÀÎ¿¡ ÀÖ´Â Ä­µéÀ» ¼ø¼­´ë·Î ¹İÈ¯ÇÑ´Ù.
         var list = new List<Vector3Int>();
         var cur = _start;
         int guard = 0;
 
         while(true)
         {
-            if(_maxcells > 0 && guard >= _maxcells)
-                break;
+            if(_maxcells > 0 && guard >= _maxcells) break;
             guard++;
 
             var step = GetStepAt(cur, _label);
             var next = new Vector3Int(cur.x + step.x, cur.y + step.y, cur.z);
 
-            if(!IsCellWithin(_map,next))
-                break;
-            if(!HasTile(_map,next))
-                break;
+            if(!IsCellWithin(_map,next)) break;
+            if(!HasTile(_map,next)) break;
 
             list.Add(next);
             cur = next;
         }
-
         return list;
     }
 
     // ----------------- helpers -----------------
-    // ÇÃ·¹ÀÌ¾î´Â W(-1,0)/SW(-1,1), ÀûÀº E(+1,0)/NE(+1,-1)
     List<DirLabel> GetDirectionsFor(Team _team, Vector3Int _start, DirectionMode _dirmode, BackMode _backmode)
     {
-        // ÆÀ ±âÁØ Àü/ÈÄ ½Ö (¶óº§)
         DirLabel backA, backB, frontA, frontB;
         if (_team == Team.Player) { backA = DirLabel.W; backB = DirLabel.SW; frontA = DirLabel.E; frontB = DirLabel.NE; }
         else { backA = DirLabel.E; backB = DirLabel.NE; frontA = DirLabel.W; frontB = DirLabel.SW; }
@@ -251,7 +244,6 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             BackMode.W_Only => new() { a },
             BackMode.SW_Only => new() { b },
             BackMode.W_or_SW => new() { a, b },
-            // (È¤½Ã E_or_NE¸¦ ¾²½Å´Ù¸é ¿©±â¿¡ Ãß°¡)
             _ => new() { a, b }
         };
     }
@@ -282,29 +274,23 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     bool IsLandingFree(BattleManager _battlemanager, Tilemap _map, Vector3Int _cell)
     {
         if (!HasTile(_map, _cell)) return false;
-
-        // ÇÑ ¼¿¸¸ ¿µ¿ªÀ¸·Î ¸¸µé¾î BattleManagerÀÇ À¯´Ö Á¶È¸ À¯Æ¿ »ç¿ë
         var units = _battlemanager.Grid.GetUnitsInArea(_map, new[] { _cell });
         foreach (var u in units)
         {
             if (u != null && !u.IsDead && u.Cell == _cell)
-                return false; // Á¡À¯ Áß
+                return false; 
         }
         return true;
     }
     bool IsBackMove(Team _team, Vector3Int _start, Vector3Int _dest)
     {
         var backLabels = GetDirectionsFor(_team, _start, DirectionMode.TeamBasedBack, backMode);
-
         foreach (var label in backLabels)
         {
-            var step = GetStepAt(_start, label);                 // È¦Â¦ ÄÃ·³ ¹İ¿µ
+            var step = GetStepAt(_start, label);
             var expected = new Vector3Int(_start.x + step.x, _start.y + step.y, _start.z);
-            if (expected == _dest)
-                return true;
+            if (expected == _dest) return true;
         }
-
-        // 1Ä­ÀÌ ¾Æ´Ñ ÀÌµ¿(¿©·¯ Ä­) ´ëºñ fallback (±âÁ¸ ·ÎÁ÷)
         if (_team == Team.Player) return _dest.x < _start.x;
         else return _dest.x > _start.x;
     }
@@ -314,26 +300,21 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
     IEnumerator MoveCasterTo(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _landing)
     {
-        if (!_caster || !_map)
-            yield break;
-
+        if (!_caster || !_map) yield break;
         var endW = _map.GetCellCenterWorld(_landing);
         var startCell = _caster.Cell;
 
-        // ÀÌµ¿ ½Ã ÇöÀç Ä­ Á¡À¯ ÇØÁ¦
         if (_battlemanager != null && _battlemanager.Grid != null)
             _battlemanager.Grid.SetOccupied(_caster.data.team, startCell, false);
 
         if (dashAnimate)
         {
-            // ¾Ö´Ï¸ŞÀÌÅÍ Å½»ö °­È­ (Root -> Children ¼ø¼­)
             var anim = _caster.GetComponent<Animator>();
             if (anim == null) anim = _caster.GetComponentInChildren<Animator>();
 
             if (anim != null)
             {
                 string trigger = null;
-
                 if (useDirectionalDashTrigger)
                 {
                     bool isBack = IsBackMove(_caster.data.team, startCell, _landing);
@@ -346,17 +327,15 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
 
                 if (!string.IsNullOrEmpty(trigger))
                 {
-                    // Æ®¸®°Å °­Á¦ ¼³Á¤ ¹× ·Î±× È®ÀÎ
                     anim.SetTrigger(trigger);
                     Debug.Log($"[Dash] {_caster.name} Play Trigger: {trigger}");
                 }
             }
             else
             {
-                Debug.LogWarning($"[Dash] {_caster.name}¿¡°Ô Animator ÄÄÆ÷³ÍÆ®°¡ ¾ø½À´Ï´Ù.");
+                Debug.LogWarning($"[Dash] {_caster.name}ì—ê²Œ Animator ì»´í¬ë„ŒíŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤.");
             }
 
-            // 2) À§Ä¡ º¸°£(´ë½Ã ¸ğ¼Ç)
             var startW = _caster.transform.position;
             float dur = Mathf.Max(0.0001f, dashDuration);
             float t = 0f;
@@ -365,29 +344,20 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
             {
                 t += Time.deltaTime;
                 float u = Mathf.Clamp01(t / dur);
-
-                // [¿É¼Ç] °¡¼Ó/°¨¼ÓÀ» ¿øÇÏ¸é Easing Ãß°¡ (¿¹: SmoothStep)
-                // u = Mathf.SmoothStep(0f, 1f, u); 
-
                 Vector3 pos = Vector3.Lerp(startW, endW, u);
-
                 if (dashArc > 0f)
                 {
                     float h = Mathf.Sin(u * Mathf.PI) * dashArc;
                     pos += Vector3.up * h;
                 }
-
                 _caster.transform.position = pos;
                 yield return null;
             }
         }
 
-        _caster.MoveTo(_map, _landing); // ÃÖÁ¾ ½º³À(¼¿ setter º¸È£)
-
-        // ÀÌµ¿ ³¡: »õ Ä­ Á¡À¯ ¼³Á¤
+        _caster.MoveTo(_map, _landing);
         if (_battlemanager != null && _battlemanager.Grid != null)
             _battlemanager.Grid.SetOccupied(_caster.data.team, _caster.Cell, true);
-
         yield return null;
     }
 
@@ -395,27 +365,17 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     {
         int baseCost = base.GetEffectiveCost(_caster);
         if (!_caster) return baseCost;
-
         int route = _caster.GetTrainingRouteIndex(this);
-        if (trainingUseCostOverride && route == 0)
-            return Mathf.Max(0, trainingCostRoute);
-
+        if (trainingUseCostOverride && route == 0) return Mathf.Max(0, trainingCostRoute);
         return baseCost;
     }
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
         string baseDesc = base.GetFullDescriptionRich(_caster);
-
         int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length) return baseDesc;
 
         var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
+        return SkillTooltipUtil.AppendTrainingRouteDescription(baseDesc, info.title, info.description);
     }
-
 }

@@ -1,34 +1,34 @@
-using UnityEngine;
-
-[CreateAssetMenu(fileName = "New Item", menuName = "Data/ItemData")]
-public class ItemData : ScriptableObject
-{
-    [Header("°íÀ¯ ID (Primary Key)")]
-    public string itemID;
-
-    [Header("±âº» Á¤º¸")]
-    public string itemName;      // Ç¥½Ã ÀÌ¸§
-    [TextArea]
-    public string itemDescription;   // ¾ÆÀÌÅÛ ¼³¸í
-
-    [Header("Addressables Atlas ¼³Á¤")]
-    public string atlasAddress;  // Atlas ¿¡¼ÂÀÇ Address (¿¹: ItemAtlas)
-    public string spriteName;    // Atlas ³»ºÎÀÇ Sprite ÀÌ¸§ (¿¹: icon_potion)
-
-    [Header("¼Ó¼º")]
-    public ItemType itemType;    // ¾ÆÀÌÅÛ Á¾·ù
-    public int maxStack = 6;    // ÇÑ ½½·Ô¿¡ ¸î °³±îÁö °ãÃÄÁö´ÂÁö
-
-    // ·±Å¸ÀÓ¿¡ ÀÌ ¹®ÀÚ¿­·Î ÀÌ¹ÌÁö¸¦ ·Îµå: "ItemAtlas[icon_potion]"
-    public string GetAtlasKey()
-    {
-        // ·Î±×¸¦ ÅëÇØ ½ÇÁ¦·Î ¾î¶² °ªÀÌ µé¾îÀÖ´ÂÁö °­Á¦·Î È®ÀÎ
-        Debug.Log($"[Debug] Item: {itemName}, Atlas: '{atlasAddress}', Sprite: '{spriteName}'");
-
-        if (string.IsNullOrEmpty(atlasAddress) || string.IsNullOrEmpty(spriteName))
-        {
-            return string.Empty; // ¿©±â¼­ ºó °ªÀÌ ¹İÈ¯µÇ¾î Key=[] ¿¡·¯°¡ ¹ß»ıÇÔ 
-        }
-        return $"{atlasAddress}[{spriteName}]";
-    }
+using UnityEngine;
+
+[CreateAssetMenu(fileName = "New Item", menuName = "Data/ItemData")]
+public class ItemData : ScriptableObject
+{
+    [Header("ê³ ìœ  ID (Primary Key)")]
+    public string itemID;
+
+    [Header("ê¸°ë³¸ ì •ë³´")]
+    public string itemName;      // í‘œì‹œ ì´ë¦„
+    [TextArea]
+    public string itemDescription;   // ì•„ì´í…œ ì„¤ëª…
+
+    [Header("Addressables Atlas ì„¤ì •")]
+    public string atlasAddress;  // Atlas ì—ì…‹ì˜ Address (ì˜ˆ: ItemAtlas)
+    public string spriteName;    // Atlas ë‚´ë¶€ì˜ Sprite ì´ë¦„ (ì˜ˆ: icon_potion)
+
+    [Header("ì†ì„±")]
+    public ItemType itemType;    // ì•„ì´í…œ ì¢…ë¥˜
+    public int maxStack = 6;    // í•œ ìŠ¬ë¡¯ì— ëª‡ ê°œê¹Œì§€ ê²¹ì³ì§€ëŠ”ì§€
+
+    // ëŸ°íƒ€ì„ì— ì´ ë¬¸ìì—´ë¡œ ì´ë¯¸ì§€ë¥¼ ë¡œë“œ: "ItemAtlas[icon_potion]"
+    public string GetAtlasKey()
+    {
+        // ë¡œê·¸ë¥¼ í†µí•´ ì‹¤ì œë¡œ ì–´ë–¤ ê°’ì´ ë“¤ì–´ìˆëŠ”ì§€ ê°•ì œë¡œ í™•ì¸
+        Debug.Log($"[Debug] Item: {itemName}, Atlas: '{atlasAddress}', Sprite: '{spriteName}'");
+
+        if (string.IsNullOrEmpty(atlasAddress) || string.IsNullOrEmpty(spriteName))
+        {
+            return string.Empty; // ì—¬ê¸°ì„œ ë¹ˆ ê°’ì´ ë°˜í™˜ë˜ì–´ Key=[] ì—ëŸ¬ê°€ ë°œìƒí•¨ 
+        }
+        return $"{atlasAddress}[{spriteName}]";
+    }
 }

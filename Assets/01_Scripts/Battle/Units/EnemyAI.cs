@@ -1,37 +1,37 @@
-using UnityEngine;
-
-[DisallowMultipleComponent]
-public class EnemyAI : MonoBehaviour
-{
-    [System.Serializable] public struct WeightedSO { public SkillAsset skill; public float weight; }
-    public WeightedSO[] soSkills;
-    public SkillAsset plannedSkill;
-
-    public bool TryPickSkillSO(out SkillAsset so)
-    {
-        so = null;
-        if (soSkills == null || soSkills.Length == 0) return false;
-        float sum = 0f; foreach (var e in soSkills) sum += Mathf.Max(0f, e.weight);
-        if (sum <= 0f) { so = soSkills[Random.Range(0, soSkills.Length)].skill; return so != null; }
-        float r = Random.value * sum; float acc = 0f;
-        foreach (var e in soSkills) { acc += Mathf.Max(0f, e.weight); if (r <= acc) { so = e.skill; return so != null; } }
-        return false;
-    }
-
-    // ´ÙÀ½ ÅÏ¿ë ½ºÅ³À» ¹Ì¸® ¼±Á¤ÇÏ¿© º¸°üÇÏ°í ¹ÝÈ¯
-    public SkillAsset PlanNextSkill()
-    {
-        if (!TryPickSkillSO(out plannedSkill))
-            plannedSkill = null;
-        return plannedSkill;
-    }
-
-    // ½ÇÇà ½ÃÁ¡¿¡ ²¨³» ¾²´Â ÇïÆÛ(¾øÀ¸¸é Áï½Ã »Ì±â)
-    public SkillAsset ConsumePlannedSkillOrPick()
-    {
-        var so = plannedSkill;
-        plannedSkill = null; // ÇÑ ¹ø ¾²¸é ºñ¿ò
-        if (so == null) TryPickSkillSO(out so);
-        return so;
-    }
-}
+using UnityEngine;
+
+[DisallowMultipleComponent]
+public class EnemyAI : MonoBehaviour
+{
+    [System.Serializable] public struct WeightedSO { public SkillAsset skill; public float weight; }
+    public WeightedSO[] soSkills;
+    public SkillAsset plannedSkill;
+
+    public bool TryPickSkillSO(out SkillAsset so)
+    {
+        so = null;
+        if (soSkills == null || soSkills.Length == 0) return false;
+        float sum = 0f; foreach (var e in soSkills) sum += Mathf.Max(0f, e.weight);
+        if (sum <= 0f) { so = soSkills[Random.Range(0, soSkills.Length)].skill; return so != null; }
+        float r = Random.value * sum; float acc = 0f;
+        foreach (var e in soSkills) { acc += Mathf.Max(0f, e.weight); if (r <= acc) { so = e.skill; return so != null; } }
+        return false;
+    }
+
+    // ë‹¤ìŒ í„´ìš© ìŠ¤í‚¬ì„ ë¯¸ë¦¬ ì„ ì •í•˜ì—¬ ë³´ê´€í•˜ê³  ë°˜í™˜
+    public SkillAsset PlanNextSkill()
+    {
+        if (!TryPickSkillSO(out plannedSkill))
+            plannedSkill = null;
+        return plannedSkill;
+    }
+
+    // ì‹¤í–‰ ì‹œì ì— êº¼ë‚´ ì“°ëŠ” í—¬í¼(ì—†ìœ¼ë©´ ì¦‰ì‹œ ë½‘ê¸°)
+    public SkillAsset ConsumePlannedSkillOrPick()
+    {
+        var so = plannedSkill;
+        plannedSkill = null; // í•œ ë²ˆ ì“°ë©´ ë¹„ì›€
+        if (so == null) TryPickSkillSO(out so);
+        return so;
+    }
+}

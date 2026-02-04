@@ -1,89 +1,89 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class TrapBehavior : MonoBehaviour
-{
-    public static readonly List<TrapBehavior> allTraps = new List<TrapBehavior>();
-
-    [Header("Trap Settings")]
-    [SerializeField] private bool applyOnce = true;
-    [SerializeField] private WeightedDescriptionsSO triggerDescriptions;
-
-    // (¼±ÅÃ) Å¸ÀÏÀ» ¸í½ÃÀûÀ¸·Î ¹Ú¾ÆµÎ°í ½ÍÀ¸¸é »ç¿ë
-    // ºñ¿öµÎ¸é transform.positionÀ» floorMap.WorldToCell·Î È¯»êÇØ¼­ »ç¿ë
-    [SerializeField] private bool useExplicitCell = false;
-    [SerializeField] private Vector3Int explicitCell;
-
-    private bool isTriggered;
-
-    void Awake()
-    {
-        if (!allTraps.Contains(this))
-            allTraps.Add(this);
-    }
-
-    void OnDestroy()
-    {
-        if (allTraps.Contains(this))
-            allTraps.Remove(this);
-    }
-
-    // ÇÃ·¹ÀÌ¾î°¡ ÇÔÁ¤ÀÌ ÀÖ´Â ¼¿¿¡ Á¸ÀçÇÏ¸é ¹ßµ¿
-    public void TryTriggerByPlayer(Tilemap floorMap, Vector3Int playerCell)
-    {
-        if (isTriggered) return;
-        if (floorMap == null) return;
-
-        Vector3Int trapCell = useExplicitCell ? explicitCell : floorMap.WorldToCell(transform.position);
-        if (trapCell != playerCell) return;
-
-        isTriggered = true;
-
-        // È°±â ¼Ò¸ð (Áï½Ã ¼Ò¸ð À¯Áö)
-        var vigor = VigorManager.Instance;
-        if (vigor != null)
-        {
-            int cost = Mathf.Max(0, vigor.costTriggerTrap);
-            if (cost > 0 && !vigor.TrySpend(cost, VigorSpendReason.TriggerTrap))
-            {
-                vigor.FailExploration($"È°±â°¡ ºÎÁ·ÇØ Æ®·¦ ÇÇÇØ¸¦ °¨´çÇÏÁö ¸øÇß½À´Ï´Ù. (ÇÊ¿ä {cost}, ÇöÀç {vigor.CurrentVigor})");
-                return;
-            }
-        }
-
-        // ·Î±× Ãâ·Â
-        int idx = triggerDescriptions ? triggerDescriptions.PickIndex() : -1;
-        if (idx >= 0 && idx < triggerDescriptions.entries.Length)
-        {
-            var text = triggerDescriptions.entries[idx].text;
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                ExplorationLogUI.Instance?.Push(text);
-                // ¿©±â¼­ UI¸¦ ´Ý´Â °Ô ¡°ÀÌµ¿ Á¤Áö¡±¿¡ ¿µÇâÀ» ÁÖ´Â ±¸Á¶°¡ ¾Æ´Ï¶ó¸é À¯Áö °¡´É
-                InteractionHintUI.Instance?.HideAll();
-            }
-        }
-
-        // 1È¸¼º ÇÔÁ¤ÀÌ¸é ºñÈ°¼ºÈ­
-        if (applyOnce)
-            gameObject.SetActive(false);
-    }
-
-    // ¹Ú½º°¡°¡ ÇÔÁ¤ÀÌ ÀÖ´Â ¼¿¿¡ Á¸ÀçÇÏ¸é ¹ßµ¿
-    public void TryConsumeByBox(Tilemap floorMap, Vector3Int boxCell)
-    {
-        if (isTriggered) return;
-        if (floorMap == null) return;
-
-        Vector3Int trapCell = useExplicitCell ? explicitCell : floorMap.WorldToCell(transform.position);
-        if (trapCell != boxCell) return;
-
-        // ¡°»óÀÚ¿¡ ÀÇÇØ Á¦°Å¡±ÀÌ¹Ç·Î ¹ßµ¿ Ã³¸®(È°±â/·Î±× ¾øÀ½)
-        isTriggered = true;
-
-        // 1È¸¼º ÇÔÁ¤ÀÌ¸é ºñÈ°¼ºÈ­(¶Ç´Â Destroy·Î ¹Ù²ãµµ µÊ)
-        if (applyOnce)
-            gameObject.SetActive(false);
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class TrapBehavior : MonoBehaviour
+{
+    public static readonly List<TrapBehavior> allTraps = new List<TrapBehavior>();
+
+    [Header("Trap Settings")]
+    [SerializeField] private bool applyOnce = true;
+    [SerializeField] private WeightedDescriptionsSO triggerDescriptions;
+
+    // (ì„ íƒ) íƒ€ì¼ì„ ëª…ì‹œì ìœ¼ë¡œ ë°•ì•„ë‘ê³  ì‹¶ìœ¼ë©´ ì‚¬ìš©
+    // ë¹„ì›Œë‘ë©´ transform.positionì„ floorMap.WorldToCellë¡œ í™˜ì‚°í•´ì„œ ì‚¬ìš©
+    [SerializeField] private bool useExplicitCell = false;
+    [SerializeField] private Vector3Int explicitCell;
+
+    private bool isTriggered;
+
+    void Awake()
+    {
+        if (!allTraps.Contains(this))
+            allTraps.Add(this);
+    }
+
+    void OnDestroy()
+    {
+        if (allTraps.Contains(this))
+            allTraps.Remove(this);
+    }
+
+    // í”Œë ˆì´ì–´ê°€ í•¨ì •ì´ ìžˆëŠ” ì…€ì— ì¡´ìž¬í•˜ë©´ ë°œë™
+    public void TryTriggerByPlayer(Tilemap floorMap, Vector3Int playerCell)
+    {
+        if (isTriggered) return;
+        if (floorMap == null) return;
+
+        Vector3Int trapCell = useExplicitCell ? explicitCell : floorMap.WorldToCell(transform.position);
+        if (trapCell != playerCell) return;
+
+        isTriggered = true;
+
+        // í™œê¸° ì†Œëª¨ (ì¦‰ì‹œ ì†Œëª¨ ìœ ì§€)
+        var vigor = VigorManager.Instance;
+        if (vigor != null)
+        {
+            int cost = Mathf.Max(0, vigor.costTriggerTrap);
+            if (cost > 0 && !vigor.TrySpend(cost, VigorSpendReason.TriggerTrap))
+            {
+                vigor.FailExploration($"í™œê¸°ê°€ ë¶€ì¡±í•´ íŠ¸ëž© í”¼í•´ë¥¼ ê°ë‹¹í•˜ì§€ ëª»í–ˆìŠµë‹ˆë‹¤. (í•„ìš” {cost}, í˜„ìž¬ {vigor.CurrentVigor})");
+                return;
+            }
+        }
+
+        // ë¡œê·¸ ì¶œë ¥
+        int idx = triggerDescriptions ? triggerDescriptions.PickIndex() : -1;
+        if (idx >= 0 && idx < triggerDescriptions.entries.Length)
+        {
+            var text = triggerDescriptions.entries[idx].text;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                ExplorationLogUI.Instance?.Push(text);
+                // ì—¬ê¸°ì„œ UIë¥¼ ë‹«ëŠ” ê²Œ â€œì´ë™ ì •ì§€â€ì— ì˜í–¥ì„ ì£¼ëŠ” êµ¬ì¡°ê°€ ì•„ë‹ˆë¼ë©´ ìœ ì§€ ê°€ëŠ¥
+                InteractionHintUI.Instance?.HideAll();
+            }
+        }
+
+        // 1íšŒì„± í•¨ì •ì´ë©´ ë¹„í™œì„±í™”
+        if (applyOnce)
+            gameObject.SetActive(false);
+    }
+
+    // ë°•ìŠ¤ê°€ê°€ í•¨ì •ì´ ìžˆëŠ” ì…€ì— ì¡´ìž¬í•˜ë©´ ë°œë™
+    public void TryConsumeByBox(Tilemap floorMap, Vector3Int boxCell)
+    {
+        if (isTriggered) return;
+        if (floorMap == null) return;
+
+        Vector3Int trapCell = useExplicitCell ? explicitCell : floorMap.WorldToCell(transform.position);
+        if (trapCell != boxCell) return;
+
+        // â€œìƒìžì— ì˜í•´ ì œê±°â€ì´ë¯€ë¡œ ë°œë™ ì²˜ë¦¬(í™œê¸°/ë¡œê·¸ ì—†ìŒ)
+        isTriggered = true;
+
+        // 1íšŒì„± í•¨ì •ì´ë©´ ë¹„í™œì„±í™”(ë˜ëŠ” Destroyë¡œ ë°”ê¿”ë„ ë¨)
+        if (applyOnce)
+            gameObject.SetActive(false);
+    }
+}

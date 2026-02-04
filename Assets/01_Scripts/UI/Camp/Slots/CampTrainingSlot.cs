@@ -1,95 +1,95 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public class CampTrainingSlot : MonoBehaviour
-{
-    [Header("UI")]
-    [SerializeField] private Text nameText;
-    [SerializeField] private Button button;
-    [SerializeField] private Image selectionHighlight; // ¼±ÅÃ ½Ã ÇÏÀÌ¶óÀÌÆ®
-
-    [Header("Colors")]
-    [SerializeField] private Color activeColor = Color.green;      // Àû¿ëµÊ
-    [SerializeField] private Color inactiveColor = Color.white;    // ¹ÌÀû¿ë (°³¹æµÊ)
-    [SerializeField] private Color lockedColor = new Color(1, 1, 1, 0.4f); // ¹Ì°³¹æ (¹İÅõ¸í)
-
-    private int routeIndex; // 0, 1, 2...
-    private int unlockCost;
-    private CampSkillSlot parentSlot; // ³ª¸¦ °ü¸®ÇÏ´Â ½ºÅ³ ½½·Ô(ºÎ¸ğ)
-    private bool isLocked = false;
-
-    public void Setup(int index, string trainingName, int cost, bool locked, CampSkillSlot parent)
-    {
-        routeIndex = index;
-        parentSlot = parent;
-        isLocked = locked;
-        unlockCost = cost;
-
-        if (nameText) nameText.text = trainingName;
-
-        button.onClick.RemoveAllListeners();
-        button.onClick.AddListener(OnClickTraining);
-    }
-
-    private void OnClickTraining()
-    {
-        if (isLocked)
-        {
-            // [Àá±è »óÅÂ]
-            // ¼±ÅÃ È¿°ú(ÃÊ·Ï»ö)¸¦ ³»Áö ¾Ê°í, ºÎ¸ğ¿¡°Ô "Àá±ä°Å ´­·È´Ù"°í º¸°íÇÔ
-            parentSlot.OnLockedTrainingSelected(routeIndex, unlockCost, this.transform);
-        }
-        else
-        {
-            // [ÇØ±İ »óÅÂ]
-            // Á¤»óÀûÀ¸·Î ¼±ÅÃ
-            parentSlot.OnTrainingSelected(routeIndex, this.transform);
-        }
-    }
-
-    // »óÅÂ¿¡ µû¸¥ ºñÁÖ¾ó °»½Å
-    public void UpdateVisualState(int currentActiveRoute, int focusedRouteIndex)
-    {
-        // ¹öÆ° InteractableÀº Ç×»ó true·Î µÖ¾ß Å¬¸¯ÇØ¼­ Á¤º¸¸¦ º¼ ¼ö ÀÖÀ½
-        button.interactable = true;
-
-        // ¹öÆ°ÀÇ ¹è°æ ÀÌ¹ÌÁö °¡Á®¿À±â (¾øÀ¸¸é button.targetGraphic »ç¿ë)
-        Image btnImage = button.GetComponent<Image>();
-
-        if (isLocked)
-        {
-            // [Àá±è] ÅØ½ºÆ®¿Í ¹öÆ° ¹è°æ ¸ğµÎ ¹İÅõ¸í »ö»ó Àû¿ë
-            if (nameText) nameText.color = lockedColor;
-            if (btnImage) btnImage.color = lockedColor;
-        }
-        else if (currentActiveRoute == routeIndex)
-        {
-            // [¼±ÅÃµÊ] ÅØ½ºÆ®´Â ÃÊ·Ï»ö(activeColor), ¹è°æÀº ¿ø·¡´ë·Î(Èò»ö)
-            if (nameText) nameText.color = activeColor;
-            if (btnImage) btnImage.color = Color.white;
-        }
-        else
-        {
-            // [¹Ì¼±ÅÃ/ÇØ±İµÊ] ÅØ½ºÆ® Èò»ö(inactiveColor), ¹è°æ Èò»ö
-            if (nameText) nameText.color = inactiveColor;
-            if (btnImage) btnImage.color = Color.white;
-        }
-
-        // ÇÏÀÌ¶óÀÌÆ® Ç¥½Ã Ã³¸®
-        if (selectionHighlight != null)
-        {
-            // focusedRouteIndex(ÇöÀç Å¬¸¯µÈ ÈÆ·Ã ¹øÈ£)
-            bool isFocused = (routeIndex == focusedRouteIndex);
-
-            // Àá°ÜÀÖÀ¸¸é Æ÷Ä¿½ºµÇ¾îµµ ÇÏÀÌ¶óÀÌÆ® ²ô±â
-            if (isLocked)
-            {
-                selectionHighlight.gameObject.SetActive(false);
-            }
-            else
-            {
-                selectionHighlight.gameObject.SetActive(isFocused);
-            }
-        }
-    }
+using UnityEngine;
+using UnityEngine.UI;
+
+public class CampTrainingSlot : MonoBehaviour
+{
+    [Header("UI")]
+    [SerializeField] private Text nameText;
+    [SerializeField] private Button button;
+    [SerializeField] private Image selectionHighlight; // ì„ íƒ ì‹œ í•˜ì´ë¼ì´íŠ¸
+
+    [Header("Colors")]
+    [SerializeField] private Color activeColor = Color.green;      // ì ìš©ë¨
+    [SerializeField] private Color inactiveColor = Color.white;    // ë¯¸ì ìš© (ê°œë°©ë¨)
+    [SerializeField] private Color lockedColor = new Color(1, 1, 1, 0.4f); // ë¯¸ê°œë°© (ë°˜íˆ¬ëª…)
+
+    private int routeIndex; // 0, 1, 2...
+    private int unlockCost;
+    private CampSkillSlot parentSlot; // ë‚˜ë¥¼ ê´€ë¦¬í•˜ëŠ” ìŠ¤í‚¬ ìŠ¬ë¡¯(ë¶€ëª¨)
+    private bool isLocked = false;
+
+    public void Setup(int index, string trainingName, int cost, bool locked, CampSkillSlot parent)
+    {
+        routeIndex = index;
+        parentSlot = parent;
+        isLocked = locked;
+        unlockCost = cost;
+
+        if (nameText) nameText.text = trainingName;
+
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(OnClickTraining);
+    }
+
+    private void OnClickTraining()
+    {
+        if (isLocked)
+        {
+            // [ì ê¹€ ìƒíƒœ]
+            // ì„ íƒ íš¨ê³¼(ì´ˆë¡ìƒ‰)ë¥¼ ë‚´ì§€ ì•Šê³ , ë¶€ëª¨ì—ê²Œ "ì ê¸´ê±° ëˆŒë ¸ë‹¤"ê³  ë³´ê³ í•¨
+            parentSlot.OnLockedTrainingSelected(routeIndex, unlockCost, this.transform);
+        }
+        else
+        {
+            // [í•´ê¸ˆ ìƒíƒœ]
+            // ì •ìƒì ìœ¼ë¡œ ì„ íƒ
+            parentSlot.OnTrainingSelected(routeIndex, this.transform);
+        }
+    }
+
+    // ìƒíƒœì— ë”°ë¥¸ ë¹„ì£¼ì–¼ ê°±ì‹ 
+    public void UpdateVisualState(int currentActiveRoute, int focusedRouteIndex)
+    {
+        // ë²„íŠ¼ Interactableì€ í•­ìƒ trueë¡œ ë‘¬ì•¼ í´ë¦­í•´ì„œ ì •ë³´ë¥¼ ë³¼ ìˆ˜ ìˆìŒ
+        button.interactable = true;
+
+        // ë²„íŠ¼ì˜ ë°°ê²½ ì´ë¯¸ì§€ ê°€ì ¸ì˜¤ê¸° (ì—†ìœ¼ë©´ button.targetGraphic ì‚¬ìš©)
+        Image btnImage = button.GetComponent<Image>();
+
+        if (isLocked)
+        {
+            // [ì ê¹€] í…ìŠ¤íŠ¸ì™€ ë²„íŠ¼ ë°°ê²½ ëª¨ë‘ ë°˜íˆ¬ëª… ìƒ‰ìƒ ì ìš©
+            if (nameText) nameText.color = lockedColor;
+            if (btnImage) btnImage.color = lockedColor;
+        }
+        else if (currentActiveRoute == routeIndex)
+        {
+            // [ì„ íƒë¨] í…ìŠ¤íŠ¸ëŠ” ì´ˆë¡ìƒ‰(activeColor), ë°°ê²½ì€ ì›ë˜ëŒ€ë¡œ(í°ìƒ‰)
+            if (nameText) nameText.color = activeColor;
+            if (btnImage) btnImage.color = Color.white;
+        }
+        else
+        {
+            // [ë¯¸ì„ íƒ/í•´ê¸ˆë¨] í…ìŠ¤íŠ¸ í°ìƒ‰(inactiveColor), ë°°ê²½ í°ìƒ‰
+            if (nameText) nameText.color = inactiveColor;
+            if (btnImage) btnImage.color = Color.white;
+        }
+
+        // í•˜ì´ë¼ì´íŠ¸ í‘œì‹œ ì²˜ë¦¬
+        if (selectionHighlight != null)
+        {
+            // focusedRouteIndex(í˜„ì¬ í´ë¦­ëœ í›ˆë ¨ ë²ˆí˜¸)
+            bool isFocused = (routeIndex == focusedRouteIndex);
+
+            // ì ê²¨ìˆìœ¼ë©´ í¬ì»¤ìŠ¤ë˜ì–´ë„ í•˜ì´ë¼ì´íŠ¸ ë„ê¸°
+            if (isLocked)
+            {
+                selectionHighlight.gameObject.SetActive(false);
+            }
+            else
+            {
+                selectionHighlight.gameObject.SetActive(isFocused);
+            }
+        }
+    }
 }

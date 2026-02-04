@@ -1,319 +1,319 @@
-using UnityEngine;
-using UnityEngine.UI;
-using System.Collections;
-
-public class BoxInteract : MonoBehaviour, IExplorationPersistable
-{
-    private ExplorationPersistId pid;
-    public Animator animator;
-    public bool isPlayerNear = false;
-    [SerializeField] private bool isOpened = false;
-    private bool _applyOpenOnStart = false;  // º¹¿ø ½Ã ´ÙÀ½ ÇÁ·¹ÀÓ¿¡ ¹İ¿µ
-
-    // === ÇÏÀÌ¶óÀÌÆ® ÇÊµå ===
-    [Header("ÇÏÀÌ¶óÀÌÆ® Ã³¸®")]
-    public SpriteRenderer highlightRenderer;   // ÁöÁ¤ ¾øÀ¸¸é GetComponent·Î ÀÚµ¿ ÇÒ´ç
-    private Color originalColor;
-    private bool isHighlighted = false;
-
-    [Header("È®·ü ¼³¸í (»óÀÚ ¿­ ¶§)")]
-    public WeightedDescriptionsSO openDescriptions;
-
-    [Header("¿­¸° ÈÄ Ã³¸®")]
-    [SerializeField] private bool removeOnOpen = true; // true¸é ¿­°í ³ª¼­ »óÀÚ¸¦ È­¸é/Ãæµ¹¿¡¼­ Á¦°Å
-    private float removeOnOpenDelay = 1.5f; // ¾Ö´Ï¸ŞÀÌ¼Ç º¸¿©ÁÙ ½Ã°£ (ÃÊ)
-    private int _pendingInspectCost = -1; // »óÀÚ ºñ¿ëÀ» "»ç¶óÁú ¶§" °áÁ¦ÇÏ±â À§ÇÑ ¿¹¾à°ª
-    private string _pendingOpenLogText = null;
-
-    // ÀÎ½ÄµÈ »óÀÚ È®ÀÎ
-    private bool isFocused = false;
-
-    [Header("Animator Restore")]
-    [SerializeField] private string openedStateName = "Box_Open"; // ¶Ç´Â "Opened"/"OpenIdle" µî ÇÁ·ÎÁ§Æ® »óÅÂ¸í
-    [SerializeField] private int openedLayer = 0;             // ±âº» ·¹ÀÌ¾î
-    [SerializeField] private bool jumpToOpenedPoseOnRestore = true;
-
-    // === ¿ÜºÎ È®ÀÎ¿ë ÇÁ·ÎÆÛÆ¼ ===
-    public bool IsOpened => isOpened;
-
-    private void OnEnable()
-    {
-        if (isOpened)
-            ForceOpenedVisual();
-    }
-
-    private void Awake()
-    {
-        pid = GetComponent<ExplorationPersistId>();
-        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
-
-        // SpriteRenderer Ä³½Ã ¹× ¿øº» »ö»ó ÀúÀå
-        if (highlightRenderer == null)
-            highlightRenderer = GetComponent<SpriteRenderer>();
-        if (highlightRenderer != null)
-            originalColor = highlightRenderer.color;
-
-        // ½ÃÀÛ ½Ã ¾È³» UI OFF
-        //if (targetMarker != null) targetMarker.SetActive(false);
-    }
-
-    void Start()
-    {
-        if (animator == null)
-            animator = GetComponent<Animator>();
-        //if (targetMarker != null)
-        //    targetMarker.SetActive(false); // ½ÃÀÛ½Ã ²¨µÎ±â
-
-        // º¹±Í Á÷ÈÄ Animator ÃÊ±â »óÅÂ°¡ µ¤¾î½áµµ ¿©±â¼­ ´Ù½Ã °­Á¦·Î ¸ÂÃã
-        if (isOpened || _applyOpenOnStart)
-        {
-            _applyOpenOnStart = false;
-            ForceOpenedVisual();
-        }
-    }
-
-    void Update(){}
-    // ¿ÜºÎ¿¡¼­ Æ÷Ä¿½º ÁöÁ¤
-    public void SetFocused(bool on)
-    {
-        if (isFocused == on) return;
-        isFocused = on;
-    }
-
-    // PushObject¿Í µ¿ÀÏ ÆĞÅÏÀÇ ÇÏÀÌ¶óÀÌÆ® ¸Ş¼­µå
-    public void SetHighlight(bool on)
-    {
-        if (highlightRenderer != null && isHighlighted != on)
-        {
-            // ¿­·ÈÀ¸¸é ±»ÀÌ ÄÑÁö ¾Êµµ·Ï ¹æ¾î
-            if (on && isOpened) on = false;
-
-            // PushObject´Â ³ë¶õ»ö, »óÀÚ´Â ½Ã°¢ÀûÀ¸·Î ±¸ºĞµÇµµ·Ï Ã»·Ï °è¿­ ¿¹½Ã
-            highlightRenderer.color = on ? new Color(0.4f, 1f, 1f, 1f) : originalColor;
-            isHighlighted = on;
-        }
-    }
-
-    // ½ÇÁ¦ ¿­±â µ¿ÀÛ ÇÔ¼ö
-    public void OpenChest()
-    {
-        if (isOpened) return;
-
-        // »óÀÚ Ã³¸® Áß¿¡´Â ÇÃ·¹ÀÌ¾î ÀÔ·Â ¿ÏÀü Â÷´Ü
-        PlayerMovement.Instance?.LockMovementIndefinite();
-
-        // È°±â ¼Ò¸ğ »óÀÚ Á¶»ç/°³ºÀ ºñ¿ë ===
-        var vigor = VigorManager.Instance;
-        if (vigor != null)
-        {
-            int cost = Mathf.Max(0, vigor.costInspectBox);
-            if (cost > 0 && !vigor.CanSpend(cost))
-            {
-                ExplorationLogUI.Instance?.Push($"È°±â°¡ ºÎÁ·ÇÕ´Ï´Ù. (»óÀÚ Á¶»ç / ÇÊ¿ä {cost}, ÇöÀç {vigor.CurrentVigor})");
-                return;
-            }
-
-            _pendingInspectCost = cost;
-        }
-        else
-        {
-            _pendingInspectCost = 0;
-        }
-
-        isOpened = true;
-        animator.SetBool("IsOpen", isOpened);
-
-        int idx = openDescriptions ? openDescriptions.PickIndex() : -1;
-        if (idx >= 0 && idx < openDescriptions.entries.Length)
-        {
-            switch (idx)
-            {
-                case 0: /* 40% ÄÉÀÌ½º ·ÎÁ÷ */ break;
-                case 1: /* 30% ÄÉÀÌ½º ·ÎÁ÷ */ break;
-                case 2:  break;
-                case 3: /* 10% ÄÉÀÌ½º ·ÎÁ÷ */ break;
-                default: /* ¿¹¿Ü Ã³¸®(ÇÁ¸®¼ÂÀÌ ´õ ±æ¾îÁú ¼öµµ) */ break;
-            }
-
-            // ¹®±¸ Ãâ·Â
-            var text = openDescriptions.entries[idx].text;
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                _pendingOpenLogText = text; // »ç¶óÁú ¶§ Ãâ·Â
-            }
-
-        }
-
-        var descriptiondata = GetComponent<DescriptionData>();
-        if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
-
-        // ¿­¸° µÚ¿¡´Â Æ÷Ä¿½º/ÇÏÀÌ¶óÀÌÆ®/¾È³» UI Á¤¸®
-        SetHighlight(false);;
-        isFocused = false;
-        // ¿­¸° µÚ Àá±ñ ¾Ö´Ï¸ŞÀÌ¼ÇÀ» º¸¿©ÁØ ´ÙÀ½ Á¦°Å/ºñÈ°¼º Ã³¸®
-        if (removeOnOpen)
-        {
-            StartCoroutine(Co_DelayedPostOpen());
-        }
-    }
-
-    // »óÀÚ°¡ ¿­¸° µÚ ÈÄÃ³¸®
-    // removeOnOpen == true ÀÌ¸é, È­¸é/Ãæµ¹¿¡¼­ Á¦°Å (Å¸ÀÏ ÅëÇà °¡´É)
-    private void ApplyPostOpenBehavior()
-    {
-        if (!removeOnOpen)
-            return;
-
-        // ¸ğµç Äİ¶óÀÌ´õ ºñÈ°¼ºÈ­ ¡æ impassableLayerMask Ãæµ¹ Á¦°Å + Å¬¸¯ ºÒ°¡
-        foreach (var col in GetComponents<Collider2D>())
-        {
-            if (col) col.enabled = false;
-        }
-
-        // ¸ğµç SpriteRenderer ºñÈ°¼ºÈ­ ¡æ ½Ã°¢ÀûÀ¸·Î ¿ÏÀüÈ÷ »ç¶óÁü
-        foreach (var sr in GetComponentsInChildren<SpriteRenderer>())
-        {
-            if (sr) sr.enabled = false;
-        }
-
-        // ÇÊ¿äÇÏ´Ù¸é Animatorµµ ´õ ÀÌ»ó µ¹Áö ¾Ê°Ô ¸·À» ¼ö ÀÖÀ½
-        if (animator != null)
-        {
-            animator.enabled = false;
-        }
-    }
-
-    // µô·¹ÀÌ ÈÄ ¿ÀºêÀèÆ® Á¦°Å
-    // ¾Ö´Ï¸ŞÀÌ¼ÇÀÌ ³¡³­ ÈÄ Á¦°Å°¡ µÇ°Ô ÇÏ±â À§ÇØ
-    private IEnumerator Co_DelayedPostOpen()
-    {
-        if (removeOnOpenDelay > 0f)
-            yield return new WaitForSeconds(removeOnOpenDelay);
-
-        // »ç¶óÁö´Â ¼ø°£ È°±â ¼Ò¸ğ
-        var vigor = VigorManager.Instance;
-        if (vigor != null && _pendingInspectCost > 0)
-        {
-            if (!vigor.TrySpend(_pendingInspectCost, VigorSpendReason.InspectBox))
-            {
-                vigor.FailExploration($"Å½»öÀ» ½ÇÆĞÇß½À´Ï´Ù. (»óÀÚ °áÁ¦ ½ÇÆĞ / ÇÊ¿ä {_pendingInspectCost}, ÇöÀç {vigor.CurrentVigor})");
-                yield break;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(_pendingOpenLogText))
-        {
-            ExplorationLogUI.Instance?.Push(_pendingOpenLogText);
-            //Shared.interactionHintUI?.HideAll();
-            _pendingOpenLogText = null;
-        }
-
-        _pendingInspectCost = -1;
-
-        ApplyPostOpenBehavior(); // »óÀÚ Á¦°Å
-                                 
-        PlayerMovement.Instance?.UnlockMovementIndefinite();// ÀÔ·Â ÇØÁ¦
-    }
-
-    void OnTriggerEnter2D(Collider2D other)
-    {
-        if (other.CompareTag("Player"))
-        {
-            isPlayerNear = true;
-        }
-    }
-
-    void OnTriggerExit2D(Collider2D other)
-    {
-        if (other.CompareTag("Player"))
-        {
-            isPlayerNear = false;
-
-            // ¾ÈÀüÇÏ°Ô ¾È³» UI/ÇÏÀÌ¶óÀÌÆ® ²¨ÁÜ
-            if (!isOpened)
-            {
-                SetHighlight(false);
-                //if (targetMarker != null) targetMarker.SetActive(false);
-                isFocused = false;
-            }
-        }
-    }
-
-    // º¹¿ø¿ë: Áï½Ã ¿­¸° »óÅÂ·Î ¼¼ÆÃ
-    public void OpenImmediately()
-    {
-        isOpened = true;
-        ForceOpenedVisual();
-
-        // º¹¿ø/Áï½Ã ¿­±â ½Ã¿¡µµ °°Àº Ã³¸®
-        var descriptiondata = GetComponent<DescriptionData>();
-        if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
-
-        // º¹¿ø ½Ã¿¡µµ "ÀÌ¹Ì ¿­¸° »óÀÚ"´Â Á¦°Å/ºñÈ°¼º Ã³¸®
-        ApplyPostOpenBehavior();
-    }
-
-    private void ForceOpenedVisual()
-    {
-        if (animator == null) animator = GetComponent<Animator>();
-        if (animator == null) return;
-
-        // ÆÄ¶ó¹ÌÅÍ
-        animator.SetBool("IsOpened", true);
-
-        if (jumpToOpenedPoseOnRestore)
-        {
-            // 1) »óÅÂ ÀÌ¸§À¸·Î ¹Ù·Î Á¡ÇÁ: Æ®·£Áö¼Ç/Å©·Î½ºÆäÀÌµå ¾øÀÌ "±× »óÅÂÀÇ ¸¶Áö¸· Æ÷Áî"·Î °íÁ¤
-            if (!string.IsNullOrEmpty(openedStateName))
-            {
-                int hash = Animator.StringToHash(openedStateName);
-                if (animator.HasState(openedLayer, hash))
-                {
-                    // Play(..., normalizedTime=1f) ¡æ ¸¶Áö¸· ÇÁ·¹ÀÓ·Î ½º³À
-                    animator.Play(hash, openedLayer, 1f);
-                }
-                else
-                {
-                    // Æú¹é: ÇöÀç ÄÁÆ®·Ñ·¯¿¡ "Open"ÀÌ ¾ø´Ù¸é ±×³É bool¸¸ ¸ÂÃß°í ³Ñ¾î°¨
-                }
-            }
-            else
-            {
-                // ÀÌ¸§ ¹ÌÁöÁ¤ Æú¹é: bool¸¸ ¸ÂÃß±â
-            }
-        }
-
-        // Áï½Ã Æò°¡(ÇÑ ÇÁ·¹ÀÓ ´ë±â ¾øÀÌ Æ÷Áî Àû¿ë)
-        animator.Update(0f);
-
-        // Æ÷Ä¿½º/UIµµ ¿­¸° »óÅÂ¿¡ ¸ÂÃç Á¤¸®
-        //if (targetMarker) targetMarker.SetActive(false);
-    }
-
-    // IExplorationPersistable
-    public string PersistID => pid.Id;
-    public ExplorationObjectState SaveState()
-    {
-        return new ExplorationObjectState
-        {
-            id = PersistID,
-            kind = "Chest",
-            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
-            position = transform.position,
-            b1 = isOpened
-        };
-    }
-
-    public void LoadState(ExplorationObjectState s)
-    {
-        transform.position = s.position;
-        isOpened = s.b1;
-        if (isOpened)
-        {
-            // Áï½Ã ¹İ¿µ + ´ÙÀ½ ÇÁ·¹ÀÓ¿¡µµ ÇÑ ¹ø ´õ º¸Á¤
-            OpenImmediately();
-            _applyOpenOnStart = true;
-        }
-    }
-
-}
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+
+public class BoxInteract : MonoBehaviour, IExplorationPersistable
+{
+    private ExplorationPersistId pid;
+    public Animator animator;
+    public bool isPlayerNear = false;
+    [SerializeField] private bool isOpened = false;
+    private bool _applyOpenOnStart = false;  // ë³µì› ì‹œ ë‹¤ìŒ í”„ë ˆì„ì— ë°˜ì˜
+
+    // === í•˜ì´ë¼ì´íŠ¸ í•„ë“œ ===
+    [Header("í•˜ì´ë¼ì´íŠ¸ ì²˜ë¦¬")]
+    public SpriteRenderer highlightRenderer;   // ì§€ì • ì—†ìœ¼ë©´ GetComponentë¡œ ìë™ í• ë‹¹
+    private Color originalColor;
+    private bool isHighlighted = false;
+
+    [Header("í™•ë¥  ì„¤ëª… (ìƒì ì—´ ë•Œ)")]
+    public WeightedDescriptionsSO openDescriptions;
+
+    [Header("ì—´ë¦° í›„ ì²˜ë¦¬")]
+    [SerializeField] private bool removeOnOpen = true; // trueë©´ ì—´ê³  ë‚˜ì„œ ìƒìë¥¼ í™”ë©´/ì¶©ëŒì—ì„œ ì œê±°
+    private float removeOnOpenDelay = 1.5f; // ì• ë‹ˆë©”ì´ì…˜ ë³´ì—¬ì¤„ ì‹œê°„ (ì´ˆ)
+    private int _pendingInspectCost = -1; // ìƒì ë¹„ìš©ì„ "ì‚¬ë¼ì§ˆ ë•Œ" ê²°ì œí•˜ê¸° ìœ„í•œ ì˜ˆì•½ê°’
+    private string _pendingOpenLogText = null;
+
+    // ì¸ì‹ëœ ìƒì í™•ì¸
+    private bool isFocused = false;
+
+    [Header("Animator Restore")]
+    [SerializeField] private string openedStateName = "Box_Open"; // ë˜ëŠ” "Opened"/"OpenIdle" ë“± í”„ë¡œì íŠ¸ ìƒíƒœëª…
+    [SerializeField] private int openedLayer = 0;             // ê¸°ë³¸ ë ˆì´ì–´
+    [SerializeField] private bool jumpToOpenedPoseOnRestore = true;
+
+    // === ì™¸ë¶€ í™•ì¸ìš© í”„ë¡œí¼í‹° ===
+    public bool IsOpened => isOpened;
+
+    private void OnEnable()
+    {
+        if (isOpened)
+            ForceOpenedVisual();
+    }
+
+    private void Awake()
+    {
+        pid = GetComponent<ExplorationPersistId>();
+        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
+
+        // SpriteRenderer ìºì‹œ ë° ì›ë³¸ ìƒ‰ìƒ ì €ì¥
+        if (highlightRenderer == null)
+            highlightRenderer = GetComponent<SpriteRenderer>();
+        if (highlightRenderer != null)
+            originalColor = highlightRenderer.color;
+
+        // ì‹œì‘ ì‹œ ì•ˆë‚´ UI OFF
+        //if (targetMarker != null) targetMarker.SetActive(false);
+    }
+
+    void Start()
+    {
+        if (animator == null)
+            animator = GetComponent<Animator>();
+        //if (targetMarker != null)
+        //    targetMarker.SetActive(false); // ì‹œì‘ì‹œ êº¼ë‘ê¸°
+
+        // ë³µê·€ ì§í›„ Animator ì´ˆê¸° ìƒíƒœê°€ ë®ì–´ì¨ë„ ì—¬ê¸°ì„œ ë‹¤ì‹œ ê°•ì œë¡œ ë§ì¶¤
+        if (isOpened || _applyOpenOnStart)
+        {
+            _applyOpenOnStart = false;
+            ForceOpenedVisual();
+        }
+    }
+
+    void Update(){}
+    // ì™¸ë¶€ì—ì„œ í¬ì»¤ìŠ¤ ì§€ì •
+    public void SetFocused(bool on)
+    {
+        if (isFocused == on) return;
+        isFocused = on;
+    }
+
+    // PushObjectì™€ ë™ì¼ íŒ¨í„´ì˜ í•˜ì´ë¼ì´íŠ¸ ë©”ì„œë“œ
+    public void SetHighlight(bool on)
+    {
+        if (highlightRenderer != null && isHighlighted != on)
+        {
+            // ì—´ë ¸ìœ¼ë©´ êµ³ì´ ì¼œì§€ ì•Šë„ë¡ ë°©ì–´
+            if (on && isOpened) on = false;
+
+            // PushObjectëŠ” ë…¸ë€ìƒ‰, ìƒìëŠ” ì‹œê°ì ìœ¼ë¡œ êµ¬ë¶„ë˜ë„ë¡ ì²­ë¡ ê³„ì—´ ì˜ˆì‹œ
+            highlightRenderer.color = on ? new Color(0.4f, 1f, 1f, 1f) : originalColor;
+            isHighlighted = on;
+        }
+    }
+
+    // ì‹¤ì œ ì—´ê¸° ë™ì‘ í•¨ìˆ˜
+    public void OpenChest()
+    {
+        if (isOpened) return;
+
+        // ìƒì ì²˜ë¦¬ ì¤‘ì—ëŠ” í”Œë ˆì´ì–´ ì…ë ¥ ì™„ì „ ì°¨ë‹¨
+        PlayerMovement.Instance?.LockMovementIndefinite();
+
+        // í™œê¸° ì†Œëª¨ ìƒì ì¡°ì‚¬/ê°œë´‰ ë¹„ìš© ===
+        var vigor = VigorManager.Instance;
+        if (vigor != null)
+        {
+            int cost = Mathf.Max(0, vigor.costInspectBox);
+            if (cost > 0 && !vigor.CanSpend(cost))
+            {
+                ExplorationLogUI.Instance?.Push($"í™œê¸°ê°€ ë¶€ì¡±í•©ë‹ˆë‹¤. (ìƒì ì¡°ì‚¬ / í•„ìš” {cost}, í˜„ì¬ {vigor.CurrentVigor})");
+                return;
+            }
+
+            _pendingInspectCost = cost;
+        }
+        else
+        {
+            _pendingInspectCost = 0;
+        }
+
+        isOpened = true;
+        animator.SetBool("IsOpen", isOpened);
+
+        int idx = openDescriptions ? openDescriptions.PickIndex() : -1;
+        if (idx >= 0 && idx < openDescriptions.entries.Length)
+        {
+            switch (idx)
+            {
+                case 0: /* 40% ì¼€ì´ìŠ¤ ë¡œì§ */ break;
+                case 1: /* 30% ì¼€ì´ìŠ¤ ë¡œì§ */ break;
+                case 2:  break;
+                case 3: /* 10% ì¼€ì´ìŠ¤ ë¡œì§ */ break;
+                default: /* ì˜ˆì™¸ ì²˜ë¦¬(í”„ë¦¬ì…‹ì´ ë” ê¸¸ì–´ì§ˆ ìˆ˜ë„) */ break;
+            }
+
+            // ë¬¸êµ¬ ì¶œë ¥
+            var text = openDescriptions.entries[idx].text;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                _pendingOpenLogText = text; // ì‚¬ë¼ì§ˆ ë•Œ ì¶œë ¥
+            }
+
+        }
+
+        var descriptiondata = GetComponent<DescriptionData>();
+        if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
+
+        // ì—´ë¦° ë’¤ì—ëŠ” í¬ì»¤ìŠ¤/í•˜ì´ë¼ì´íŠ¸/ì•ˆë‚´ UI ì •ë¦¬
+        SetHighlight(false);;
+        isFocused = false;
+        // ì—´ë¦° ë’¤ ì ê¹ ì• ë‹ˆë©”ì´ì…˜ì„ ë³´ì—¬ì¤€ ë‹¤ìŒ ì œê±°/ë¹„í™œì„± ì²˜ë¦¬
+        if (removeOnOpen)
+        {
+            StartCoroutine(Co_DelayedPostOpen());
+        }
+    }
+
+    // ìƒìê°€ ì—´ë¦° ë’¤ í›„ì²˜ë¦¬
+    // removeOnOpen == true ì´ë©´, í™”ë©´/ì¶©ëŒì—ì„œ ì œê±° (íƒ€ì¼ í†µí–‰ ê°€ëŠ¥)
+    private void ApplyPostOpenBehavior()
+    {
+        if (!removeOnOpen)
+            return;
+
+        // ëª¨ë“  ì½œë¼ì´ë” ë¹„í™œì„±í™” â†’ impassableLayerMask ì¶©ëŒ ì œê±° + í´ë¦­ ë¶ˆê°€
+        foreach (var col in GetComponents<Collider2D>())
+        {
+            if (col) col.enabled = false;
+        }
+
+        // ëª¨ë“  SpriteRenderer ë¹„í™œì„±í™” â†’ ì‹œê°ì ìœ¼ë¡œ ì™„ì „íˆ ì‚¬ë¼ì§
+        foreach (var sr in GetComponentsInChildren<SpriteRenderer>())
+        {
+            if (sr) sr.enabled = false;
+        }
+
+        // í•„ìš”í•˜ë‹¤ë©´ Animatorë„ ë” ì´ìƒ ëŒì§€ ì•Šê²Œ ë§‰ì„ ìˆ˜ ìˆìŒ
+        if (animator != null)
+        {
+            animator.enabled = false;
+        }
+    }
+
+    // ë”œë ˆì´ í›„ ì˜¤ë¸Œì­íŠ¸ ì œê±°
+    // ì• ë‹ˆë©”ì´ì…˜ì´ ëë‚œ í›„ ì œê±°ê°€ ë˜ê²Œ í•˜ê¸° ìœ„í•´
+    private IEnumerator Co_DelayedPostOpen()
+    {
+        if (removeOnOpenDelay > 0f)
+            yield return new WaitForSeconds(removeOnOpenDelay);
+
+        // ì‚¬ë¼ì§€ëŠ” ìˆœê°„ í™œê¸° ì†Œëª¨
+        var vigor = VigorManager.Instance;
+        if (vigor != null && _pendingInspectCost > 0)
+        {
+            if (!vigor.TrySpend(_pendingInspectCost, VigorSpendReason.InspectBox))
+            {
+                vigor.FailExploration($"íƒìƒ‰ì„ ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤. (ìƒì ê²°ì œ ì‹¤íŒ¨ / í•„ìš” {_pendingInspectCost}, í˜„ì¬ {vigor.CurrentVigor})");
+                yield break;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_pendingOpenLogText))
+        {
+            ExplorationLogUI.Instance?.Push(_pendingOpenLogText);
+            //Shared.interactionHintUI?.HideAll();
+            _pendingOpenLogText = null;
+        }
+
+        _pendingInspectCost = -1;
+
+        ApplyPostOpenBehavior(); // ìƒì ì œê±°
+                                 
+        PlayerMovement.Instance?.UnlockMovementIndefinite();// ì…ë ¥ í•´ì œ
+    }
+
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.CompareTag("Player"))
+        {
+            isPlayerNear = true;
+        }
+    }
+
+    void OnTriggerExit2D(Collider2D other)
+    {
+        if (other.CompareTag("Player"))
+        {
+            isPlayerNear = false;
+
+            // ì•ˆì „í•˜ê²Œ ì•ˆë‚´ UI/í•˜ì´ë¼ì´íŠ¸ êº¼ì¤Œ
+            if (!isOpened)
+            {
+                SetHighlight(false);
+                //if (targetMarker != null) targetMarker.SetActive(false);
+                isFocused = false;
+            }
+        }
+    }
+
+    // ë³µì›ìš©: ì¦‰ì‹œ ì—´ë¦° ìƒíƒœë¡œ ì„¸íŒ…
+    public void OpenImmediately()
+    {
+        isOpened = true;
+        ForceOpenedVisual();
+
+        // ë³µì›/ì¦‰ì‹œ ì—´ê¸° ì‹œì—ë„ ê°™ì€ ì²˜ë¦¬
+        var descriptiondata = GetComponent<DescriptionData>();
+        if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
+
+        // ë³µì› ì‹œì—ë„ "ì´ë¯¸ ì—´ë¦° ìƒì"ëŠ” ì œê±°/ë¹„í™œì„± ì²˜ë¦¬
+        ApplyPostOpenBehavior();
+    }
+
+    private void ForceOpenedVisual()
+    {
+        if (animator == null) animator = GetComponent<Animator>();
+        if (animator == null) return;
+
+        // íŒŒë¼ë¯¸í„°
+        animator.SetBool("IsOpened", true);
+
+        if (jumpToOpenedPoseOnRestore)
+        {
+            // 1) ìƒíƒœ ì´ë¦„ìœ¼ë¡œ ë°”ë¡œ ì í”„: íŠ¸ëœì§€ì…˜/í¬ë¡œìŠ¤í˜ì´ë“œ ì—†ì´ "ê·¸ ìƒíƒœì˜ ë§ˆì§€ë§‰ í¬ì¦ˆ"ë¡œ ê³ ì •
+            if (!string.IsNullOrEmpty(openedStateName))
+            {
+                int hash = Animator.StringToHash(openedStateName);
+                if (animator.HasState(openedLayer, hash))
+                {
+                    // Play(..., normalizedTime=1f) â†’ ë§ˆì§€ë§‰ í”„ë ˆì„ë¡œ ìŠ¤ëƒ…
+                    animator.Play(hash, openedLayer, 1f);
+                }
+                else
+                {
+                    // í´ë°±: í˜„ì¬ ì»¨íŠ¸ë¡¤ëŸ¬ì— "Open"ì´ ì—†ë‹¤ë©´ ê·¸ëƒ¥ boolë§Œ ë§ì¶”ê³  ë„˜ì–´ê°
+                }
+            }
+            else
+            {
+                // ì´ë¦„ ë¯¸ì§€ì • í´ë°±: boolë§Œ ë§ì¶”ê¸°
+            }
+        }
+
+        // ì¦‰ì‹œ í‰ê°€(í•œ í”„ë ˆì„ ëŒ€ê¸° ì—†ì´ í¬ì¦ˆ ì ìš©)
+        animator.Update(0f);
+
+        // í¬ì»¤ìŠ¤/UIë„ ì—´ë¦° ìƒíƒœì— ë§ì¶° ì •ë¦¬
+        //if (targetMarker) targetMarker.SetActive(false);
+    }
+
+    // IExplorationPersistable
+    public string PersistID => pid.Id;
+    public ExplorationObjectState SaveState()
+    {
+        return new ExplorationObjectState
+        {
+            id = PersistID,
+            kind = "Chest",
+            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
+            position = transform.position,
+            b1 = isOpened
+        };
+    }
+
+    public void LoadState(ExplorationObjectState s)
+    {
+        transform.position = s.position;
+        isOpened = s.b1;
+        if (isOpened)
+        {
+            // ì¦‰ì‹œ ë°˜ì˜ + ë‹¤ìŒ í”„ë ˆì„ì—ë„ í•œ ë²ˆ ë” ë³´ì •
+            OpenImmediately();
+            _applyOpenOnStart = true;
+        }
+    }
+
+}

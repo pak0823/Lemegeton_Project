@@ -1,18 +1,18 @@
-using UnityEngine;
-
-namespace Project.UI
-{
-    // ¾À °øÅë UI ¸ğµâÀÇ ÃÖ¼Ò °è¾à
-    public interface ISceneUiModule
-    {
-        void OnUiShown();   // gameObject°¡ ÄÑÁø Á÷ÈÄ 1È¸
-        void OnUiHidden();  // gameObject°¡ ²¨Áö±â Á÷Àü 1È¸
-    }
-
-    public interface IThemedUiModule
-    {
-        void ApplyTheme(Color? accent = null, Font font = null);
-    }
-}
-
-
+using UnityEngine;
+
+namespace Project.UI
+{
+    // ì”¬ ê³µí†µ UI ëª¨ë“ˆì˜ ìµœì†Œ ê³„ì•½
+    public interface ISceneUiModule
+    {
+        void OnUiShown();   // gameObjectê°€ ì¼œì§„ ì§í›„ 1íšŒ
+        void OnUiHidden();  // gameObjectê°€ êº¼ì§€ê¸° ì§ì „ 1íšŒ
+    }
+
+    public interface IThemedUiModule
+    {
+        void ApplyTheme(Color? accent = null, Font font = null);
+    }
+}
+
+

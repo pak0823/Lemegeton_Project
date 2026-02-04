@@ -1,92 +1,92 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class HudController : MonoBehaviour
-{
-    [Header("Toggle Button (¿É¼Ç)")]
-    [SerializeField] private Button toggleButton;
-
-    [Header("HUD Root (°øÅë ºÎ¸ğ, ¹İµå½Ã CanvasGroup ºÎÂø)")]
-    [SerializeField] private CanvasGroup hudRoot;
-
-    [Header("Ãß°¡·Î ÇÔ²² Åä±ÛÇÒ GameObjectµé (CanvasGroup ¾øÀ» ¶§¸¸)")]
-    [SerializeField] private List<GameObject> extraGameObjects = new List<GameObject>();
-
-    [SerializeField] private GameSpeedController speedCtrl;
-
-    public bool IsVisible { get; private set; } = true;
-    bool initialized = false; // ÃÊ±â Apply ½Ã ¼Óµµº¯°æ ¹æÁö
-
-    void Awake()
-    {
-        if (!hudRoot)
-        {
-            // °°Àº ¿ÀºêÁ§Æ®¿¡ ºÙ¾î ÀÖ´Ù¸é ÀÚµ¿ È¹µæ ½Ãµµ
-            hudRoot = GetComponent<CanvasGroup>();
-        }
-
-        if (toggleButton != null)
-            toggleButton.onClick.AddListener(Toggle);
-
-        // ÃÊ±â »óÅÂ µ¿±âÈ­
-        if (hudRoot != null)
-            IsVisible = hudRoot.alpha > 0.5f && hudRoot.interactable && hudRoot.blocksRaycasts;
-
-        Apply(IsVisible, true); // ÃÊ±â¿£ ¼Óµµ º¯°æÇÏÁö ¾ÊÀ½
-        initialized = true;
-    }
-
-    void OnDestroy()
-    {
-        if (toggleButton != null)
-            toggleButton.onClick.RemoveListener(Toggle);
-    }
-
-    public void Toggle()
-    {
-        IsVisible = !IsVisible;
-        Apply(IsVisible, false);
-    }
-
-    public void Show()
-    {
-        IsVisible = true;
-        Apply(IsVisible, false);
-    }
-
-    public void Hide()
-    {
-        IsVisible = false;
-        Apply(IsVisible, false);
-    }
-
-    void Apply(bool show, bool isInitial)
-    {
-        // HUDRoot´Â Ç×»ó CanvasGroup ¹æ½Ä(È­¸é °¡¸®±â)
-        if (hudRoot)
-        {
-            hudRoot.alpha = show ? 1f : 0f;
-            hudRoot.interactable = show;
-            hudRoot.blocksRaycasts = show;
-        }
-
-        // CanvasGroupÀÌ ÀüÇô ¾ø´Â ´Ü¼ø GO´Â SetActive·Î Ã³¸®(»óÅÂ ¿µÇâ ¾øÀ» ¶§¸¸ »ç¿ë)
-        if (extraGameObjects != null)
-        {
-            foreach (var go in extraGameObjects)
-            {
-                if (!go) continue;
-                go.SetActive(show);
-            }
-        }
-        // ¼Óµµ Á¦¾î ¿¬µ¿
-        if (initialized && !isInitial && speedCtrl != null)
-        {
-            if (!show)
-                speedCtrl.RequestPause();   // HUD ¼û±è ¡æ ÀÏ½ÃÁ¤Áö ¿äÃ»
-            else
-                speedCtrl.ReleasePause(); // HUD Ç¥½Ã ¡æ ÀÏ½ÃÁ¤Áö ÇØÁ¦ ¿äÃ»
-        }
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class HudController : MonoBehaviour
+{
+    [Header("Toggle Button (ì˜µì…˜)")]
+    [SerializeField] private Button toggleButton;
+
+    [Header("HUD Root (ê³µí†µ ë¶€ëª¨, ë°˜ë“œì‹œ CanvasGroup ë¶€ì°©)")]
+    [SerializeField] private CanvasGroup hudRoot;
+
+    [Header("ì¶”ê°€ë¡œ í•¨ê»˜ í† ê¸€í•  GameObjectë“¤ (CanvasGroup ì—†ì„ ë•Œë§Œ)")]
+    [SerializeField] private List<GameObject> extraGameObjects = new List<GameObject>();
+
+    [SerializeField] private GameSpeedController speedCtrl;
+
+    public bool IsVisible { get; private set; } = true;
+    bool initialized = false; // ì´ˆê¸° Apply ì‹œ ì†ë„ë³€ê²½ ë°©ì§€
+
+    void Awake()
+    {
+        if (!hudRoot)
+        {
+            // ê°™ì€ ì˜¤ë¸Œì íŠ¸ì— ë¶™ì–´ ìˆë‹¤ë©´ ìë™ íšë“ ì‹œë„
+            hudRoot = GetComponent<CanvasGroup>();
+        }
+
+        if (toggleButton != null)
+            toggleButton.onClick.AddListener(Toggle);
+
+        // ì´ˆê¸° ìƒíƒœ ë™ê¸°í™”
+        if (hudRoot != null)
+            IsVisible = hudRoot.alpha > 0.5f && hudRoot.interactable && hudRoot.blocksRaycasts;
+
+        Apply(IsVisible, true); // ì´ˆê¸°ì—” ì†ë„ ë³€ê²½í•˜ì§€ ì•ŠìŒ
+        initialized = true;
+    }
+
+    void OnDestroy()
+    {
+        if (toggleButton != null)
+            toggleButton.onClick.RemoveListener(Toggle);
+    }
+
+    public void Toggle()
+    {
+        IsVisible = !IsVisible;
+        Apply(IsVisible, false);
+    }
+
+    public void Show()
+    {
+        IsVisible = true;
+        Apply(IsVisible, false);
+    }
+
+    public void Hide()
+    {
+        IsVisible = false;
+        Apply(IsVisible, false);
+    }
+
+    void Apply(bool show, bool isInitial)
+    {
+        // HUDRootëŠ” í•­ìƒ CanvasGroup ë°©ì‹(í™”ë©´ ê°€ë¦¬ê¸°)
+        if (hudRoot)
+        {
+            hudRoot.alpha = show ? 1f : 0f;
+            hudRoot.interactable = show;
+            hudRoot.blocksRaycasts = show;
+        }
+
+        // CanvasGroupì´ ì „í˜€ ì—†ëŠ” ë‹¨ìˆœ GOëŠ” SetActiveë¡œ ì²˜ë¦¬(ìƒíƒœ ì˜í–¥ ì—†ì„ ë•Œë§Œ ì‚¬ìš©)
+        if (extraGameObjects != null)
+        {
+            foreach (var go in extraGameObjects)
+            {
+                if (!go) continue;
+                go.SetActive(show);
+            }
+        }
+        // ì†ë„ ì œì–´ ì—°ë™
+        if (initialized && !isInitial && speedCtrl != null)
+        {
+            if (!show)
+                speedCtrl.RequestPause();   // HUD ìˆ¨ê¹€ â†’ ì¼ì‹œì •ì§€ ìš”ì²­
+            else
+                speedCtrl.ReleasePause(); // HUD í‘œì‹œ â†’ ì¼ì‹œì •ì§€ í•´ì œ ìš”ì²­
+        }
+    }
+}

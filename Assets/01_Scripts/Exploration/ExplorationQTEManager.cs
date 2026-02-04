@@ -1,122 +1,122 @@
-using System;
-using System.Collections;
-using UnityEngine;
-using Random = UnityEngine.Random;
-
-public class ExplorationQTEManager : MonoBehaviour
-{
-    // [ÇÙ½É] ±¸Ã¼ÀûÀÎ Å¬·¡½º ´ë½Å Ãß»ó Å¬·¡½º·Î ¼±¾ğ.
-    // ÀÎ½ºÆåÅÍ¿¡´Â SimpleQTEController°¡ ´Ş¸° ¿ÀºêÁ§Æ®¸¦ µå·¡±×¾Øµå·Ó ÇÏ¸é µÊ. (´ÙÇü¼º)
-    public static ExplorationQTEManager Instance { get; private set; }  // ½Ì±ÛÅæ ÆĞÅÏ
-
-    [Header("System References")]
-    [SerializeField] private BaseQTEController qteController; // QTE UI ÄÁÆ®·Ñ·¯
-    public PlayerMovement playerMovement;   // ÇÃ·¹ÀÌ¾î ¿òÁ÷ÀÓÀ» ¸ØÃß±â À§ÇÑ ÂüÁ¶
-
-    [Header("Settings")]
-    [SerializeField] private int targetScore = 6; // ÃÖÁ¾ ¼º°ø Á¡¼ö
-    [SerializeField] private int failScoreCondition = -6; // ÃÖÁ¾ ½ÇÆĞ Á¡¼ö
-
-    private bool _isEventPlaying = false;
-
-    private void Awake()
-    {
-        // ½Ì±ÛÅæ ÃÊ±âÈ­
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-        // QTE UI´Â ²¨µÎ°í ½ÃÀÛ
-        if (qteController != null) qteController.Init();
-    }
-    /// <summary>
-    /// ¿ÜºÎ ¿ÀºêÁ§Æ®(º¸¹°»óÀÚ µî)°¡ ÀÌ ÇÔ¼ö¸¦ È£ÃâÇØ¼­ QTE¸¦ ½ÃÀÛÇÔ.
-    /// </summary>
-    /// <param name="onSuccess">¼º°ø ½Ã ½ÇÇàÇÒ ·ÎÁ÷ (¾ÆÀÌÅÛ È¹µæ µî)</param>
-    /// <param name="onFail">½ÇÆĞ ½Ã ½ÇÇàÇÒ ·ÎÁ÷ (µ¥¹ÌÁö ÀÔÀ½ µî)</param>
-    public void StartExplorationEvent(Action onSuccess, Action onFail)
-    {
-        if (_isEventPlaying) return; // ÀÌ¹Ì ÁøÇà ÁßÀÌ¸é ¹«½Ã
-
-        StartCoroutine(Co_ProcessLoopEvent(onSuccess, onFail));
-    }
-    private IEnumerator Co_ProcessLoopEvent(Action onSuccess, Action onFail)
-    {
-        _isEventPlaying = true;
-        int currentScore = 0;
-        int roundCount = 0;
-
-        Debug.Log($"[System] QTE ½ÃÀÛ! ¸ñÇ¥: {targetScore} / ÆĞ¹èÁ¶°Ç: {failScoreCondition}");
-
-        //Player ÀÌµ¿ Á¤Áö
-        if (playerMovement != null)
-        {
-            playerMovement.HaltImmediately();       // °¡´ø ±æ ¸ØÃã
-            playerMovement.LockMovementIndefinite(); // ÀÔ·Â Àá±İ ÅäÅ« Áõ°¡
-        }
-
-        // ¸ñÇ¥ Á¡¼ö µµ´ŞÇÒ ¶§±îÁö ¹İº¹
-        while (currentScore < targetScore)
-        {
-            roundCount++;
-            Debug.Log($"[Round {roundCount}] ÇöÀç Á¡¼ö: {currentScore} (¸ñÇ¥: {targetScore}, ÆĞ¹è: {failScoreCondition})");
-
-            bool isFinished = false;
-            QTEResult roundResult = QTEResult.Fail;
-
-            // QTE ½ÇÇà
-            qteController.StartQTE((QTEResult result) => {
-                roundResult = result;
-                isFinished = true;
-            });
-
-            while (!isFinished) yield return null;
-
-            // Á¡¼ö °è»ê
-            switch (roundResult)
-            {
-                case QTEResult.Perfect:
-                    currentScore += 2;
-                    Debug.Log($" >> ´ë¼º°ø! (+2Á¡) | ÇÕ°è: {currentScore}");
-                    break;
-                case QTEResult.Success:
-                    currentScore += 1;
-                    Debug.Log($" >> ¼º°ø! (+1Á¡) | ÇÕ°è: {currentScore}");
-                    break;
-                case QTEResult.Fail:
-                    currentScore -= 1;
-                    // Á¡¼ö°¡ À½¼ö°¡ µÇ´Â °É ¹æÁöÇÏ°í ½ÍÀ¸¸é ¾Æ·¡ ÁÖ¼® ÇØÁ¦
-                    // if (currentScore < 0) currentScore = 0;
-                    Debug.Log($" >> ½ÇÆĞ... (-1Á¡) | ÇÕ°è: {currentScore}");
-                    break;
-            }
-
-            // ¸ñÇ¥ ´Ş¼º ½Ã (¼º°ø)
-            if (currentScore >= targetScore)
-            {
-                Debug.Log($"[System] ÃÖÁ¾ ½Â¸®! (Á¡¼ö: {currentScore})");
-                onSuccess?.Invoke();
-                break; // ·çÇÁ Å»Ãâ
-            }
-
-            // ÆĞ¹è Á¶°Ç µµ´Ş ½Ã (½ÇÆĞ)
-            if (currentScore <= failScoreCondition)
-            {
-                Debug.Log($"[System] ÃÖÁ¾ ÆĞ¹è... (Á¡¼ö: {currentScore})");
-                onFail?.Invoke();
-                break; // ·çÇÁ Å»Ãâ
-            }
-
-            // ¾ÆÁ÷ ¾È ³¡³µÀ¸¸é ÄğÅ¸ÀÓ ÈÄ ´ÙÀ½ ¶ó¿îµå
-            float waitTime = Random.Range(3.0f, 6.0f);
-            Debug.Log($"[System] ´ÙÀ½ ¶ó¿îµå±îÁö {waitTime:F1}ÃÊ ´ë±â...");
-            yield return new WaitForSeconds(waitTime);
-        }
-
-        if (playerMovement != null)
-        {
-            playerMovement.UnlockMovementIndefinite();
-        }
-
-        _isEventPlaying = false;
-    }
-}
+using System;
+using System.Collections;
+using UnityEngine;
+using Random = UnityEngine.Random;
+
+public class ExplorationQTEManager : MonoBehaviour
+{
+    // [í•µì‹¬] êµ¬ì²´ì ì¸ í´ë˜ìŠ¤ ëŒ€ì‹  ì¶”ìƒ í´ë˜ìŠ¤ë¡œ ì„ ì–¸.
+    // ì¸ìŠ¤í™í„°ì—ëŠ” SimpleQTEControllerê°€ ë‹¬ë¦° ì˜¤ë¸Œì íŠ¸ë¥¼ ë“œë˜ê·¸ì•¤ë“œë¡­ í•˜ë©´ ë¨. (ë‹¤í˜•ì„±)
+    public static ExplorationQTEManager Instance { get; private set; }  // ì‹±ê¸€í†¤ íŒ¨í„´
+
+    [Header("System References")]
+    [SerializeField] private BaseQTEController qteController; // QTE UI ì»¨íŠ¸ë¡¤ëŸ¬
+    public PlayerMovement playerMovement;   // í”Œë ˆì´ì–´ ì›€ì§ì„ì„ ë©ˆì¶”ê¸° ìœ„í•œ ì°¸ì¡°
+
+    [Header("Settings")]
+    [SerializeField] private int targetScore = 6; // ìµœì¢… ì„±ê³µ ì ìˆ˜
+    [SerializeField] private int failScoreCondition = -6; // ìµœì¢… ì‹¤íŒ¨ ì ìˆ˜
+
+    private bool _isEventPlaying = false;
+
+    private void Awake()
+    {
+        // ì‹±ê¸€í†¤ ì´ˆê¸°í™”
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        // QTE UIëŠ” êº¼ë‘ê³  ì‹œì‘
+        if (qteController != null) qteController.Init();
+    }
+    /// <summary>
+    /// ì™¸ë¶€ ì˜¤ë¸Œì íŠ¸(ë³´ë¬¼ìƒì ë“±)ê°€ ì´ í•¨ìˆ˜ë¥¼ í˜¸ì¶œí•´ì„œ QTEë¥¼ ì‹œì‘í•¨.
+    /// </summary>
+    /// <param name="onSuccess">ì„±ê³µ ì‹œ ì‹¤í–‰í•  ë¡œì§ (ì•„ì´í…œ íšë“ ë“±)</param>
+    /// <param name="onFail">ì‹¤íŒ¨ ì‹œ ì‹¤í–‰í•  ë¡œì§ (ë°ë¯¸ì§€ ì…ìŒ ë“±)</param>
+    public void StartExplorationEvent(Action onSuccess, Action onFail)
+    {
+        if (_isEventPlaying) return; // ì´ë¯¸ ì§„í–‰ ì¤‘ì´ë©´ ë¬´ì‹œ
+
+        StartCoroutine(Co_ProcessLoopEvent(onSuccess, onFail));
+    }
+    private IEnumerator Co_ProcessLoopEvent(Action onSuccess, Action onFail)
+    {
+        _isEventPlaying = true;
+        int currentScore = 0;
+        int roundCount = 0;
+
+        Debug.Log($"[System] QTE ì‹œì‘! ëª©í‘œ: {targetScore} / íŒ¨ë°°ì¡°ê±´: {failScoreCondition}");
+
+        //Player ì´ë™ ì •ì§€
+        if (playerMovement != null)
+        {
+            playerMovement.HaltImmediately();       // ê°€ë˜ ê¸¸ ë©ˆì¶¤
+            playerMovement.LockMovementIndefinite(); // ì…ë ¥ ì ê¸ˆ í† í° ì¦ê°€
+        }
+
+        // ëª©í‘œ ì ìˆ˜ ë„ë‹¬í•  ë•Œê¹Œì§€ ë°˜ë³µ
+        while (currentScore < targetScore)
+        {
+            roundCount++;
+            Debug.Log($"[Round {roundCount}] í˜„ì¬ ì ìˆ˜: {currentScore} (ëª©í‘œ: {targetScore}, íŒ¨ë°°: {failScoreCondition})");
+
+            bool isFinished = false;
+            QTEResult roundResult = QTEResult.Fail;
+
+            // QTE ì‹¤í–‰
+            qteController.StartQTE((QTEResult result) => {
+                roundResult = result;
+                isFinished = true;
+            });
+
+            while (!isFinished) yield return null;
+
+            // ì ìˆ˜ ê³„ì‚°
+            switch (roundResult)
+            {
+                case QTEResult.Perfect:
+                    currentScore += 2;
+                    Debug.Log($" >> ëŒ€ì„±ê³µ! (+2ì ) | í•©ê³„: {currentScore}");
+                    break;
+                case QTEResult.Success:
+                    currentScore += 1;
+                    Debug.Log($" >> ì„±ê³µ! (+1ì ) | í•©ê³„: {currentScore}");
+                    break;
+                case QTEResult.Fail:
+                    currentScore -= 1;
+                    // ì ìˆ˜ê°€ ìŒìˆ˜ê°€ ë˜ëŠ” ê±¸ ë°©ì§€í•˜ê³  ì‹¶ìœ¼ë©´ ì•„ë˜ ì£¼ì„ í•´ì œ
+                    // if (currentScore < 0) currentScore = 0;
+                    Debug.Log($" >> ì‹¤íŒ¨... (-1ì ) | í•©ê³„: {currentScore}");
+                    break;
+            }
+
+            // ëª©í‘œ ë‹¬ì„± ì‹œ (ì„±ê³µ)
+            if (currentScore >= targetScore)
+            {
+                Debug.Log($"[System] ìµœì¢… ìŠ¹ë¦¬! (ì ìˆ˜: {currentScore})");
+                onSuccess?.Invoke();
+                break; // ë£¨í”„ íƒˆì¶œ
+            }
+
+            // íŒ¨ë°° ì¡°ê±´ ë„ë‹¬ ì‹œ (ì‹¤íŒ¨)
+            if (currentScore <= failScoreCondition)
+            {
+                Debug.Log($"[System] ìµœì¢… íŒ¨ë°°... (ì ìˆ˜: {currentScore})");
+                onFail?.Invoke();
+                break; // ë£¨í”„ íƒˆì¶œ
+            }
+
+            // ì•„ì§ ì•ˆ ëë‚¬ìœ¼ë©´ ì¿¨íƒ€ì„ í›„ ë‹¤ìŒ ë¼ìš´ë“œ
+            float waitTime = Random.Range(3.0f, 6.0f);
+            Debug.Log($"[System] ë‹¤ìŒ ë¼ìš´ë“œê¹Œì§€ {waitTime:F1}ì´ˆ ëŒ€ê¸°...");
+            yield return new WaitForSeconds(waitTime);
+        }
+
+        if (playerMovement != null)
+        {
+            playerMovement.UnlockMovementIndefinite();
+        }
+
+        _isEventPlaying = false;
+    }
+}

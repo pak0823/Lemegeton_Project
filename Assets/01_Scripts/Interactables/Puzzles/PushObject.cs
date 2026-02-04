@@ -1,164 +1,164 @@
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class PushObject : MonoBehaviour //,IExplorationPersistable
-{
-    private ExplorationPersistId pid;
-    public List<Tilemap> floorTilemap;
-    public List<Tilemap> wallMaps;
-    public LayerMask obstacleLayer;
-
-    // ∆Ì¿«∏¶ ¿ß«ÿ ±‚¡ÿ¿Ã µ«¥¬ 0π¯¬∞ πŸ¥⁄ ∏  π›»Ø (¡¬«• ∫Ø»ØøÎ)
-    public Tilemap MainFloorMap => (floorTilemap != null && floorTilemap.Count > 0) ? floorTilemap[0] : null;
-
-    [Header("√ ±‚»≠ ¿ßƒ° ¡§∫∏")]
-    private Vector3 initialPosition;
-
-    [Header("«œ¿Ã∂Û¿Ã∆Æ √≥∏Æ")]
-    public SpriteRenderer highlightRenderer;
-    private Color originalColor;
-    private bool isHighlighted = false;
-    //public GameObject targetMarker;   //¿ŒΩƒ «•Ω√
-
-    public bool isPushable = true;
-
-    private void Awake()
-    {
-        initialPosition = transform.position;
-
-        pid = GetComponent<ExplorationPersistId>();
-        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
-
-        highlightRenderer = GetComponent<SpriteRenderer>();
-        if (highlightRenderer != null)
-            originalColor = highlightRenderer.color;
-
-        // Ω√¿€ Ω√ æ»≥ª UI OFF
-        //if (targetMarker != null) targetMarker.SetActive(false);
-    }
-
-    void OnEnable()
-    {
-        SetHighlight(false);
-    }
-
-    public void SetHighlight(bool on)
-    {
-        if (highlightRenderer != null && isHighlighted != on)
-        {
-            highlightRenderer.color = on ?  Color.yellow : originalColor;
-            isHighlighted = on;
-        }
-
-        //if (targetMarker != null)
-        //    targetMarker.SetActive(on);
-    }
-
-    public bool CanBePushed(Direction dir)
-    {
-        if (!isPushable) return false;
-
-        // [ºˆ¡§] MainFloorMap ªÁøÎ
-        Vector3Int currentCell = MainFloorMap.WorldToCell(transform.position);
-        bool odd = Mathf.Abs(currentCell.y) % 2 == 1;
-        Vector3Int offset = GetOffsetForDirection(dir, odd);
-        Vector3Int targetCell = currentCell + offset;
-
-        // [ºˆ¡§] πŸ¥⁄ ∏ÆΩ∫∆Æ ¿¸√º √º≈©
-        bool hasFloor = HasFloorAt(targetCell);
-
-        // [ºˆ¡§] ∫Æ ∏ÆΩ∫∆Æ ¿¸√º √º≈©
-        bool hasWall = false;
-        if (wallMaps != null)
-        {
-            foreach (var wall in wallMaps)
-            {
-                if (wall.HasTile(targetCell))
-                {
-                    hasWall = true;
-                    break;
-                }
-            }
-        }
-
-        // MainFloorMap ªÁøÎ
-        Vector3 worldPos = MainFloorMap.GetCellCenterWorld(targetCell);
-        Collider2D obstacle = Physics2D.OverlapCircle(worldPos, 0.1f, obstacleLayer);
-
-        var hits = Physics2D.OverlapCircleAll(worldPos, 0.1f);
-        bool hasOtherPushObject = hits.Any(h => h.GetComponent<PushObject>() != null && h.gameObject != this);
-
-        Debug.Log($"[PushCheck] {name} °Ê {offset} | Floor: {hasFloor}, Wall: {hasWall}, Blocked: {obstacle != null}, OtherPush: {hasOtherPushObject}");
-
-        return hasFloor && !hasWall && obstacle == null && !hasOtherPushObject;
-    }
-
-    // ø‹∫Œ(PlayerMovement µÓ)ø°º≠ πŸ¥⁄ √º≈©∏¶ Ω±∞‘ «œ±‚ ¿ß«— «Ô∆€
-    public bool HasFloorAt(Vector3Int cell)
-    {
-        if (floorTilemap == null) return false;
-        foreach (var map in floorTilemap)
-        {
-            if (map != null && map.HasTile(cell)) return true;
-        }
-        return false;
-    }
-
-    public bool TryPush(Direction dir, out Vector3Int fromCell, out Vector3Int toCell)
-    {
-        fromCell = Vector3Int.zero;
-        toCell = Vector3Int.zero;
-
-        if (MainFloorMap == null) return false;
-
-        fromCell = MainFloorMap.WorldToCell(transform.position);
-        bool odd = Mathf.Abs(fromCell.y) % 2 == 1;
-        Vector3Int offset = GetOffsetForDirection(dir, odd);
-        toCell = fromCell + offset;
-
-        if (!CanBePushed(dir))
-            return false;
-
-        return true;
-    }
-
-    private Vector3Int GetOffsetForDirection(Direction dir, bool odd)
-    {
-        return dir switch
-        {
-            Direction.West => new Vector3Int(-1, 0, 0),
-            Direction.East => new Vector3Int(1, 0, 0),
-            Direction.NW => odd ? new Vector3Int(0, 1, 0) : new Vector3Int(-1, 1, 0),
-            Direction.NE => odd ? new Vector3Int(1, 1, 0) : new Vector3Int(0, 1, 0),
-            Direction.SW => odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0),
-            Direction.SE => odd ? new Vector3Int(1, -1, 0) : new Vector3Int(0, -1, 0),
-            _ => Vector3Int.zero,
-        };
-    }
-    public void SetTilemaps(List<Tilemap> floor, List<Tilemap> walls)
-    {
-        floorTilemap = floor;
-        wallMaps = walls;
-    }
-
-    // IExplorationPersistable
-    public string PersistID => pid.Id;
-    //public ExplorationObjectState SaveState()
-    //{
-    //    return new ExplorationObjectState
-    //    {
-    //        id = PersistID,
-    //        kind = "Push",
-    //        prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
-    //        position = transform.position
-    //    };
-    //}
-    public void LoadState(ExplorationObjectState s)
-    {
-        transform.position = s.position;
-        // ≥ª∫Œ ƒ≥Ω√/∞Ê∑Œ∞° ¿÷¥Ÿ∏È ø©±‚º≠ √ ±‚»≠
-    }
-}
-
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class PushObject : MonoBehaviour //,IExplorationPersistable
+{
+    private ExplorationPersistId pid;
+    public List<Tilemap> floorTilemap;
+    public List<Tilemap> wallMaps;
+    public LayerMask obstacleLayer;
+
+    // Ìé∏ÏùòÎ•º ÏúÑÌï¥ Í∏∞Ï§ÄÏù¥ ÎêòÎäî 0Î≤àÏß∏ Î∞îÎã• Îßµ Î∞òÌôò (Ï¢åÌëú Î≥ÄÌôòÏö©)
+    public Tilemap MainFloorMap => (floorTilemap != null && floorTilemap.Count > 0) ? floorTilemap[0] : null;
+
+    [Header("Ï¥àÍ∏∞Ìôî ÏúÑÏπò Ï†ïÎ≥¥")]
+    private Vector3 initialPosition;
+
+    [Header("ÌïòÏù¥ÎùºÏù¥Ìä∏ Ï≤òÎ¶¨")]
+    public SpriteRenderer highlightRenderer;
+    private Color originalColor;
+    private bool isHighlighted = false;
+    //public GameObject targetMarker;   //Ïù∏Ïãù ÌëúÏãú
+
+    public bool isPushable = true;
+
+    private void Awake()
+    {
+        initialPosition = transform.position;
+
+        pid = GetComponent<ExplorationPersistId>();
+        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
+
+        highlightRenderer = GetComponent<SpriteRenderer>();
+        if (highlightRenderer != null)
+            originalColor = highlightRenderer.color;
+
+        // ÏãúÏûë Ïãú ÏïàÎÇ¥ UI OFF
+        //if (targetMarker != null) targetMarker.SetActive(false);
+    }
+
+    void OnEnable()
+    {
+        SetHighlight(false);
+    }
+
+    public void SetHighlight(bool on)
+    {
+        if (highlightRenderer != null && isHighlighted != on)
+        {
+            highlightRenderer.color = on ?  Color.yellow : originalColor;
+            isHighlighted = on;
+        }
+
+        //if (targetMarker != null)
+        //    targetMarker.SetActive(on);
+    }
+
+    public bool CanBePushed(Direction dir)
+    {
+        if (!isPushable) return false;
+
+        // [ÏàòÏ†ï] MainFloorMap ÏÇ¨Ïö©
+        Vector3Int currentCell = MainFloorMap.WorldToCell(transform.position);
+        bool odd = Mathf.Abs(currentCell.y) % 2 == 1;
+        Vector3Int offset = GetOffsetForDirection(dir, odd);
+        Vector3Int targetCell = currentCell + offset;
+
+        // [ÏàòÏ†ï] Î∞îÎã• Î¶¨Ïä§Ìä∏ Ï†ÑÏ≤¥ Ï≤¥ÌÅ¨
+        bool hasFloor = HasFloorAt(targetCell);
+
+        // [ÏàòÏ†ï] Î≤Ω Î¶¨Ïä§Ìä∏ Ï†ÑÏ≤¥ Ï≤¥ÌÅ¨
+        bool hasWall = false;
+        if (wallMaps != null)
+        {
+            foreach (var wall in wallMaps)
+            {
+                if (wall.HasTile(targetCell))
+                {
+                    hasWall = true;
+                    break;
+                }
+            }
+        }
+
+        // MainFloorMap ÏÇ¨Ïö©
+        Vector3 worldPos = MainFloorMap.GetCellCenterWorld(targetCell);
+        Collider2D obstacle = Physics2D.OverlapCircle(worldPos, 0.1f, obstacleLayer);
+
+        var hits = Physics2D.OverlapCircleAll(worldPos, 0.1f);
+        bool hasOtherPushObject = hits.Any(h => h.GetComponent<PushObject>() != null && h.gameObject != this);
+
+        Debug.Log($"[PushCheck] {name} ‚Üí {offset} | Floor: {hasFloor}, Wall: {hasWall}, Blocked: {obstacle != null}, OtherPush: {hasOtherPushObject}");
+
+        return hasFloor && !hasWall && obstacle == null && !hasOtherPushObject;
+    }
+
+    // Ïô∏Î∂Ä(PlayerMovement Îì±)ÏóêÏÑú Î∞îÎã• Ï≤¥ÌÅ¨Î•º ÏâΩÍ≤å ÌïòÍ∏∞ ÏúÑÌïú Ìó¨Ìçº
+    public bool HasFloorAt(Vector3Int cell)
+    {
+        if (floorTilemap == null) return false;
+        foreach (var map in floorTilemap)
+        {
+            if (map != null && map.HasTile(cell)) return true;
+        }
+        return false;
+    }
+
+    public bool TryPush(Direction dir, out Vector3Int fromCell, out Vector3Int toCell)
+    {
+        fromCell = Vector3Int.zero;
+        toCell = Vector3Int.zero;
+
+        if (MainFloorMap == null) return false;
+
+        fromCell = MainFloorMap.WorldToCell(transform.position);
+        bool odd = Mathf.Abs(fromCell.y) % 2 == 1;
+        Vector3Int offset = GetOffsetForDirection(dir, odd);
+        toCell = fromCell + offset;
+
+        if (!CanBePushed(dir))
+            return false;
+
+        return true;
+    }
+
+    private Vector3Int GetOffsetForDirection(Direction dir, bool odd)
+    {
+        return dir switch
+        {
+            Direction.West => new Vector3Int(-1, 0, 0),
+            Direction.East => new Vector3Int(1, 0, 0),
+            Direction.NW => odd ? new Vector3Int(0, 1, 0) : new Vector3Int(-1, 1, 0),
+            Direction.NE => odd ? new Vector3Int(1, 1, 0) : new Vector3Int(0, 1, 0),
+            Direction.SW => odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0),
+            Direction.SE => odd ? new Vector3Int(1, -1, 0) : new Vector3Int(0, -1, 0),
+            _ => Vector3Int.zero,
+        };
+    }
+    public void SetTilemaps(List<Tilemap> floor, List<Tilemap> walls)
+    {
+        floorTilemap = floor;
+        wallMaps = walls;
+    }
+
+    // IExplorationPersistable
+    public string PersistID => pid.Id;
+    //public ExplorationObjectState SaveState()
+    //{
+    //    return new ExplorationObjectState
+    //    {
+    //        id = PersistID,
+    //        kind = "Push",
+    //        prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
+    //        position = transform.position
+    //    };
+    //}
+    public void LoadState(ExplorationObjectState s)
+    {
+        transform.position = s.position;
+        // ÎÇ¥Î∂Ä Ï∫êÏãú/Í≤ΩÎ°úÍ∞Ä ÏûàÎã§Î©¥ Ïó¨Í∏∞ÏÑú Ï¥àÍ∏∞Ìôî
+    }
+}
+

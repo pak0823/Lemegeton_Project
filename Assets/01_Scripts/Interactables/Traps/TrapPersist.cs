@@ -1,66 +1,66 @@
-using UnityEngine;
-
-public class TrapPersist : MonoBehaviour, IExplorationPersistable
-{
-    private ExplorationPersistId pid;
-    [SerializeField] private bool isTriggered = false;
-    [SerializeField] private bool isActive = true;
-
-    public bool IsTriggered => isTriggered;
-    public bool IsActive => isActive;
-
-    void Awake()
-    {
-        pid = GetComponent<ExplorationPersistId>();
-        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
-    }
-
-    // °ÔÀÓ Áß ÇÔÁ¤ÀÌ ¹ßµ¿µÉ ¶§ ÀÌ ¸Ş¼­µå¸¦ È£Ãâ
-    public void MarkTriggered()
-    {
-        isTriggered = true;
-        isActive = false;
-        var col = GetComponent<Collider2D>(); if (col) col.enabled = false;
-        var sr = GetComponent<SpriteRenderer>(); if (sr) sr.color = new Color(1, 1, 1, 0.4f);
-    }
-
-    // IExplorationPersistable
-    public string PersistID => pid.Id;
-
-    public ExplorationObjectState SaveState()
-    {
-        // ½ÇÁ¦ È°¼º/ºñÈ°¼º »óÅÂ¸¦ °­Á¦·Î Àç»êÃâÇØ¼­ ÀúÀå
-        var col = GetComponent<Collider2D>();
-        bool activeNow = gameObject.activeInHierarchy && (col == null || col.enabled);
-        bool triggeredNow = isTriggered || !gameObject.activeInHierarchy || (col != null && !col.enabled);
-
-        return new ExplorationObjectState
-        {
-            id = PersistID,
-            kind = "Trap",
-            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
-            position = transform.position,
-            b1 = triggeredNow, // Triggered
-            b2 = activeNow // Active
-        };
-    }
-
-    public void LoadState(ExplorationObjectState s)
-    {
-        transform.position = s.position;
-        isTriggered = s.b1; 
-        isActive = s.b2;
-
-        // TriggeredÀÌ°Å³ª Inactive¸é °ğÀå »ç¶óÁ®¾ß ÇÔ
-        if (s.b1 || !s.b2)
-        {
-            gameObject.SetActive(false);
-            return;
-        }
-
-        // È°¼º »óÅÂ¸é, ¾ÈÀüÇÏ°Ô Äİ¶óÀÌ´õ/ºñÁÖ¾ó Àç¼³Á¤
-        var col = GetComponent<Collider2D>(); if (col) col.enabled = true;
-        var sr = GetComponent<SpriteRenderer>(); if (sr) sr.color = Color.white;
-
-    }
-}
+using UnityEngine;
+
+public class TrapPersist : MonoBehaviour, IExplorationPersistable
+{
+    private ExplorationPersistId pid;
+    [SerializeField] private bool isTriggered = false;
+    [SerializeField] private bool isActive = true;
+
+    public bool IsTriggered => isTriggered;
+    public bool IsActive => isActive;
+
+    void Awake()
+    {
+        pid = GetComponent<ExplorationPersistId>();
+        if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
+    }
+
+    // ê²Œì„ ì¤‘ í•¨ì •ì´ ë°œë™ë  ë•Œ ì´ ë©”ì„œë“œë¥¼ í˜¸ì¶œ
+    public void MarkTriggered()
+    {
+        isTriggered = true;
+        isActive = false;
+        var col = GetComponent<Collider2D>(); if (col) col.enabled = false;
+        var sr = GetComponent<SpriteRenderer>(); if (sr) sr.color = new Color(1, 1, 1, 0.4f);
+    }
+
+    // IExplorationPersistable
+    public string PersistID => pid.Id;
+
+    public ExplorationObjectState SaveState()
+    {
+        // ì‹¤ì œ í™œì„±/ë¹„í™œì„± ìƒíƒœë¥¼ ê°•ì œë¡œ ì¬ì‚°ì¶œí•´ì„œ ì €ì¥
+        var col = GetComponent<Collider2D>();
+        bool activeNow = gameObject.activeInHierarchy && (col == null || col.enabled);
+        bool triggeredNow = isTriggered || !gameObject.activeInHierarchy || (col != null && !col.enabled);
+
+        return new ExplorationObjectState
+        {
+            id = PersistID,
+            kind = "Trap",
+            prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
+            position = transform.position,
+            b1 = triggeredNow, // Triggered
+            b2 = activeNow // Active
+        };
+    }
+
+    public void LoadState(ExplorationObjectState s)
+    {
+        transform.position = s.position;
+        isTriggered = s.b1; 
+        isActive = s.b2;
+
+        // Triggeredì´ê±°ë‚˜ Inactiveë©´ ê³§ì¥ ì‚¬ë¼ì ¸ì•¼ í•¨
+        if (s.b1 || !s.b2)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
+
+        // í™œì„± ìƒíƒœë©´, ì•ˆì „í•˜ê²Œ ì½œë¼ì´ë”/ë¹„ì£¼ì–¼ ì¬ì„¤ì •
+        var col = GetComponent<Collider2D>(); if (col) col.enabled = true;
+        var sr = GetComponent<SpriteRenderer>(); if (sr) sr.color = Color.white;
+
+    }
+}

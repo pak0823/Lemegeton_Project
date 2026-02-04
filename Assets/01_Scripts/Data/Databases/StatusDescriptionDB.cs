@@ -1,98 +1,98 @@
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Status/Status Description DB", fileName = "StatusDescriptionDB")]
-public class StatusDescriptionDB : ScriptableObject
-{
-    [Serializable]
-    public class Entry
-    {
-        [Header("ID ¼±ÅÃ (µÑ Áß ÇÏ³ª¸¸ »ç¿ë)")]
-        public StatusId statusId = StatusId.None;
-        public UnitStateBuffId buffId = UnitStateBuffId.None;
-
-        [Header("Ç¥½Ã¿ë ÅØ½ºÆ®")]
-        public string displayName;          // ¿¹: "ÃâÇ÷", "¸¶·Â °­È­"
-        [TextArea]
-        public string shortDescription;     // ¿¹: "¸Å ÅÏ Ã¼·ÂÀ» ÀÒ½À´Ï´Ù."
-    }
-
-    public List<Entry> entries = new List<Entry>();
-
-    static StatusDescriptionDB _instance;
-    public static StatusDescriptionDB Instance => _instance;
-
-    Dictionary<StatusId, Entry> _statusMap;
-    Dictionary<UnitStateBuffId, Entry> _buffMap;
-
-    void OnEnable()
-    {
-        _instance = this;
-        Rebuild();
-    }
-
-    void OnValidate()
-    {
-        if (_instance == null) _instance = this;
-        Rebuild();
-    }
-
-    void Rebuild()
-    {
-        _statusMap = new Dictionary<StatusId, Entry>();
-        _buffMap = new Dictionary<UnitStateBuffId, Entry>();
-
-        foreach (var e in entries)
-        {
-            if (e.statusId != StatusId.None)
-            {
-                _statusMap[e.statusId] = e;
-            }
-            if (e.buffId != UnitStateBuffId.None)
-            {
-                _buffMap[e.buffId] = e;
-            }
-        }
-    }
-
-    public Entry Get(StatusId id)
-    {
-        if (_statusMap == null) Rebuild();
-        _statusMap.TryGetValue(id, out var e);
-        return e;
-    }
-
-    public Entry Get(UnitStateBuffId id)
-    {
-        if (_buffMap == null) Rebuild();
-        _buffMap.TryGetValue(id, out var e);
-        return e;
-    }
-
-    public string GetDisplayName(StatusId id)
-    {
-        if (id == StatusId.None) return "";
-        var e = Get(id);
-        return !string.IsNullOrEmpty(e?.displayName) ? e.displayName : id.ToString();
-    }
-
-    public string GetDisplayName(UnitStateBuffId id)
-    {
-        if (id == UnitStateBuffId.None) return "";
-        var e = Get(id);
-        return !string.IsNullOrEmpty(e?.displayName) ? e.displayName : id.ToString();
-    }
-
-    public string GetShortDescription(StatusId id)
-    {
-        var e = Get(id);
-        return e?.shortDescription ?? "";
-    }
-
-    public string GetShortDescription(UnitStateBuffId id)
-    {
-        var e = Get(id);
-        return e?.shortDescription ?? "";
-    }
-}
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Status/Status Description DB", fileName = "StatusDescriptionDB")]
+public class StatusDescriptionDB : ScriptableObject
+{
+    [Serializable]
+    public class Entry
+    {
+        [Header("ID ì„ íƒ (ë‘˜ ì¤‘ í•˜ë‚˜ë§Œ ì‚¬ìš©)")]
+        public StatusId statusId = StatusId.None;
+        public UnitStateBuffId buffId = UnitStateBuffId.None;
+
+        [Header("í‘œì‹œìš© í…ìŠ¤íŠ¸")]
+        public string displayName;          // ì˜ˆ: "ì¶œí˜ˆ", "ë§ˆë ¥ ê°•í™”"
+        [TextArea]
+        public string shortDescription;     // ì˜ˆ: "ë§¤ í„´ ì²´ë ¥ì„ ìƒìŠµë‹ˆë‹¤."
+    }
+
+    public List<Entry> entries = new List<Entry>();
+
+    static StatusDescriptionDB _instance;
+    public static StatusDescriptionDB Instance => _instance;
+
+    Dictionary<StatusId, Entry> _statusMap;
+    Dictionary<UnitStateBuffId, Entry> _buffMap;
+
+    void OnEnable()
+    {
+        _instance = this;
+        Rebuild();
+    }
+
+    void OnValidate()
+    {
+        if (_instance == null) _instance = this;
+        Rebuild();
+    }
+
+    void Rebuild()
+    {
+        _statusMap = new Dictionary<StatusId, Entry>();
+        _buffMap = new Dictionary<UnitStateBuffId, Entry>();
+
+        foreach (var e in entries)
+        {
+            if (e.statusId != StatusId.None)
+            {
+                _statusMap[e.statusId] = e;
+            }
+            if (e.buffId != UnitStateBuffId.None)
+            {
+                _buffMap[e.buffId] = e;
+            }
+        }
+    }
+
+    public Entry Get(StatusId id)
+    {
+        if (_statusMap == null) Rebuild();
+        _statusMap.TryGetValue(id, out var e);
+        return e;
+    }
+
+    public Entry Get(UnitStateBuffId id)
+    {
+        if (_buffMap == null) Rebuild();
+        _buffMap.TryGetValue(id, out var e);
+        return e;
+    }
+
+    public string GetDisplayName(StatusId id)
+    {
+        if (id == StatusId.None) return "";
+        var e = Get(id);
+        return !string.IsNullOrEmpty(e?.displayName) ? e.displayName : id.ToString();
+    }
+
+    public string GetDisplayName(UnitStateBuffId id)
+    {
+        if (id == UnitStateBuffId.None) return "";
+        var e = Get(id);
+        return !string.IsNullOrEmpty(e?.displayName) ? e.displayName : id.ToString();
+    }
+
+    public string GetShortDescription(StatusId id)
+    {
+        var e = Get(id);
+        return e?.shortDescription ?? "";
+    }
+
+    public string GetShortDescription(UnitStateBuffId id)
+    {
+        var e = Get(id);
+        return e?.shortDescription ?? "";
+    }
+}

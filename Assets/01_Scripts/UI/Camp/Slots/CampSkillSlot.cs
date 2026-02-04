@@ -1,184 +1,184 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class CampSkillSlot : MonoBehaviour
-{
-    [Header("UI References")]
-    [SerializeField] private Text nameText;
-    [SerializeField] private Button skillButton;
-    [SerializeField] private GameObject selectionHighlight; // ÇöÀç ¼±ÅÃµÈ ½ºÅ³ Ç¥½Ã¿ë Å×µÎ¸®
-
-    [Header("Training UI")]
-    [SerializeField] private Transform trainingContainer; // ÈÆ·Ã ¹öÆ°µéÀÌ µé¾î°¥ ºÎ¸ğ (Horizontal Layout)
-    [SerializeField] private GameObject trainingSlotPrefab; // À§¿¡¼­ ¸¸µç CampTrainingSlot ÇÁ¸®ÆÕ
-
-    private SkillAsset mySkill;
-    private UnitData myUnit;
-    private CampSkillPage parentPage;
-    private int currentFocusedTrainingIndex = -1;
-
-    private List<CampTrainingSlot> trainingSlots = new List<CampTrainingSlot>();
-    public SkillAsset GetSkill() => mySkill;        // ¿ÜºÎ¿¡¼­ ÀÌ ½½·ÔÀÌ ¾î¶² ½ºÅ³ÀÎÁö È®ÀÎ¿ë
-
-    // ÃÊ±âÈ­ ÇÔ¼ö
-    public void Setup(UnitData unit, SkillAsset skill, CampSkillPage page)
-    {
-        myUnit = unit;
-        mySkill = skill;
-        parentPage = page;
-
-        if (mySkill != null)
-        {
-            nameText.text = mySkill.displayName;
-        }
-
-        // ½ºÅ³ ¹öÆ° Å¬¸¯ (¼³¸íÃ¢ °»½Å¿ë)
-        skillButton.onClick.RemoveAllListeners();
-        skillButton.onClick.AddListener(() => parentPage.OnSlotClicked(this, mySkill, unit));
-
-        // ÈÆ·Ã ½½·Ô »ı¼º
-        CreateTrainingSlots();
-
-        // ÈÆ·Ã »óÅÂ(»ö»ó) °»½Å
-        RefreshTrainingVisuals();
-
-        SetSelected(false);
-
-        // ÇÏÀÌ¶óÀÌÆ® ÃÊ±âÈ­
-        if (selectionHighlight) selectionHighlight.SetActive(false);
-    }
-
-    private void CreateTrainingSlots()
-    {
-        // ±âÁ¸ ½½·Ô Á¦°Å(ÃÊ±âÈ­)
-        foreach (Transform child in trainingContainer) Destroy(child.gameObject);
-        trainingSlots.Clear();
-
-        // SkillAsset¿¡¼­ ½ÇÁ¦ ÈÆ·Ã µ¥ÀÌÅÍ °¡Á®¿À±â
-        if (mySkill == null || mySkill.trainingRoutes == null) return;
-
-        // trainingRoutes ¹è¿­ ±æÀÌ¸¸Å­ ¹İº¹
-        for (int i = 0; i < mySkill.trainingRoutes.Length; i++)
-        {
-            // µ¥ÀÌÅÍ °¡Á®¿À±â
-            var routeInfo = mySkill.trainingRoutes[i];
-
-            // DB¿¡¼­ Àá±İ ¿©ºÎ È®ÀÎ
-            // ºñ¿ëÀÌ 0ÀÌ¸é ¹«Á¶°Ç ÇØ±İ(false), ¾Æ´Ï¸é DB È®ÀÎÇÔ
-            bool isLocked = true;
-            if (routeInfo.trainingCost <= 0)
-            {
-                isLocked = false; // ¹«·á ÈÆ·ÃÀº Ç×»ó ¿­¸²
-            }
-            else if (TrainingDB.Instance != null)
-            {
-                // DB¿¡ ±â·ÏÀÌ ÀÖÀ¸¸é ±× °ªÀ» µû¸§
-                isLocked = !TrainingDB.Instance.IsUnlocked(myUnit, mySkill, i);
-            }
-
-            GameObject go = Instantiate(trainingSlotPrefab, trainingContainer);
-            CampTrainingSlot tSlot = go.GetComponent<CampTrainingSlot>();
-
-            string tName = string.IsNullOrEmpty(routeInfo.title) ? $"ÈÆ·Ã {i + 1}" : routeInfo.title;
-
-            // Setup È£Ãâ (ºñ¿ë Àü´Ş)
-            tSlot.Setup(i, tName, routeInfo.trainingCost, isLocked, this);
-            trainingSlots.Add(tSlot);
-        }
-    }
-    public void SimulateClick()
-    {
-        if (skillButton != null)
-        {
-            skillButton.onClick.Invoke();
-        }
-    }
-
-    // ÆäÀÌÁö°¡ "³Ê ¼±ÅÃµÊ/ÇØÁ¦µÊ" ¾Ë·ÁÁÙ ¶§ È£Ãâ
-    public void SetSelected(bool isSelected)
-    {
-        if (selectionHighlight) selectionHighlight.SetActive(isSelected);
-        // È¤Àº ¹öÆ° »ö±òÀ» ¹Ù²Ù°Å³ª interactableÀ» ²ô°Å³ª µîµî ½Ã°¢ È¿°ú
-    }
-
-    // Àá±ä ÈÆ·ÃÀÌ ´­·ÈÀ» ¶§ Page·Î Åä½º
-    public void OnLockedTrainingSelected(int index, int cost, Transform slotTransform)
-    {
-        // ÀüÃ¼ ÃÊ±âÈ­
-        parentPage.DeselectAllHighlights();
-
-        parentPage.OnLockedTrainingClicked(myUnit, mySkill, index, cost, slotTransform);
-
-        RefreshTrainingVisuals();
-    }
-
-    // ÈÆ·Ã ½½·ÔÀÌ ÇØ±İ µÆÀ» ¶§ È£Ãâ
-    public void OnTrainingUnlocked(int index)
-    {
-        // DB¿¡ ÇØ±İ »ç½Ç ±â·Ï
-        if (TrainingDB.Instance != null)
-        {
-            TrainingDB.Instance.UnlockRoute(myUnit, mySkill, index);
-        }
-
-        // ÇØ±İµÆÀ¸´Ï ¾ê¸¦ Æ÷Ä¿½º ÀâÀ½
-        currentFocusedTrainingIndex = index;
-
-        // UI ÀüÃ¼ ´Ù½Ã ±×¸®±â (Àá±İ Ç®¸° °Í ¹İ¿µ)
-        CreateTrainingSlots();
-        RefreshTrainingVisuals();
-
-        if (index < trainingSlots.Count)
-        {
-            // »õ·Î »ı¼ºµÈ ÈÆ·Ã ½½·ÔÀ» ¹Ù·Î ¼±ÅÃ
-            OnTrainingSelected(index, trainingSlots[index].transform);
-        }
-    }
-
-    // ÈÆ·Ã ¹öÆ°ÀÌ ´­·ÈÀ» ¶§ ½ÇÇà
-    public void OnTrainingSelected(int index, Transform slotTransform)
-    {
-        // ÀüÃ¼ ÃÊ±âÈ­ ¿äÃ» (´Ù¸¥ ½ºÅ³, ´Ù¸¥ ÈÆ·Ã ÇÏÀÌ¶óÀÌÆ® ´Ù ²ô±â)
-        parentPage.DeselectAllHighlights();
-
-        // Æ÷Ä¿½º ÀÎµ¦½º °»½Å (³» °Í¸¸ ÄÔ)
-        currentFocusedTrainingIndex = index;
-
-        // ÆäÀÌÁö¿¡ ¾Ë¸²
-        parentPage.OnUnlockedTrainingClicked(myUnit, mySkill, index, slotTransform);
-
-        // UI °»½Å (¿©±â¼­ ÇÏÀÌ¶óÀÌÆ®°¡ ÄÑÁü)
-        RefreshTrainingVisuals();
-    }
-    private void RefreshTrainingVisuals()
-    {
-        if (TrainingDB.Instance == null) return;
-
-        // ÇöÀç ÀúÀåµÈ ·çÆ® ÀÎµ¦½º °¡Á®¿À±â (-1: ¾øÀ½, 0~2: ÇØ´ç ·çÆ®)
-        int currentRoute = TrainingDB.Instance.GetRoute(myUnit, mySkill);
-
-        foreach (var slot in trainingSlots)
-        {
-            // Æ÷Ä¿½º ÀÎµ¦½º(currentFocusedTrainingIndex)¸¦ °°ÀÌ ³Ñ±è
-            slot.UpdateVisualState(currentRoute, currentFocusedTrainingIndex);
-        }
-    }
-    // ÈÆ·Ã Æ÷Ä¿½º¸¦ ÃÊ±âÈ­ÇÏ°í ºñÁÖ¾óÀ» °»½ÅÇÏ´Â ÇÔ¼ö
-    public void ResetTrainingFocus()
-    {
-        currentFocusedTrainingIndex = -1;
-        RefreshTrainingVisuals(); // ÀÌ·¯¸é ÀÎµ¦½º°¡ -1ÀÌ µÇ¾î¼­ ¸ğµç ÈÆ·Ã ÇÏÀÌ¶óÀÌÆ®°¡ ²¨Áü
-    }
-
-    // ¸®½ºÆ® °»½Å ÈÄ, Æ¯Á¤ ÀÎµ¦½ºÀÇ ÈÆ·Ã ½½·Ô À§Ä¡(Transform)¸¦ ¹İÈ¯ÇÏ´Â ÇÔ¼ö
-    public Transform GetTrainingSlotTransform(int index)
-    {
-        if (trainingSlots != null && index >= 0 && index < trainingSlots.Count)
-        {
-            return trainingSlots[index].transform;
-        }
-        // ¿¹¿Ü Ã³¸®: ¸ø Ã£À¸¸é ±×³É ½ºÅ³ ½½·Ô ÀÚÃ¼ ¸®ÅÏ
-        return this.transform;
-    }
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class CampSkillSlot : MonoBehaviour
+{
+    [Header("UI References")]
+    [SerializeField] private Text nameText;
+    [SerializeField] private Button skillButton;
+    [SerializeField] private GameObject selectionHighlight; // í˜„ì¬ ì„ íƒëœ ìŠ¤í‚¬ í‘œì‹œìš© í…Œë‘ë¦¬
+
+    [Header("Training UI")]
+    [SerializeField] private Transform trainingContainer; // í›ˆë ¨ ë²„íŠ¼ë“¤ì´ ë“¤ì–´ê°ˆ ë¶€ëª¨ (Horizontal Layout)
+    [SerializeField] private GameObject trainingSlotPrefab; // ìœ„ì—ì„œ ë§Œë“  CampTrainingSlot í”„ë¦¬íŒ¹
+
+    private SkillAsset mySkill;
+    private UnitData myUnit;
+    private CampSkillPage parentPage;
+    private int currentFocusedTrainingIndex = -1;
+
+    private List<CampTrainingSlot> trainingSlots = new List<CampTrainingSlot>();
+    public SkillAsset GetSkill() => mySkill;        // ì™¸ë¶€ì—ì„œ ì´ ìŠ¬ë¡¯ì´ ì–´ë–¤ ìŠ¤í‚¬ì¸ì§€ í™•ì¸ìš©
+
+    // ì´ˆê¸°í™” í•¨ìˆ˜
+    public void Setup(UnitData unit, SkillAsset skill, CampSkillPage page)
+    {
+        myUnit = unit;
+        mySkill = skill;
+        parentPage = page;
+
+        if (mySkill != null)
+        {
+            nameText.text = mySkill.displayName;
+        }
+
+        // ìŠ¤í‚¬ ë²„íŠ¼ í´ë¦­ (ì„¤ëª…ì°½ ê°±ì‹ ìš©)
+        skillButton.onClick.RemoveAllListeners();
+        skillButton.onClick.AddListener(() => parentPage.OnSlotClicked(this, mySkill, unit));
+
+        // í›ˆë ¨ ìŠ¬ë¡¯ ìƒì„±
+        CreateTrainingSlots();
+
+        // í›ˆë ¨ ìƒíƒœ(ìƒ‰ìƒ) ê°±ì‹ 
+        RefreshTrainingVisuals();
+
+        SetSelected(false);
+
+        // í•˜ì´ë¼ì´íŠ¸ ì´ˆê¸°í™”
+        if (selectionHighlight) selectionHighlight.SetActive(false);
+    }
+
+    private void CreateTrainingSlots()
+    {
+        // ê¸°ì¡´ ìŠ¬ë¡¯ ì œê±°(ì´ˆê¸°í™”)
+        foreach (Transform child in trainingContainer) Destroy(child.gameObject);
+        trainingSlots.Clear();
+
+        // SkillAssetì—ì„œ ì‹¤ì œ í›ˆë ¨ ë°ì´í„° ê°€ì ¸ì˜¤ê¸°
+        if (mySkill == null || mySkill.trainingRoutes == null) return;
+
+        // trainingRoutes ë°°ì—´ ê¸¸ì´ë§Œí¼ ë°˜ë³µ
+        for (int i = 0; i < mySkill.trainingRoutes.Length; i++)
+        {
+            // ë°ì´í„° ê°€ì ¸ì˜¤ê¸°
+            var routeInfo = mySkill.trainingRoutes[i];
+
+            // DBì—ì„œ ì ê¸ˆ ì—¬ë¶€ í™•ì¸
+            // ë¹„ìš©ì´ 0ì´ë©´ ë¬´ì¡°ê±´ í•´ê¸ˆ(false), ì•„ë‹ˆë©´ DB í™•ì¸í•¨
+            bool isLocked = true;
+            if (routeInfo.trainingCost <= 0)
+            {
+                isLocked = false; // ë¬´ë£Œ í›ˆë ¨ì€ í•­ìƒ ì—´ë¦¼
+            }
+            else if (TrainingDB.Instance != null)
+            {
+                // DBì— ê¸°ë¡ì´ ìˆìœ¼ë©´ ê·¸ ê°’ì„ ë”°ë¦„
+                isLocked = !TrainingDB.Instance.IsUnlocked(myUnit, mySkill, i);
+            }
+
+            GameObject go = Instantiate(trainingSlotPrefab, trainingContainer);
+            CampTrainingSlot tSlot = go.GetComponent<CampTrainingSlot>();
+
+            string tName = string.IsNullOrEmpty(routeInfo.title) ? $"í›ˆë ¨ {i + 1}" : routeInfo.title;
+
+            // Setup í˜¸ì¶œ (ë¹„ìš© ì „ë‹¬)
+            tSlot.Setup(i, tName, routeInfo.trainingCost, isLocked, this);
+            trainingSlots.Add(tSlot);
+        }
+    }
+    public void SimulateClick()
+    {
+        if (skillButton != null)
+        {
+            skillButton.onClick.Invoke();
+        }
+    }
+
+    // í˜ì´ì§€ê°€ "ë„ˆ ì„ íƒë¨/í•´ì œë¨" ì•Œë ¤ì¤„ ë•Œ í˜¸ì¶œ
+    public void SetSelected(bool isSelected)
+    {
+        if (selectionHighlight) selectionHighlight.SetActive(isSelected);
+        // í˜¹ì€ ë²„íŠ¼ ìƒ‰ê¹”ì„ ë°”ê¾¸ê±°ë‚˜ interactableì„ ë„ê±°ë‚˜ ë“±ë“± ì‹œê° íš¨ê³¼
+    }
+
+    // ì ê¸´ í›ˆë ¨ì´ ëˆŒë ¸ì„ ë•Œ Pageë¡œ í† ìŠ¤
+    public void OnLockedTrainingSelected(int index, int cost, Transform slotTransform)
+    {
+        // ì „ì²´ ì´ˆê¸°í™”
+        parentPage.DeselectAllHighlights();
+
+        parentPage.OnLockedTrainingClicked(myUnit, mySkill, index, cost, slotTransform);
+
+        RefreshTrainingVisuals();
+    }
+
+    // í›ˆë ¨ ìŠ¬ë¡¯ì´ í•´ê¸ˆ ëì„ ë•Œ í˜¸ì¶œ
+    public void OnTrainingUnlocked(int index)
+    {
+        // DBì— í•´ê¸ˆ ì‚¬ì‹¤ ê¸°ë¡
+        if (TrainingDB.Instance != null)
+        {
+            TrainingDB.Instance.UnlockRoute(myUnit, mySkill, index);
+        }
+
+        // í•´ê¸ˆëìœ¼ë‹ˆ ì–˜ë¥¼ í¬ì»¤ìŠ¤ ì¡ìŒ
+        currentFocusedTrainingIndex = index;
+
+        // UI ì „ì²´ ë‹¤ì‹œ ê·¸ë¦¬ê¸° (ì ê¸ˆ í’€ë¦° ê²ƒ ë°˜ì˜)
+        CreateTrainingSlots();
+        RefreshTrainingVisuals();
+
+        if (index < trainingSlots.Count)
+        {
+            // ìƒˆë¡œ ìƒì„±ëœ í›ˆë ¨ ìŠ¬ë¡¯ì„ ë°”ë¡œ ì„ íƒ
+            OnTrainingSelected(index, trainingSlots[index].transform);
+        }
+    }
+
+    // í›ˆë ¨ ë²„íŠ¼ì´ ëˆŒë ¸ì„ ë•Œ ì‹¤í–‰
+    public void OnTrainingSelected(int index, Transform slotTransform)
+    {
+        // ì „ì²´ ì´ˆê¸°í™” ìš”ì²­ (ë‹¤ë¥¸ ìŠ¤í‚¬, ë‹¤ë¥¸ í›ˆë ¨ í•˜ì´ë¼ì´íŠ¸ ë‹¤ ë„ê¸°)
+        parentPage.DeselectAllHighlights();
+
+        // í¬ì»¤ìŠ¤ ì¸ë±ìŠ¤ ê°±ì‹  (ë‚´ ê²ƒë§Œ ì¼¬)
+        currentFocusedTrainingIndex = index;
+
+        // í˜ì´ì§€ì— ì•Œë¦¼
+        parentPage.OnUnlockedTrainingClicked(myUnit, mySkill, index, slotTransform);
+
+        // UI ê°±ì‹  (ì—¬ê¸°ì„œ í•˜ì´ë¼ì´íŠ¸ê°€ ì¼œì§)
+        RefreshTrainingVisuals();
+    }
+    private void RefreshTrainingVisuals()
+    {
+        if (TrainingDB.Instance == null) return;
+
+        // í˜„ì¬ ì €ì¥ëœ ë£¨íŠ¸ ì¸ë±ìŠ¤ ê°€ì ¸ì˜¤ê¸° (-1: ì—†ìŒ, 0~2: í•´ë‹¹ ë£¨íŠ¸)
+        int currentRoute = TrainingDB.Instance.GetRoute(myUnit, mySkill);
+
+        foreach (var slot in trainingSlots)
+        {
+            // í¬ì»¤ìŠ¤ ì¸ë±ìŠ¤(currentFocusedTrainingIndex)ë¥¼ ê°™ì´ ë„˜ê¹€
+            slot.UpdateVisualState(currentRoute, currentFocusedTrainingIndex);
+        }
+    }
+    // í›ˆë ¨ í¬ì»¤ìŠ¤ë¥¼ ì´ˆê¸°í™”í•˜ê³  ë¹„ì£¼ì–¼ì„ ê°±ì‹ í•˜ëŠ” í•¨ìˆ˜
+    public void ResetTrainingFocus()
+    {
+        currentFocusedTrainingIndex = -1;
+        RefreshTrainingVisuals(); // ì´ëŸ¬ë©´ ì¸ë±ìŠ¤ê°€ -1ì´ ë˜ì–´ì„œ ëª¨ë“  í›ˆë ¨ í•˜ì´ë¼ì´íŠ¸ê°€ êº¼ì§
+    }
+
+    // ë¦¬ìŠ¤íŠ¸ ê°±ì‹  í›„, íŠ¹ì • ì¸ë±ìŠ¤ì˜ í›ˆë ¨ ìŠ¬ë¡¯ ìœ„ì¹˜(Transform)ë¥¼ ë°˜í™˜í•˜ëŠ” í•¨ìˆ˜
+    public Transform GetTrainingSlotTransform(int index)
+    {
+        if (trainingSlots != null && index >= 0 && index < trainingSlots.Count)
+        {
+            return trainingSlots[index].transform;
+        }
+        // ì˜ˆì™¸ ì²˜ë¦¬: ëª» ì°¾ìœ¼ë©´ ê·¸ëƒ¥ ìŠ¤í‚¬ ìŠ¬ë¡¯ ìì²´ ë¦¬í„´
+        return this.transform;
+    }
 }

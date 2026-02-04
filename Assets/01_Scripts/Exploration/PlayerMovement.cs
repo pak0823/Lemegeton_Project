@@ -1,1874 +1,1874 @@
-// PlayerMovement.cs
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-using UnityEngine.EventSystems;
-using TMPro;
-
-public class PlayerMovement : MonoBehaviour
-{
-    public static PlayerMovement Instance {  get; private set; }
-
-    [Header("Å¸ÀÏ¸Ê ¼³Á¤")]
-    public List<Tilemap> floorMaps = new List<Tilemap>();
-    public List<Tilemap> wallMaps = new List<Tilemap>();
-    public List<Tilemap> obstacleMaps = new List<Tilemap>();
-    public float defaultMoveSpeed = 2f;
-    public LayerMask impassableLayerMask;
-    public Tilemap floorTilemap => (floorMaps != null && floorMaps.Count > 0) ? floorMaps[0] : null;
-
-    private Rigidbody2D rb;
-    private List<Vector3> path = new();
-    float movementLockUntil = 0f;
-    int _hardLockTokens = 0; // ¹«±âÇÑ Àá±İ ÅäÅ«
-
-    public bool isPushMode { private set; get; }
-    private Direction pendingDirectionKey = Direction.None;
-    private bool isPerformingPush = false;
-
-    ContactFilter2D _castFilter;
-    readonly RaycastHit2D[] _castHits = new RaycastHit2D[4];
-
-    // Å¸ÀÏ °æ·Î ±â¹İ ÀÌµ¿ »óÅÂ
-    [Header("Å¸ÀÏ °æ·Î ÀÌµ¿ ¼³Á¤")]
-    [SerializeField] private GameObject pathMarkerPrefab;   // °æ·Î Ç¥½Ã¿ë ÇÁ¸®ÆÕ
-    [SerializeField] private GameObject pushMarkerPrefab; // Push ÈÄº¸ Å¸ÀÏ Ç¥½Ã Àü¿ë
-    [SerializeField] private GameObject goalMarkerPrefab; // ¸ñÇ¥ ÁöÁ¡(³¡ºÎºĞ) Àü¿ë ¸¶Ä¿(³ë¶õ Å×µÎ¸®)
-
-    // ÇöÀç ¼±ÅÃµÈ °æ·Î(¼¿ ´ÜÀ§)
-    private List<Vector3Int> currentPathCells = new List<Vector3Int>();
-    // ÇöÀç ¼±ÅÃµÈ ¸ñÇ¥ ¼¿ (Ã¹ ¹øÂ° Å¬¸¯À¸·Î ¼±ÅÃµÈ Å¸ÀÏ)
-    private Vector3Int? selectedTargetCell = null;
-    // °æ·Î¸¦ µû¶ó ½ÇÁ¦ ÀÌµ¿ ÁßÀÎÁö ¿©ºÎ
-    private bool isMovingByPath = false;
-    // °æ·Î ÀÌµ¿ ÄÚ·çÆ¾ ÇÚµé
-    private Coroutine pathMoveRoutine = null;
-    // È­¸é¿¡ ÂïÈù °æ·Î ¸¶Ä¿µé
-    private readonly List<GameObject> activePathMarkers = new List<GameObject>();
-
-    // °æ·Î µµÂø ½Ã ½ÇÇàÇÒ Äİ¹é (¿¹: »óÀÚ ¿­±â)
-    private Action pathArrivalCallback = null;
-
-    // »óÈ£ÀÛ¿ë ÀÌµ¿¿ëÀ¸·Î ¼±ÅÃµÈ »óÀÚ(ÀÖ´Ù¸é)
-    private BoxInteract pendingChest = null;
-    private PortalController pendingPortal = null;
-
-    // ÇöÀç »óÈ£ÀÛ¿ë ´ë»ó(°üÂû/Á¶»ç ¹öÆ°ÀÌ °¡¸®Å°´Â ´ë»ó)
-    private Collider2D currentInteractTarget = null;
-    private DescriptionData currentDescData = null;
-
-    private int _pendingMoveVigorCost = 0;  //ÀÌµ¿ ºñ¿ë
-
-    // Push ¼±ÅÃ(Å¸ÀÏ Å¬¸¯) ¸ğµå
-    private bool isPushSelectMode = false;
-    private PushObject pendingPushBox = null;
-
-    // ¹Ú½º°¡ ÀÌµ¿ÇÒ ¼ö ÀÖ´Â ¸ñÇ¥ Å¸ÀÏ¸¸ Çã¿ë
-    private HashSet<Vector3Int> pushValidTargetCells = new HashSet<Vector3Int>();
-
-    // Ç¥½Ã¿ë ¸¶Ä¿(±âÁ¸ pathMarkerPrefab Àç»ç¿ë °¡´É)
-    private readonly List<GameObject> activePushMarkers = new List<GameObject>();
-
-    [Header("Path Cost Label (TMP)")]
-    [SerializeField] private float pathCostLabelScale = 0.05f;
-    private TextMeshPro _pathCostTMP = null;
-    private GameObject _pathCostLabelGO = null;
-
-    [Header("³ôÀÌ ÀÌµ¿ ¼³Á¤")]
-    public AnimationCurve jumpCurve;      // Á¡ÇÁ °î¼±
-    public float jumpHeightMultiplier = 0.5f; // Á¡ÇÁ ³ôÀÌ ¹èÀ²
-
-    [SerializeField] private LayerMask encounterLayerMask;
-    [SerializeField] private string battleSceneName = "BattleScene"; // ½ÇÁ¦ ÀüÅõ¾À ÀÌ¸§À¸·Î
-
-    private SpriteRenderer spriterenderer;
-    private Animator animator;
-
-    void Awake()
-    {
-        if(Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-        rb = GetComponent<Rigidbody2D>();
-        spriterenderer = GetComponent<SpriteRenderer>();
-        animator = GetComponent<Animator>();
-
-        // ¸¶¿ì½º ÀÌµ¿ Ãæµ¹ ¿¹Ãø ÇÊÅÍ (ÀÚ±â ÀÚ½ÅÀº ÀÚµ¿ Á¦¿ÜµÊ)
-        _castFilter.useTriggers = false;
-        _castFilter.SetLayerMask(impassableLayerMask);
-    }
-
-    void Update()
-    {
-        // °üÂû/´ëÈ­ Dialog°¡ ¿­·Á ÀÖÀ» ¶§: 
-        // ÁÂÅ¬¸¯À¸·Î ´İ±â
-        // ´İÈ÷±â Àü±îÁö´Â ÀÌµ¿/Å¸ÀÏ Å¬¸¯À» ÀüºÎ ¸·´Â´Ù
-        if (DescriptionDialogUI.Instance != null && DescriptionDialogUI.Instance.IsOpen)
-        {
-            if (Input.GetMouseButtonDown(0))
-            {
-                DescriptionDialogUI.Instance.Hide();
-            }
-
-            HaltImmediately();
-            return;
-        }
-
-        // ÀÔ·Â Â÷´Ü Á¶°ÇÀ» ÇÑ °÷¿¡¼­ Ã¼Å©
-        bool isInputBlocked =
-                                (Time.time < movementLockUntil)
-                              || (_hardLockTokens > 0)
-                              || isPerformingPush
-                              || GamePause.IsPaused;
-
-        if (isInputBlocked)
-        {
-            if (!isMovingByPath)
-                HaltImmediately();
-
-            return;
-        }
-
-        if (!isPushSelectMode && pendingPushBox == null)
-        {
-            HandleTileClickInput(); // Å¸ÀÏ Å¬¸¯/»óÀÚ Å¬¸¯ ÀÌµ¿
-        }
-
-        if (isPushSelectMode)
-        {
-            // RMB Ãë¼Ò(¿ä±¸»çÇ× 5)
-            if (Input.GetMouseButtonDown(1))
-            {
-                ExitPushSelectMode();
-                return;
-            }
-
-            // LMB: Çã¿ë Å¸ÀÏ¸¸
-            if (Input.GetMouseButtonDown(0))
-            {
-                var cam = Camera.main;
-                float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-                var wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-                wp.z = 0;
-
-                var clickedCell = floorTilemap.WorldToCell(wp);
-
-                if (!pushValidTargetCells.Contains(clickedCell))
-                    return;
-
-                // ¡°¸ñÇ¥ ¼¿¡±¸¸ ³Ñ±â°í, ½ÇÁ¦ ¿¬¼Ó/´Ü¹ß Çª½Ã´Â ³»ºÎ¿¡¼­ Ã³¸®
-                StartPushToCell(pendingPushBox, clickedCell);
-
-                ExitPushSelectMode(keepBoxHighlight: false);
-                return;
-            }
-
-            return; // pushSelectMode Áß¿¡´Â ÀÏ¹İ ÀÌµ¿/»óÈ£ÀÛ¿ë ÀÔ·Â Â÷´Ü
-        }
-
-        if (!isPushSelectMode && pendingPushBox != null && Input.GetMouseButtonDown(1))
-        {
-            pendingPushBox.SetHighlight(false);
-            pendingPushBox = null;
-            InteractionHintUI.Instance?.HideAll();
-            return;
-        }
-    }
-
-    void FixedUpdate()
-    {
-        if (isPerformingPush) return;
-        if (GamePause.IsPaused)
-        {
-            if (animator != null)
-                animator.SetInteger("Move", 0);
-            return;
-        }
-    }
-
-    void ExitPushSelectMode(bool keepBoxHighlight = false)
-    {
-        ClearPushTargets();
-        pushValidTargetCells.Clear();
-
-        if (animator != null)
-        {
-            animator.SetInteger("Move", 0);
-            animator.SetBool("IsPushIdle", false);
-        }
-
-        isPushSelectMode = false;
-        isPushMode = false;
-
-        if (!keepBoxHighlight)
-            pendingPushBox?.SetHighlight(false);
-
-        pendingPushBox = null;
-        pendingDirectionKey = Direction.None;
-
-        InteractionHintUI.Instance?.HideAll();
-    }
-
-    // --- Å¸ÀÏ Å¬¸¯ ÀÔ·Â Ã³¸® ---
-    void HandleTileClickInput()
-    {
-        // Ä«¸Ş¶ó/¸¶¿ì½º ÁÂÇ¥ °è»ê
-        var cam = Camera.main;
-        if (cam == null) return;
-
-        float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-        Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-        wp.z = 0;
-
-        // Å¸ÀÏ ÆÇÁ¤ ¹× µğ¹ö±× °»½Å
-        Vector3Int clickedCell = GetClickedCellWithHeight(wp);
-        Vector3Int currentCell = GetCellFromWorldPos(rb.position);
-
-        clickedCell.z = 0;
-        currentCell.z = 0;
-
-        // UI ¹× ÀÌµ¿ Áß Â÷´Ü
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
-
-        if (isMovingByPath)
-            return;
-
-        // ¿ŞÂÊ Å¬¸¯: °æ·Î ÇÁ¸®ºä or ÀÌµ¿ ½ÇÇà
-        if (Input.GetMouseButtonDown(0))
-        {
-            // ¸ÕÀú, Å¬¸¯ ÁöÁ¡¿¡ »óÈ£ÀÛ¿ë °¡´ÉÇÑ ¿ÀºêÁ§Æ®°¡ ÀÖ´ÂÁö °Ë»ç
-            BoxInteract clickedChest = null;
-            Collider2D clickedCollider = null;
-            DescriptionData clickedDesc = null;
-            PushObject clickedPush = null;
-            PortalController clickedPortal = null;
-
-            var hits = Physics2D.OverlapPointAll(wp);
-
-            foreach (var h in hits)
-            {
-                // PushObject °¨Áö
-                var push = h.GetComponentInParent<PushObject>();
-                if (push != null)
-                {
-                    clickedPush = push;
-                    if (!clickedCollider) clickedCollider = h;
-                }
-
-                // »óÀÚ(ºÎ¸ğ Æ÷ÇÔ) °Ë»ç
-                var chest = h.GetComponentInParent<BoxInteract>();
-                if (chest != null)
-                {
-                    // ÀÌ¹Ì ¿­¸° »óÀÚ´Â ¿ÏÀüÈ÷ ¹«½Ã (¸ğµç Äİ¶óÀÌ´õ Æ÷ÇÔ)
-                    if (chest.IsOpened)
-                        continue;
-
-                    // ´İÈù »óÀÚ¶ó¸é »óÀÚ Á¤º¸¸¸ ÀúÀå (Å¬¸¯ ´ë»ó ¿ì¼±)
-                    if (clickedChest == null)
-                        clickedChest = chest;
-
-                    // »óÀÚ Äİ¶óÀÌ´õµµ »óÈ£ÀÛ¿ë ´ë»ó Äİ¶óÀÌ´õ·Î ÀÎÁ¤
-                    if (!clickedCollider)
-                        clickedCollider = h;
-                }
-
-                // ¼³¸í µ¥ÀÌÅÍ´Â »óÀÚ/±âÅ¸ °øÅëÀ¸·Î °¡Á®¿Â´Ù
-                if (clickedDesc == null && h.TryGetComponent<DescriptionData>(out var descriptiondata))
-                {
-                    clickedDesc = descriptiondata;
-                    if (!clickedCollider)
-                        clickedCollider = h;
-                }
-
-                // Portal °¨Áö
-                var portal = h.GetComponentInParent<PortalController>();
-                if (portal != null)
-                {
-                    if (clickedPortal == null) clickedPortal = portal;
-                    if (!clickedCollider) clickedCollider = h;
-                }
-            }
-
-            if (clickedPush != null)
-            {
-                CancelSelectionAndHint(); // ±âÁ¸ ¼±ÅÃ/°æ·Î Á¤¸®:contentReference[oaicite:9]{index=9}
-
-                pendingPushBox = clickedPush;
-                pendingPushBox.SetHighlight(true);
-
-                // ¹Ğ±â/Ãë¼Ò 2¹öÆ°¸¸ Ç¥½Ã
-                InteractionHintUI.Instance?.ShowPushCancelAt(pendingPushBox.transform);
-                return;
-            }
-
-            // ¿ÀºêÁ§Æ®(»óÀÚ, NPC, ±âÅ¸) Å¬¸¯
-            if (clickedChest != null || clickedPortal != null || clickedCollider != null)
-            {
-                // ¸ñÇ¥°¡ µÉ Transform °áÁ¤ (»óÀÚ ¿ì¼±, ¾Æ´Ï¸é ÇØ´ç Äİ¶óÀÌ´õ)
-                Transform targetTr = clickedChest ? clickedChest.transform :
-                                    (clickedPortal != null ? clickedPortal.transform :
-                                     clickedCollider.transform);
-
-                // ´ë»ó ¼¿
-                Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
-                
-
-                // ÇöÀç ¼¿ÀÌ ´ë»ó ¼¿°ú °°Àº ¼¿ÀÌ°Å³ª, ÀÎÁ¢ 6Ä­ Áß ÇÏ³ª¶ó¸é "ÀÌµ¿ ¾øÀÌ »óÈ£ÀÛ¿ë °¡´É"
-                bool isAdjacentOrSame = false;
-                {
-                    if (currentCell == targetCell)
-                    {
-                        isAdjacentOrSame = true;
-                    }
-                    else
-                    {
-                        Direction[] dirs =
-                        {
-                            Direction.West,
-                            Direction.East,
-                            Direction.NW,
-                            Direction.NE,
-                            Direction.SW,
-                            Direction.SE
-                        };
-
-                        bool odd = (targetCell.y & 1) != 0;
-                        foreach (var dir in dirs)
-                        {
-                            Vector3Int offset = GetOffsetForDirection(dir, odd);
-                            Vector3Int adj = targetCell + offset;
-                            if (adj == currentCell)
-                            {
-                                isAdjacentOrSame = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (isAdjacentOrSame)
-                {
-                    // ÀÌµ¿ ¾øÀÌ ¹Ù·Î »óÈ£ÀÛ¿ëÇÒ ¼ö ÀÖ´Â °Å¸®
-                    selectedTargetCell = currentCell;
-                    currentPathCells = new List<Vector3Int> { currentCell };
-
-                    // ÇöÀç »óÈ£ÀÛ¿ë ´ë»ó/°üÂû ´ë»ó ÀúÀå
-                    currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
-                    currentDescData = clickedDesc;
-                    pendingChest = clickedChest;
-                    pendingPortal = clickedPortal;
-
-                    // Á¦ÀÚ¸®¿¡¼± °æ·Î ÇÁ¸®ºä´Â ÇÊ¿ä ¾øÀ¸´Ï È£ÃâÇØµµ Ç¥½Ã°¡ ¾È µÊ(Count < 2¶ó¼­)
-                    ShowPathPreview(currentPathCells);
-
-                    // HintUI¸¦ ´ë»ó À§Ä¡¿¡ Ç¥½Ã (Á¶»ç/°üÂû/Ãë¼Ò ¹öÆ° ¸ğµÎ)
-                    InteractionHintUI.Instance?.HideAll();
-
-                    if (clickedPortal != null)
-                    {
-                        InteractionHintUI.Instance?.ShowSurveyAt(targetTr, clickedPortal.GetHintLabel()); // "ÀÌµ¿"
-                                                                                                        // PortalÀº °üÂû ¹öÆ° ºÒÇÊ¿äÇÏ¸é »ı·«
-                    }
-                    else
-                    {
-                        InteractionHintUI.Instance?.ShowBothAt(targetTr); // ±âÁ¸ »óÀÚ/±âÅ¸
-                    }
-
-                    InteractionHintUI.Instance?.ShowCancelAt(targetTr);
-                    return;
-                }
-
-
-                var newPath = FindPathToAdjacentCell(currentCell, targetCell);
-
-                if (newPath == null || newPath.Count < 2)
-                {
-                    // µµ´Ş ºÒ°¡ ¡æ ¼±ÅÃ/ÇÁ¸®ºä ÇØÁ¦
-                    selectedTargetCell = null;
-                    currentPathCells.Clear();
-                    ClearPathPreview();
-                    pendingChest = null;
-                    pendingPortal = null;
-                    pathArrivalCallback = null;
-                    currentInteractTarget = null;
-                    currentDescData = null;
-                    InteractionHintUI.Instance?.HideAll();
-                    return;
-                }
-
-                selectedTargetCell = newPath[newPath.Count - 1];
-                currentPathCells = newPath;
-
-                // ÇöÀç »óÈ£ÀÛ¿ë ´ë»ó/°üÂû ´ë»ó ÀúÀå
-                currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
-                currentDescData = clickedDesc;
-
-                pendingChest = clickedChest;
-                pendingPortal = clickedPortal;
-
-                ShowPathPreview(newPath);
-
-                // HintUI¸¦ ´ë»ó À§Ä¡¿¡ Ç¥½Ã (Á¶»ç/°üÂû/Ãë¼Ò ¹öÆ° ¸ğµÎ)
-                InteractionHintUI.Instance?.ShowBothAt(targetTr); // Á¶»ç + °üÂû
-                InteractionHintUI.Instance?.ShowCancel();         // Ãë¼Ò ¹öÆ° Ãß°¡
-                return;
-            }
-
-            // ¿ÀºêÁ§Æ®°¡ ¾Æ´Ñ ±×³É Å¸ÀÏ Å¬¸¯ÀÎ °æ¿ì
-            if (pendingChest != null)
-            {
-                // ¿ŞÂÊ Å¬¸¯Àº ¹«½Ã (¹öÆ°À¸·Î¸¸ ÀÌµ¿ ½ÃÀÛ)
-                return;
-            }
-
-            // ÀÌ¹Ì °°Àº Å¸ÀÏÀÌ ¼±ÅÃµÈ »óÅÂ¿¡¼­ ´Ù½Ã ¿ŞÂÊ Å¬¸¯ ¡æ ÀÌµ¿ ½ÇÇà
-            if (selectedTargetCell.HasValue
-                && selectedTargetCell.Value == clickedCell
-                && currentPathCells != null
-                && currentPathCells.Count >= 2)
-            {
-                StartPathMove(currentPathCells, pathArrivalCallback);
-                return;
-            }
-
-            if (!IsWalkableCell(clickedCell))
-            {
-                Debug.Log($"[ÀÌµ¿ ºÒ°¡] ÁÂÇ¥: {clickedCell} - ¹Ù´ÚÀÌ ¾ø°Å³ª º®/Àå¾Ö¹°ÀÌ ÀÖ½À´Ï´Ù.");
-                return;
-            }
-
-            // »õ °æ·Î °è»ê
-            var newPath2 = FindPath(currentCell, clickedCell);
-
-            // °æ·Î°¡ ¾ø°Å³ª 1Ä­(Á¦ÀÚ¸®)ÀÌ¸é ¼±ÅÃ/ÇÁ¸®ºä ÇØÁ¦
-            if (newPath2 == null || newPath2.Count <= 1)
-            {
-                selectedTargetCell = null;
-                currentPathCells.Clear();
-                ClearPathPreview();
-                pendingChest = null;
-                pathArrivalCallback = null;
-                currentInteractTarget = null;
-                currentDescData = null;
-                InteractionHintUI.Instance?.HideAll();
-                return;
-            }
-
-            // Ã¹ ¹øÂ° Å¬¸¯: °æ·Î¸¸ Ç¥½Ã (ÀÌ °æ¿ì °üÂû ´ë»óÀº ¾øÀ½)
-            selectedTargetCell = clickedCell;
-            currentPathCells = newPath2;
-            pendingChest = null;
-            pathArrivalCallback = null;
-            currentInteractTarget = null;
-            currentDescData = null;
-            ShowPathPreview(newPath2);
-            InteractionHintUI.Instance?.HideAll();
-            return;
-        }
-
-        // ¿À¸¥ÂÊ Å¬¸¯: °°Àº Å¸ÀÏÀ» Å¬¸¯ÇÏ¸é ¼±ÅÃ/ÇÁ¸®ºä Ãë¼Ò
-        if (Input.GetMouseButtonDown(1))
-        {
-            if (selectedTargetCell.HasValue || (currentPathCells != null && currentPathCells.Count > 0))
-            {
-                CancelSelectionAndHint();
-            }
-        }
-    }
-    //HintUi °øÅë Ãë¼Ò ¸Ş¼­µå
-    void CancelSelectionAndHint()
-    {
-        selectedTargetCell = null;
-        currentPathCells.Clear();
-        ClearPathPreview();
-        pendingChest = null;
-        pathArrivalCallback = null;
-        currentInteractTarget = null;
-        currentDescData = null;
-        pendingPortal = null;
-        InteractionHintUI.Instance?.HideAll();
-    }
-
-    // ¿ÜºÎ¿¡¼­ Àá±İ ¿äÃ»
-    public void LockMovementFor(float seconds)
-    {
-        movementLockUntil = Mathf.Max(movementLockUntil, Time.time + Mathf.Max(0f, seconds));
-
-        // °æ·Î ÀÌµ¿ Áß¿¡´Â ÄÚ·çÆ¾À» ²÷Áö ¸»°í ÀÔ·Â¸¸ Àá±İ
-        if (!isMovingByPath)
-        {
-            HaltImmediately();
-        }
-        else
-        {
-            if (animator != null) animator.SetInteger("Move", 0);
-        }
-    }
-    public void LockMovementIndefinite()
-    {
-        _hardLockTokens++;
-        HaltImmediately();
-    }
-    public void UnlockMovementIndefinite()
-    {
-        _hardLockTokens = Mathf.Max(0, _hardLockTokens - 1);
-        HaltImmediately();
-    }
-
-    #region Movement
-    public Tilemap GetWalkableMapAt(Vector3Int cell)
-    {
-        if (floorMaps == null) return null;
-
-        // ¸®½ºÆ® µÚÂÊ(³ôÀº Ãş)ºÎÅÍ °Ë»çÇØ¾ß °ãÃÆÀ» ¶§ À§ÂÊ Å¸ÀÏÀ» °¡Á®¿È
-        for (int i = floorMaps.Count - 1; i >= 0; i--)
-        {
-            if (floorMaps[i].HasTile(cell)) return floorMaps[i];
-        }
-        return null;
-    }
-
-    // È­¸é¿¡¼­ °æ·Î Ç¥½Ã Á¦°Å
-    void ClearPathPreview()
-    {
-        if (activePathMarkers.Count > 0)
-        {
-            foreach (var marker in activePathMarkers)
-            {
-                if (marker != null)
-                    Destroy(marker);
-            }
-            activePathMarkers.Clear();
-        }
-        if (_pathCostLabelGO != null)
-        {
-            Destroy(_pathCostLabelGO);
-            _pathCostLabelGO = null;
-            _pathCostTMP = null;
-        }
-    }
-    // °æ·Î ÇÁ¸®ºä »ı¼º (2Ä­ ÀÌ»óÀÏ ¶§¸¸ Ç¥½Ã)
-    void ShowPathPreview(List<Vector3Int> cells)
-    {
-        ClearPathPreview();
-
-        currentPathCells = cells ?? new List<Vector3Int>();
-        if (cells == null || cells.Count < 2) return;
-
-        for (int i = 0; i < cells.Count; i++)
-        {
-            Vector3Int cell = cells[i];
-
-            // ÇØ´ç ¼¿ÀÌ ¼Ò¼ÓµÈ Å¸ÀÏ¸ÊÀ» Ã£À½ (³ôÀÌ Á¤º¸ Æ÷ÇÔ)
-            Tilemap targetMap = GetWalkableMapAt(cell);
-            if (targetMap == null) targetMap = floorTilemap;
-
-            // ±× Å¸ÀÏ¸Ê ±âÁØÀ¸·Î ¿ùµå ÁÂÇ¥¸¦ °¡Á®¿Â´Ù (Anchor °ª ÀÚµ¿ ¹İ¿µµÊ)
-            Vector3 world = targetMap.GetCellCenterWorld(cell);
-
-            // ZÃà Á¤·Ä
-            world.z = 0;
-
-            bool isGoal = (i == cells.Count - 1);
-
-            GameObject prefabToUse = isGoal && goalMarkerPrefab != null
-                ? goalMarkerPrefab
-                : pathMarkerPrefab;
-
-            if (prefabToUse == null) continue;
-
-            var marker = Instantiate(prefabToUse, world, Quaternion.identity);
-
-            // ¸¶Ä¿°¡ Å¸ÀÏ¿¡ ÆÄ¹¯È÷Áö ¾Ê°Ô Sorting Order µ¿Àû Á¶Àı
-            var mapRenderer = targetMap.GetComponent<TilemapRenderer>();
-            var markerRenderer = marker.GetComponent<SpriteRenderer>();
-
-            if (mapRenderer != null && markerRenderer != null)
-            {
-                // Å¸ÀÏ¸Ê°ú °°Àº Sorting Layer¸¦ ¾²°í,
-                markerRenderer.sortingLayerID = mapRenderer.sortingLayerID;
-
-                // ¼ø¼­´Â Å¸ÀÏ¸Êº¸´Ù 1 ³ô°Ô ¼³Á¤ (¹«Á¶°Ç Å¸ÀÏ À§¿¡ ±×·ÁÁü)
-                markerRenderer.sortingOrder = mapRenderer.sortingOrder + 1;
-            }
-
-            activePathMarkers.Add(marker);
-        }
-
-        // ¸ñÇ¥ ÁöÁ¡¿¡ ÃÑ ÇÊ¿ä È°±â Ç¥½Ã
-        var vigor = VigorManager.Instance;
-        if (vigor != null && cells.Count > 0)
-        {
-            int steps = Mathf.Max(0, cells.Count - 1);
-            int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
-
-            Vector3Int goalCell = cells[cells.Count - 1];
-            Tilemap goalMap = GetWalkableMapAt(goalCell);
-            if (goalMap == null) goalMap = floorTilemap;
-
-            Vector3 goalWorld = goalMap.GetCellCenterWorld(goalCell);
-            goalWorld.z = 0;
-
-            if (_pathCostLabelGO == null)
-            {
-                _pathCostLabelGO = new GameObject("PathCostLabel_TMP");
-                _pathCostLabelGO.transform.localScale = Vector3.one * pathCostLabelScale;
-
-                _pathCostTMP = _pathCostLabelGO.AddComponent<TextMeshPro>();
-                _pathCostTMP.text = $"-{cost}";
-                _pathCostTMP.alignment = TextAlignmentOptions.Center;
-                _pathCostTMP.fontSize = 30;                // ½ºÄÉÀÏ°ú ÇÔ²² Æ©´×
-                _pathCostTMP.enableWordWrapping = false;
-
-                // ¸ñÇ¥ ÁöÁ¡ ¸ÊÀÇ Order + 2 Á¤µµ·Î ¼³Á¤
-                var renderer = goalMap.GetComponent<TilemapRenderer>();
-                int baseOrder = renderer != null ? renderer.sortingOrder : 0;
-                _pathCostTMP.sortingOrder = baseOrder + 2; // ÅØ½ºÆ®´Â È®½ÇÇÏ°Ô À§·Î
-                _pathCostTMP.outlineWidth = 0.2f;          // °¡µ¶¼º
-                _pathCostTMP.color = (cost <= vigor.CurrentVigor) ? Color.white : Color.red;
-            }
-
-            _pathCostLabelGO.transform.position = goalWorld;
-            _pathCostTMP.text = $"-{cost}";
-        }
-    }
-
-    // µÎ Å¸ÀÏ »çÀÌÀÇ ³ôÀÌ Â÷ÀÌ°¡ ÀÌµ¿ °¡´ÉÇÑ ¼öÁØÀÎÁö È®ÀÎ (3Ä­ ÀÌ»ó ºÒ°¡)
-    bool IsHeightDiffValid(Vector3Int from, Vector3Int to)
-    {
-        Tilemap fromMap = GetWalkableMapAt(from);
-        Tilemap toMap = GetWalkableMapAt(to);
-
-        // ¸ÊÀ» ¸ø Ã£À¸¸é ¹Ù´Ú(0)À¸·Î °¡Á¤
-        float fromH = (fromMap != null) ? fromMap.tileAnchor.y : 0f;
-        float toH = (toMap != null) ? toMap.tileAnchor.y : 0f;
-
-        float diff = Mathf.Abs(toH - fromH);    // (µµÂø - Ãâ¹ß)
-
-        // À§·Î °¡µç ¾Æ·¡·Î °¡µç Â÷ÀÌ°¡ 0.6f ¹Ì¸¸ÀÌ¾î¾ß ÇÔ
-        if (Mathf.Abs(diff) < 0.55f)
-        {
-            return true;
-        }
-
-        return false;
-    }
-    // ³í¸®Àû ÆÇ´ÜÀ» À§ÇÑ Á¤È®ÇÑ ¿ùµå ÁÂÇ¥ ¹İÈ¯
-    Vector3 GetWorldPosForLogic(Vector3Int cell)
-    {
-        Tilemap map = GetWalkableMapAt(cell);
-        if (map == null) map = floorTilemap; // ¾øÀ¸¸é ¹Ù´Ú ±âÁØ
-
-        // ÇØ´ç ¸ÊÀÇ ¾ŞÄ¿°¡ Àû¿ëµÈ ¿ùµå Áß½É ÁÂÇ¥
-        Vector3 worldPos = map.GetCellCenterWorld(cell);
-        worldPos.z = 0; // °Å¸®´Â 2D Æò¸é(XY) ±âÁØÀ¸·Î¸¸ º¼ °Å´Ï±î Z ¹«½Ã
-        return worldPos;
-    }
-
-    // --- Å¸ÀÏ ±â¹İ ÃÖ¼Ò °æ·Î Å½»ö (BFS) ---
-    List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal)
-    {
-        if (start == goal) return new List<Vector3Int> { start };
-
-        var queue = new Queue<Vector3Int>();
-        var cameFrom = new Dictionary<Vector3Int, Vector3Int>();
-
-        queue.Enqueue(start);
-        cameFrom[start] = start;
-
-        Direction[] dirs =
-        {
-            Direction.West, Direction.East,
-            Direction.NW, Direction.NE,
-            Direction.SW, Direction.SE
-        };
-
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-            if (current == goal) break;
-
-            bool odd = (current.y & 1) != 0;
-            Vector3 currentWorldPos = GetWorldPosForLogic(current);
-
-            foreach (var dir in dirs)
-            {
-                Vector3Int offset = GetOffsetForDirection(dir, odd);
-                Vector3Int next = current + offset;
-
-                if (cameFrom.ContainsKey(next)) continue;
-
-                // 1. ¹Ù´Ú Å¸ÀÏ ¾øÀ¸¸é ½ºÅµ
-                if (!IsWalkableCell(next)) continue;
-
-                // 2. ³ôÀÌ Â÷ÀÌ ¾È ¸ÂÀ¸¸é ½ºÅµ
-                if (!IsHeightDiffValid(current, next)) continue;
-
-                // 3. ¹°¸®Àû °Å¸®°¡ ³Ê¹« ¸Ö¸é(¾ŞÄ¿ ¿ÀÂ÷ µîÀ¸·Î ²÷±ä °÷) ½ºÅµ
-                // ¾ÈÀüÇÏ°Ô 2.0f·Î À¯Áö
-                Vector3 nextWorldPos = GetWorldPosForLogic(next);
-                float dist = Vector2.Distance(currentWorldPos, nextWorldPos);
-                if (dist > 2.0f) continue;
-
-                cameFrom[next] = current;
-                queue.Enqueue(next);
-            }
-        }
-
-        if (!cameFrom.ContainsKey(goal))
-        {
-            return null; // °æ·Î ¾øÀ½ (Á¶¿ëÈ÷ ¸®ÅÏ)
-        }
-
-        // °æ·Î ¿ªÃßÀû
-        var path = new List<Vector3Int>();
-        var cur = goal;
-        while (true)
-        {
-            path.Add(cur);
-            if (cur == start) break;
-            cur = cameFrom[cur];
-        }
-        path.Reverse();
-        return path;
-    }
-
-    // Æ¯Á¤ ¿ÀºêÁ§Æ® ¼¿ ÁÖº¯(ÀÎÁ¢ 6Ä­) Áß ÇÏ³ª±îÁöÀÇ ÃÖ´Ü °æ·Î¸¦ Ã£´Â´Ù.
-    List<Vector3Int> FindPathToAdjacentCell(Vector3Int start, Vector3Int objectCell)
-    {
-        Direction[] dirs =
-        {
-            Direction.West,
-            Direction.East,
-            Direction.NW,
-            Direction.NE,
-            Direction.SW,
-            Direction.SE
-        };
-
-        List<Vector3Int> bestPath = null;
-
-        bool odd = (objectCell.y & 1) != 0;
-
-        foreach (var dir in dirs)
-        {
-            Vector3Int offset = GetOffsetForDirection(dir, odd);
-            Vector3Int adj = objectCell + offset;
-
-            if (!IsWalkableCell(adj))
-                continue;
-
-            var path = FindPath(start, adj);
-            if (path == null || path.Count < 2)
-                continue;
-
-            if (bestPath == null || path.Count < bestPath.Count)
-                bestPath = path;
-        }
-
-        return bestPath;
-    }
-
-    List<Vector3Int> FindPathToPushReadyCell(Vector3Int playerCell, Vector3Int boxCell, PushObject box)
-    {
-        Direction[] dirs =
-        {
-        Direction.West, Direction.East,
-        Direction.NW, Direction.NE,
-        Direction.SW, Direction.SE
-    };
-
-        List<Vector3Int> best = null;
-        bool oddBox = (boxCell.y & 1) != 0;
-
-        foreach (var d in dirs)
-        {
-            var adj = boxCell + GetOffsetForDirection(d, oddBox);
-            if (!IsWalkableCell(adj)) continue;
-
-            // adj(ÇÃ·¹ÀÌ¾î À§Ä¡)¿¡¼­ box¸¦ ¹Ğ ¶§ÀÇ ¡°ÇÃ·¹ÀÌ¾î¡æ¹Ú½º »ó´ë ¹æÇâ¡±À» dirKey·Î »êÃâ
-            var delta = boxCell - adj;
-            bool oddAdj = (adj.y & 1) != 0;
-            var dirKey = GetDirectionFromDelta(delta, oddAdj);
-            if (dirKey == Direction.None) continue;
-
-            // ±× ÀÚ¸®¿¡¼­ ½ÇÁ¦·Î 1Ä­ÀÌ¶óµµ ¹Ğ ¼ö ÀÖ¾î¾ß ¡°push-ready¡±
-            // (ÈÄº¸ Å¸ÀÏ °è»ê ÇÔ¼ö´Â ¾Æ·¡ 2)¿¡¼­ Ãß°¡ÇÒ BuildPushLineTargets¸¦ »ç¿ë)
-            var line = BuildPushLineTargets(box, boxCell, dirKey);
-            if (line.Count == 0) continue;
-
-            var path = FindPath(playerCell, adj);
-            if (path == null || path.Count < 2) continue;
-
-            if (best == null || path.Count < best.Count) best = path;
-        }
-
-        return best;
-    }
-
-    //½Éº¼ ÀÎÄ«¿îÅÍ ¸ó½ºÅÍ Å¸ÀÏ Ã¼Å©
-    bool TryGetEncounterAtCell(Vector3Int cell, out EncounterMonster monster)
-    {
-        monster = null;
-        var world = floorTilemap.GetCellCenterWorld(cell);
-        var hits = Physics2D.OverlapCircleAll(world, 0.4f, encounterLayerMask);
-
-        // Å½ÁöµÈ °³¼ö È®ÀÎ
-        if (hits.Length == 0)
-        {
-            Debug.Log($"[Encounter] ÇØ´ç Å¸ÀÏ({cell}) Áß½É¿¡¼­ ¹İ°æ 0.4f ³»¿¡ 'Water' ·¹ÀÌ¾î °¨Áö ¾È µÊ. À§Ä¡: {world}");
-            return false;
-        }
-
-        foreach (var h in hits)
-        {
-            if (!h) continue;
-            var m = h.GetComponentInParent<EncounterMonster>();
-            if (m != null)
-            {
-                if (!m.IsActive) Debug.Log($"[Encounter] ¸ó½ºÅÍ °¨ÁöµÊ({m.name}) ±×·¯³ª IsActive°¡ falseÀÓ.");
-                else
-                {
-                    Debug.Log($"[Encounter] ¸ó½ºÅÍ °¨Áö ¼º°ø! ÀüÅõ ÁøÀÔ ½Ãµµ.");
-                    monster = m;
-                    return true;
-                }
-                   
-            }
-        }
-        return false;
-    }
-    //ÇÔÁ¤ Å¸ÀÏ Ã¼Å©
-    void TryTriggerTrapAtCell(Vector3Int cell)
-    {
-        if (floorTilemap == null) return;
-
-        var traps = TrapBehavior.allTraps;
-        for (int i = 0; i < traps.Count; i++)
-        {
-            var trap = traps[i];
-            if (!trap) continue;
-            trap.TryTriggerByPlayer(floorTilemap, cell);
-        }
-    }
-    void TryConsumeTrapByBoxAtCell(Vector3Int cell)
-    {
-        if (floorTilemap == null) return;
-
-        var traps = TrapBehavior.allTraps;
-        for (int i = 0; i < traps.Count; i++)
-        {
-            var trap = traps[i];
-            if (!trap) continue;
-            if (!trap.gameObject.activeInHierarchy) continue; // ºñÈ°¼º Æ®·¦ ½ºÅµ(±ÇÀå)
-
-            trap.TryConsumeByBox(floorTilemap, cell);
-        }
-    }
-
-    void StartPushToCell(PushObject box, Vector3Int targetCell)
-    {
-        if (box == null || floorTilemap == null) return;
-
-        // ½ÃÄö½º ½ÃÀÛ ½ÃÁ¡ÀÇ ¡°¹æÇâ¡±Àº EnterPushSelectMode¿¡¼­ °áÁ¤µÈ pendingDirectionKey¸¦ »ç¿ë
-        // (ÇØ´ç ¸ğµå¿¡¼­´Â ¹æÇâÀÌ ÇÏ³ª·Î °íÁ¤µÇ´Â ¼³°è)
-        if (pendingDirectionKey == Direction.None) return;
-
-        // ÀÔ·Â Àá±İÀº ½ÃÄö½º¿¡¼­¸¸ °ü¸®
-        StartCoroutine(PerformPushToTarget(box, pendingDirectionKey, targetCell));
-    }
-
-    // °æ·Î¸¦ µû¶ó ½ÇÁ¦·Î ÀÌµ¿
-    void StartPathMove(List<Vector3Int> cells, Action onArrive = null, int? overrideVigorCost = null)
-    {
-        if (cells == null || cells.Count < 2) return; // Á¦ÀÚ¸®ÀÌ°Å³ª Àß¸øµÈ °æ·Î
-
-        // ÀÌµ¿ ºñ¿ë °è»ê
-        _pendingMoveVigorCost = 0;
-        var vigor = VigorManager.Instance;
-
-        if (overrideVigorCost.HasValue)
-        {
-            // º¹±Í ÈÄ ÀÌ¾î¼­ ÀÌµ¿: "ÃÑ ¿¹Á¤ ºñ¿ë"À» ±×´ë·Î ÀÌ¾î¹Ş´Â´Ù
-            _pendingMoveVigorCost = Mathf.Max(0, overrideVigorCost.Value);
-        }
-        else if (vigor != null)
-        {
-            int steps = Mathf.Max(0, cells.Count - 1);
-            int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
-
-            // ¼± Â÷°¨ ´ë½Å °¡´É ¿©ºÎ¸¸ È®ÀÎ
-            if (cost > 0 && !vigor.CanSpend(cost))
-            {
-                ExplorationLogUI.Instance?.Push($"È°±â°¡ ºÎÁ·ÇÕ´Ï´Ù. ÀÌµ¿ ÇÊ¿ä: {cost}, ÇöÀç: {vigor.CurrentVigor}");
-                CancelSelectionAndHint();
-                return;
-            }
-            _pendingMoveVigorCost = cost;
-        }
-
-        // ÀÌµ¿ ÁßÀÌ¸é ¸ÕÀú Á¤¸®
-        if (pathMoveRoutine != null)
-        {
-            StopCoroutine(pathMoveRoutine);
-            pathMoveRoutine = null;
-        }
-
-        isMovingByPath = true;
-
-        // µµÂø Äİ¹é ¼³Á¤
-        pathArrivalCallback = onArrive;
-
-        // ÇÁ¸®ºä´Â ÀÌµ¿ ½ÃÀÛ ½Ã Áö¿ò
-        ClearPathPreview();
-
-        var moveCells = new List<Vector3Int>(cells);   // º¹»çº» »ı¼º
-        pathMoveRoutine = StartCoroutine(Co_MoveAlongPath(moveCells));
-    }
-
-    void EndPathMove()
-    {
-        isMovingByPath = false;
-        selectedTargetCell = null;
-        currentPathCells.Clear();
-        pathMoveRoutine = null;
-
-        // °æ·Î ÇÁ¸®ºä/¸¶Ä¿ Á¤¸®
-        ClearPathPreview();
-    }
-
-    // ¹°¸® ¿£Áø(Raycast)À» ÀÌ¿ëÇÑ Á¤È®ÇÑ Å¸ÀÏ °¨Áö
-    // [Physics ¹æ½Ä + ÁÂÇ¥ º¸Á¤]
-    Vector3Int GetClickedCellWithHeight(Vector3 mouseWorldPos)
-    {
-        // È­¸é»ó ¸¶¿ì½º À§Ä¡¿¡¼­ ·¹ÀÌ ¹ß»ç
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        // ·¹ÀÌ¿¡ Ãæµ¹µÈ Å¸ÀÏ ¸ğµÎ °¡Á®¿À±â
-        RaycastHit2D[] hits = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
-
-        if (hits.Length > 0)
-        {
-            Tilemap bestMap = null;
-            int maxOrder = int.MinValue;
-            Vector3Int bestCell = Vector3Int.zero;
-            bool found = false;
-
-            float bestHitY = float.MaxValue;
-
-            // °¡Àå À§¿¡ ±×·ÁÁø(Sorting Order ³ôÀº) Å¸ÀÏ Ã£±â
-            foreach (var hit in hits)
-            {
-                Tilemap map = hit.collider.GetComponent<Tilemap>();
-                if (map != null)
-                {
-                    // ÀÌ ¸Ê ±âÁØÀ¸·Î ÁÂÇ¥ º¸Á¤
-                    Grid grid = map.layoutGrid;
-                    Vector3 exactWorldAnchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(map.tileAnchor))
-                                                   - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
-
-                    Vector3 correctedPoint = (Vector3)hit.point - exactWorldAnchorOffset;
-                    Vector3Int tempCell = map.WorldToCell(correctedPoint);
-                    tempCell.z = 0;
-
-                    // ½ÇÁ¦·Î ±× ÁÂÇ¥¿¡ Å¸ÀÏÀÌ ÀÖ´ÂÁö È®ÀÎ
-                    if (map.HasTile(tempCell))
-                    {
-                        var renderer = map.GetComponent<TilemapRenderer>();
-                        int order = renderer != null ? renderer.sortingOrder : 0;
-
-                        // Order ³ô°Å³ª, °°À¸¸é È­¸é»ó ¾Æ·¡ÂÊ(Y°¡ ÀÛÀº) ¿ì¼±
-                        if (!found || order > maxOrder || (order == maxOrder && hit.point.y < bestHitY))
-                        {
-                            maxOrder = order;
-                            bestMap = map;
-                            bestCell = tempCell;
-                            bestHitY = hit.point.y; // ºñ±³¿ë Y°ª ÀúÀå
-                            found = true;
-                        }
-                    }
-                }
-            }
-
-            if (found && bestMap != null)
-            {
-                return bestCell;
-            }
-        }
-
-        // Çã°ø Å¬¸¯ ½Ã Fallback(°¡Àå ¹Ù´Ú ¸Ê ±âÁØ)
-        if (floorTilemap != null)
-        {
-            Vector3 correctedMouse = mouseWorldPos;
-            correctedMouse -= floorTilemap.tileAnchor;
-            Vector3Int baseCell = floorTilemap.WorldToCell(correctedMouse);
-            baseCell.z = 0;
-            return baseCell;
-        }
-
-        return Vector3Int.zero;
-    }
-
-    // ÇÃ·¹ÀÌ¾î(¶Ç´Â Æ¯Á¤ ¿ùµå ÁÂÇ¥)°¡ ¹â°í ÀÖ´Â Å¸ÀÏÀÇ Á¤È®ÇÑ ¼¿ ÁÂÇ¥ ±¸ÇÏ±â
-    public Vector3Int GetCellFromWorldPos(Vector3 worldPos)
-    {
-        // ÇØ´ç À§Ä¡¿¡ ÀÖ´Â ¸ğµç Äİ¶óÀÌ´õ °Ë»ç
-        Collider2D[] cols = Physics2D.OverlapPointAll(worldPos);
-
-        Tilemap bestMap = null;
-        int maxOrder = int.MinValue;
-
-        foreach (var col in cols)
-        {
-            Tilemap map = col.GetComponent<Tilemap>();
-            if (map != null)
-            {
-                // Àå¾Ö¹°/º® Á¦¿ÜÇÏ°í ¹Ù´Ú¸¸ Ã¼Å© (ÇÊ¿ä½Ã wall Æ÷ÇÔ ¿©ºÎ °áÁ¤)
-                if (obstacleMaps.Contains(map)) continue;
-
-                var renderer = map.GetComponent<TilemapRenderer>();
-                int order = renderer != null ? renderer.sortingOrder : 0;
-
-                // °¡Àå À§¿¡ ±×·ÁÁø(Sorting Order°¡ ³ôÀº) ¸Ê ¼±ÅÃ
-                if (order > maxOrder)
-                {
-                    maxOrder = order;
-                    bestMap = map;
-                }
-            }
-        }
-
-        if (bestMap != null)
-        {
-            Vector3 correctedPos = worldPos;
-
-            // ¹â°í ÀÖ´Â ¸ÊÀÇ Anchor¸¸Å­ ÁÂÇ¥¸¦ ³»·Á¼­ °è»ê
-            Grid grid = bestMap.layoutGrid;
-            Vector3 anchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(bestMap.tileAnchor))
-                                 - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
-            correctedPos -= anchorOffset;
-
-            Vector3Int cell = bestMap.WorldToCell(correctedPos);
-            cell.z = 0;
-            return cell;
-        }
-
-        // ¹Ù´ÚÀ» ¸ø Ã£¾ÒÀ» °æ¿ì Fallback
-        if (floorTilemap != null)
-        {
-            // È¤½Ã ¸ğ¸£´Ï ±âº» ¹Ù´Ú ¾ŞÄ¿¶óµµ »©ÁÜ
-            Vector3 correctedPos = worldPos;
-            correctedPos -= floorTilemap.tileAnchor;
-            return floorTilemap.WorldToCell(correctedPos);
-        }
-
-        return Vector3Int.zero;
-    }
-    IEnumerator Co_MoveAlongPath(List<Vector3Int> cells)
-    {
-        // ¾ÈÀüÇÏ°Ô ·ÎÄÃ·Î º¹»ç(Áß°£¿¡ ¿ÜºÎ¿¡¼­ ¸®½ºÆ®°¡ ¹Ù²î´Â °æ¿ì ¹æÁö)
-        if (cells == null || cells.Count < 2)
-        {
-            EndPathMove();
-            yield break;
-        }
-
-        Action cb = pathArrivalCallback;
-
-        try
-        {
-            // ½ÃÀÛ ¼¿Àº ÇöÀç À§Ä¡¶ó°í °¡Á¤, 1¹øÂ° ÀÎµ¦½ººÎÅÍ ³¡±îÁö ¼ø¼­´ë·Î ÀÌµ¿
-            for (int i = 1; i < cells.Count; i++)
-            {
-                // ÀÌÀü Å¸ÀÏ(Ãâ¹ß)°ú ÇöÀç Å¸ÀÏ(µµÂø)ÀÇ Ãş¼ö(Index) ±¸ÇÏ±â
-                Vector3Int startCell = cells[i - 1];
-                Vector3Int endCell = cells[i];
-
-                // °¢ ¼¿ÀÌ ¼Ò¼ÓµÈ ¸ÊÀ» Ã£¾Æ¼­ ½ÇÁ¦ ¿ùµå ÁÂÇ¥¸¦ °¡Á®¿È
-                Tilemap startMap = GetWalkableMapAt(startCell);
-                Tilemap endMap = GetWalkableMapAt(endCell);
-
-                // ¸ÊÀ» ¸ø Ã£À¸¸é ±âº» ¸Ê »ç¿ë (¹æ¾î ÄÚµå)
-                Vector3 startPos = (startMap != null ? startMap : floorTilemap).GetCellCenterWorld(startCell);
-                Vector3 endPos = (endMap != null ? endMap : floorTilemap).GetCellCenterWorld(endCell);
-
-                // ZÃà °íÁ¤
-                startPos.z = transform.position.z;
-                endPos.z = transform.position.z;
-
-                // Å¸ÀÏ¸ÊÀÇ °íÀ¯ ³ôÀÌ(Anchor.y)³ª ¸Ê ÀÎ½ºÅÏ½º ÀÚÃ¼°¡ ´Ù¸¦ ¶§¸¸ Á¡ÇÁ
-                float startHeight = (startMap != null) ? startMap.tileAnchor.y : 0f;
-                float endHeight = (endMap != null) ? endMap.tileAnchor.y : 0f;
-
-                // ³ôÀÌ Â÷ÀÌ °è»ê
-                float heightDiff = Mathf.Abs(endHeight - startHeight);
-
-                // ³ôÀÌ Â÷ÀÌ°¡ ¹Ì¼¼ÇÏ°Ô¶óµµ ÀÖÀ¸¸é Á¡ÇÁ (0.001f ¿ÀÂ÷ Çã¿ë)
-                bool isJump = heightDiff > 0.001f;
-
-                // ¹æÇâ º¤ÅÍ ¹× °Å¸® °è»ê (2D Æò¸é °Å¸® ±âÁØ)
-                float dist = Vector2.Distance(startPos, endPos);
-                if (dist < 0.0001f) continue;
-
-                Vector2 dir = (endPos - startPos).normalized;
-                float speed = Mathf.Max(0.01f, defaultMoveSpeed);
-                float duration = dist / speed;
-                float t = 0f;
-
-                // ½ºÇÁ¶óÀÌÆ® ¹æÇâ
-                if (Mathf.Abs(dir.x) > 0.0001f) spriterenderer.flipX = dir.x > 0f;
-                if (animator != null) animator.SetInteger("Move", 1);
-
-                // Á¡ÇÁ ³ôÀÌ µ¿Àû °è»ê
-                float currentJumpMultiplier = jumpHeightMultiplier;
-
-                if (isJump)
-                {
-                    // 1Ä­ Â÷ÀÌ vs 2Ä­ Â÷ÀÌ ±¸ºĞ
-                    // 0.18(¾à 1.5Ä­)º¸´Ù Å©¸é 2Ä­ Á¡ÇÁ·Î °£ÁÖÇÏ¿© ³ôÀÌ¸¦ Å°¿ò
-                    if (heightDiff > 0.26f)
-                    {
-                        currentJumpMultiplier *= 1.5f; // 2Ä­ÀÏ ¶§ 1.6¹è ´õ ³ô°Ô Á¡ÇÁ (ÃëÇâ²¯ Á¶Àı)
-                    }
-
-                    // ³»·Á°¡´Â Á¡ÇÁ´Â »ìÂ¦ ³·°Ô (±âÁ¸ ·ÎÁ÷ À¯Áö)
-                    if (endHeight < startHeight)
-                    {
-                        currentJumpMultiplier *= 0.6f;
-                    }
-                }
-
-                while (t < 1f)
-                {
-                    if (GamePause.IsPaused || Time.time < movementLockUntil)
-                    {
-                        if (animator != null) animator.SetInteger("Move", 0);
-                        yield return null;
-                        continue;
-                    }
-
-                    t += Time.deltaTime / duration;
-                    float percent = Mathf.Clamp01(t);
-
-                    // ±âº» ¼±Çü ÀÌµ¿ (³ôÀÌ Â÷ÀÌ°¡ ÀÖÀ¸¸é ´ë°¢¼±À¸·Î ÀÌµ¿µÊ)
-                    Vector3 currentPos = Vector3.Lerp(startPos, endPos, percent);
-
-                    // Á¡ÇÁ ¿¬Ãâ (YÃà Â÷ÀÌ°¡ ÀÖÀ» ¶§¸¸)
-                    if (isJump && jumpCurve != null)
-                    {
-                        float curveValue = jumpCurve.Evaluate(percent);
-                        currentPos.y += curveValue * currentJumpMultiplier;
-                    }
-
-                    rb.MovePosition(currentPos);
-                    yield return null;
-                }
-
-                rb.MovePosition(endPos); // ÃÖÁ¾ À§Ä¡ º¸Á¤
-
-                // µµÂø ¼¿ ÇÔÁ¤ Ã¼Å©
-                TryTriggerTrapAtCell(cells[i]);
-
-                // µµÂø ¼¿¿¡¼­ ÀÎÄ«¿îÅÍ Ã¼Å©
-                if (TryGetEncounterAtCell(cells[i], out var monster))
-                {
-                    // ³²Àº °æ·Î ±¸¼º: ÇöÀç(¸ó½ºÅÍ ¼¿)ºÎÅÍ ³¡±îÁö
-                    var remaining = new List<Vector3Int>();
-                    for (int k = i; k < cells.Count; k++)
-                        remaining.Add(cells[k]);
-
-                    if (animator != null) animator.SetInteger("Move", 0);
-
-                    var stm = SceneTransitionManager.Instance;
-                    if (stm != null && VigorManager.Instance != null)
-                    {
-                        stm.SetDeferredMoveCost(_pendingMoveVigorCost);
-                        stm.SetResumePath(remaining);
-
-                        Tilemap encounterMap = GetWalkableMapAt(cells[i]);
-                        if (encounterMap == null) encounterMap = floorTilemap;
-
-                        Vector3 returnPos = encounterMap.GetCellCenterWorld(cells[i]);
-                        // ZÃàÀº 0À¸·Î ¸ÂÃß°Å³ª ÇÊ¿ä½Ã transform.position.z »ç¿ë
-                        returnPos.z = 0;
-
-                        stm.SaveReturnPoint(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, returnPos);
-
-                        stm.SaveExplorationSnapshot(stm.BuildExplorationSnapshotFromScene());
-
-                        monster.MarkConsumed();
-                        stm.SaveVigor(VigorManager.Instance.CurrentVigor);
-
-                        string monsterName = monster != null ? monster.gameObject.name : "¸ó½ºÅÍ";
-                        stm.EnterBattleWithEncounterBanner(monsterName, battleSceneName);
-
-                        yield break;
-                    }
-
-                    _pendingMoveVigorCost = 0;
-                    yield break;
-                }
-            }
-
-            // ÀÌµ¿ ºñ¿ë °áÁ¦(µµÂø±îÁö ¿Ï·áµÈ °æ¿ì¿¡¸¸)
-            if (VigorManager.Instance != null && _pendingMoveVigorCost > 0)
-            {
-                if (!VigorManager.Instance.TrySpend(_pendingMoveVigorCost, VigorSpendReason.MoveTile))
-                {
-                    VigorManager.Instance.FailExploration(
-                        $"Å½»öÀ» ½ÇÆĞÇß½À´Ï´Ù. (ÀÌµ¿ °áÁ¦ ½ÇÆĞ / ÇÊ¿ä {_pendingMoveVigorCost}, ÇöÀç {VigorManager.Instance.CurrentVigor})"
-                    );
-                    yield break;
-                }
-            }
-
-            _pendingMoveVigorCost = 0;
-
-            if (animator != null)
-                animator.SetInteger("Move", 0);
-
-            // Á¤»ó µµÂø Äİ¹é ½ÇÇà(»óÀÚ ¿­±â µî)
-            cb?.Invoke();
-        }
-        finally
-        {
-            EndPathMove();  // ÀÌµ¿ »óÅÂ Á¤¸®
-
-            // ÀÌµ¿ ÈÄ »óÈ£ÀÛ¿ë ¿¹¾àÀº ÇÑ ¹ø ¾²°í ºñ¿ò
-            pathArrivalCallback = null;
-            pendingChest = null;
-            currentInteractTarget = null;
-            currentDescData = null;
-        }
-    }
-
-    //Å½Çè¾À º¹±Í ÈÄ ³²Àº °æ·Î ÀÌµ¿
-    public void ResumePathAfterBattle(List<Vector3Int> resumeCells)
-    {
-        if (resumeCells == null || resumeCells.Count < 2) return;
-        if (isMovingByPath) return;
-
-        CancelSelectionAndHint();
-
-        // ÀüÅõ Àü¿¡ ÀúÀåÇØ µĞ ÃÑ ¿¹Á¤ ÀÌµ¿ ºñ¿ëÀ» ÀÌ¾î¹Ş´Â´Ù
-        int plannedCost = 0;
-        var stm = SceneTransitionManager.Instance;
-        if (stm != null) plannedCost = stm.ConsumeDeferredMoveCost();
-
-        StartPathMove(resumeCells, null, plannedCost);
-    }
-    #endregion
-    // === Hint UI ¹öÆ°¿ë Äİ¹é ===
-    public void OnClickSurveyButton()
-    {
-        DescriptionDialogUI.Instance?.Hide();
-        InteractionHintUI.Instance?.HideAll();
-
-        if (isMovingByPath)
-            return;
-
-        // Portal/NPC ÀÌµ¿ ÈÄ ½ÇÇà ¶Ç´Â Áï½Ã ½ÇÇà
-        if (pendingPortal != null)
-        {
-            var portal = pendingPortal;
-
-            // ÀÌµ¿ ¾øÀÌ Áï½Ã ½ÇÇà(ÀÎÁ¢/Á¦ÀÚ¸®)
-            if (currentPathCells == null || currentPathCells.Count < 2)
-            {
-                if (portal != null) portal.UsePortal();
-
-                ClearPath();
-                pendingPortal = null;
-                return;
-            }
-
-            // ÀÌµ¿ ÈÄ ½ÇÇà
-            Action onArrive = () =>
-            {
-                if (portal != null) portal.UsePortal();
-            };
-
-            StartPathMove(currentPathCells, onArrive);
-
-            // ¿¹¾à Á¤¸®(ÇÑ ¹ø¸¸)
-            pendingPortal = null;
-            return;
-        }
-
-        // Push Àü¿ë ºĞ±â
-        if (pendingPushBox != null)
-        {
-            var box = pendingPushBox;
-            var playerCell = floorTilemap.WorldToCell(rb.position);
-            var boxCell = floorTilemap.WorldToCell(box.transform.position);
-
-            // ÀÌ¹Ì ÀÎÁ¢ÀÌ¸é Áï½Ã ÁøÀÔ
-            if (IsAdjacentOrSame(playerCell, boxCell))
-            {
-                EnterPushSelectMode(box);
-                return;
-            }
-
-            // ¸Ö¸® ÀÖÀ¸¸é: ¡°¹Ğ±â °¡´ÉÇÑ ÀÎÁ¢ Å¸ÀÏ¡±±îÁö ÀÌµ¿ ÈÄ ÁøÀÔ
-            var pathToReady = FindPathToPushReadyCell(playerCell, boxCell, box);
-            if (pathToReady == null || pathToReady.Count < 2)
-            {
-                ExplorationLogUI.Instance?.Push("ÇØ´ç »óÀÚ¸¦ ¹Ğ ¼ö ÀÖ´Â À§Ä¡·Î ÀÌµ¿ÇÒ ¼ö ¾ø½À´Ï´Ù.");
-                box.SetHighlight(false);
-                pendingPushBox = null;
-                InteractionHintUI.Instance?.HideAll();
-                return;
-            }
-
-            // ÀÌµ¿ ½ÃÀÛ Áï½Ã UI ´İ±â
-            InteractionHintUI.Instance?.HideAll();
-
-            // µµÂø ÈÄ ¹Ğ±â ¸ğµå ÁøÀÔ
-            Action onArrive = () =>
-            {
-                // µµÂø ½ÃÁ¡¿¡ ¹Ú½º°¡ ¾ÆÁ÷ Á¸Àç/À¯È¿ÇÑÁö È®ÀÎ
-                if (box == null) return;
-
-                // µµÂø ÈÄ¿¡´Â ÀÎÁ¢ÀÏ °ÍÀÌ¸ç, ÀÌ¶§ EnterPushSelectMode°¡ ´ÙÄ­ ÈÄº¸±îÁö Ç¥½Ã(2¹ø ¼öÁ¤)
-                EnterPushSelectMode(box);
-            };
-
-            StartPathMove(pathToReady, onArrive);
-            return;
-        }
-        // ÀÌµ¿ ¾øÀÌ Áï½Ã ½ÇÇàÇØ¾ß ÇÏ´Â °æ¿ì (ÇÑ Ä­ ÀÌ³»)
-        if (currentPathCells == null || currentPathCells.Count < 2)
-        {
-            if (pendingChest != null)
-            {
-                pendingChest.OpenChest();
-                InteractionHintUI.Instance?.HideAll();
-            }
-            // ³ªÁß¿¡ Á¶»ç ´ë»óÀÌ ´õ »ı±â¸é ¿©±â¿¡ else-if·Î Ãß°¡
-
-            // »óÅÂ Á¤¸®
-            ClearPath();
-            return;
-        }
-
-        // ¿©±âºÎÅÍ´Â "ÀÌµ¿ ÈÄ ½ÇÇà" ÄÉÀÌ½º
-        if (currentPathCells != null && currentPathCells.Count >= 2)
-        {
-            Action onArrive = null;
-            if (pendingChest != null)
-                onArrive = () => pendingChest.OpenChest();
-
-            StartPathMove(currentPathCells, onArrive);
-        }
-    }
-    public void OnClickCommunicationButton()
-    {
-        if (isMovingByPath)
-            return;
-
-        // ÇÑ Ä­ ÀÌ³»¸é ÀÌµ¿ ¾øÀÌ Áï½Ã °üÂû
-        if (currentPathCells == null || currentPathCells.Count < 2)
-        {
-            if (currentDescData != null && !string.IsNullOrWhiteSpace(currentDescData.description))
-            {
-                DescriptionDialogUI.Instance?.Toggle(currentDescData.description);
-                InteractionHintUI.Instance?.HideAll();
-            }
-            return;
-        }
-
-        // ÀÌµ¿ ÈÄ °üÂû
-        if (currentPathCells != null && currentPathCells.Count >= 2)
-        {
-            Action onArrive = null;
-            if (currentDescData != null && !string.IsNullOrWhiteSpace(currentDescData.description))
-            {
-                onArrive = () =>
-                {
-                    DescriptionDialogUI.Instance?.Toggle(currentDescData.description);
-                    InteractionHintUI.Instance?.HideAll();
-                };
-            }
-
-            StartPathMove(currentPathCells, onArrive);
-        }
-    }
-
-    void EnterPushSelectMode(PushObject box)
-    {
-        if (box == null || floorTilemap == null) return;
-
-        // °æ·Î/¿¹¾à »óÈ£ÀÛ¿ë Á¤¸®
-        ClearPathPreview();
-        currentPathCells.Clear();
-
-        isPushSelectMode = true;
-        isPushMode = true;
-
-        if (animator != null)
-            animator.SetBool("IsPushIdle", true); // ¹Ğ±â ÁØºñ ¾Ö´Ï¸ŞÀÌ¼Ç
-
-        // ÇÃ·¹ÀÌ¾î À§Ä¡/¹Ú½º À§Ä¡·Î "¹Ğ ¼ö ÀÖ´Â ¹æÇâ 1°³" °è»ê(ÇÃ·¹ÀÌ¾î ÀÎÁ¢ ±âÁØ)
-        var playerCell = floorTilemap.WorldToCell(rb.position);
-        var boxCell = floorTilemap.WorldToCell(box.transform.position);
-
-        var delta = boxCell - playerCell;
-        bool odd = (playerCell.y & 1) != 0;
-        pendingDirectionKey = GetDirectionFromDelta(delta, odd);
-
-        pushValidTargetCells.Clear();
-
-        //ÇöÀç ÇÃ·¹ÀÌ¾î°¡ ¼­ ÀÖ´Â ¹æÇâÀ¸·Î ¹Ğ¼ö ÀÖ´Â ÈÄº¸ »ı¼º
-        var startBoxCell = floorTilemap.WorldToCell(box.transform.position);
-        var line = BuildPushLineTargets(box, startBoxCell, pendingDirectionKey);
-
-        for (int i = 0; i < line.Count; i++)
-            pushValidTargetCells.Add(line[i]);
-
-        if (pushValidTargetCells.Count == 0)
-        {
-            ExplorationLogUI.Instance?.Push("ÀÌ À§Ä¡¿¡¼­´Â ¹Ğ ¼ö ¾ø½À´Ï´Ù.");
-            ExitPushSelectMode(keepBoxHighlight: false);
-            return;
-        }
-
-        ShowPushTargets(pushValidTargetCells);
-    }
-
-    // ¿¬¼ÓÀûÀ¸·Î ¸ñÀûÁö±îÁö ¹Ğ±â
-    List<Vector3Int> BuildPushLineTargets(PushObject box, Vector3Int startBoxCell, Direction dirKey)
-    {
-        var results = new List<Vector3Int>();
-
-        // [Ã¼Å©] box³ª MainFloorMapÀÌ ¾øÀ¸¸é °è»ê ºÒ°¡
-        if (box == null || box.MainFloorMap == null) return results;
-        if (dirKey == Direction.None) return results;
-
-        // ´Ù¸¥ PushObject Á¡À¯ ¼¿(°¡»ó Ãæµ¹ Ã¼Å©)
-        var occupied = new HashSet<Vector3Int>();
-        foreach (var po in FindObjectsOfType<PushObject>())
-        {
-            if (po == null || po == box) continue;
-
-            // [¼öÁ¤] box.floorTilemapÀº ¸®½ºÆ®ÀÌ¹Ç·Î WorldToCellÀ» ¹Ù·Î ¾µ ¼ö ¾øÀ½ -> MainFloorMap »ç¿ë
-            if (box.MainFloorMap != null)
-            {
-                occupied.Add(box.MainFloorMap.WorldToCell(po.transform.position));
-            }
-        }
-
-        var cur = startBoxCell;
-
-        while (true)
-        {
-            bool odd = (cur.y & 1) != 0;
-            var offset = GetOffsetForDirection(dirKey, odd);
-            var next = cur + offset;
-
-            // ¸®½ºÆ® È£È¯ ¸Ş¼­µå »ç¿ë
-            bool hasFloor = box.HasFloorAt(next);
-
-            bool hasWall = false;
-            if (wallMaps != null)
-            {
-                foreach (var wall in wallMaps)
-                {
-                    if (wall.HasTile(next))
-                    {
-                        hasWall = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!hasFloor || hasWall) break;
-
-            // Àå¾Ö¹° ·¹ÀÌ¾î (±âÁØ ¸Ê »ç¿ë)
-            var world = box.MainFloorMap.GetCellCenterWorld(next);
-            var obstacle = Physics2D.OverlapCircle(world, 0.1f, box.obstacleLayer);
-            if (obstacle != null) break;
-
-            // ´Ù¸¥ PushObject Á¡À¯
-            if (occupied.Contains(next)) break;
-
-            // ¿©±â±îÁö Åë°úÇÏ¸é ¡°next´Â ¹Ğ±â °¡´ÉÇÑ ¸ñÀûÁö¡±
-            results.Add(next);
-
-            // ´ÙÀ½ ¹İº¹À» À§ÇØ ¹Ú½º À§Ä¡¸¦ next·Î °¡Á¤
-            cur = next;
-        }
-
-        return results;
-    }
-
-    public void OnClickCancelButton()
-    {
-        // °æ·Î/»óÈ£ÀÛ¿ë ¿¹¾à¸¸ Ãë¼Ò (ÀÌµ¿ ÁßÀÌ ¾Æ´Ò ¶§)
-        if (!isMovingByPath)
-            CancelSelectionAndHint();
-        if (isPushSelectMode) 
-            ExitPushSelectMode();
-        else if (pendingPushBox != null)    //Çª½Ã Å¸°Ù ¼±ÅÃ »óÅÂ Á¤¸®
-        {
-            pendingPushBox.SetHighlight(false);
-            pendingPushBox = null;
-            InteractionHintUI.Instance?.HideAll();
-        }
-    }
-    public void TeleportTo(Vector3 worldPos)
-    {
-        rb.position = worldPos;
-        transform.position = worldPos;
-        ClearPath();
-    }
-
-    Direction GetDirectionFromDelta(Vector3Int delta, bool odd)
-    {
-        foreach (Direction dir in System.Enum.GetValues(typeof(Direction)))
-        {
-            if (dir == Direction.None) continue;
-            if (GetOffsetForDirection(dir, odd) == delta)
-                return dir;
-        }
-        return Direction.None;
-    }
-
-    Vector3Int GetOffsetForDirection(Direction dir, bool odd)
-    {
-        return dir switch
-        {
-            Direction.West => new Vector3Int(-1, 0, 0),
-            Direction.East => new Vector3Int(1, 0, 0),
-            Direction.NW => odd ? new Vector3Int(0, 1, 0) : new Vector3Int(-1, 1, 0),
-            Direction.NE => odd ? new Vector3Int(1, 1, 0) : new Vector3Int(0, 1, 0),
-            Direction.SW => odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0),
-            Direction.SE => odd ? new Vector3Int(1, -1, 0) : new Vector3Int(0, -1, 0),
-            _ => Vector3Int.zero,
-        };
-    }
-    void ShowPushTargets(IEnumerable<Vector3Int> cells)
-    {
-        ClearPushTargets();
-
-        if (pushMarkerPrefab == null) return;
-
-        foreach (var c in cells)
-        {
-            var world = floorTilemap.GetCellCenterWorld(c);
-            world.z = transform.position.z;
-
-            var marker = Instantiate(pushMarkerPrefab, world, Quaternion.identity);
-            activePushMarkers.Add(marker);
-        }
-    }
-
-    void ClearPushTargets()
-    {
-        for (int i = 0; i < activePushMarkers.Count; i++)
-            if (activePushMarkers[i]) Destroy(activePushMarkers[i]);
-
-        activePushMarkers.Clear();
-    }
-
-    public void ClearPath()
-    {
-        // ±âÁ¸ ¸¶¿ì½º °æ·Î ¸®½ºÆ® Á¤¸®
-        path.Clear();
-
-        // Å¸ÀÏ °æ·Î ÀÌµ¿ »óÅÂ Á¤¸®
-        currentPathCells.Clear();
-        selectedTargetCell = null;
-        isMovingByPath = false;
-        ClearPathPreview();
-
-        if (pathMoveRoutine != null)
-        {
-            StopCoroutine(pathMoveRoutine);
-            pathMoveRoutine = null;
-        }
-
-        pathArrivalCallback = null;
-        pendingChest = null;
-        currentInteractTarget = null;
-        currentDescData = null;
-    }
-
-    private bool IsWalkableCell(Vector3Int cell)
-    {
-        // Àå¾Ö¹° ¸Ê¿¡ Å¸ÀÏÀÌ ÇÏ³ª¶óµµ ÀÖ´Ù¸é ¹«Á¶°Ç ÀÌµ¿ ºÒ°¡
-        if (obstacleMaps != null)
-        {
-            foreach (var obsMap in obstacleMaps)
-            {
-                if (obsMap.HasTile(cell)) return false; // Áï½Ã Â÷´Ü
-            }
-        }
-        // º® Ã¼Å©: ¸®½ºÆ® ÀüÃ¼ ¼øÈ¸
-        if (wallMaps != null)
-        {
-            foreach (var wall in wallMaps)
-            {
-                if (wall.HasTile(cell)) return false; // º® ÇÏ³ª¶óµµ ÀÖÀ¸¸é ÀÌµ¿ ºÒ°¡
-            }
-        }
-
-        // ÀÌ ÁÂÇ¥¿¡ ÀÖ´Â Å¸ÀÏ¸Ê Áß "°¡Àå À§¿¡ ÀÖ´Â(¸®½ºÆ®ÀÇ µÚÂÊ)" ¸ÊÀ» Ã£´Â´Ù.
-        Tilemap topMap = null;
-        for (int i = floorMaps.Count - 1; i >= 0; i--)
-        {
-            if (floorMaps[i].HasTile(cell))
-            {
-                topMap = floorMaps[i];
-                break; 
-            }
-        }
-
-        if (topMap == null) return false; // ¾Æ¹« Å¸ÀÏµµ ¾øÀ½
-
-        // ±× ¸ÊÀÌ Àå¾Ö¹°ÀÎÁö È®ÀÎ
-        string mapName = topMap.name.ToLower();
-        if (mapName.Contains("water") || mapName.Contains("obstacle") || mapName.Contains("void"))
-        {
-            return false; // °¡Àå À§ÀÇ Å¸ÀÏÀÌ ¹°ÀÌ¶ó¸é ÀÌµ¿ ºÒ°¡ (¼±ÅÃµµ ¾È µÊ)
-        }
-
-        // ÇØ´ç Å¸ÀÏ À§Ä¡¿¡ ¿ÀºêÁ§Æ®(¹Ú½º µî)°¡ ÀÖ´ÂÁö ¹°¸® °Ë»ç
-        Vector3 worldPos = GetWorldPosForLogic(cell);
-        // ¹İ°æ 0.3f Á¤µµ·Î °ãÄ¡´Â Äİ¶óÀÌ´õ °Ë»ç (Å¸ÀÏ Áß¾Ó ±âÁØ)
-        Collider2D[] colliders = Physics2D.OverlapCircleAll(worldPos, 0.3f);
-        foreach (var col in colliders)
-        {
-            // BoxInteract(»óÀÚ)°¡ ÀÖ°í, ¾ÆÁ÷ ¾È ¿­¸°(´İÈù) »óÅÂ¶ó¸é ÀÌµ¿ ºÒ°¡
-            var box = col.GetComponentInParent<BoxInteract>();
-            if (box != null)
-            {
-                return false;
-            }
-
-            // PushObject(¹Ğ±â »óÀÚ)°¡ ÀÖÀ¸¸é ÀÌµ¿ ºÒ°¡
-            var push = col.GetComponentInParent<PushObject>();
-            if (push != null)
-            {
-                return false;
-            }
-
-            // NPC³ª ±âÅ¸ Àå¾Ö¹° ÅÂ±×°¡ ÀÖ´Ù¸é ¿©±â¼­ Ãß°¡ Ã¼Å©
-            // if (col.CompareTag("NPC")) return false;
-        }
-
-
-        // ¹Ù´ÚÀÌ ÇÏ³ª¶óµµ ÀÖ¾î¾ß ÀÌµ¿ °¡´É
-        if (GetWalkableMapAt(cell) != null) return true;
-
-        return false; // ¹Ù´Úµµ ¾øÀ¸¸é ÀÌµ¿ ºÒ°¡
-    }
-
-    // ¹Ğ±â »óÀÚ¿ë ÀÎÁ¢ ÆÇÁ¤
-    bool IsAdjacentOrSame(Vector3Int a, Vector3Int b)
-    {
-        if (a == b) return true;
-
-        Direction[] dirs =
-        {
-        Direction.West, Direction.East,
-        Direction.NW, Direction.NE,
-        Direction.SW, Direction.SE
-    };
-
-        bool odd = (b.y & 1) != 0;
-        foreach (var dir in dirs)
-        {
-            var off = GetOffsetForDirection(dir, odd);
-            if (b + off == a) return true;
-        }
-        return false;
-    }
-
-    IEnumerator PerformPush(PushObject box, Vector3Int fromCell, Vector3Int dir)
-    {
-        float duration = 0.2f;
-
-        var from = fromCell;
-        var to = fromCell + dir;
-        var boxOdd = (from.y & 1) != 0;
-        var key = GetDirectionFromDelta(to - from, boxOdd);
-        var (blend, flipX) = GetPushBlend(key);
-
-        if (animator != null)
-        {
-            animator.SetFloat("PushX", blend.x);
-            animator.SetFloat("PushY", blend.y);
-            spriterenderer.flipX = flipX;
-        }
-        
-
-        Vector3 fromBox = box.transform.position;
-        Vector3 toBox = floorTilemap.GetCellCenterWorld(fromCell + dir);
-        Vector3 fromPlayer = rb.position;
-
-        Vector3 moveDir = (toBox - fromBox).normalized;      // ¹Ú½º ÀÌµ¿ ¹æÇâ
-        float offset = 0.15f;
-        Vector3 pushVisualTarget = fromBox - moveDir * offset;
-
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.deltaTime / duration;
-            box.transform.position = Vector3.Lerp(fromBox, toBox, t);
-            rb.MovePosition(Vector3.Lerp(fromPlayer, pushVisualTarget, t));
-            yield return null;
-        }
-
-        box.transform.position = toBox;
-        var logicalPlayerCellCenter = floorTilemap.GetCellCenterWorld(fromCell);
-        logicalPlayerCellCenter.z = transform.position.z;
-        rb.MovePosition(logicalPlayerCellCenter);
-
-        // »óÀÚ°¡ ÃÖÁ¾ÀûÀ¸·Î µµÂøÇÑ ¼¿
-        var boxArrivedCell = fromCell + dir;
-
-        // »óÀÚ¿¡ ÀÇÇØ ÇÔÁ¤ Á¦°Å
-        TryConsumeTrapByBoxAtCell(boxArrivedCell);
-
-        // ÆÛÁñ ¹Ú½º À§Ä¡ °»½Å ¹× ¸ñÇ¥ Ã¼Å© È£Ãâ
-        PuzzleManager.Instance?.ExecutePush(box, fromCell, fromCell + dir);
-    }
-
-    //¿¬¼Ó ¹Ğ±â ±â´É
-    // PerformPushToTarget¿¡¼­ ¿¬¼ÓÀ¸·Î ¹Ğ ¼ö ÀÖ´ÂÁö È®ÀÎ ÈÄ ÀÌµ¿Àº PerformPush·Î ÁøÇàµÊ
-    IEnumerator PerformPushToTarget(PushObject box, Direction dirKey, Vector3Int targetCell)
-    {
-        int pushedTiles = 0;
-        bool reachedTarget = false;
-
-        isPerformingPush = true;
-
-        if (animator != null)
-            animator.SetBool("IsPushing", true);
-
-        try
-        {
-            while (true)
-            {
-                if (box == null) yield break;
-
-                var curCell = floorTilemap.WorldToCell(box.transform.position);
-
-                // ÀÌ¹Ì ¸ñÇ¥ µµ´Ş
-                if (curCell == targetCell)
-                {
-                    reachedTarget = true;
-                    yield break;
-                }
-
-                // ÇöÀç À§Ä¡¿¡¼­ °¡´ÉÇÑ ¶óÀÎÀ» ´Ù½Ã °è»êÇØ¼­ 1Ä­ÀÌ¶óµµ °¡´ÉÇÑÁö È®ÀÎ
-                var line = BuildPushLineTargets(box, curCell, dirKey);
-                if (line.Count == 0)
-                    yield break; // ´õ ÀÌ»ó ¸ø ¹Ò(Áß°£¿¡ ¸·Èû)
-
-                // ´ÙÀ½ 1Ä­ ¸ñÀûÁö(¶óÀÎÀÇ Ã¹ Ä­)
-                var nextCell = line[0];
-
-                if (targetCell != nextCell && !line.Contains(targetCell))
-                    yield break;
-
-                var stepDir = nextCell - curCell;
-
-                // 1Ä­ ½ºÅÜ ½ÇÇà(¿¬Ãâ/ÀÌµ¿/ÆÛÁñ °»½Å)
-                yield return StartCoroutine(PerformPush(box, curCell, stepDir));
-
-                pushedTiles++;
-            }
-        }
-        finally
-        {
-            if (animator != null)
-                animator.SetBool("IsPushing", false);
-
-            isPerformingPush = false;
-
-            if (reachedTarget && pushedTiles > 0 && VigorManager.Instance != null)
-            {
-                int cost = pushedTiles * VigorManager.Instance.costPushBoxPerTile;
-                if (cost > 0)
-                    VigorManager.Instance.TrySpend(cost, VigorSpendReason.PushBox);
-            }
-        }
-    }
-    public void SetTilemaps(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall)
-    {
-        this.floorMaps = _floors;
-        this.obstacleMaps = _obstacles; // Àü´Ş¹ŞÀº Àå¾Ö¹° ¸®½ºÆ® ÀúÀå
-        this.wallMaps = _wall;
-
-        // °æ·Î ÃÊ±âÈ­ µî ÇÊ¿äÇÑ ·ÎÁ÷
-        ClearPath();
-        HaltImmediately();
-
-        Debug.Log($"[PlayerMovement] ¸Ê ¼³Á¤ ¿Ï·á. ¹Ù´Ú ¸Ê °³¼ö: {_floors?.Count ?? 0}");
-
-        if (_floors != null && _floors.Count > 0)
-        {
-            foreach (var push in FindObjectsOfType<PushObject>())
-            {
-                // [¼öÁ¤] PushObject.SetTilemaps°¡ ÀÌÁ¦ List<Tilemap>À» ¹ŞÀ¸¹Ç·Î
-                // _wall ¸®½ºÆ®¸¦ ±×´ë·Î Àü´ŞÇÏ¸é µË´Ï´Ù.
-                push.SetTilemaps(_floors, _wall);
-            }
-        }
-    }
-    (Vector2 blend, bool flipX) GetPushBlend(Direction dir)
-    {
-        return dir switch
-        {
-            Direction.NW => (new Vector2(1f, 1f), false),
-            Direction.NE => (new Vector2(1f, 1f), true),
-            Direction.SW => (new Vector2(1f, -1f), false),
-            Direction.SE => (new Vector2(1f, -1f), true),
-            Direction.West => (new Vector2(1f, 0f), false),
-            Direction.East => (new Vector2(1f, 0f), true),
-            _ => (Vector2.zero, false)
-        };
-    }
-
-    public void HaltImmediately()
-    {
-        // Push »óÅÂ °­Á¦ Á¤¸® (¾ÈÀü¸Á)
-        if (isPushSelectMode)
-            ExitPushSelectMode(keepBoxHighlight: false);
-        else if (pendingPushBox != null)
-        {
-            pendingPushBox.SetHighlight(false);
-            pendingPushBox = null;
-            ClearPushTargets();
-            pushValidTargetCells.Clear();
-            isPushMode = false;
-        }
-
-        // Å¸ÀÏ °æ·Î ÀÌµ¿ Áï½Ã Áß´Ü
-        if (pathMoveRoutine != null)
-        {
-            StopCoroutine(pathMoveRoutine);
-            pathMoveRoutine = null;
-        }
-        isMovingByPath = false;
-
-        // ÇÁ¸®ºä ¹× °æ·Î Á¤º¸ ÃÊ±âÈ­
-        ClearPathPreview();
-        currentPathCells.Clear();
-        selectedTargetCell = null;
-        pathArrivalCallback = null;
-        pendingChest = null;
-        currentInteractTarget = null;
-        currentDescData = null;
-
-        // ±âÁ¸ ¸¶¿ì½º ÀÌµ¿/Å° ÀÔ·Âµµ ¸ğµÎ Á¤Áö
-        path.Clear();
-
-        if (animator != null)
-            animator.SetInteger("Move", 0);
-    }
-}
+// PlayerMovement.cs
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using UnityEngine.EventSystems;
+using TMPro;
+
+public class PlayerMovement : MonoBehaviour
+{
+    public static PlayerMovement Instance {  get; private set; }
+
+    [Header("íƒ€ì¼ë§µ ì„¤ì •")]
+    public List<Tilemap> floorMaps = new List<Tilemap>();
+    public List<Tilemap> wallMaps = new List<Tilemap>();
+    public List<Tilemap> obstacleMaps = new List<Tilemap>();
+    public float defaultMoveSpeed = 2f;
+    public LayerMask impassableLayerMask;
+    public Tilemap floorTilemap => (floorMaps != null && floorMaps.Count > 0) ? floorMaps[0] : null;
+
+    private Rigidbody2D rb;
+    private List<Vector3> path = new();
+    float movementLockUntil = 0f;
+    int _hardLockTokens = 0; // ë¬´ê¸°í•œ ì ê¸ˆ í† í°
+
+    public bool isPushMode { private set; get; }
+    private Direction pendingDirectionKey = Direction.None;
+    private bool isPerformingPush = false;
+
+    ContactFilter2D _castFilter;
+    readonly RaycastHit2D[] _castHits = new RaycastHit2D[4];
+
+    // íƒ€ì¼ ê²½ë¡œ ê¸°ë°˜ ì´ë™ ìƒíƒœ
+    [Header("íƒ€ì¼ ê²½ë¡œ ì´ë™ ì„¤ì •")]
+    [SerializeField] private GameObject pathMarkerPrefab;   // ê²½ë¡œ í‘œì‹œìš© í”„ë¦¬íŒ¹
+    [SerializeField] private GameObject pushMarkerPrefab; // Push í›„ë³´ íƒ€ì¼ í‘œì‹œ ì „ìš©
+    [SerializeField] private GameObject goalMarkerPrefab; // ëª©í‘œ ì§€ì (ëë¶€ë¶„) ì „ìš© ë§ˆì»¤(ë…¸ë€ í…Œë‘ë¦¬)
+
+    // í˜„ì¬ ì„ íƒëœ ê²½ë¡œ(ì…€ ë‹¨ìœ„)
+    private List<Vector3Int> currentPathCells = new List<Vector3Int>();
+    // í˜„ì¬ ì„ íƒëœ ëª©í‘œ ì…€ (ì²« ë²ˆì§¸ í´ë¦­ìœ¼ë¡œ ì„ íƒëœ íƒ€ì¼)
+    private Vector3Int? selectedTargetCell = null;
+    // ê²½ë¡œë¥¼ ë”°ë¼ ì‹¤ì œ ì´ë™ ì¤‘ì¸ì§€ ì—¬ë¶€
+    private bool isMovingByPath = false;
+    // ê²½ë¡œ ì´ë™ ì½”ë£¨í‹´ í•¸ë“¤
+    private Coroutine pathMoveRoutine = null;
+    // í™”ë©´ì— ì°íŒ ê²½ë¡œ ë§ˆì»¤ë“¤
+    private readonly List<GameObject> activePathMarkers = new List<GameObject>();
+
+    // ê²½ë¡œ ë„ì°© ì‹œ ì‹¤í–‰í•  ì½œë°± (ì˜ˆ: ìƒì ì—´ê¸°)
+    private Action pathArrivalCallback = null;
+
+    // ìƒí˜¸ì‘ìš© ì´ë™ìš©ìœ¼ë¡œ ì„ íƒëœ ìƒì(ìˆë‹¤ë©´)
+    private BoxInteract pendingChest = null;
+    private PortalController pendingPortal = null;
+
+    // í˜„ì¬ ìƒí˜¸ì‘ìš© ëŒ€ìƒ(ê´€ì°°/ì¡°ì‚¬ ë²„íŠ¼ì´ ê°€ë¦¬í‚¤ëŠ” ëŒ€ìƒ)
+    private Collider2D currentInteractTarget = null;
+    private DescriptionData currentDescData = null;
+
+    private int _pendingMoveVigorCost = 0;  //ì´ë™ ë¹„ìš©
+
+    // Push ì„ íƒ(íƒ€ì¼ í´ë¦­) ëª¨ë“œ
+    private bool isPushSelectMode = false;
+    private PushObject pendingPushBox = null;
+
+    // ë°•ìŠ¤ê°€ ì´ë™í•  ìˆ˜ ìˆëŠ” ëª©í‘œ íƒ€ì¼ë§Œ í—ˆìš©
+    private HashSet<Vector3Int> pushValidTargetCells = new HashSet<Vector3Int>();
+
+    // í‘œì‹œìš© ë§ˆì»¤(ê¸°ì¡´ pathMarkerPrefab ì¬ì‚¬ìš© ê°€ëŠ¥)
+    private readonly List<GameObject> activePushMarkers = new List<GameObject>();
+
+    [Header("Path Cost Label (TMP)")]
+    [SerializeField] private float pathCostLabelScale = 0.05f;
+    private TextMeshPro _pathCostTMP = null;
+    private GameObject _pathCostLabelGO = null;
+
+    [Header("ë†’ì´ ì´ë™ ì„¤ì •")]
+    public AnimationCurve jumpCurve;      // ì í”„ ê³¡ì„ 
+    public float jumpHeightMultiplier = 0.5f; // ì í”„ ë†’ì´ ë°°ìœ¨
+
+    [SerializeField] private LayerMask encounterLayerMask;
+    [SerializeField] private string battleSceneName = "BattleScene"; // ì‹¤ì œ ì „íˆ¬ì”¬ ì´ë¦„ìœ¼ë¡œ
+
+    private SpriteRenderer spriterenderer;
+    private Animator animator;
+
+    void Awake()
+    {
+        if(Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        rb = GetComponent<Rigidbody2D>();
+        spriterenderer = GetComponent<SpriteRenderer>();
+        animator = GetComponent<Animator>();
+
+        // ë§ˆìš°ìŠ¤ ì´ë™ ì¶©ëŒ ì˜ˆì¸¡ í•„í„° (ìê¸° ìì‹ ì€ ìë™ ì œì™¸ë¨)
+        _castFilter.useTriggers = false;
+        _castFilter.SetLayerMask(impassableLayerMask);
+    }
+
+    void Update()
+    {
+        // ê´€ì°°/ëŒ€í™” Dialogê°€ ì—´ë ¤ ìˆì„ ë•Œ: 
+        // ì¢Œí´ë¦­ìœ¼ë¡œ ë‹«ê¸°
+        // ë‹«íˆê¸° ì „ê¹Œì§€ëŠ” ì´ë™/íƒ€ì¼ í´ë¦­ì„ ì „ë¶€ ë§‰ëŠ”ë‹¤
+        if (DescriptionDialogUI.Instance != null && DescriptionDialogUI.Instance.IsOpen)
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                DescriptionDialogUI.Instance.Hide();
+            }
+
+            HaltImmediately();
+            return;
+        }
+
+        // ì…ë ¥ ì°¨ë‹¨ ì¡°ê±´ì„ í•œ ê³³ì—ì„œ ì²´í¬
+        bool isInputBlocked =
+                                (Time.time < movementLockUntil)
+                              || (_hardLockTokens > 0)
+                              || isPerformingPush
+                              || GamePause.IsPaused;
+
+        if (isInputBlocked)
+        {
+            if (!isMovingByPath)
+                HaltImmediately();
+
+            return;
+        }
+
+        if (!isPushSelectMode && pendingPushBox == null)
+        {
+            HandleTileClickInput(); // íƒ€ì¼ í´ë¦­/ìƒì í´ë¦­ ì´ë™
+        }
+
+        if (isPushSelectMode)
+        {
+            // RMB ì·¨ì†Œ(ìš”êµ¬ì‚¬í•­ 5)
+            if (Input.GetMouseButtonDown(1))
+            {
+                ExitPushSelectMode();
+                return;
+            }
+
+            // LMB: í—ˆìš© íƒ€ì¼ë§Œ
+            if (Input.GetMouseButtonDown(0))
+            {
+                var cam = Camera.main;
+                float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
+                var wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
+                wp.z = 0;
+
+                var clickedCell = floorTilemap.WorldToCell(wp);
+
+                if (!pushValidTargetCells.Contains(clickedCell))
+                    return;
+
+                // â€œëª©í‘œ ì…€â€ë§Œ ë„˜ê¸°ê³ , ì‹¤ì œ ì—°ì†/ë‹¨ë°œ í‘¸ì‹œëŠ” ë‚´ë¶€ì—ì„œ ì²˜ë¦¬
+                StartPushToCell(pendingPushBox, clickedCell);
+
+                ExitPushSelectMode(keepBoxHighlight: false);
+                return;
+            }
+
+            return; // pushSelectMode ì¤‘ì—ëŠ” ì¼ë°˜ ì´ë™/ìƒí˜¸ì‘ìš© ì…ë ¥ ì°¨ë‹¨
+        }
+
+        if (!isPushSelectMode && pendingPushBox != null && Input.GetMouseButtonDown(1))
+        {
+            pendingPushBox.SetHighlight(false);
+            pendingPushBox = null;
+            InteractionHintUI.Instance?.HideAll();
+            return;
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (isPerformingPush) return;
+        if (GamePause.IsPaused)
+        {
+            if (animator != null)
+                animator.SetInteger("Move", 0);
+            return;
+        }
+    }
+
+    void ExitPushSelectMode(bool keepBoxHighlight = false)
+    {
+        ClearPushTargets();
+        pushValidTargetCells.Clear();
+
+        if (animator != null)
+        {
+            animator.SetInteger("Move", 0);
+            animator.SetBool("IsPushIdle", false);
+        }
+
+        isPushSelectMode = false;
+        isPushMode = false;
+
+        if (!keepBoxHighlight)
+            pendingPushBox?.SetHighlight(false);
+
+        pendingPushBox = null;
+        pendingDirectionKey = Direction.None;
+
+        InteractionHintUI.Instance?.HideAll();
+    }
+
+    // --- íƒ€ì¼ í´ë¦­ ì…ë ¥ ì²˜ë¦¬ ---
+    void HandleTileClickInput()
+    {
+        // ì¹´ë©”ë¼/ë§ˆìš°ìŠ¤ ì¢Œí‘œ ê³„ì‚°
+        var cam = Camera.main;
+        if (cam == null) return;
+
+        float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
+        Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
+        wp.z = 0;
+
+        // íƒ€ì¼ íŒì • ë° ë””ë²„ê·¸ ê°±ì‹ 
+        Vector3Int clickedCell = GetClickedCellWithHeight(wp);
+        Vector3Int currentCell = GetCellFromWorldPos(rb.position);
+
+        clickedCell.z = 0;
+        currentCell.z = 0;
+
+        // UI ë° ì´ë™ ì¤‘ ì°¨ë‹¨
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
+        if (isMovingByPath)
+            return;
+
+        // ì™¼ìª½ í´ë¦­: ê²½ë¡œ í”„ë¦¬ë·° or ì´ë™ ì‹¤í–‰
+        if (Input.GetMouseButtonDown(0))
+        {
+            // ë¨¼ì €, í´ë¦­ ì§€ì ì— ìƒí˜¸ì‘ìš© ê°€ëŠ¥í•œ ì˜¤ë¸Œì íŠ¸ê°€ ìˆëŠ”ì§€ ê²€ì‚¬
+            BoxInteract clickedChest = null;
+            Collider2D clickedCollider = null;
+            DescriptionData clickedDesc = null;
+            PushObject clickedPush = null;
+            PortalController clickedPortal = null;
+
+            var hits = Physics2D.OverlapPointAll(wp);
+
+            foreach (var h in hits)
+            {
+                // PushObject ê°ì§€
+                var push = h.GetComponentInParent<PushObject>();
+                if (push != null)
+                {
+                    clickedPush = push;
+                    if (!clickedCollider) clickedCollider = h;
+                }
+
+                // ìƒì(ë¶€ëª¨ í¬í•¨) ê²€ì‚¬
+                var chest = h.GetComponentInParent<BoxInteract>();
+                if (chest != null)
+                {
+                    // ì´ë¯¸ ì—´ë¦° ìƒìëŠ” ì™„ì „íˆ ë¬´ì‹œ (ëª¨ë“  ì½œë¼ì´ë” í¬í•¨)
+                    if (chest.IsOpened)
+                        continue;
+
+                    // ë‹«íŒ ìƒìë¼ë©´ ìƒì ì •ë³´ë§Œ ì €ì¥ (í´ë¦­ ëŒ€ìƒ ìš°ì„ )
+                    if (clickedChest == null)
+                        clickedChest = chest;
+
+                    // ìƒì ì½œë¼ì´ë”ë„ ìƒí˜¸ì‘ìš© ëŒ€ìƒ ì½œë¼ì´ë”ë¡œ ì¸ì •
+                    if (!clickedCollider)
+                        clickedCollider = h;
+                }
+
+                // ì„¤ëª… ë°ì´í„°ëŠ” ìƒì/ê¸°íƒ€ ê³µí†µìœ¼ë¡œ ê°€ì ¸ì˜¨ë‹¤
+                if (clickedDesc == null && h.TryGetComponent<DescriptionData>(out var descriptiondata))
+                {
+                    clickedDesc = descriptiondata;
+                    if (!clickedCollider)
+                        clickedCollider = h;
+                }
+
+                // Portal ê°ì§€
+                var portal = h.GetComponentInParent<PortalController>();
+                if (portal != null)
+                {
+                    if (clickedPortal == null) clickedPortal = portal;
+                    if (!clickedCollider) clickedCollider = h;
+                }
+            }
+
+            if (clickedPush != null)
+            {
+                CancelSelectionAndHint(); // ê¸°ì¡´ ì„ íƒ/ê²½ë¡œ ì •ë¦¬:contentReference[oaicite:9]{index=9}
+
+                pendingPushBox = clickedPush;
+                pendingPushBox.SetHighlight(true);
+
+                // ë°€ê¸°/ì·¨ì†Œ 2ë²„íŠ¼ë§Œ í‘œì‹œ
+                InteractionHintUI.Instance?.ShowPushCancelAt(pendingPushBox.transform);
+                return;
+            }
+
+            // ì˜¤ë¸Œì íŠ¸(ìƒì, NPC, ê¸°íƒ€) í´ë¦­
+            if (clickedChest != null || clickedPortal != null || clickedCollider != null)
+            {
+                // ëª©í‘œê°€ ë  Transform ê²°ì • (ìƒì ìš°ì„ , ì•„ë‹ˆë©´ í•´ë‹¹ ì½œë¼ì´ë”)
+                Transform targetTr = clickedChest ? clickedChest.transform :
+                                    (clickedPortal != null ? clickedPortal.transform :
+                                     clickedCollider.transform);
+
+                // ëŒ€ìƒ ì…€
+                Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
+                
+
+                // í˜„ì¬ ì…€ì´ ëŒ€ìƒ ì…€ê³¼ ê°™ì€ ì…€ì´ê±°ë‚˜, ì¸ì ‘ 6ì¹¸ ì¤‘ í•˜ë‚˜ë¼ë©´ "ì´ë™ ì—†ì´ ìƒí˜¸ì‘ìš© ê°€ëŠ¥"
+                bool isAdjacentOrSame = false;
+                {
+                    if (currentCell == targetCell)
+                    {
+                        isAdjacentOrSame = true;
+                    }
+                    else
+                    {
+                        Direction[] dirs =
+                        {
+                            Direction.West,
+                            Direction.East,
+                            Direction.NW,
+                            Direction.NE,
+                            Direction.SW,
+                            Direction.SE
+                        };
+
+                        bool odd = (targetCell.y & 1) != 0;
+                        foreach (var dir in dirs)
+                        {
+                            Vector3Int offset = GetOffsetForDirection(dir, odd);
+                            Vector3Int adj = targetCell + offset;
+                            if (adj == currentCell)
+                            {
+                                isAdjacentOrSame = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (isAdjacentOrSame)
+                {
+                    // ì´ë™ ì—†ì´ ë°”ë¡œ ìƒí˜¸ì‘ìš©í•  ìˆ˜ ìˆëŠ” ê±°ë¦¬
+                    selectedTargetCell = currentCell;
+                    currentPathCells = new List<Vector3Int> { currentCell };
+
+                    // í˜„ì¬ ìƒí˜¸ì‘ìš© ëŒ€ìƒ/ê´€ì°° ëŒ€ìƒ ì €ì¥
+                    currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
+                    currentDescData = clickedDesc;
+                    pendingChest = clickedChest;
+                    pendingPortal = clickedPortal;
+
+                    // ì œìë¦¬ì—ì„  ê²½ë¡œ í”„ë¦¬ë·°ëŠ” í•„ìš” ì—†ìœ¼ë‹ˆ í˜¸ì¶œí•´ë„ í‘œì‹œê°€ ì•ˆ ë¨(Count < 2ë¼ì„œ)
+                    ShowPathPreview(currentPathCells);
+
+                    // HintUIë¥¼ ëŒ€ìƒ ìœ„ì¹˜ì— í‘œì‹œ (ì¡°ì‚¬/ê´€ì°°/ì·¨ì†Œ ë²„íŠ¼ ëª¨ë‘)
+                    InteractionHintUI.Instance?.HideAll();
+
+                    if (clickedPortal != null)
+                    {
+                        InteractionHintUI.Instance?.ShowSurveyAt(targetTr, clickedPortal.GetHintLabel()); // "ì´ë™"
+                                                                                                        // Portalì€ ê´€ì°° ë²„íŠ¼ ë¶ˆí•„ìš”í•˜ë©´ ìƒëµ
+                    }
+                    else
+                    {
+                        InteractionHintUI.Instance?.ShowBothAt(targetTr); // ê¸°ì¡´ ìƒì/ê¸°íƒ€
+                    }
+
+                    InteractionHintUI.Instance?.ShowCancelAt(targetTr);
+                    return;
+                }
+
+
+                var newPath = FindPathToAdjacentCell(currentCell, targetCell);
+
+                if (newPath == null || newPath.Count < 2)
+                {
+                    // ë„ë‹¬ ë¶ˆê°€ â†’ ì„ íƒ/í”„ë¦¬ë·° í•´ì œ
+                    selectedTargetCell = null;
+                    currentPathCells.Clear();
+                    ClearPathPreview();
+                    pendingChest = null;
+                    pendingPortal = null;
+                    pathArrivalCallback = null;
+                    currentInteractTarget = null;
+                    currentDescData = null;
+                    InteractionHintUI.Instance?.HideAll();
+                    return;
+                }
+
+                selectedTargetCell = newPath[newPath.Count - 1];
+                currentPathCells = newPath;
+
+                // í˜„ì¬ ìƒí˜¸ì‘ìš© ëŒ€ìƒ/ê´€ì°° ëŒ€ìƒ ì €ì¥
+                currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
+                currentDescData = clickedDesc;
+
+                pendingChest = clickedChest;
+                pendingPortal = clickedPortal;
+
+                ShowPathPreview(newPath);
+
+                // HintUIë¥¼ ëŒ€ìƒ ìœ„ì¹˜ì— í‘œì‹œ (ì¡°ì‚¬/ê´€ì°°/ì·¨ì†Œ ë²„íŠ¼ ëª¨ë‘)
+                InteractionHintUI.Instance?.ShowBothAt(targetTr); // ì¡°ì‚¬ + ê´€ì°°
+                InteractionHintUI.Instance?.ShowCancel();         // ì·¨ì†Œ ë²„íŠ¼ ì¶”ê°€
+                return;
+            }
+
+            // ì˜¤ë¸Œì íŠ¸ê°€ ì•„ë‹Œ ê·¸ëƒ¥ íƒ€ì¼ í´ë¦­ì¸ ê²½ìš°
+            if (pendingChest != null)
+            {
+                // ì™¼ìª½ í´ë¦­ì€ ë¬´ì‹œ (ë²„íŠ¼ìœ¼ë¡œë§Œ ì´ë™ ì‹œì‘)
+                return;
+            }
+
+            // ì´ë¯¸ ê°™ì€ íƒ€ì¼ì´ ì„ íƒëœ ìƒíƒœì—ì„œ ë‹¤ì‹œ ì™¼ìª½ í´ë¦­ â†’ ì´ë™ ì‹¤í–‰
+            if (selectedTargetCell.HasValue
+                && selectedTargetCell.Value == clickedCell
+                && currentPathCells != null
+                && currentPathCells.Count >= 2)
+            {
+                StartPathMove(currentPathCells, pathArrivalCallback);
+                return;
+            }
+
+            if (!IsWalkableCell(clickedCell))
+            {
+                Debug.Log($"[ì´ë™ ë¶ˆê°€] ì¢Œí‘œ: {clickedCell} - ë°”ë‹¥ì´ ì—†ê±°ë‚˜ ë²½/ì¥ì• ë¬¼ì´ ìˆìŠµë‹ˆë‹¤.");
+                return;
+            }
+
+            // ìƒˆ ê²½ë¡œ ê³„ì‚°
+            var newPath2 = FindPath(currentCell, clickedCell);
+
+            // ê²½ë¡œê°€ ì—†ê±°ë‚˜ 1ì¹¸(ì œìë¦¬)ì´ë©´ ì„ íƒ/í”„ë¦¬ë·° í•´ì œ
+            if (newPath2 == null || newPath2.Count <= 1)
+            {
+                selectedTargetCell = null;
+                currentPathCells.Clear();
+                ClearPathPreview();
+                pendingChest = null;
+                pathArrivalCallback = null;
+                currentInteractTarget = null;
+                currentDescData = null;
+                InteractionHintUI.Instance?.HideAll();
+                return;
+            }
+
+            // ì²« ë²ˆì§¸ í´ë¦­: ê²½ë¡œë§Œ í‘œì‹œ (ì´ ê²½ìš° ê´€ì°° ëŒ€ìƒì€ ì—†ìŒ)
+            selectedTargetCell = clickedCell;
+            currentPathCells = newPath2;
+            pendingChest = null;
+            pathArrivalCallback = null;
+            currentInteractTarget = null;
+            currentDescData = null;
+            ShowPathPreview(newPath2);
+            InteractionHintUI.Instance?.HideAll();
+            return;
+        }
+
+        // ì˜¤ë¥¸ìª½ í´ë¦­: ê°™ì€ íƒ€ì¼ì„ í´ë¦­í•˜ë©´ ì„ íƒ/í”„ë¦¬ë·° ì·¨ì†Œ
+        if (Input.GetMouseButtonDown(1))
+        {
+            if (selectedTargetCell.HasValue || (currentPathCells != null && currentPathCells.Count > 0))
+            {
+                CancelSelectionAndHint();
+            }
+        }
+    }
+    //HintUi ê³µí†µ ì·¨ì†Œ ë©”ì„œë“œ
+    void CancelSelectionAndHint()
+    {
+        selectedTargetCell = null;
+        currentPathCells.Clear();
+        ClearPathPreview();
+        pendingChest = null;
+        pathArrivalCallback = null;
+        currentInteractTarget = null;
+        currentDescData = null;
+        pendingPortal = null;
+        InteractionHintUI.Instance?.HideAll();
+    }
+
+    // ì™¸ë¶€ì—ì„œ ì ê¸ˆ ìš”ì²­
+    public void LockMovementFor(float seconds)
+    {
+        movementLockUntil = Mathf.Max(movementLockUntil, Time.time + Mathf.Max(0f, seconds));
+
+        // ê²½ë¡œ ì´ë™ ì¤‘ì—ëŠ” ì½”ë£¨í‹´ì„ ëŠì§€ ë§ê³  ì…ë ¥ë§Œ ì ê¸ˆ
+        if (!isMovingByPath)
+        {
+            HaltImmediately();
+        }
+        else
+        {
+            if (animator != null) animator.SetInteger("Move", 0);
+        }
+    }
+    public void LockMovementIndefinite()
+    {
+        _hardLockTokens++;
+        HaltImmediately();
+    }
+    public void UnlockMovementIndefinite()
+    {
+        _hardLockTokens = Mathf.Max(0, _hardLockTokens - 1);
+        HaltImmediately();
+    }
+
+    #region Movement
+    public Tilemap GetWalkableMapAt(Vector3Int cell)
+    {
+        if (floorMaps == null) return null;
+
+        // ë¦¬ìŠ¤íŠ¸ ë’¤ìª½(ë†’ì€ ì¸µ)ë¶€í„° ê²€ì‚¬í•´ì•¼ ê²¹ì³¤ì„ ë•Œ ìœ„ìª½ íƒ€ì¼ì„ ê°€ì ¸ì˜´
+        for (int i = floorMaps.Count - 1; i >= 0; i--)
+        {
+            if (floorMaps[i].HasTile(cell)) return floorMaps[i];
+        }
+        return null;
+    }
+
+    // í™”ë©´ì—ì„œ ê²½ë¡œ í‘œì‹œ ì œê±°
+    void ClearPathPreview()
+    {
+        if (activePathMarkers.Count > 0)
+        {
+            foreach (var marker in activePathMarkers)
+            {
+                if (marker != null)
+                    Destroy(marker);
+            }
+            activePathMarkers.Clear();
+        }
+        if (_pathCostLabelGO != null)
+        {
+            Destroy(_pathCostLabelGO);
+            _pathCostLabelGO = null;
+            _pathCostTMP = null;
+        }
+    }
+    // ê²½ë¡œ í”„ë¦¬ë·° ìƒì„± (2ì¹¸ ì´ìƒì¼ ë•Œë§Œ í‘œì‹œ)
+    void ShowPathPreview(List<Vector3Int> cells)
+    {
+        ClearPathPreview();
+
+        currentPathCells = cells ?? new List<Vector3Int>();
+        if (cells == null || cells.Count < 2) return;
+
+        for (int i = 0; i < cells.Count; i++)
+        {
+            Vector3Int cell = cells[i];
+
+            // í•´ë‹¹ ì…€ì´ ì†Œì†ëœ íƒ€ì¼ë§µì„ ì°¾ìŒ (ë†’ì´ ì •ë³´ í¬í•¨)
+            Tilemap targetMap = GetWalkableMapAt(cell);
+            if (targetMap == null) targetMap = floorTilemap;
+
+            // ê·¸ íƒ€ì¼ë§µ ê¸°ì¤€ìœ¼ë¡œ ì›”ë“œ ì¢Œí‘œë¥¼ ê°€ì ¸ì˜¨ë‹¤ (Anchor ê°’ ìë™ ë°˜ì˜ë¨)
+            Vector3 world = targetMap.GetCellCenterWorld(cell);
+
+            // Zì¶• ì •ë ¬
+            world.z = 0;
+
+            bool isGoal = (i == cells.Count - 1);
+
+            GameObject prefabToUse = isGoal && goalMarkerPrefab != null
+                ? goalMarkerPrefab
+                : pathMarkerPrefab;
+
+            if (prefabToUse == null) continue;
+
+            var marker = Instantiate(prefabToUse, world, Quaternion.identity);
+
+            // ë§ˆì»¤ê°€ íƒ€ì¼ì— íŒŒë¬»íˆì§€ ì•Šê²Œ Sorting Order ë™ì  ì¡°ì ˆ
+            var mapRenderer = targetMap.GetComponent<TilemapRenderer>();
+            var markerRenderer = marker.GetComponent<SpriteRenderer>();
+
+            if (mapRenderer != null && markerRenderer != null)
+            {
+                // íƒ€ì¼ë§µê³¼ ê°™ì€ Sorting Layerë¥¼ ì“°ê³ ,
+                markerRenderer.sortingLayerID = mapRenderer.sortingLayerID;
+
+                // ìˆœì„œëŠ” íƒ€ì¼ë§µë³´ë‹¤ 1 ë†’ê²Œ ì„¤ì • (ë¬´ì¡°ê±´ íƒ€ì¼ ìœ„ì— ê·¸ë ¤ì§)
+                markerRenderer.sortingOrder = mapRenderer.sortingOrder + 1;
+            }
+
+            activePathMarkers.Add(marker);
+        }
+
+        // ëª©í‘œ ì§€ì ì— ì´ í•„ìš” í™œê¸° í‘œì‹œ
+        var vigor = VigorManager.Instance;
+        if (vigor != null && cells.Count > 0)
+        {
+            int steps = Mathf.Max(0, cells.Count - 1);
+            int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
+
+            Vector3Int goalCell = cells[cells.Count - 1];
+            Tilemap goalMap = GetWalkableMapAt(goalCell);
+            if (goalMap == null) goalMap = floorTilemap;
+
+            Vector3 goalWorld = goalMap.GetCellCenterWorld(goalCell);
+            goalWorld.z = 0;
+
+            if (_pathCostLabelGO == null)
+            {
+                _pathCostLabelGO = new GameObject("PathCostLabel_TMP");
+                _pathCostLabelGO.transform.localScale = Vector3.one * pathCostLabelScale;
+
+                _pathCostTMP = _pathCostLabelGO.AddComponent<TextMeshPro>();
+                _pathCostTMP.text = $"-{cost}";
+                _pathCostTMP.alignment = TextAlignmentOptions.Center;
+                _pathCostTMP.fontSize = 30;                // ìŠ¤ì¼€ì¼ê³¼ í•¨ê»˜ íŠœë‹
+                _pathCostTMP.enableWordWrapping = false;
+
+                // ëª©í‘œ ì§€ì  ë§µì˜ Order + 2 ì •ë„ë¡œ ì„¤ì •
+                var renderer = goalMap.GetComponent<TilemapRenderer>();
+                int baseOrder = renderer != null ? renderer.sortingOrder : 0;
+                _pathCostTMP.sortingOrder = baseOrder + 2; // í…ìŠ¤íŠ¸ëŠ” í™•ì‹¤í•˜ê²Œ ìœ„ë¡œ
+                _pathCostTMP.outlineWidth = 0.2f;          // ê°€ë…ì„±
+                _pathCostTMP.color = (cost <= vigor.CurrentVigor) ? Color.white : Color.red;
+            }
+
+            _pathCostLabelGO.transform.position = goalWorld;
+            _pathCostTMP.text = $"-{cost}";
+        }
+    }
+
+    // ë‘ íƒ€ì¼ ì‚¬ì´ì˜ ë†’ì´ ì°¨ì´ê°€ ì´ë™ ê°€ëŠ¥í•œ ìˆ˜ì¤€ì¸ì§€ í™•ì¸ (3ì¹¸ ì´ìƒ ë¶ˆê°€)
+    bool IsHeightDiffValid(Vector3Int from, Vector3Int to)
+    {
+        Tilemap fromMap = GetWalkableMapAt(from);
+        Tilemap toMap = GetWalkableMapAt(to);
+
+        // ë§µì„ ëª» ì°¾ìœ¼ë©´ ë°”ë‹¥(0)ìœ¼ë¡œ ê°€ì •
+        float fromH = (fromMap != null) ? fromMap.tileAnchor.y : 0f;
+        float toH = (toMap != null) ? toMap.tileAnchor.y : 0f;
+
+        float diff = Mathf.Abs(toH - fromH);    // (ë„ì°© - ì¶œë°œ)
+
+        // ìœ„ë¡œ ê°€ë“  ì•„ë˜ë¡œ ê°€ë“  ì°¨ì´ê°€ 0.6f ë¯¸ë§Œì´ì–´ì•¼ í•¨
+        if (Mathf.Abs(diff) < 0.55f)
+        {
+            return true;
+        }
+
+        return false;
+    }
+    // ë…¼ë¦¬ì  íŒë‹¨ì„ ìœ„í•œ ì •í™•í•œ ì›”ë“œ ì¢Œí‘œ ë°˜í™˜
+    Vector3 GetWorldPosForLogic(Vector3Int cell)
+    {
+        Tilemap map = GetWalkableMapAt(cell);
+        if (map == null) map = floorTilemap; // ì—†ìœ¼ë©´ ë°”ë‹¥ ê¸°ì¤€
+
+        // í•´ë‹¹ ë§µì˜ ì•µì»¤ê°€ ì ìš©ëœ ì›”ë“œ ì¤‘ì‹¬ ì¢Œí‘œ
+        Vector3 worldPos = map.GetCellCenterWorld(cell);
+        worldPos.z = 0; // ê±°ë¦¬ëŠ” 2D í‰ë©´(XY) ê¸°ì¤€ìœ¼ë¡œë§Œ ë³¼ ê±°ë‹ˆê¹Œ Z ë¬´ì‹œ
+        return worldPos;
+    }
+
+    // --- íƒ€ì¼ ê¸°ë°˜ ìµœì†Œ ê²½ë¡œ íƒìƒ‰ (BFS) ---
+    List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal)
+    {
+        if (start == goal) return new List<Vector3Int> { start };
+
+        var queue = new Queue<Vector3Int>();
+        var cameFrom = new Dictionary<Vector3Int, Vector3Int>();
+
+        queue.Enqueue(start);
+        cameFrom[start] = start;
+
+        Direction[] dirs =
+        {
+            Direction.West, Direction.East,
+            Direction.NW, Direction.NE,
+            Direction.SW, Direction.SE
+        };
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (current == goal) break;
+
+            bool odd = (current.y & 1) != 0;
+            Vector3 currentWorldPos = GetWorldPosForLogic(current);
+
+            foreach (var dir in dirs)
+            {
+                Vector3Int offset = GetOffsetForDirection(dir, odd);
+                Vector3Int next = current + offset;
+
+                if (cameFrom.ContainsKey(next)) continue;
+
+                // 1. ë°”ë‹¥ íƒ€ì¼ ì—†ìœ¼ë©´ ìŠ¤í‚µ
+                if (!IsWalkableCell(next)) continue;
+
+                // 2. ë†’ì´ ì°¨ì´ ì•ˆ ë§ìœ¼ë©´ ìŠ¤í‚µ
+                if (!IsHeightDiffValid(current, next)) continue;
+
+                // 3. ë¬¼ë¦¬ì  ê±°ë¦¬ê°€ ë„ˆë¬´ ë©€ë©´(ì•µì»¤ ì˜¤ì°¨ ë“±ìœ¼ë¡œ ëŠê¸´ ê³³) ìŠ¤í‚µ
+                // ì•ˆì „í•˜ê²Œ 2.0fë¡œ ìœ ì§€
+                Vector3 nextWorldPos = GetWorldPosForLogic(next);
+                float dist = Vector2.Distance(currentWorldPos, nextWorldPos);
+                if (dist > 2.0f) continue;
+
+                cameFrom[next] = current;
+                queue.Enqueue(next);
+            }
+        }
+
+        if (!cameFrom.ContainsKey(goal))
+        {
+            return null; // ê²½ë¡œ ì—†ìŒ (ì¡°ìš©íˆ ë¦¬í„´)
+        }
+
+        // ê²½ë¡œ ì—­ì¶”ì 
+        var path = new List<Vector3Int>();
+        var cur = goal;
+        while (true)
+        {
+            path.Add(cur);
+            if (cur == start) break;
+            cur = cameFrom[cur];
+        }
+        path.Reverse();
+        return path;
+    }
+
+    // íŠ¹ì • ì˜¤ë¸Œì íŠ¸ ì…€ ì£¼ë³€(ì¸ì ‘ 6ì¹¸) ì¤‘ í•˜ë‚˜ê¹Œì§€ì˜ ìµœë‹¨ ê²½ë¡œë¥¼ ì°¾ëŠ”ë‹¤.
+    List<Vector3Int> FindPathToAdjacentCell(Vector3Int start, Vector3Int objectCell)
+    {
+        Direction[] dirs =
+        {
+            Direction.West,
+            Direction.East,
+            Direction.NW,
+            Direction.NE,
+            Direction.SW,
+            Direction.SE
+        };
+
+        List<Vector3Int> bestPath = null;
+
+        bool odd = (objectCell.y & 1) != 0;
+
+        foreach (var dir in dirs)
+        {
+            Vector3Int offset = GetOffsetForDirection(dir, odd);
+            Vector3Int adj = objectCell + offset;
+
+            if (!IsWalkableCell(adj))
+                continue;
+
+            var path = FindPath(start, adj);
+            if (path == null || path.Count < 2)
+                continue;
+
+            if (bestPath == null || path.Count < bestPath.Count)
+                bestPath = path;
+        }
+
+        return bestPath;
+    }
+
+    List<Vector3Int> FindPathToPushReadyCell(Vector3Int playerCell, Vector3Int boxCell, PushObject box)
+    {
+        Direction[] dirs =
+        {
+        Direction.West, Direction.East,
+        Direction.NW, Direction.NE,
+        Direction.SW, Direction.SE
+    };
+
+        List<Vector3Int> best = null;
+        bool oddBox = (boxCell.y & 1) != 0;
+
+        foreach (var d in dirs)
+        {
+            var adj = boxCell + GetOffsetForDirection(d, oddBox);
+            if (!IsWalkableCell(adj)) continue;
+
+            // adj(í”Œë ˆì´ì–´ ìœ„ì¹˜)ì—ì„œ boxë¥¼ ë°€ ë•Œì˜ â€œí”Œë ˆì´ì–´â†’ë°•ìŠ¤ ìƒëŒ€ ë°©í–¥â€ì„ dirKeyë¡œ ì‚°ì¶œ
+            var delta = boxCell - adj;
+            bool oddAdj = (adj.y & 1) != 0;
+            var dirKey = GetDirectionFromDelta(delta, oddAdj);
+            if (dirKey == Direction.None) continue;
+
+            // ê·¸ ìë¦¬ì—ì„œ ì‹¤ì œë¡œ 1ì¹¸ì´ë¼ë„ ë°€ ìˆ˜ ìˆì–´ì•¼ â€œpush-readyâ€
+            // (í›„ë³´ íƒ€ì¼ ê³„ì‚° í•¨ìˆ˜ëŠ” ì•„ë˜ 2)ì—ì„œ ì¶”ê°€í•  BuildPushLineTargetsë¥¼ ì‚¬ìš©)
+            var line = BuildPushLineTargets(box, boxCell, dirKey);
+            if (line.Count == 0) continue;
+
+            var path = FindPath(playerCell, adj);
+            if (path == null || path.Count < 2) continue;
+
+            if (best == null || path.Count < best.Count) best = path;
+        }
+
+        return best;
+    }
+
+    //ì‹¬ë³¼ ì¸ì¹´ìš´í„° ëª¬ìŠ¤í„° íƒ€ì¼ ì²´í¬
+    bool TryGetEncounterAtCell(Vector3Int cell, out EncounterMonster monster)
+    {
+        monster = null;
+        var world = floorTilemap.GetCellCenterWorld(cell);
+        var hits = Physics2D.OverlapCircleAll(world, 0.4f, encounterLayerMask);
+
+        // íƒì§€ëœ ê°œìˆ˜ í™•ì¸
+        if (hits.Length == 0)
+        {
+            Debug.Log($"[Encounter] í•´ë‹¹ íƒ€ì¼({cell}) ì¤‘ì‹¬ì—ì„œ ë°˜ê²½ 0.4f ë‚´ì— 'Water' ë ˆì´ì–´ ê°ì§€ ì•ˆ ë¨. ìœ„ì¹˜: {world}");
+            return false;
+        }
+
+        foreach (var h in hits)
+        {
+            if (!h) continue;
+            var m = h.GetComponentInParent<EncounterMonster>();
+            if (m != null)
+            {
+                if (!m.IsActive) Debug.Log($"[Encounter] ëª¬ìŠ¤í„° ê°ì§€ë¨({m.name}) ê·¸ëŸ¬ë‚˜ IsActiveê°€ falseì„.");
+                else
+                {
+                    Debug.Log($"[Encounter] ëª¬ìŠ¤í„° ê°ì§€ ì„±ê³µ! ì „íˆ¬ ì§„ì… ì‹œë„.");
+                    monster = m;
+                    return true;
+                }
+                   
+            }
+        }
+        return false;
+    }
+    //í•¨ì • íƒ€ì¼ ì²´í¬
+    void TryTriggerTrapAtCell(Vector3Int cell)
+    {
+        if (floorTilemap == null) return;
+
+        var traps = TrapBehavior.allTraps;
+        for (int i = 0; i < traps.Count; i++)
+        {
+            var trap = traps[i];
+            if (!trap) continue;
+            trap.TryTriggerByPlayer(floorTilemap, cell);
+        }
+    }
+    void TryConsumeTrapByBoxAtCell(Vector3Int cell)
+    {
+        if (floorTilemap == null) return;
+
+        var traps = TrapBehavior.allTraps;
+        for (int i = 0; i < traps.Count; i++)
+        {
+            var trap = traps[i];
+            if (!trap) continue;
+            if (!trap.gameObject.activeInHierarchy) continue; // ë¹„í™œì„± íŠ¸ë© ìŠ¤í‚µ(ê¶Œì¥)
+
+            trap.TryConsumeByBox(floorTilemap, cell);
+        }
+    }
+
+    void StartPushToCell(PushObject box, Vector3Int targetCell)
+    {
+        if (box == null || floorTilemap == null) return;
+
+        // ì‹œí€€ìŠ¤ ì‹œì‘ ì‹œì ì˜ â€œë°©í–¥â€ì€ EnterPushSelectModeì—ì„œ ê²°ì •ëœ pendingDirectionKeyë¥¼ ì‚¬ìš©
+        // (í•´ë‹¹ ëª¨ë“œì—ì„œëŠ” ë°©í–¥ì´ í•˜ë‚˜ë¡œ ê³ ì •ë˜ëŠ” ì„¤ê³„)
+        if (pendingDirectionKey == Direction.None) return;
+
+        // ì…ë ¥ ì ê¸ˆì€ ì‹œí€€ìŠ¤ì—ì„œë§Œ ê´€ë¦¬
+        StartCoroutine(PerformPushToTarget(box, pendingDirectionKey, targetCell));
+    }
+
+    // ê²½ë¡œë¥¼ ë”°ë¼ ì‹¤ì œë¡œ ì´ë™
+    void StartPathMove(List<Vector3Int> cells, Action onArrive = null, int? overrideVigorCost = null)
+    {
+        if (cells == null || cells.Count < 2) return; // ì œìë¦¬ì´ê±°ë‚˜ ì˜ëª»ëœ ê²½ë¡œ
+
+        // ì´ë™ ë¹„ìš© ê³„ì‚°
+        _pendingMoveVigorCost = 0;
+        var vigor = VigorManager.Instance;
+
+        if (overrideVigorCost.HasValue)
+        {
+            // ë³µê·€ í›„ ì´ì–´ì„œ ì´ë™: "ì´ ì˜ˆì • ë¹„ìš©"ì„ ê·¸ëŒ€ë¡œ ì´ì–´ë°›ëŠ”ë‹¤
+            _pendingMoveVigorCost = Mathf.Max(0, overrideVigorCost.Value);
+        }
+        else if (vigor != null)
+        {
+            int steps = Mathf.Max(0, cells.Count - 1);
+            int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
+
+            // ì„  ì°¨ê° ëŒ€ì‹  ê°€ëŠ¥ ì—¬ë¶€ë§Œ í™•ì¸
+            if (cost > 0 && !vigor.CanSpend(cost))
+            {
+                ExplorationLogUI.Instance?.Push($"í™œê¸°ê°€ ë¶€ì¡±í•©ë‹ˆë‹¤. ì´ë™ í•„ìš”: {cost}, í˜„ì¬: {vigor.CurrentVigor}");
+                CancelSelectionAndHint();
+                return;
+            }
+            _pendingMoveVigorCost = cost;
+        }
+
+        // ì´ë™ ì¤‘ì´ë©´ ë¨¼ì € ì •ë¦¬
+        if (pathMoveRoutine != null)
+        {
+            StopCoroutine(pathMoveRoutine);
+            pathMoveRoutine = null;
+        }
+
+        isMovingByPath = true;
+
+        // ë„ì°© ì½œë°± ì„¤ì •
+        pathArrivalCallback = onArrive;
+
+        // í”„ë¦¬ë·°ëŠ” ì´ë™ ì‹œì‘ ì‹œ ì§€ì›€
+        ClearPathPreview();
+
+        var moveCells = new List<Vector3Int>(cells);   // ë³µì‚¬ë³¸ ìƒì„±
+        pathMoveRoutine = StartCoroutine(Co_MoveAlongPath(moveCells));
+    }
+
+    void EndPathMove()
+    {
+        isMovingByPath = false;
+        selectedTargetCell = null;
+        currentPathCells.Clear();
+        pathMoveRoutine = null;
+
+        // ê²½ë¡œ í”„ë¦¬ë·°/ë§ˆì»¤ ì •ë¦¬
+        ClearPathPreview();
+    }
+
+    // ë¬¼ë¦¬ ì—”ì§„(Raycast)ì„ ì´ìš©í•œ ì •í™•í•œ íƒ€ì¼ ê°ì§€
+    // [Physics ë°©ì‹ + ì¢Œí‘œ ë³´ì •]
+    Vector3Int GetClickedCellWithHeight(Vector3 mouseWorldPos)
+    {
+        // í™”ë©´ìƒ ë§ˆìš°ìŠ¤ ìœ„ì¹˜ì—ì„œ ë ˆì´ ë°œì‚¬
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        // ë ˆì´ì— ì¶©ëŒëœ íƒ€ì¼ ëª¨ë‘ ê°€ì ¸ì˜¤ê¸°
+        RaycastHit2D[] hits = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
+
+        if (hits.Length > 0)
+        {
+            Tilemap bestMap = null;
+            int maxOrder = int.MinValue;
+            Vector3Int bestCell = Vector3Int.zero;
+            bool found = false;
+
+            float bestHitY = float.MaxValue;
+
+            // ê°€ì¥ ìœ„ì— ê·¸ë ¤ì§„(Sorting Order ë†’ì€) íƒ€ì¼ ì°¾ê¸°
+            foreach (var hit in hits)
+            {
+                Tilemap map = hit.collider.GetComponent<Tilemap>();
+                if (map != null)
+                {
+                    // ì´ ë§µ ê¸°ì¤€ìœ¼ë¡œ ì¢Œí‘œ ë³´ì •
+                    Grid grid = map.layoutGrid;
+                    Vector3 exactWorldAnchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(map.tileAnchor))
+                                                   - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
+
+                    Vector3 correctedPoint = (Vector3)hit.point - exactWorldAnchorOffset;
+                    Vector3Int tempCell = map.WorldToCell(correctedPoint);
+                    tempCell.z = 0;
+
+                    // ì‹¤ì œë¡œ ê·¸ ì¢Œí‘œì— íƒ€ì¼ì´ ìˆëŠ”ì§€ í™•ì¸
+                    if (map.HasTile(tempCell))
+                    {
+                        var renderer = map.GetComponent<TilemapRenderer>();
+                        int order = renderer != null ? renderer.sortingOrder : 0;
+
+                        // Order ë†’ê±°ë‚˜, ê°™ìœ¼ë©´ í™”ë©´ìƒ ì•„ë˜ìª½(Yê°€ ì‘ì€) ìš°ì„ 
+                        if (!found || order > maxOrder || (order == maxOrder && hit.point.y < bestHitY))
+                        {
+                            maxOrder = order;
+                            bestMap = map;
+                            bestCell = tempCell;
+                            bestHitY = hit.point.y; // ë¹„êµìš© Yê°’ ì €ì¥
+                            found = true;
+                        }
+                    }
+                }
+            }
+
+            if (found && bestMap != null)
+            {
+                return bestCell;
+            }
+        }
+
+        // í—ˆê³µ í´ë¦­ ì‹œ Fallback(ê°€ì¥ ë°”ë‹¥ ë§µ ê¸°ì¤€)
+        if (floorTilemap != null)
+        {
+            Vector3 correctedMouse = mouseWorldPos;
+            correctedMouse -= floorTilemap.tileAnchor;
+            Vector3Int baseCell = floorTilemap.WorldToCell(correctedMouse);
+            baseCell.z = 0;
+            return baseCell;
+        }
+
+        return Vector3Int.zero;
+    }
+
+    // í”Œë ˆì´ì–´(ë˜ëŠ” íŠ¹ì • ì›”ë“œ ì¢Œí‘œ)ê°€ ë°Ÿê³  ìˆëŠ” íƒ€ì¼ì˜ ì •í™•í•œ ì…€ ì¢Œí‘œ êµ¬í•˜ê¸°
+    public Vector3Int GetCellFromWorldPos(Vector3 worldPos)
+    {
+        // í•´ë‹¹ ìœ„ì¹˜ì— ìˆëŠ” ëª¨ë“  ì½œë¼ì´ë” ê²€ì‚¬
+        Collider2D[] cols = Physics2D.OverlapPointAll(worldPos);
+
+        Tilemap bestMap = null;
+        int maxOrder = int.MinValue;
+
+        foreach (var col in cols)
+        {
+            Tilemap map = col.GetComponent<Tilemap>();
+            if (map != null)
+            {
+                // ì¥ì• ë¬¼/ë²½ ì œì™¸í•˜ê³  ë°”ë‹¥ë§Œ ì²´í¬ (í•„ìš”ì‹œ wall í¬í•¨ ì—¬ë¶€ ê²°ì •)
+                if (obstacleMaps.Contains(map)) continue;
+
+                var renderer = map.GetComponent<TilemapRenderer>();
+                int order = renderer != null ? renderer.sortingOrder : 0;
+
+                // ê°€ì¥ ìœ„ì— ê·¸ë ¤ì§„(Sorting Orderê°€ ë†’ì€) ë§µ ì„ íƒ
+                if (order > maxOrder)
+                {
+                    maxOrder = order;
+                    bestMap = map;
+                }
+            }
+        }
+
+        if (bestMap != null)
+        {
+            Vector3 correctedPos = worldPos;
+
+            // ë°Ÿê³  ìˆëŠ” ë§µì˜ Anchorë§Œí¼ ì¢Œí‘œë¥¼ ë‚´ë ¤ì„œ ê³„ì‚°
+            Grid grid = bestMap.layoutGrid;
+            Vector3 anchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(bestMap.tileAnchor))
+                                 - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
+            correctedPos -= anchorOffset;
+
+            Vector3Int cell = bestMap.WorldToCell(correctedPos);
+            cell.z = 0;
+            return cell;
+        }
+
+        // ë°”ë‹¥ì„ ëª» ì°¾ì•˜ì„ ê²½ìš° Fallback
+        if (floorTilemap != null)
+        {
+            // í˜¹ì‹œ ëª¨ë¥´ë‹ˆ ê¸°ë³¸ ë°”ë‹¥ ì•µì»¤ë¼ë„ ë¹¼ì¤Œ
+            Vector3 correctedPos = worldPos;
+            correctedPos -= floorTilemap.tileAnchor;
+            return floorTilemap.WorldToCell(correctedPos);
+        }
+
+        return Vector3Int.zero;
+    }
+    IEnumerator Co_MoveAlongPath(List<Vector3Int> cells)
+    {
+        // ì•ˆì „í•˜ê²Œ ë¡œì»¬ë¡œ ë³µì‚¬(ì¤‘ê°„ì— ì™¸ë¶€ì—ì„œ ë¦¬ìŠ¤íŠ¸ê°€ ë°”ë€ŒëŠ” ê²½ìš° ë°©ì§€)
+        if (cells == null || cells.Count < 2)
+        {
+            EndPathMove();
+            yield break;
+        }
+
+        Action cb = pathArrivalCallback;
+
+        try
+        {
+            // ì‹œì‘ ì…€ì€ í˜„ì¬ ìœ„ì¹˜ë¼ê³  ê°€ì •, 1ë²ˆì§¸ ì¸ë±ìŠ¤ë¶€í„° ëê¹Œì§€ ìˆœì„œëŒ€ë¡œ ì´ë™
+            for (int i = 1; i < cells.Count; i++)
+            {
+                // ì´ì „ íƒ€ì¼(ì¶œë°œ)ê³¼ í˜„ì¬ íƒ€ì¼(ë„ì°©)ì˜ ì¸µìˆ˜(Index) êµ¬í•˜ê¸°
+                Vector3Int startCell = cells[i - 1];
+                Vector3Int endCell = cells[i];
+
+                // ê° ì…€ì´ ì†Œì†ëœ ë§µì„ ì°¾ì•„ì„œ ì‹¤ì œ ì›”ë“œ ì¢Œí‘œë¥¼ ê°€ì ¸ì˜´
+                Tilemap startMap = GetWalkableMapAt(startCell);
+                Tilemap endMap = GetWalkableMapAt(endCell);
+
+                // ë§µì„ ëª» ì°¾ìœ¼ë©´ ê¸°ë³¸ ë§µ ì‚¬ìš© (ë°©ì–´ ì½”ë“œ)
+                Vector3 startPos = (startMap != null ? startMap : floorTilemap).GetCellCenterWorld(startCell);
+                Vector3 endPos = (endMap != null ? endMap : floorTilemap).GetCellCenterWorld(endCell);
+
+                // Zì¶• ê³ ì •
+                startPos.z = transform.position.z;
+                endPos.z = transform.position.z;
+
+                // íƒ€ì¼ë§µì˜ ê³ ìœ  ë†’ì´(Anchor.y)ë‚˜ ë§µ ì¸ìŠ¤í„´ìŠ¤ ìì²´ê°€ ë‹¤ë¥¼ ë•Œë§Œ ì í”„
+                float startHeight = (startMap != null) ? startMap.tileAnchor.y : 0f;
+                float endHeight = (endMap != null) ? endMap.tileAnchor.y : 0f;
+
+                // ë†’ì´ ì°¨ì´ ê³„ì‚°
+                float heightDiff = Mathf.Abs(endHeight - startHeight);
+
+                // ë†’ì´ ì°¨ì´ê°€ ë¯¸ì„¸í•˜ê²Œë¼ë„ ìˆìœ¼ë©´ ì í”„ (0.001f ì˜¤ì°¨ í—ˆìš©)
+                bool isJump = heightDiff > 0.001f;
+
+                // ë°©í–¥ ë²¡í„° ë° ê±°ë¦¬ ê³„ì‚° (2D í‰ë©´ ê±°ë¦¬ ê¸°ì¤€)
+                float dist = Vector2.Distance(startPos, endPos);
+                if (dist < 0.0001f) continue;
+
+                Vector2 dir = (endPos - startPos).normalized;
+                float speed = Mathf.Max(0.01f, defaultMoveSpeed);
+                float duration = dist / speed;
+                float t = 0f;
+
+                // ìŠ¤í”„ë¼ì´íŠ¸ ë°©í–¥
+                if (Mathf.Abs(dir.x) > 0.0001f) spriterenderer.flipX = dir.x > 0f;
+                if (animator != null) animator.SetInteger("Move", 1);
+
+                // ì í”„ ë†’ì´ ë™ì  ê³„ì‚°
+                float currentJumpMultiplier = jumpHeightMultiplier;
+
+                if (isJump)
+                {
+                    // 1ì¹¸ ì°¨ì´ vs 2ì¹¸ ì°¨ì´ êµ¬ë¶„
+                    // 0.18(ì•½ 1.5ì¹¸)ë³´ë‹¤ í¬ë©´ 2ì¹¸ ì í”„ë¡œ ê°„ì£¼í•˜ì—¬ ë†’ì´ë¥¼ í‚¤ì›€
+                    if (heightDiff > 0.26f)
+                    {
+                        currentJumpMultiplier *= 1.5f; // 2ì¹¸ì¼ ë•Œ 1.6ë°° ë” ë†’ê²Œ ì í”„ (ì·¨í–¥ê» ì¡°ì ˆ)
+                    }
+
+                    // ë‚´ë ¤ê°€ëŠ” ì í”„ëŠ” ì‚´ì§ ë‚®ê²Œ (ê¸°ì¡´ ë¡œì§ ìœ ì§€)
+                    if (endHeight < startHeight)
+                    {
+                        currentJumpMultiplier *= 0.6f;
+                    }
+                }
+
+                while (t < 1f)
+                {
+                    if (GamePause.IsPaused || Time.time < movementLockUntil)
+                    {
+                        if (animator != null) animator.SetInteger("Move", 0);
+                        yield return null;
+                        continue;
+                    }
+
+                    t += Time.deltaTime / duration;
+                    float percent = Mathf.Clamp01(t);
+
+                    // ê¸°ë³¸ ì„ í˜• ì´ë™ (ë†’ì´ ì°¨ì´ê°€ ìˆìœ¼ë©´ ëŒ€ê°ì„ ìœ¼ë¡œ ì´ë™ë¨)
+                    Vector3 currentPos = Vector3.Lerp(startPos, endPos, percent);
+
+                    // ì í”„ ì—°ì¶œ (Yì¶• ì°¨ì´ê°€ ìˆì„ ë•Œë§Œ)
+                    if (isJump && jumpCurve != null)
+                    {
+                        float curveValue = jumpCurve.Evaluate(percent);
+                        currentPos.y += curveValue * currentJumpMultiplier;
+                    }
+
+                    rb.MovePosition(currentPos);
+                    yield return null;
+                }
+
+                rb.MovePosition(endPos); // ìµœì¢… ìœ„ì¹˜ ë³´ì •
+
+                // ë„ì°© ì…€ í•¨ì • ì²´í¬
+                TryTriggerTrapAtCell(cells[i]);
+
+                // ë„ì°© ì…€ì—ì„œ ì¸ì¹´ìš´í„° ì²´í¬
+                if (TryGetEncounterAtCell(cells[i], out var monster))
+                {
+                    // ë‚¨ì€ ê²½ë¡œ êµ¬ì„±: í˜„ì¬(ëª¬ìŠ¤í„° ì…€)ë¶€í„° ëê¹Œì§€
+                    var remaining = new List<Vector3Int>();
+                    for (int k = i; k < cells.Count; k++)
+                        remaining.Add(cells[k]);
+
+                    if (animator != null) animator.SetInteger("Move", 0);
+
+                    var stm = SceneTransitionManager.Instance;
+                    if (stm != null && VigorManager.Instance != null)
+                    {
+                        stm.SetDeferredMoveCost(_pendingMoveVigorCost);
+                        stm.SetResumePath(remaining);
+
+                        Tilemap encounterMap = GetWalkableMapAt(cells[i]);
+                        if (encounterMap == null) encounterMap = floorTilemap;
+
+                        Vector3 returnPos = encounterMap.GetCellCenterWorld(cells[i]);
+                        // Zì¶•ì€ 0ìœ¼ë¡œ ë§ì¶”ê±°ë‚˜ í•„ìš”ì‹œ transform.position.z ì‚¬ìš©
+                        returnPos.z = 0;
+
+                        stm.SaveReturnPoint(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, returnPos);
+
+                        stm.SaveExplorationSnapshot(stm.BuildExplorationSnapshotFromScene());
+
+                        monster.MarkConsumed();
+                        stm.SaveVigor(VigorManager.Instance.CurrentVigor);
+
+                        string monsterName = monster != null ? monster.gameObject.name : "ëª¬ìŠ¤í„°";
+                        stm.EnterBattleWithEncounterBanner(monsterName, battleSceneName);
+
+                        yield break;
+                    }
+
+                    _pendingMoveVigorCost = 0;
+                    yield break;
+                }
+            }
+
+            // ì´ë™ ë¹„ìš© ê²°ì œ(ë„ì°©ê¹Œì§€ ì™„ë£Œëœ ê²½ìš°ì—ë§Œ)
+            if (VigorManager.Instance != null && _pendingMoveVigorCost > 0)
+            {
+                if (!VigorManager.Instance.TrySpend(_pendingMoveVigorCost, VigorSpendReason.MoveTile))
+                {
+                    VigorManager.Instance.FailExploration(
+                        $"íƒìƒ‰ì„ ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤. (ì´ë™ ê²°ì œ ì‹¤íŒ¨ / í•„ìš” {_pendingMoveVigorCost}, í˜„ì¬ {VigorManager.Instance.CurrentVigor})"
+                    );
+                    yield break;
+                }
+            }
+
+            _pendingMoveVigorCost = 0;
+
+            if (animator != null)
+                animator.SetInteger("Move", 0);
+
+            // ì •ìƒ ë„ì°© ì½œë°± ì‹¤í–‰(ìƒì ì—´ê¸° ë“±)
+            cb?.Invoke();
+        }
+        finally
+        {
+            EndPathMove();  // ì´ë™ ìƒíƒœ ì •ë¦¬
+
+            // ì´ë™ í›„ ìƒí˜¸ì‘ìš© ì˜ˆì•½ì€ í•œ ë²ˆ ì“°ê³  ë¹„ì›€
+            pathArrivalCallback = null;
+            pendingChest = null;
+            currentInteractTarget = null;
+            currentDescData = null;
+        }
+    }
+
+    //íƒí—˜ì”¬ ë³µê·€ í›„ ë‚¨ì€ ê²½ë¡œ ì´ë™
+    public void ResumePathAfterBattle(List<Vector3Int> resumeCells)
+    {
+        if (resumeCells == null || resumeCells.Count < 2) return;
+        if (isMovingByPath) return;
+
+        CancelSelectionAndHint();
+
+        // ì „íˆ¬ ì „ì— ì €ì¥í•´ ë‘” ì´ ì˜ˆì • ì´ë™ ë¹„ìš©ì„ ì´ì–´ë°›ëŠ”ë‹¤
+        int plannedCost = 0;
+        var stm = SceneTransitionManager.Instance;
+        if (stm != null) plannedCost = stm.ConsumeDeferredMoveCost();
+
+        StartPathMove(resumeCells, null, plannedCost);
+    }
+    #endregion
+    // === Hint UI ë²„íŠ¼ìš© ì½œë°± ===
+    public void OnClickSurveyButton()
+    {
+        DescriptionDialogUI.Instance?.Hide();
+        InteractionHintUI.Instance?.HideAll();
+
+        if (isMovingByPath)
+            return;
+
+        // Portal/NPC ì´ë™ í›„ ì‹¤í–‰ ë˜ëŠ” ì¦‰ì‹œ ì‹¤í–‰
+        if (pendingPortal != null)
+        {
+            var portal = pendingPortal;
+
+            // ì´ë™ ì—†ì´ ì¦‰ì‹œ ì‹¤í–‰(ì¸ì ‘/ì œìë¦¬)
+            if (currentPathCells == null || currentPathCells.Count < 2)
+            {
+                if (portal != null) portal.UsePortal();
+
+                ClearPath();
+                pendingPortal = null;
+                return;
+            }
+
+            // ì´ë™ í›„ ì‹¤í–‰
+            Action onArrive = () =>
+            {
+                if (portal != null) portal.UsePortal();
+            };
+
+            StartPathMove(currentPathCells, onArrive);
+
+            // ì˜ˆì•½ ì •ë¦¬(í•œ ë²ˆë§Œ)
+            pendingPortal = null;
+            return;
+        }
+
+        // Push ì „ìš© ë¶„ê¸°
+        if (pendingPushBox != null)
+        {
+            var box = pendingPushBox;
+            var playerCell = floorTilemap.WorldToCell(rb.position);
+            var boxCell = floorTilemap.WorldToCell(box.transform.position);
+
+            // ì´ë¯¸ ì¸ì ‘ì´ë©´ ì¦‰ì‹œ ì§„ì…
+            if (IsAdjacentOrSame(playerCell, boxCell))
+            {
+                EnterPushSelectMode(box);
+                return;
+            }
+
+            // ë©€ë¦¬ ìˆìœ¼ë©´: â€œë°€ê¸° ê°€ëŠ¥í•œ ì¸ì ‘ íƒ€ì¼â€ê¹Œì§€ ì´ë™ í›„ ì§„ì…
+            var pathToReady = FindPathToPushReadyCell(playerCell, boxCell, box);
+            if (pathToReady == null || pathToReady.Count < 2)
+            {
+                ExplorationLogUI.Instance?.Push("í•´ë‹¹ ìƒìë¥¼ ë°€ ìˆ˜ ìˆëŠ” ìœ„ì¹˜ë¡œ ì´ë™í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
+                box.SetHighlight(false);
+                pendingPushBox = null;
+                InteractionHintUI.Instance?.HideAll();
+                return;
+            }
+
+            // ì´ë™ ì‹œì‘ ì¦‰ì‹œ UI ë‹«ê¸°
+            InteractionHintUI.Instance?.HideAll();
+
+            // ë„ì°© í›„ ë°€ê¸° ëª¨ë“œ ì§„ì…
+            Action onArrive = () =>
+            {
+                // ë„ì°© ì‹œì ì— ë°•ìŠ¤ê°€ ì•„ì§ ì¡´ì¬/ìœ íš¨í•œì§€ í™•ì¸
+                if (box == null) return;
+
+                // ë„ì°© í›„ì—ëŠ” ì¸ì ‘ì¼ ê²ƒì´ë©°, ì´ë•Œ EnterPushSelectModeê°€ ë‹¤ì¹¸ í›„ë³´ê¹Œì§€ í‘œì‹œ(2ë²ˆ ìˆ˜ì •)
+                EnterPushSelectMode(box);
+            };
+
+            StartPathMove(pathToReady, onArrive);
+            return;
+        }
+        // ì´ë™ ì—†ì´ ì¦‰ì‹œ ì‹¤í–‰í•´ì•¼ í•˜ëŠ” ê²½ìš° (í•œ ì¹¸ ì´ë‚´)
+        if (currentPathCells == null || currentPathCells.Count < 2)
+        {
+            if (pendingChest != null)
+            {
+                pendingChest.OpenChest();
+                InteractionHintUI.Instance?.HideAll();
+            }
+            // ë‚˜ì¤‘ì— ì¡°ì‚¬ ëŒ€ìƒì´ ë” ìƒê¸°ë©´ ì—¬ê¸°ì— else-ifë¡œ ì¶”ê°€
+
+            // ìƒíƒœ ì •ë¦¬
+            ClearPath();
+            return;
+        }
+
+        // ì—¬ê¸°ë¶€í„°ëŠ” "ì´ë™ í›„ ì‹¤í–‰" ì¼€ì´ìŠ¤
+        if (currentPathCells != null && currentPathCells.Count >= 2)
+        {
+            Action onArrive = null;
+            if (pendingChest != null)
+                onArrive = () => pendingChest.OpenChest();
+
+            StartPathMove(currentPathCells, onArrive);
+        }
+    }
+    public void OnClickCommunicationButton()
+    {
+        if (isMovingByPath)
+            return;
+
+        // í•œ ì¹¸ ì´ë‚´ë©´ ì´ë™ ì—†ì´ ì¦‰ì‹œ ê´€ì°°
+        if (currentPathCells == null || currentPathCells.Count < 2)
+        {
+            if (currentDescData != null && !string.IsNullOrWhiteSpace(currentDescData.description))
+            {
+                DescriptionDialogUI.Instance?.Toggle(currentDescData.description);
+                InteractionHintUI.Instance?.HideAll();
+            }
+            return;
+        }
+
+        // ì´ë™ í›„ ê´€ì°°
+        if (currentPathCells != null && currentPathCells.Count >= 2)
+        {
+            Action onArrive = null;
+            if (currentDescData != null && !string.IsNullOrWhiteSpace(currentDescData.description))
+            {
+                onArrive = () =>
+                {
+                    DescriptionDialogUI.Instance?.Toggle(currentDescData.description);
+                    InteractionHintUI.Instance?.HideAll();
+                };
+            }
+
+            StartPathMove(currentPathCells, onArrive);
+        }
+    }
+
+    void EnterPushSelectMode(PushObject box)
+    {
+        if (box == null || floorTilemap == null) return;
+
+        // ê²½ë¡œ/ì˜ˆì•½ ìƒí˜¸ì‘ìš© ì •ë¦¬
+        ClearPathPreview();
+        currentPathCells.Clear();
+
+        isPushSelectMode = true;
+        isPushMode = true;
+
+        if (animator != null)
+            animator.SetBool("IsPushIdle", true); // ë°€ê¸° ì¤€ë¹„ ì• ë‹ˆë©”ì´ì…˜
+
+        // í”Œë ˆì´ì–´ ìœ„ì¹˜/ë°•ìŠ¤ ìœ„ì¹˜ë¡œ "ë°€ ìˆ˜ ìˆëŠ” ë°©í–¥ 1ê°œ" ê³„ì‚°(í”Œë ˆì´ì–´ ì¸ì ‘ ê¸°ì¤€)
+        var playerCell = floorTilemap.WorldToCell(rb.position);
+        var boxCell = floorTilemap.WorldToCell(box.transform.position);
+
+        var delta = boxCell - playerCell;
+        bool odd = (playerCell.y & 1) != 0;
+        pendingDirectionKey = GetDirectionFromDelta(delta, odd);
+
+        pushValidTargetCells.Clear();
+
+        //í˜„ì¬ í”Œë ˆì´ì–´ê°€ ì„œ ìˆëŠ” ë°©í–¥ìœ¼ë¡œ ë°€ìˆ˜ ìˆëŠ” í›„ë³´ ìƒì„±
+        var startBoxCell = floorTilemap.WorldToCell(box.transform.position);
+        var line = BuildPushLineTargets(box, startBoxCell, pendingDirectionKey);
+
+        for (int i = 0; i < line.Count; i++)
+            pushValidTargetCells.Add(line[i]);
+
+        if (pushValidTargetCells.Count == 0)
+        {
+            ExplorationLogUI.Instance?.Push("ì´ ìœ„ì¹˜ì—ì„œëŠ” ë°€ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
+            ExitPushSelectMode(keepBoxHighlight: false);
+            return;
+        }
+
+        ShowPushTargets(pushValidTargetCells);
+    }
+
+    // ì—°ì†ì ìœ¼ë¡œ ëª©ì ì§€ê¹Œì§€ ë°€ê¸°
+    List<Vector3Int> BuildPushLineTargets(PushObject box, Vector3Int startBoxCell, Direction dirKey)
+    {
+        var results = new List<Vector3Int>();
+
+        // [ì²´í¬] boxë‚˜ MainFloorMapì´ ì—†ìœ¼ë©´ ê³„ì‚° ë¶ˆê°€
+        if (box == null || box.MainFloorMap == null) return results;
+        if (dirKey == Direction.None) return results;
+
+        // ë‹¤ë¥¸ PushObject ì ìœ  ì…€(ê°€ìƒ ì¶©ëŒ ì²´í¬)
+        var occupied = new HashSet<Vector3Int>();
+        foreach (var po in FindObjectsOfType<PushObject>())
+        {
+            if (po == null || po == box) continue;
+
+            // [ìˆ˜ì •] box.floorTilemapì€ ë¦¬ìŠ¤íŠ¸ì´ë¯€ë¡œ WorldToCellì„ ë°”ë¡œ ì“¸ ìˆ˜ ì—†ìŒ -> MainFloorMap ì‚¬ìš©
+            if (box.MainFloorMap != null)
+            {
+                occupied.Add(box.MainFloorMap.WorldToCell(po.transform.position));
+            }
+        }
+
+        var cur = startBoxCell;
+
+        while (true)
+        {
+            bool odd = (cur.y & 1) != 0;
+            var offset = GetOffsetForDirection(dirKey, odd);
+            var next = cur + offset;
+
+            // ë¦¬ìŠ¤íŠ¸ í˜¸í™˜ ë©”ì„œë“œ ì‚¬ìš©
+            bool hasFloor = box.HasFloorAt(next);
+
+            bool hasWall = false;
+            if (wallMaps != null)
+            {
+                foreach (var wall in wallMaps)
+                {
+                    if (wall.HasTile(next))
+                    {
+                        hasWall = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasFloor || hasWall) break;
+
+            // ì¥ì• ë¬¼ ë ˆì´ì–´ (ê¸°ì¤€ ë§µ ì‚¬ìš©)
+            var world = box.MainFloorMap.GetCellCenterWorld(next);
+            var obstacle = Physics2D.OverlapCircle(world, 0.1f, box.obstacleLayer);
+            if (obstacle != null) break;
+
+            // ë‹¤ë¥¸ PushObject ì ìœ 
+            if (occupied.Contains(next)) break;
+
+            // ì—¬ê¸°ê¹Œì§€ í†µê³¼í•˜ë©´ â€œnextëŠ” ë°€ê¸° ê°€ëŠ¥í•œ ëª©ì ì§€â€
+            results.Add(next);
+
+            // ë‹¤ìŒ ë°˜ë³µì„ ìœ„í•´ ë°•ìŠ¤ ìœ„ì¹˜ë¥¼ nextë¡œ ê°€ì •
+            cur = next;
+        }
+
+        return results;
+    }
+
+    public void OnClickCancelButton()
+    {
+        // ê²½ë¡œ/ìƒí˜¸ì‘ìš© ì˜ˆì•½ë§Œ ì·¨ì†Œ (ì´ë™ ì¤‘ì´ ì•„ë‹ ë•Œ)
+        if (!isMovingByPath)
+            CancelSelectionAndHint();
+        if (isPushSelectMode) 
+            ExitPushSelectMode();
+        else if (pendingPushBox != null)    //í‘¸ì‹œ íƒ€ê²Ÿ ì„ íƒ ìƒíƒœ ì •ë¦¬
+        {
+            pendingPushBox.SetHighlight(false);
+            pendingPushBox = null;
+            InteractionHintUI.Instance?.HideAll();
+        }
+    }
+    public void TeleportTo(Vector3 worldPos)
+    {
+        rb.position = worldPos;
+        transform.position = worldPos;
+        ClearPath();
+    }
+
+    Direction GetDirectionFromDelta(Vector3Int delta, bool odd)
+    {
+        foreach (Direction dir in System.Enum.GetValues(typeof(Direction)))
+        {
+            if (dir == Direction.None) continue;
+            if (GetOffsetForDirection(dir, odd) == delta)
+                return dir;
+        }
+        return Direction.None;
+    }
+
+    Vector3Int GetOffsetForDirection(Direction dir, bool odd)
+    {
+        return dir switch
+        {
+            Direction.West => new Vector3Int(-1, 0, 0),
+            Direction.East => new Vector3Int(1, 0, 0),
+            Direction.NW => odd ? new Vector3Int(0, 1, 0) : new Vector3Int(-1, 1, 0),
+            Direction.NE => odd ? new Vector3Int(1, 1, 0) : new Vector3Int(0, 1, 0),
+            Direction.SW => odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0),
+            Direction.SE => odd ? new Vector3Int(1, -1, 0) : new Vector3Int(0, -1, 0),
+            _ => Vector3Int.zero,
+        };
+    }
+    void ShowPushTargets(IEnumerable<Vector3Int> cells)
+    {
+        ClearPushTargets();
+
+        if (pushMarkerPrefab == null) return;
+
+        foreach (var c in cells)
+        {
+            var world = floorTilemap.GetCellCenterWorld(c);
+            world.z = transform.position.z;
+
+            var marker = Instantiate(pushMarkerPrefab, world, Quaternion.identity);
+            activePushMarkers.Add(marker);
+        }
+    }
+
+    void ClearPushTargets()
+    {
+        for (int i = 0; i < activePushMarkers.Count; i++)
+            if (activePushMarkers[i]) Destroy(activePushMarkers[i]);
+
+        activePushMarkers.Clear();
+    }
+
+    public void ClearPath()
+    {
+        // ê¸°ì¡´ ë§ˆìš°ìŠ¤ ê²½ë¡œ ë¦¬ìŠ¤íŠ¸ ì •ë¦¬
+        path.Clear();
+
+        // íƒ€ì¼ ê²½ë¡œ ì´ë™ ìƒíƒœ ì •ë¦¬
+        currentPathCells.Clear();
+        selectedTargetCell = null;
+        isMovingByPath = false;
+        ClearPathPreview();
+
+        if (pathMoveRoutine != null)
+        {
+            StopCoroutine(pathMoveRoutine);
+            pathMoveRoutine = null;
+        }
+
+        pathArrivalCallback = null;
+        pendingChest = null;
+        currentInteractTarget = null;
+        currentDescData = null;
+    }
+
+    private bool IsWalkableCell(Vector3Int cell)
+    {
+        // ì¥ì• ë¬¼ ë§µì— íƒ€ì¼ì´ í•˜ë‚˜ë¼ë„ ìˆë‹¤ë©´ ë¬´ì¡°ê±´ ì´ë™ ë¶ˆê°€
+        if (obstacleMaps != null)
+        {
+            foreach (var obsMap in obstacleMaps)
+            {
+                if (obsMap.HasTile(cell)) return false; // ì¦‰ì‹œ ì°¨ë‹¨
+            }
+        }
+        // ë²½ ì²´í¬: ë¦¬ìŠ¤íŠ¸ ì „ì²´ ìˆœíšŒ
+        if (wallMaps != null)
+        {
+            foreach (var wall in wallMaps)
+            {
+                if (wall.HasTile(cell)) return false; // ë²½ í•˜ë‚˜ë¼ë„ ìˆìœ¼ë©´ ì´ë™ ë¶ˆê°€
+            }
+        }
+
+        // ì´ ì¢Œí‘œì— ìˆëŠ” íƒ€ì¼ë§µ ì¤‘ "ê°€ì¥ ìœ„ì— ìˆëŠ”(ë¦¬ìŠ¤íŠ¸ì˜ ë’¤ìª½)" ë§µì„ ì°¾ëŠ”ë‹¤.
+        Tilemap topMap = null;
+        for (int i = floorMaps.Count - 1; i >= 0; i--)
+        {
+            if (floorMaps[i].HasTile(cell))
+            {
+                topMap = floorMaps[i];
+                break; 
+            }
+        }
+
+        if (topMap == null) return false; // ì•„ë¬´ íƒ€ì¼ë„ ì—†ìŒ
+
+        // ê·¸ ë§µì´ ì¥ì• ë¬¼ì¸ì§€ í™•ì¸
+        string mapName = topMap.name.ToLower();
+        if (mapName.Contains("water") || mapName.Contains("obstacle") || mapName.Contains("void"))
+        {
+            return false; // ê°€ì¥ ìœ„ì˜ íƒ€ì¼ì´ ë¬¼ì´ë¼ë©´ ì´ë™ ë¶ˆê°€ (ì„ íƒë„ ì•ˆ ë¨)
+        }
+
+        // í•´ë‹¹ íƒ€ì¼ ìœ„ì¹˜ì— ì˜¤ë¸Œì íŠ¸(ë°•ìŠ¤ ë“±)ê°€ ìˆëŠ”ì§€ ë¬¼ë¦¬ ê²€ì‚¬
+        Vector3 worldPos = GetWorldPosForLogic(cell);
+        // ë°˜ê²½ 0.3f ì •ë„ë¡œ ê²¹ì¹˜ëŠ” ì½œë¼ì´ë” ê²€ì‚¬ (íƒ€ì¼ ì¤‘ì•™ ê¸°ì¤€)
+        Collider2D[] colliders = Physics2D.OverlapCircleAll(worldPos, 0.3f);
+        foreach (var col in colliders)
+        {
+            // BoxInteract(ìƒì)ê°€ ìˆê³ , ì•„ì§ ì•ˆ ì—´ë¦°(ë‹«íŒ) ìƒíƒœë¼ë©´ ì´ë™ ë¶ˆê°€
+            var box = col.GetComponentInParent<BoxInteract>();
+            if (box != null)
+            {
+                return false;
+            }
+
+            // PushObject(ë°€ê¸° ìƒì)ê°€ ìˆìœ¼ë©´ ì´ë™ ë¶ˆê°€
+            var push = col.GetComponentInParent<PushObject>();
+            if (push != null)
+            {
+                return false;
+            }
+
+            // NPCë‚˜ ê¸°íƒ€ ì¥ì• ë¬¼ íƒœê·¸ê°€ ìˆë‹¤ë©´ ì—¬ê¸°ì„œ ì¶”ê°€ ì²´í¬
+            // if (col.CompareTag("NPC")) return false;
+        }
+
+
+        // ë°”ë‹¥ì´ í•˜ë‚˜ë¼ë„ ìˆì–´ì•¼ ì´ë™ ê°€ëŠ¥
+        if (GetWalkableMapAt(cell) != null) return true;
+
+        return false; // ë°”ë‹¥ë„ ì—†ìœ¼ë©´ ì´ë™ ë¶ˆê°€
+    }
+
+    // ë°€ê¸° ìƒììš© ì¸ì ‘ íŒì •
+    bool IsAdjacentOrSame(Vector3Int a, Vector3Int b)
+    {
+        if (a == b) return true;
+
+        Direction[] dirs =
+        {
+        Direction.West, Direction.East,
+        Direction.NW, Direction.NE,
+        Direction.SW, Direction.SE
+    };
+
+        bool odd = (b.y & 1) != 0;
+        foreach (var dir in dirs)
+        {
+            var off = GetOffsetForDirection(dir, odd);
+            if (b + off == a) return true;
+        }
+        return false;
+    }
+
+    IEnumerator PerformPush(PushObject box, Vector3Int fromCell, Vector3Int dir)
+    {
+        float duration = 0.2f;
+
+        var from = fromCell;
+        var to = fromCell + dir;
+        var boxOdd = (from.y & 1) != 0;
+        var key = GetDirectionFromDelta(to - from, boxOdd);
+        var (blend, flipX) = GetPushBlend(key);
+
+        if (animator != null)
+        {
+            animator.SetFloat("PushX", blend.x);
+            animator.SetFloat("PushY", blend.y);
+            spriterenderer.flipX = flipX;
+        }
+        
+
+        Vector3 fromBox = box.transform.position;
+        Vector3 toBox = floorTilemap.GetCellCenterWorld(fromCell + dir);
+        Vector3 fromPlayer = rb.position;
+
+        Vector3 moveDir = (toBox - fromBox).normalized;      // ë°•ìŠ¤ ì´ë™ ë°©í–¥
+        float offset = 0.15f;
+        Vector3 pushVisualTarget = fromBox - moveDir * offset;
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / duration;
+            box.transform.position = Vector3.Lerp(fromBox, toBox, t);
+            rb.MovePosition(Vector3.Lerp(fromPlayer, pushVisualTarget, t));
+            yield return null;
+        }
+
+        box.transform.position = toBox;
+        var logicalPlayerCellCenter = floorTilemap.GetCellCenterWorld(fromCell);
+        logicalPlayerCellCenter.z = transform.position.z;
+        rb.MovePosition(logicalPlayerCellCenter);
+
+        // ìƒìê°€ ìµœì¢…ì ìœ¼ë¡œ ë„ì°©í•œ ì…€
+        var boxArrivedCell = fromCell + dir;
+
+        // ìƒìì— ì˜í•´ í•¨ì • ì œê±°
+        TryConsumeTrapByBoxAtCell(boxArrivedCell);
+
+        // í¼ì¦ ë°•ìŠ¤ ìœ„ì¹˜ ê°±ì‹  ë° ëª©í‘œ ì²´í¬ í˜¸ì¶œ
+        PuzzleManager.Instance?.ExecutePush(box, fromCell, fromCell + dir);
+    }
+
+    //ì—°ì† ë°€ê¸° ê¸°ëŠ¥
+    // PerformPushToTargetì—ì„œ ì—°ì†ìœ¼ë¡œ ë°€ ìˆ˜ ìˆëŠ”ì§€ í™•ì¸ í›„ ì´ë™ì€ PerformPushë¡œ ì§„í–‰ë¨
+    IEnumerator PerformPushToTarget(PushObject box, Direction dirKey, Vector3Int targetCell)
+    {
+        int pushedTiles = 0;
+        bool reachedTarget = false;
+
+        isPerformingPush = true;
+
+        if (animator != null)
+            animator.SetBool("IsPushing", true);
+
+        try
+        {
+            while (true)
+            {
+                if (box == null) yield break;
+
+                var curCell = floorTilemap.WorldToCell(box.transform.position);
+
+                // ì´ë¯¸ ëª©í‘œ ë„ë‹¬
+                if (curCell == targetCell)
+                {
+                    reachedTarget = true;
+                    yield break;
+                }
+
+                // í˜„ì¬ ìœ„ì¹˜ì—ì„œ ê°€ëŠ¥í•œ ë¼ì¸ì„ ë‹¤ì‹œ ê³„ì‚°í•´ì„œ 1ì¹¸ì´ë¼ë„ ê°€ëŠ¥í•œì§€ í™•ì¸
+                var line = BuildPushLineTargets(box, curCell, dirKey);
+                if (line.Count == 0)
+                    yield break; // ë” ì´ìƒ ëª» ë°ˆ(ì¤‘ê°„ì— ë§‰í˜)
+
+                // ë‹¤ìŒ 1ì¹¸ ëª©ì ì§€(ë¼ì¸ì˜ ì²« ì¹¸)
+                var nextCell = line[0];
+
+                if (targetCell != nextCell && !line.Contains(targetCell))
+                    yield break;
+
+                var stepDir = nextCell - curCell;
+
+                // 1ì¹¸ ìŠ¤í… ì‹¤í–‰(ì—°ì¶œ/ì´ë™/í¼ì¦ ê°±ì‹ )
+                yield return StartCoroutine(PerformPush(box, curCell, stepDir));
+
+                pushedTiles++;
+            }
+        }
+        finally
+        {
+            if (animator != null)
+                animator.SetBool("IsPushing", false);
+
+            isPerformingPush = false;
+
+            if (reachedTarget && pushedTiles > 0 && VigorManager.Instance != null)
+            {
+                int cost = pushedTiles * VigorManager.Instance.costPushBoxPerTile;
+                if (cost > 0)
+                    VigorManager.Instance.TrySpend(cost, VigorSpendReason.PushBox);
+            }
+        }
+    }
+    public void SetTilemaps(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall)
+    {
+        this.floorMaps = _floors;
+        this.obstacleMaps = _obstacles; // ì „ë‹¬ë°›ì€ ì¥ì• ë¬¼ ë¦¬ìŠ¤íŠ¸ ì €ì¥
+        this.wallMaps = _wall;
+
+        // ê²½ë¡œ ì´ˆê¸°í™” ë“± í•„ìš”í•œ ë¡œì§
+        ClearPath();
+        HaltImmediately();
+
+        Debug.Log($"[PlayerMovement] ë§µ ì„¤ì • ì™„ë£Œ. ë°”ë‹¥ ë§µ ê°œìˆ˜: {_floors?.Count ?? 0}");
+
+        if (_floors != null && _floors.Count > 0)
+        {
+            foreach (var push in FindObjectsOfType<PushObject>())
+            {
+                // [ìˆ˜ì •] PushObject.SetTilemapsê°€ ì´ì œ List<Tilemap>ì„ ë°›ìœ¼ë¯€ë¡œ
+                // _wall ë¦¬ìŠ¤íŠ¸ë¥¼ ê·¸ëŒ€ë¡œ ì „ë‹¬í•˜ë©´ ë©ë‹ˆë‹¤.
+                push.SetTilemaps(_floors, _wall);
+            }
+        }
+    }
+    (Vector2 blend, bool flipX) GetPushBlend(Direction dir)
+    {
+        return dir switch
+        {
+            Direction.NW => (new Vector2(1f, 1f), false),
+            Direction.NE => (new Vector2(1f, 1f), true),
+            Direction.SW => (new Vector2(1f, -1f), false),
+            Direction.SE => (new Vector2(1f, -1f), true),
+            Direction.West => (new Vector2(1f, 0f), false),
+            Direction.East => (new Vector2(1f, 0f), true),
+            _ => (Vector2.zero, false)
+        };
+    }
+
+    public void HaltImmediately()
+    {
+        // Push ìƒíƒœ ê°•ì œ ì •ë¦¬ (ì•ˆì „ë§)
+        if (isPushSelectMode)
+            ExitPushSelectMode(keepBoxHighlight: false);
+        else if (pendingPushBox != null)
+        {
+            pendingPushBox.SetHighlight(false);
+            pendingPushBox = null;
+            ClearPushTargets();
+            pushValidTargetCells.Clear();
+            isPushMode = false;
+        }
+
+        // íƒ€ì¼ ê²½ë¡œ ì´ë™ ì¦‰ì‹œ ì¤‘ë‹¨
+        if (pathMoveRoutine != null)
+        {
+            StopCoroutine(pathMoveRoutine);
+            pathMoveRoutine = null;
+        }
+        isMovingByPath = false;
+
+        // í”„ë¦¬ë·° ë° ê²½ë¡œ ì •ë³´ ì´ˆê¸°í™”
+        ClearPathPreview();
+        currentPathCells.Clear();
+        selectedTargetCell = null;
+        pathArrivalCallback = null;
+        pendingChest = null;
+        currentInteractTarget = null;
+        currentDescData = null;
+
+        // ê¸°ì¡´ ë§ˆìš°ìŠ¤ ì´ë™/í‚¤ ì…ë ¥ë„ ëª¨ë‘ ì •ì§€
+        path.Clear();
+
+        if (animator != null)
+            animator.SetInteger("Move", 0);
+    }
+}

@@ -1,76 +1,76 @@
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[ExecuteAlways]
-public class TilemapDebugger : MonoBehaviour
-{
-    public Color hexFillColor = new Color(0f, 1f, 0.4f, 0.13f);    // πŸ¥⁄ ≈∏¿œ √§øÚªˆ
-    public Color hexOutlineColor = new Color(1f, 1f, 0f, 0.18f);   // ¿¸√º ºø ø‹∞˚º±
-    public Color wallFillColor = new Color(1f, 0f, 0f, 0.25f);     // ∫Æ ≈∏¿œ(ª°∞£ªˆ)
-
-    public Tilemap wallTilemap; // Inspectorø°º≠ "∫Æ" ≈∏¿œ∏ (øπ: Layer10 µÓ) drag & drop
-
-    private Tilemap tilemap;
-
-    void OnDrawGizmos()
-    {
-        if (tilemap == null)
-            tilemap = GetComponent<Tilemap>();
-        if (tilemap == null) return;
-
-        // ¿¸√º ºø(Outline)
-        foreach (var pos in tilemap.cellBounds.allPositionsWithin)
-        {
-            Vector3 world = tilemap.GetCellCenterWorld(pos);
-            DrawHexOutline(world, tilemap.cellSize, hexOutlineColor);
-        }
-
-        // πŸ¥⁄ ≈∏¿œ ºø(√§øÚ)
-        foreach (var pos in tilemap.cellBounds.allPositionsWithin)
-        {
-            if (!tilemap.HasTile(pos)) continue;
-
-            // ∫Æ ≈∏¿œ∏ ¿Ã ¿÷∞Ì, ¿Ã ºøø° ∫Æ¿Ã ¿÷¿∏∏È ª°∞£ªˆ
-            if (wallTilemap != null && wallTilemap.HasTile(pos))
-                DrawHexFilled(tilemap.GetCellCenterWorld(pos), tilemap.cellSize, wallFillColor);
-            else
-                DrawHexFilled(tilemap.GetCellCenterWorld(pos), tilemap.cellSize, hexFillColor);
-        }
-    }
-
-    void DrawHexOutline(Vector3 center, Vector3 size, Color color)
-    {
-        float w = size.x * 0.5f;
-        float h = size.y * 0.5f;
-        float r = Mathf.Min(w, h) * 0.98f;
-        Vector3[] pts = new Vector3[7];
-        for (int i = 0; i < 7; ++i)
-        {
-            float ang = Mathf.Deg2Rad * (90f + 60f * i);
-            pts[i] = center + new Vector3(r * Mathf.Cos(ang), r * Mathf.Sin(ang), 0f);
-        }
-        Gizmos.color = color;
-        for (int i = 0; i < 6; ++i)
-            Gizmos.DrawLine(pts[i], pts[i + 1]);
-    }
-
-    void DrawHexFilled(Vector3 center, Vector3 size, Color color)
-    {
-        float w = size.x * 0.5f;
-        float h = size.y * 0.5f;
-        float r = Mathf.Min(w, h) * 0.95f;
-        Vector3[] pts = new Vector3[6];
-        for (int i = 0; i < 6; ++i)
-        {
-            float ang = Mathf.Deg2Rad * (90f + 60f * i);
-            pts[i] = center + new Vector3(r * Mathf.Cos(ang), r * Mathf.Sin(ang), 0f);
-        }
-        Gizmos.color = color;
-        for (int i = 0; i < 6; ++i)
-        {
-            int j = (i + 1) % 6;
-            Gizmos.DrawLine(center, pts[i]);
-            Gizmos.DrawLine(pts[i], pts[j]);
-        }
-    }
-}
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[ExecuteAlways]
+public class TilemapDebugger : MonoBehaviour
+{
+    public Color hexFillColor = new Color(0f, 1f, 0.4f, 0.13f);    // Î∞îÎã• ÌÉÄÏùº Ï±ÑÏõÄÏÉâ
+    public Color hexOutlineColor = new Color(1f, 1f, 0f, 0.18f);   // Ï†ÑÏ≤¥ ÏÖÄ Ïô∏Í≥ΩÏÑ†
+    public Color wallFillColor = new Color(1f, 0f, 0f, 0.25f);     // Î≤Ω ÌÉÄÏùº(Îπ®Í∞ÑÏÉâ)
+
+    public Tilemap wallTilemap; // InspectorÏóêÏÑú "Î≤Ω" ÌÉÄÏùºÎßµ(Ïòà: Layer10 Îì±) drag & drop
+
+    private Tilemap tilemap;
+
+    void OnDrawGizmos()
+    {
+        if (tilemap == null)
+            tilemap = GetComponent<Tilemap>();
+        if (tilemap == null) return;
+
+        // Ï†ÑÏ≤¥ ÏÖÄ(Outline)
+        foreach (var pos in tilemap.cellBounds.allPositionsWithin)
+        {
+            Vector3 world = tilemap.GetCellCenterWorld(pos);
+            DrawHexOutline(world, tilemap.cellSize, hexOutlineColor);
+        }
+
+        // Î∞îÎã• ÌÉÄÏùº ÏÖÄ(Ï±ÑÏõÄ)
+        foreach (var pos in tilemap.cellBounds.allPositionsWithin)
+        {
+            if (!tilemap.HasTile(pos)) continue;
+
+            // Î≤Ω ÌÉÄÏùºÎßµÏù¥ ÏûàÍ≥†, Ïù¥ ÏÖÄÏóê Î≤ΩÏù¥ ÏûàÏúºÎ©¥ Îπ®Í∞ÑÏÉâ
+            if (wallTilemap != null && wallTilemap.HasTile(pos))
+                DrawHexFilled(tilemap.GetCellCenterWorld(pos), tilemap.cellSize, wallFillColor);
+            else
+                DrawHexFilled(tilemap.GetCellCenterWorld(pos), tilemap.cellSize, hexFillColor);
+        }
+    }
+
+    void DrawHexOutline(Vector3 center, Vector3 size, Color color)
+    {
+        float w = size.x * 0.5f;
+        float h = size.y * 0.5f;
+        float r = Mathf.Min(w, h) * 0.98f;
+        Vector3[] pts = new Vector3[7];
+        for (int i = 0; i < 7; ++i)
+        {
+            float ang = Mathf.Deg2Rad * (90f + 60f * i);
+            pts[i] = center + new Vector3(r * Mathf.Cos(ang), r * Mathf.Sin(ang), 0f);
+        }
+        Gizmos.color = color;
+        for (int i = 0; i < 6; ++i)
+            Gizmos.DrawLine(pts[i], pts[i + 1]);
+    }
+
+    void DrawHexFilled(Vector3 center, Vector3 size, Color color)
+    {
+        float w = size.x * 0.5f;
+        float h = size.y * 0.5f;
+        float r = Mathf.Min(w, h) * 0.95f;
+        Vector3[] pts = new Vector3[6];
+        for (int i = 0; i < 6; ++i)
+        {
+            float ang = Mathf.Deg2Rad * (90f + 60f * i);
+            pts[i] = center + new Vector3(r * Mathf.Cos(ang), r * Mathf.Sin(ang), 0f);
+        }
+        Gizmos.color = color;
+        for (int i = 0; i < 6; ++i)
+        {
+            int j = (i + 1) % 6;
+            Gizmos.DrawLine(center, pts[i]);
+            Gizmos.DrawLine(pts[i], pts[j]);
+        }
+    }
+}

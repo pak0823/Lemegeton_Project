@@ -1,50 +1,50 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public class ItemTooltipUI : MonoBehaviour
-{
-    public static ItemTooltipUI Instance;
-
-    [SerializeField] private Text nameText;
-    [SerializeField] private Text descText;
-    [SerializeField] private Text typeText;
-    [SerializeField] private RectTransform rectTransform;
-
-    void Awake()
-    {
-        Instance = this;
-        gameObject.SetActive(false); // Ã³À½¿£ ²û
-    }
-
-    public void Show(ItemData data)
-    {
-        if (data == null) return;
-
-        gameObject.SetActive(true);
-        nameText.text = data.itemName;
-        descText.text = data.itemDescription;
-        // ItemData¿¡ typeÀÌ³ª µî±Ş Á¤º¸°¡ ÀÖ´Ù¸é Ãß°¡ Ç¥½Ã
-        // typeText.text = data.itemType.ToString();
-
-        // ¸¶¿ì½º À§Ä¡·Î Áï½Ã ÀÌµ¿
-        UpdatePosition();
-    }
-
-    public void Hide()
-    {
-        gameObject.SetActive(false);
-    }
-
-    void Update()
-    {
-        // ÅøÆÁÀÌ ÄÑÁ® ÀÖ´Â µ¿¾È ¸¶¿ì½º¸¦ µû¶ó´Ù´Ï°Ô ÇÔ
-        UpdatePosition();
-    }
-
-    private void UpdatePosition()
-    {
-        Vector2 mousePos = Input.mousePosition;
-        // ÅøÆÁÀÌ ¸¶¿ì½º Ä¿¼­¿¡ °¡·ÁÁöÁö ¾Ê°Ô ¾à°£ ¿ÀÇÁ¼ÂÀ» ÁÜ
-        rectTransform.position = mousePos + new Vector2(10f, -10f);
-    }
+using UnityEngine;
+using UnityEngine.UI;
+
+public class ItemTooltipUI : MonoBehaviour
+{
+    public static ItemTooltipUI Instance;
+
+    [SerializeField] private Text nameText;
+    [SerializeField] private Text descText;
+    [SerializeField] private Text typeText;
+    [SerializeField] private RectTransform rectTransform;
+
+    void Awake()
+    {
+        Instance = this;
+        gameObject.SetActive(false); // ì²˜ìŒì—” ë”
+    }
+
+    public void Show(ItemData data)
+    {
+        if (data == null) return;
+
+        gameObject.SetActive(true);
+        nameText.text = data.itemName;
+        descText.text = data.itemDescription;
+        // ItemDataì— typeì´ë‚˜ ë“±ê¸‰ ì •ë³´ê°€ ìˆë‹¤ë©´ ì¶”ê°€ í‘œì‹œ
+        // typeText.text = data.itemType.ToString();
+
+        // ë§ˆìš°ìŠ¤ ìœ„ì¹˜ë¡œ ì¦‰ì‹œ ì´ë™
+        UpdatePosition();
+    }
+
+    public void Hide()
+    {
+        gameObject.SetActive(false);
+    }
+
+    void Update()
+    {
+        // íˆ´íŒì´ ì¼œì ¸ ìˆëŠ” ë™ì•ˆ ë§ˆìš°ìŠ¤ë¥¼ ë”°ë¼ë‹¤ë‹ˆê²Œ í•¨
+        UpdatePosition();
+    }
+
+    private void UpdatePosition()
+    {
+        Vector2 mousePos = Input.mousePosition;
+        // íˆ´íŒì´ ë§ˆìš°ìŠ¤ ì»¤ì„œì— ê°€ë ¤ì§€ì§€ ì•Šê²Œ ì•½ê°„ ì˜¤í”„ì…‹ì„ ì¤Œ
+        rectTransform.position = mousePos + new Vector2(10f, -10f);
+    }
 }

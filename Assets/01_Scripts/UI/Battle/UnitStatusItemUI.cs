@@ -1,444 +1,444 @@
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.UI;
-using static StatusController;
-using static UnitStateController;
-
-public class UnitStatusItemUI : MonoBehaviour
-{
-    [Header("Widgets (ÀÖ´Â °Í¸¸ ¿¬°áÇÏ¸é µÊ)")]
-    public Text nameText;
-    public Slider hpBar;
-    public Text hpText;         // ÇöÀç HP ¼ıÀÚ Ç¥½Ã
-    public Slider mpBar;        // ¾Æ±º¿ë: ¾øÀ¸¸é ºñ¿öµÎ±â
-    public Text mpText;         // ÇöÀç MP ¼ıÀÚ Ç¥½Ã
-    public Slider rageBar;      // ¾Æ±º¿ë: ºĞ³ë °ÔÀÌÁö(¾øÀ¸¸é ºñ¿öµÎ±â)
-    public Text rageText;         // ÇöÀç Rage ¼ıÀÚ Ç¥½Ã
-    public Text skillNameText;  // Àû Àü¿ë(Àû Ä«µå¿¡¸¸ ¹èÄ¡)
-
-
-    [SerializeField] private Transform chipRoot;                 // °ø¿ë Ä¨ ·çÆ® (¿À¸¥ÂÊ Á¤·Ä)
-    [SerializeField] private HorizontalLayoutGroup chipLayout;   // ChipRoot¿¡ ºÙÀº LayoutGroup
-
-    [Header("Visual DB (»óÅÂ ¹öÇÁ)")]
-    [SerializeField] private UnitStateVisualDB visualDB;
-    [SerializeField] private GameObject stateChipPrefab;
-    [SerializeField] private Sprite defaultIcon;           // ¸ÅÇÎ ¾øÀ» ¶§ ´ëÃ¼
-
-    [Header("Stackable Status (ÁßÃ¸ ¹öÇÁ)")]
-    [SerializeField] private StackableStatusVisualDB stackVisualDB; 
-    [SerializeField] private GameObject stackChipPrefab;// ¾ÆÀÌÄÜ Ä¨ ÇÁ¸®ÆÕ(µĞÈ­¿¡¼­ ¾²´ø °Í)
-    [SerializeField] private Sprite defaultDebuffIcon;
-
-    [Header("UnitState Buff (¹öÇÁ)")]
-    [SerializeField] private UnitStateBuffVisualDB buffVisualDB;
-    [SerializeField] private GameObject buffChipPrefab;     // ¾øÀ¸¸é stateChipPrefab Àç»ç¿ëÇØµµ µÊ
-    [SerializeField] private Sprite defaultBuffIcon;
-
-    [Header("Highlight (µÑ Áß ÇÏ³ª/µÑ ´Ù °¡´É)")]
-    public Image highlightOverlay;                 // ¿¹: ÀüÃ¼¸¦ µ¤´Â Image
-    public Sprite defaultHighlightSprite;          // ±âº» ÇÏÀÌ¶óÀÌÆ® ½ºÇÁ¶óÀÌÆ®
-    public List<Graphic> tintTargets = new List<Graphic>(); //¿À¹ö·¹ÀÌ°¡ ¾øÀ» ¶§ »ö»óÀ¸·Î °­Á¶ÇÏ°í ½ÍÀº Graphicµé
-    public Color highlightTint = new Color(255f / 255f, 173f / 255f, 122f / 255f, 1f); // ¹àÀº ³ë¶õ Åæ
-
-    [Header("Death Style")]
-    //public Color deadTint = new Color(0.6f, 0.6f, 0.6f, 1f);   // È¸»ö °­Á¶
-    [Range(0f, 1f)] public float deadNameAlpha = 0.4f; // Á×¾úÀ» ¶§ ÀÌ¸§ Åõ¸íµµ
-    public Sprite deadHighlightSprite;                         // (¼±ÅÃ) »ç¸Á ¿À¹ö·¹ÀÌ
-    Color _nameOrigColor;
-    bool _nameColorCached;
-
-    Color[] _originalColors;
-    bool _highlighted;
-    bool _isDead;
-    Sprite _pendingOverlaySprite;         // SetHighlighted¿¡¼­ Àü´Ş¹Ş¾Æ º¸°ü
-
-    BattleUnit Battleunit;
-    StatusController StatusController;
-    UnitStateController unitStateController;
-
-    // ÆĞ³Î¿¡¼­ ÁÖÀÔ °¡´ÉÇÏµµ·Ï ¿­¾îµÒ
-    public void SetVisualDB(UnitStateVisualDB db) => visualDB = db;
-    public void SetStackVisualDB(StackableStatusVisualDB db) => stackVisualDB = db;
-
-    void Unsubscribe()
-    {
-        if (StatusController != null)
-            StatusController.OnStatusChanged -= HandleStatusChanged;
-
-        if (unitStateController != null)
-        {
-            unitStateController.OnStatesChanged -= HandleStatesChanged;
-            unitStateController.OnBuffsChanged -= HandleStatesChanged;
-        }
-
-        if (Battleunit != null)
-            Battleunit.OnDied -= HandleUnitDied;
-    }
-
-    private void Awake()
-    {
-        CacheOriginalColors();
-        if (highlightOverlay) highlightOverlay.enabled = false;
-    }
-
-    void OnDisable()
-    {
-        Unsubscribe();
-    }
-    void OnDestroy()
-    {
-        Unsubscribe();
-    }
-
-    public void Bind(BattleUnit u)
-    {
-        // ÀÌÀü À¯´Ö°úÀÇ ±¸µ¶ ÇØÁ¦
-        Unsubscribe();
-
-        Battleunit = u;
-
-        if (nameText)
-        {
-            nameText.text = u ? u.name : "-";
-
-            if (!_nameColorCached)
-            {
-                _nameOrigColor = nameText.color;
-                _nameColorCached = true;
-            }
-            ApplyNameAlpha(); // ÇöÀç dead »óÅÂ¿¡ ¸ÂÃç ÀÌ¸§ ¾ËÆÄ Àû¿ë
-        }
-
-        if (hpBar)
-        {
-            hpBar.minValue = 0;
-            hpBar.maxValue = Mathf.Max(1, u.MaxHP);
-            hpBar.value = u.HP;
-        }
-
-        if (mpBar)
-        {
-            mpBar.minValue = 0;
-            mpBar.maxValue = Mathf.Max(1, u.MaxMP);
-            mpBar.value = u.MP;
-        }
-
-        if (rageBar)
-        {
-            rageBar.minValue = 0;
-            rageBar.maxValue = Mathf.Max(1, u.MaxRage);
-            rageBar.value = u.Rage;
-        }
-
-        if (hpText) hpText.text = (u != null ? u.HP : 0).ToString();  // ÇöÀç HP ÅØ½ºÆ® ¼¼ÆÃ
-        if (mpText) mpText.text = (u != null ? u.MP : 0).ToString();  // ÇöÀç MP ÅØ½ºÆ® ¼¼ÆÃ
-        if (rageText) rageText.text = (u != null ? u.Rage : 0).ToString();  // ÇöÀç Rage ÅØ½ºÆ® ¼¼ÆÃ
-
-        StatusController = u ? u.GetComponent<StatusController>() : null;
-        unitStateController = u ? u.GetComponent<UnitStateController>() : null;
-
-        // ÀÌº¥Æ® ±¸µ¶
-        if (StatusController != null)
-            StatusController.OnStatusChanged += HandleStatusChanged;
-
-        if (unitStateController != null)
-        {
-            unitStateController.OnStatesChanged += HandleStatesChanged;
-            unitStateController.OnBuffsChanged += HandleStatesChanged;
-        }
-
-        if (Battleunit != null)
-            Battleunit.OnDied += HandleUnitDied;
-
-        // ÇöÀç »óÅÂ/¹öÇÁ/½ºÅÃÀ¸·Î ¾ÆÀÌÄÜ ÇÑ ¹ø °»½Å
-        RefreshFromControllers(unitStateController, StatusController);
-    }
-
-    void HandleUnitDied(BattleUnit dead)
-    {
-        ClearChildren(chipRoot);
-        if (chipRoot) chipRoot.gameObject.SetActive(false);
-    }
-    static void ClearChildren(Transform root)
-    {
-        if (!root) return;
-        for (int i = root.childCount - 1; i >= 0; i--)
-            Destroy(root.GetChild(i).gameObject);
-    }
-
-    void Update()
-    {
-        if (Battleunit == null) return;
-
-        if (hpBar) hpBar.value = Battleunit.HP;
-
-        if (mpBar)
-        {
-            mpBar.maxValue = Mathf.Max(1, Battleunit.MaxMP);
-            mpBar.value = Battleunit.MP;
-        }
-        if (rageBar)
-        {
-            rageBar.maxValue = Mathf.Max(1, Battleunit.MaxRage);
-            rageBar.value = Battleunit.Rage;
-        }
-
-        if (hpText) hpText.text = Battleunit.HP.ToString();  // ¸Å ÇÁ·¹ÀÓ ÇöÀç HP °»½Å
-        if (mpText) mpText.text = Battleunit.MP.ToString();  // ¸Å ÇÁ·¹ÀÓ ÇöÀç HP °»½Å
-        if (rageText) rageText.text = Battleunit.Rage.ToString();  // ¸Å ÇÁ·¹ÀÓ ÇöÀç HP °»½Å
-    }
-
-    void CacheOriginalColors()
-    {
-        if (tintTargets == null) return;
-        _originalColors = new Color[tintTargets.Count];
-        for (int i = 0; i < tintTargets.Count; i++)
-            _originalColors[i] = tintTargets[i] ? tintTargets[i].color : Color.white;
-
-        // tintTargets°¡ ºñ¾îÀÖ°í Ä«µå ·çÆ®¿¡ Image°¡ ÀÖ´Ù¸é ÀÚµ¿ µî·Ï(ÆíÀÇ)
-        if (tintTargets.Count == 0)
-        {
-            var auto = GetComponent<Image>();
-            if (auto) { tintTargets.Add(auto); _originalColors = new[] { auto.color }; }
-        }
-    }
-
-    static Color MulRGB(Color a, Color b) // ¾ËÆÄ´Â ¿øº» À¯Áö
-        => new Color(a.r * b.r, a.g * b.g, a.b * b.b, a.a);
-
-    // »ç¸Á ½ºÅ¸ÀÏ Åä±Û API
-    public void SetDeadStyle(bool dead)
-    {
-        _isDead = dead;
-        ApplyNameAlpha();
-        ApplyVisualState();
-    }
-
-    public void SetHighlighted(bool on, Sprite overlaySprite = null)
-    {
-        _highlighted = on;
-        _pendingOverlaySprite = overlaySprite;
-        ApplyVisualState();
-    }
-
-    void ApplyNameAlpha()
-    {
-        if (!nameText || !_nameColorCached) return;
-        var c = _nameOrigColor;
-        c.a = _isDead ? deadNameAlpha : _nameOrigColor.a;
-        nameText.color = c;
-    }
-
-    void ApplyVisualState()
-    {
-        // 1) Overlay
-        if (highlightOverlay)
-        {
-            if (_isDead)
-            {
-                highlightOverlay.enabled = false; // »ç¸Á ½Ã ¿À¹ö·¹ÀÌ ºñÈ°¼º
-            }
-            else
-            {
-                if (_highlighted)
-                {
-                    if (_pendingOverlaySprite != null) highlightOverlay.sprite = _pendingOverlaySprite;
-                    else if (highlightOverlay.sprite == null && defaultHighlightSprite != null)
-                        highlightOverlay.sprite = defaultHighlightSprite;
-                    highlightOverlay.enabled = true;
-                    highlightOverlay.color = Color.white;
-                }
-                else
-                {
-                    highlightOverlay.enabled = false;
-                }
-            }
-        }
-
-        // 2) Tint (»ç¸Á > ÇÏÀÌ¶óÀÌÆ® > ¿øº»)
-        if (tintTargets != null && tintTargets.Count > 0)
-        {
-            if (_originalColors == null || _originalColors.Length != tintTargets.Count)
-                CacheOriginalColors();
-
-            Color tint = _highlighted ? highlightTint : Color.white; // Á×¾úÀ» ¶§ deadTint ´ë½Å, ÇÏÀÌ¶óÀÌÆ® ½Ã¿¡¸¸ tint Àû¿ë
-            for (int i = 0; i < tintTargets.Count; i++)
-            {
-                var g = tintTargets[i];
-                if (!g) continue;
-                g.color = MulRGB(_originalColors[i], tint);
-            }
-        }
-    }
-
-    public void RefreshFromControllers(UnitStateController usc, StatusController sc)
-    {
-        var states = usc != null ? usc.GetAll() : null;            // SelfState ÁıÇÕ
-        var stacks = sc != null ? sc.GetStatusViews() : null;     // ÁßÃ¸ µğ¹öÇÁ ºäµé
-
-        BuffView[] buffs = null;
-        if (usc != null)
-        {
-            var allBuffs = usc.GetAllBuffs(); // ¡ç ÀÌ¹Ì ÀÖ´Â API
-            var list = new List<BuffView>();
-            foreach (var b in allBuffs)
-            {
-                int remain = usc.GetRemainingBuffTurns(b); // »õ·Î Ãß°¡ÇÑ ÇÔ¼ö
-                list.Add(new BuffView(b, remain));
-            }
-            buffs = list.ToArray();
-        }
-
-        RefreshChips(states, buffs, stacks);
-    }
-
-    void HandleStatusChanged()
-    {
-        RefreshFromControllers(unitStateController, StatusController);
-    }
-
-    void HandleStatesChanged()
-    {
-        RefreshFromControllers(unitStateController, StatusController);
-    }
-
-    public void RefreshChips(
-    IReadOnlyCollection<UnitStateId> states,
-    IEnumerable<BuffView> buffs,
-    IEnumerable<StatusView> stacks)
-    {
-        if (!chipRoot) return;
-
-        // 0) ÃÊ±âÈ­
-        for (int i = chipRoot.childCount - 1; i >= 0; i--)
-            Destroy(chipRoot.GetChild(i).gameObject);
-
-        // 1) UnitStateId »óÅÂÄ¨ (¿À¸¥ÂÊ)
-        GameObject rightmostState = null;
-        if (states != null && states.Count > 0)
-        {
-            foreach (var s in states)
-            {
-                var go = Instantiate(stateChipPrefab, chipRoot);
-                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
-                var sprite = visualDB ? (visualDB.GetIcon(s) ?? defaultIcon) : defaultIcon;
-                var color = visualDB ? visualDB.GetColor(s) : Color.white;
-                if (icon)
-                {
-                    icon.sprite = sprite;
-                    icon.color = color;
-                    icon.enabled = (sprite != null);
-                }
-
-                // »óÅÂÄ¨Àº ÅØ½ºÆ® ¼û±è
-                var texts = go.GetComponentsInChildren<Text>(true);
-                var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
-                var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
-                if (tTurn) tTurn.gameObject.SetActive(false);
-                if (tStack) tStack.gameObject.SetActive(false);
-
-                go.transform.SetAsLastSibling();
-                rightmostState = go;
-            }
-        }
-
-        // 2) UnitStateBuffId ¹öÇÁÄ¨ (»óÅÂ ¹Ù·Î ¿ŞÂÊ)
-        if (buffs != null)
-        {
-            foreach (var v in buffs)
-            {
-                var go = Instantiate(buffChipPrefab ? buffChipPrefab : stateChipPrefab, chipRoot);
-                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
-
-                Sprite sprite = defaultBuffIcon;
-                Color color = Color.white;
-                bool showTurns = true;
-
-                if (buffVisualDB != null)
-                {
-                    sprite = buffVisualDB.GetIcon(v.id) ?? defaultBuffIcon;
-                    color = buffVisualDB.GetColor(v.id);
-                    showTurns = buffVisualDB.GetShowTurns(v.id);
-                }
-
-                if (icon)
-                {
-                    icon.sprite = sprite;
-                    icon.color = color;
-                    icon.enabled = (sprite != null);
-                }
-
-                var texts = go.GetComponentsInChildren<Text>(true);
-                var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
-                var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
-
-                if (tStack) tStack.gameObject.SetActive(false);           // ¹öÇÁ´Â ½ºÅÃ ¾øÀ½
-                if (tTurn)
-                {
-                    tTurn.gameObject.SetActive(showTurns);
-                    if (showTurns)
-                        tTurn.text = (v.remainingTurns > 0) ? v.remainingTurns.ToString() : "¡Ä";
-                }
-
-                if (rightmostState)
-                {
-                    int idx = rightmostState.transform.GetSiblingIndex();
-                    go.transform.SetSiblingIndex(idx);  // »óÅÂÄ¨ ¹Ù·Î ¿ŞÂÊ
-                }
-                else
-                {
-                    go.transform.SetAsLastSibling();
-                    rightmostState = go;
-                }
-            }
-        }
-
-        // 3) ±âÁ¸ Stackable Status Ä¨ (µğ¹öÇÁ)
-        if (stacks != null)
-        {
-            var list = stacks.ToList();
-            for (int i = list.Count - 1; i >= 0; --i)
-            {
-                var v = list[i];
-                var go = Instantiate(stackChipPrefab, chipRoot);
-                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(ii => ii.name == "Icon");
-                var tStk = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Stack");
-                var tTurn = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Turn");
-
-                var entry = stackVisualDB ? stackVisualDB.Get(v.id) : null;
-                var sprite = entry?.icon ?? defaultDebuffIcon;
-                var color = entry?.tint ?? Color.white;
-
-                if (icon) { icon.sprite = sprite; icon.color = color; icon.enabled = (sprite != null); }
-                if (tStk) { tStk.gameObject.SetActive(entry?.showStacks ?? true); if (tStk.gameObject.activeSelf) tStk.text = v.stacks.ToString(); }
-                if (tTurn) { tTurn.gameObject.SetActive(entry?.showTurns ?? true); if (tTurn.gameObject.activeSelf) tTurn.text = v.remainingTurns > 0 ? v.remainingTurns + "" : "¡Ä"; }
-
-                if (rightmostState)
-                {
-                    int idx = rightmostState.transform.GetSiblingIndex();
-                    go.transform.SetSiblingIndex(idx);
-                }
-                else
-                {
-                    go.transform.SetAsLastSibling();
-                }
-            }
-        }
-
-        // 4) ·¹ÀÌ¾Æ¿ô °­Á¦ °»½Å
-        var rt = chipRoot as RectTransform;
-        if (rt)
-        {
-            Canvas.ForceUpdateCanvases();
-            LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
-        }
-    }
-
-    // === ¿ÜºÎ ÀÌº¥Æ® ÈÅ ===
-    public void SetSkillLabel(string label)
-    {
-        if (skillNameText) skillNameText.text = label ?? "";
-    }
-}
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+using static StatusController;
+using static UnitStateController;
+
+public class UnitStatusItemUI : MonoBehaviour
+{
+    [Header("Widgets (ìˆëŠ” ê²ƒë§Œ ì—°ê²°í•˜ë©´ ë¨)")]
+    public Text nameText;
+    public Slider hpBar;
+    public Text hpText;         // í˜„ì¬ HP ìˆ«ì í‘œì‹œ
+    public Slider mpBar;        // ì•„êµ°ìš©: ì—†ìœ¼ë©´ ë¹„ì›Œë‘ê¸°
+    public Text mpText;         // í˜„ì¬ MP ìˆ«ì í‘œì‹œ
+    public Slider rageBar;      // ì•„êµ°ìš©: ë¶„ë…¸ ê²Œì´ì§€(ì—†ìœ¼ë©´ ë¹„ì›Œë‘ê¸°)
+    public Text rageText;         // í˜„ì¬ Rage ìˆ«ì í‘œì‹œ
+    public Text skillNameText;  // ì  ì „ìš©(ì  ì¹´ë“œì—ë§Œ ë°°ì¹˜)
+
+
+    [SerializeField] private Transform chipRoot;                 // ê³µìš© ì¹© ë£¨íŠ¸ (ì˜¤ë¥¸ìª½ ì •ë ¬)
+    [SerializeField] private HorizontalLayoutGroup chipLayout;   // ChipRootì— ë¶™ì€ LayoutGroup
+
+    [Header("Visual DB (ìƒíƒœ ë²„í”„)")]
+    [SerializeField] private UnitStateVisualDB visualDB;
+    [SerializeField] private GameObject stateChipPrefab;
+    [SerializeField] private Sprite defaultIcon;           // ë§¤í•‘ ì—†ì„ ë•Œ ëŒ€ì²´
+
+    [Header("Stackable Status (ì¤‘ì²© ë²„í”„)")]
+    [SerializeField] private StackableStatusVisualDB stackVisualDB; 
+    [SerializeField] private GameObject stackChipPrefab;// ì•„ì´ì½˜ ì¹© í”„ë¦¬íŒ¹(ë‘”í™”ì—ì„œ ì“°ë˜ ê²ƒ)
+    [SerializeField] private Sprite defaultDebuffIcon;
+
+    [Header("UnitState Buff (ë²„í”„)")]
+    [SerializeField] private UnitStateBuffVisualDB buffVisualDB;
+    [SerializeField] private GameObject buffChipPrefab;     // ì—†ìœ¼ë©´ stateChipPrefab ì¬ì‚¬ìš©í•´ë„ ë¨
+    [SerializeField] private Sprite defaultBuffIcon;
+
+    [Header("Highlight (ë‘˜ ì¤‘ í•˜ë‚˜/ë‘˜ ë‹¤ ê°€ëŠ¥)")]
+    public Image highlightOverlay;                 // ì˜ˆ: ì „ì²´ë¥¼ ë®ëŠ” Image
+    public Sprite defaultHighlightSprite;          // ê¸°ë³¸ í•˜ì´ë¼ì´íŠ¸ ìŠ¤í”„ë¼ì´íŠ¸
+    public List<Graphic> tintTargets = new List<Graphic>(); //ì˜¤ë²„ë ˆì´ê°€ ì—†ì„ ë•Œ ìƒ‰ìƒìœ¼ë¡œ ê°•ì¡°í•˜ê³  ì‹¶ì€ Graphicë“¤
+    public Color highlightTint = new Color(255f / 255f, 173f / 255f, 122f / 255f, 1f); // ë°ì€ ë…¸ë€ í†¤
+
+    [Header("Death Style")]
+    //public Color deadTint = new Color(0.6f, 0.6f, 0.6f, 1f);   // íšŒìƒ‰ ê°•ì¡°
+    [Range(0f, 1f)] public float deadNameAlpha = 0.4f; // ì£½ì—ˆì„ ë•Œ ì´ë¦„ íˆ¬ëª…ë„
+    public Sprite deadHighlightSprite;                         // (ì„ íƒ) ì‚¬ë§ ì˜¤ë²„ë ˆì´
+    Color _nameOrigColor;
+    bool _nameColorCached;
+
+    Color[] _originalColors;
+    bool _highlighted;
+    bool _isDead;
+    Sprite _pendingOverlaySprite;         // SetHighlightedì—ì„œ ì „ë‹¬ë°›ì•„ ë³´ê´€
+
+    BattleUnit Battleunit;
+    StatusController StatusController;
+    UnitStateController unitStateController;
+
+    // íŒ¨ë„ì—ì„œ ì£¼ì… ê°€ëŠ¥í•˜ë„ë¡ ì—´ì–´ë‘ 
+    public void SetVisualDB(UnitStateVisualDB db) => visualDB = db;
+    public void SetStackVisualDB(StackableStatusVisualDB db) => stackVisualDB = db;
+
+    void Unsubscribe()
+    {
+        if (StatusController != null)
+            StatusController.OnStatusChanged -= HandleStatusChanged;
+
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged -= HandleStatesChanged;
+            unitStateController.OnBuffsChanged -= HandleStatesChanged;
+        }
+
+        if (Battleunit != null)
+            Battleunit.OnDied -= HandleUnitDied;
+    }
+
+    private void Awake()
+    {
+        CacheOriginalColors();
+        if (highlightOverlay) highlightOverlay.enabled = false;
+    }
+
+    void OnDisable()
+    {
+        Unsubscribe();
+    }
+    void OnDestroy()
+    {
+        Unsubscribe();
+    }
+
+    public void Bind(BattleUnit u)
+    {
+        // ì´ì „ ìœ ë‹›ê³¼ì˜ êµ¬ë… í•´ì œ
+        Unsubscribe();
+
+        Battleunit = u;
+
+        if (nameText)
+        {
+            nameText.text = u ? u.name : "-";
+
+            if (!_nameColorCached)
+            {
+                _nameOrigColor = nameText.color;
+                _nameColorCached = true;
+            }
+            ApplyNameAlpha(); // í˜„ì¬ dead ìƒíƒœì— ë§ì¶° ì´ë¦„ ì•ŒíŒŒ ì ìš©
+        }
+
+        if (hpBar)
+        {
+            hpBar.minValue = 0;
+            hpBar.maxValue = Mathf.Max(1, u.MaxHP);
+            hpBar.value = u.HP;
+        }
+
+        if (mpBar)
+        {
+            mpBar.minValue = 0;
+            mpBar.maxValue = Mathf.Max(1, u.MaxMP);
+            mpBar.value = u.MP;
+        }
+
+        if (rageBar)
+        {
+            rageBar.minValue = 0;
+            rageBar.maxValue = Mathf.Max(1, u.MaxRage);
+            rageBar.value = u.Rage;
+        }
+
+        if (hpText) hpText.text = (u != null ? u.HP : 0).ToString();  // í˜„ì¬ HP í…ìŠ¤íŠ¸ ì„¸íŒ…
+        if (mpText) mpText.text = (u != null ? u.MP : 0).ToString();  // í˜„ì¬ MP í…ìŠ¤íŠ¸ ì„¸íŒ…
+        if (rageText) rageText.text = (u != null ? u.Rage : 0).ToString();  // í˜„ì¬ Rage í…ìŠ¤íŠ¸ ì„¸íŒ…
+
+        StatusController = u ? u.GetComponent<StatusController>() : null;
+        unitStateController = u ? u.GetComponent<UnitStateController>() : null;
+
+        // ì´ë²¤íŠ¸ êµ¬ë…
+        if (StatusController != null)
+            StatusController.OnStatusChanged += HandleStatusChanged;
+
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged += HandleStatesChanged;
+            unitStateController.OnBuffsChanged += HandleStatesChanged;
+        }
+
+        if (Battleunit != null)
+            Battleunit.OnDied += HandleUnitDied;
+
+        // í˜„ì¬ ìƒíƒœ/ë²„í”„/ìŠ¤íƒìœ¼ë¡œ ì•„ì´ì½˜ í•œ ë²ˆ ê°±ì‹ 
+        RefreshFromControllers(unitStateController, StatusController);
+    }
+
+    void HandleUnitDied(BattleUnit dead)
+    {
+        ClearChildren(chipRoot);
+        if (chipRoot) chipRoot.gameObject.SetActive(false);
+    }
+    static void ClearChildren(Transform root)
+    {
+        if (!root) return;
+        for (int i = root.childCount - 1; i >= 0; i--)
+            Destroy(root.GetChild(i).gameObject);
+    }
+
+    void Update()
+    {
+        if (Battleunit == null) return;
+
+        if (hpBar) hpBar.value = Battleunit.HP;
+
+        if (mpBar)
+        {
+            mpBar.maxValue = Mathf.Max(1, Battleunit.MaxMP);
+            mpBar.value = Battleunit.MP;
+        }
+        if (rageBar)
+        {
+            rageBar.maxValue = Mathf.Max(1, Battleunit.MaxRage);
+            rageBar.value = Battleunit.Rage;
+        }
+
+        if (hpText) hpText.text = Battleunit.HP.ToString();  // ë§¤ í”„ë ˆì„ í˜„ì¬ HP ê°±ì‹ 
+        if (mpText) mpText.text = Battleunit.MP.ToString();  // ë§¤ í”„ë ˆì„ í˜„ì¬ HP ê°±ì‹ 
+        if (rageText) rageText.text = Battleunit.Rage.ToString();  // ë§¤ í”„ë ˆì„ í˜„ì¬ HP ê°±ì‹ 
+    }
+
+    void CacheOriginalColors()
+    {
+        if (tintTargets == null) return;
+        _originalColors = new Color[tintTargets.Count];
+        for (int i = 0; i < tintTargets.Count; i++)
+            _originalColors[i] = tintTargets[i] ? tintTargets[i].color : Color.white;
+
+        // tintTargetsê°€ ë¹„ì–´ìˆê³  ì¹´ë“œ ë£¨íŠ¸ì— Imageê°€ ìˆë‹¤ë©´ ìë™ ë“±ë¡(í¸ì˜)
+        if (tintTargets.Count == 0)
+        {
+            var auto = GetComponent<Image>();
+            if (auto) { tintTargets.Add(auto); _originalColors = new[] { auto.color }; }
+        }
+    }
+
+    static Color MulRGB(Color a, Color b) // ì•ŒíŒŒëŠ” ì›ë³¸ ìœ ì§€
+        => new Color(a.r * b.r, a.g * b.g, a.b * b.b, a.a);
+
+    // ì‚¬ë§ ìŠ¤íƒ€ì¼ í† ê¸€ API
+    public void SetDeadStyle(bool dead)
+    {
+        _isDead = dead;
+        ApplyNameAlpha();
+        ApplyVisualState();
+    }
+
+    public void SetHighlighted(bool on, Sprite overlaySprite = null)
+    {
+        _highlighted = on;
+        _pendingOverlaySprite = overlaySprite;
+        ApplyVisualState();
+    }
+
+    void ApplyNameAlpha()
+    {
+        if (!nameText || !_nameColorCached) return;
+        var c = _nameOrigColor;
+        c.a = _isDead ? deadNameAlpha : _nameOrigColor.a;
+        nameText.color = c;
+    }
+
+    void ApplyVisualState()
+    {
+        // 1) Overlay
+        if (highlightOverlay)
+        {
+            if (_isDead)
+            {
+                highlightOverlay.enabled = false; // ì‚¬ë§ ì‹œ ì˜¤ë²„ë ˆì´ ë¹„í™œì„±
+            }
+            else
+            {
+                if (_highlighted)
+                {
+                    if (_pendingOverlaySprite != null) highlightOverlay.sprite = _pendingOverlaySprite;
+                    else if (highlightOverlay.sprite == null && defaultHighlightSprite != null)
+                        highlightOverlay.sprite = defaultHighlightSprite;
+                    highlightOverlay.enabled = true;
+                    highlightOverlay.color = Color.white;
+                }
+                else
+                {
+                    highlightOverlay.enabled = false;
+                }
+            }
+        }
+
+        // 2) Tint (ì‚¬ë§ > í•˜ì´ë¼ì´íŠ¸ > ì›ë³¸)
+        if (tintTargets != null && tintTargets.Count > 0)
+        {
+            if (_originalColors == null || _originalColors.Length != tintTargets.Count)
+                CacheOriginalColors();
+
+            Color tint = _highlighted ? highlightTint : Color.white; // ì£½ì—ˆì„ ë•Œ deadTint ëŒ€ì‹ , í•˜ì´ë¼ì´íŠ¸ ì‹œì—ë§Œ tint ì ìš©
+            for (int i = 0; i < tintTargets.Count; i++)
+            {
+                var g = tintTargets[i];
+                if (!g) continue;
+                g.color = MulRGB(_originalColors[i], tint);
+            }
+        }
+    }
+
+    public void RefreshFromControllers(UnitStateController usc, StatusController sc)
+    {
+        var states = usc != null ? usc.GetAll() : null;            // SelfState ì§‘í•©
+        var stacks = sc != null ? sc.GetStatusViews() : null;     // ì¤‘ì²© ë””ë²„í”„ ë·°ë“¤
+
+        BuffView[] buffs = null;
+        if (usc != null)
+        {
+            var allBuffs = usc.GetAllBuffs(); // â† ì´ë¯¸ ìˆëŠ” API
+            var list = new List<BuffView>();
+            foreach (var b in allBuffs)
+            {
+                int remain = usc.GetRemainingBuffTurns(b); // ìƒˆë¡œ ì¶”ê°€í•œ í•¨ìˆ˜
+                list.Add(new BuffView(b, remain));
+            }
+            buffs = list.ToArray();
+        }
+
+        RefreshChips(states, buffs, stacks);
+    }
+
+    void HandleStatusChanged()
+    {
+        RefreshFromControllers(unitStateController, StatusController);
+    }
+
+    void HandleStatesChanged()
+    {
+        RefreshFromControllers(unitStateController, StatusController);
+    }
+
+    public void RefreshChips(
+    IReadOnlyCollection<UnitStateId> states,
+    IEnumerable<BuffView> buffs,
+    IEnumerable<StatusView> stacks)
+    {
+        if (!chipRoot) return;
+
+        // 0) ì´ˆê¸°í™”
+        for (int i = chipRoot.childCount - 1; i >= 0; i--)
+            Destroy(chipRoot.GetChild(i).gameObject);
+
+        // 1) UnitStateId ìƒíƒœì¹© (ì˜¤ë¥¸ìª½)
+        GameObject rightmostState = null;
+        if (states != null && states.Count > 0)
+        {
+            foreach (var s in states)
+            {
+                var go = Instantiate(stateChipPrefab, chipRoot);
+                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
+                var sprite = visualDB ? (visualDB.GetIcon(s) ?? defaultIcon) : defaultIcon;
+                var color = visualDB ? visualDB.GetColor(s) : Color.white;
+                if (icon)
+                {
+                    icon.sprite = sprite;
+                    icon.color = color;
+                    icon.enabled = (sprite != null);
+                }
+
+                // ìƒíƒœì¹©ì€ í…ìŠ¤íŠ¸ ìˆ¨ê¹€
+                var texts = go.GetComponentsInChildren<Text>(true);
+                var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
+                var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
+                if (tTurn) tTurn.gameObject.SetActive(false);
+                if (tStack) tStack.gameObject.SetActive(false);
+
+                go.transform.SetAsLastSibling();
+                rightmostState = go;
+            }
+        }
+
+        // 2) UnitStateBuffId ë²„í”„ì¹© (ìƒíƒœ ë°”ë¡œ ì™¼ìª½)
+        if (buffs != null)
+        {
+            foreach (var v in buffs)
+            {
+                var go = Instantiate(buffChipPrefab ? buffChipPrefab : stateChipPrefab, chipRoot);
+                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
+
+                Sprite sprite = defaultBuffIcon;
+                Color color = Color.white;
+                bool showTurns = true;
+
+                if (buffVisualDB != null)
+                {
+                    sprite = buffVisualDB.GetIcon(v.id) ?? defaultBuffIcon;
+                    color = buffVisualDB.GetColor(v.id);
+                    showTurns = buffVisualDB.GetShowTurns(v.id);
+                }
+
+                if (icon)
+                {
+                    icon.sprite = sprite;
+                    icon.color = color;
+                    icon.enabled = (sprite != null);
+                }
+
+                var texts = go.GetComponentsInChildren<Text>(true);
+                var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
+                var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
+
+                if (tStack) tStack.gameObject.SetActive(false);           // ë²„í”„ëŠ” ìŠ¤íƒ ì—†ìŒ
+                if (tTurn)
+                {
+                    tTurn.gameObject.SetActive(showTurns);
+                    if (showTurns)
+                        tTurn.text = (v.remainingTurns > 0) ? v.remainingTurns.ToString() : "âˆ";
+                }
+
+                if (rightmostState)
+                {
+                    int idx = rightmostState.transform.GetSiblingIndex();
+                    go.transform.SetSiblingIndex(idx);  // ìƒíƒœì¹© ë°”ë¡œ ì™¼ìª½
+                }
+                else
+                {
+                    go.transform.SetAsLastSibling();
+                    rightmostState = go;
+                }
+            }
+        }
+
+        // 3) ê¸°ì¡´ Stackable Status ì¹© (ë””ë²„í”„)
+        if (stacks != null)
+        {
+            var list = stacks.ToList();
+            for (int i = list.Count - 1; i >= 0; --i)
+            {
+                var v = list[i];
+                var go = Instantiate(stackChipPrefab, chipRoot);
+                var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(ii => ii.name == "Icon");
+                var tStk = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Stack");
+                var tTurn = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Turn");
+
+                var entry = stackVisualDB ? stackVisualDB.Get(v.id) : null;
+                var sprite = entry?.icon ?? defaultDebuffIcon;
+                var color = entry?.tint ?? Color.white;
+
+                if (icon) { icon.sprite = sprite; icon.color = color; icon.enabled = (sprite != null); }
+                if (tStk) { tStk.gameObject.SetActive(entry?.showStacks ?? true); if (tStk.gameObject.activeSelf) tStk.text = v.stacks.ToString(); }
+                if (tTurn) { tTurn.gameObject.SetActive(entry?.showTurns ?? true); if (tTurn.gameObject.activeSelf) tTurn.text = v.remainingTurns > 0 ? v.remainingTurns + "" : "âˆ"; }
+
+                if (rightmostState)
+                {
+                    int idx = rightmostState.transform.GetSiblingIndex();
+                    go.transform.SetSiblingIndex(idx);
+                }
+                else
+                {
+                    go.transform.SetAsLastSibling();
+                }
+            }
+        }
+
+        // 4) ë ˆì´ì•„ì›ƒ ê°•ì œ ê°±ì‹ 
+        var rt = chipRoot as RectTransform;
+        if (rt)
+        {
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
+        }
+    }
+
+    // === ì™¸ë¶€ ì´ë²¤íŠ¸ í›… ===
+    public void SetSkillLabel(string label)
+    {
+        if (skillNameText) skillNameText.text = label ?? "";
+    }
+}

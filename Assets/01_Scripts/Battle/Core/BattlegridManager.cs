@@ -1,169 +1,169 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class BattleGridManager : MonoBehaviour, IGridProvider
-{
-    [Header("Settings")]
-    public LayerMask unitMask;
-
-    IBattleMapProvider provider;
-    private HashSet<Vector3Int> playerOcc = new();
-    private HashSet<Vector3Int> enemyOcc = new();
-
-    public void Initialize(IBattleMapProvider mapProvider)
-    {
-        this.provider = mapProvider;
-    }
-    public Tilemap GetMap(Team team)
-    {
-        if (team == Team.Player)
-            return provider.PlayerFloor;
-        else
-            return provider.EnemyFloor;
-    }
-
-    public IEnumerable<Vector3Int> GetReachable(Team team, Vector3Int start, int range)
-    {
-        var map = GetMap(team);
-        var visited = new HashSet<Vector3Int> { start };
-        var q = new Queue<(Vector3Int, int)>();
-        q.Enqueue((start, 0));
-        while (q.Count > 0)
-        {
-            var (c, cost) = q.Dequeue();
-            yield return c;
-            if (cost == range) continue;
-
-            bool odd = Mathf.Abs(c.y) % 2 == 1;
-            Vector3Int[] dirs = {
-                new(1,0,0), new(-1,0,0), new(0,1,0), new(0,-1,0), new(1,-1,0), new(-1,1,0)
-            };
-
-            foreach (var d in dirs)
-            {
-                var n = c + d;
-                if (visited.Contains(n)) continue;
-                if (!map.cellBounds.Contains(n) || !map.HasTile(n)) continue;
-                if (IsOccupied(team, n)) continue;
-                visited.Add(n);
-                q.Enqueue((n, cost + 1));
-            }
-        }
-    }
-    // ÇöÀç ¼¿ ±âÁØÀ¸·Î 6¹æÇâ ÀÎÁ¢Ä­(1Ä­) Áß 'ÀÌµ¿ °¡´É' Ä­¸¸ ¹İÈ¯
-    public IEnumerable<Vector3Int> GetAdjacentWalkable(Team team, Vector3Int center)
-    {
-        var map = GetMap(team); // ±âÁ¸¿¡ »ç¿ë ÁßÀÎ ÆÀ¡æÅ¸ÀÏ¸Ê ¸ÅÇÎ ÇÔ¼ö
-        var results = new List<Vector3Int>();
-
-        bool odd = Mathf.Abs(center.y) % 2 == 1;
-        // PlayerMovement/PushObject¿Í µ¿ÀÏÇÑ Æ÷ÀÎÆ¼µå-Å¾ Çí»ç ¿ÀÇÁ¼Â
-        Vector3Int[] offsets = odd
-            ? new[] {
-            new Vector3Int(-1, 0, 0), // W
-            new Vector3Int( 1, 0, 0), // E
-            new Vector3Int( 0, 1, 0), // NW
-            new Vector3Int( 1, 1, 0), // NE
-            new Vector3Int( 0,-1, 0), // SW
-            new Vector3Int( 1,-1, 0), // SE
-            }
-            : new[] {
-            new Vector3Int(-1, 0, 0), // W
-            new Vector3Int( 1, 0, 0), // E
-            new Vector3Int(-1, 1, 0), // NW
-            new Vector3Int( 0, 1, 0), // NE
-            new Vector3Int(-1,-1, 0), // SW
-            new Vector3Int( 0,-1, 0), // SE
-            };
-
-        foreach (var d in offsets)
-        {
-            var n = center + d;
-            if (!map.cellBounds.Contains(n)) continue;
-            if (!map.HasTile(n)) continue;                // ¹Ù´Ú ¾øÀ½
-            if (IsOccupied(team, n)) continue;            // ¿ì¸® Áø¿µ Á¡À¯ Ä­Àº Á¦¿Ü(°ãÄ§ ¹æÁö)
-
-            results.Add(n);
-        }
-
-        return results;
-    }
-
-    public bool InRange(Vector3Int a, Vector3Int b, int range)
-    {
-        int dist = (Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y) + Mathf.Abs((a.x + a.y) - (b.x + b.y))) / 2;
-        return dist <= range;
-    }
-
-    public int CrossMapDistance(
-    Tilemap reference,           // ±âÁØ Å¸ÀÏ¸Ê(±ÇÀå: PlayerFloor)
-    Tilemap fromMap, Vector3Int fromCell,
-    Tilemap toMap, Vector3Int toCell)
-    {
-        Vector3 aW = fromMap.GetCellCenterWorld(fromCell);
-        Vector3 bW = toMap.GetCellCenterWorld(toCell);
-        Vector3Int aRef = reference.WorldToCell(aW);
-        Vector3Int bRef = reference.WorldToCell(bW);
-        return (Mathf.Abs(aRef.x - bRef.x)
-              + Mathf.Abs(aRef.y - bRef.y)
-              + Mathf.Abs((aRef.x + aRef.y) - (bRef.x + bRef.y))) / 2;
-    }
-    public void RebindProvider()
-    {
-        provider = BattleMapManager.Instance as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>(true);
-    }
-
-    public void SetOccupied(Team t, Vector3Int cell, bool on)
-    {
-        var set = (t == Team.Player) ? playerOcc : enemyOcc;
-        if (on) set.Add(cell); else set.Remove(cell);
-    }
-    public bool IsOccupied(Team t, Vector3Int cell)
-    {
-        var set = (t == Team.Player) ? playerOcc : enemyOcc;
-        return set.Contains(cell);
-    }
-    // ¸ÊÀ» ±â¹İÀ¸·Î ÆÀ Á¡À¯ ¿©ºÎ ÀÚµ¿ ÆÇ´Ü
-    public bool IsOccupied(Tilemap map, Vector3Int cell)
-    {
-        if (provider == null) return false;
-        if (map == provider.PlayerFloor) return IsOccupied(Team.Player, cell);
-        if (map == provider.EnemyFloor) return IsOccupied(Team.Enemy, cell);
-        return false;
-    }
-    // ÀÌµ¿ °¡´É ¿©ºÎ (Å¸ÀÏ Á¸Àç O + Á¡À¯ X)
-    public bool IsWalkable(Tilemap map, Vector3Int cell)
-    {
-        if (map == null || !map.HasTile(cell)) return false;
-        return !IsOccupied(map, cell);
-    }
-
-    // Æ¯Á¤ ¼¿ÀÇ À¯´Ö Ã£±â (Physics ±â¹İ)
-    public BattleUnit GetUnitAt(Vector3Int cell)
-    {
-        var map = GetMap(Team.Player); // ÁÂÇ¥ °è»ê¿ë ±âÁØ ¸Ê
-        if (map == null) return null;
-
-        Vector3 worldPos = map.GetCellCenterWorld(cell);
-        Collider2D hit = Physics2D.OverlapCircle(worldPos, 0.2f, unitMask);
-
-        if (hit != null) return hit.GetComponentInParent<BattleUnit>();
-        return null;
-    }
-    public IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
-    {
-        if (map == null || cells == null) yield break;
-
-        var valid = new HashSet<Vector3Int>(cells.Where(c => map.HasTile(c)));
-        // ¸ğµç À¯´ÖÀ» ¼øÈ¸ÇÏ¸ç °Ë»ç (UnitManager°¡ »ı±â¸é °Å±â¼­ °¡Á®¿À´Â °É·Î ´ëÃ¼ ÃßÃµ)
-        foreach (var u in FindObjectsOfType<BattleUnit>())
-        {
-            if (u == null || u.CurrentMap != map) continue;
-            if (valid.Contains(u.Cell)) yield return u;
-        }
-    }
-}
-
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class BattleGridManager : MonoBehaviour, IGridProvider
+{
+    [Header("Settings")]
+    public LayerMask unitMask;
+
+    IBattleMapProvider provider;
+    private HashSet<Vector3Int> playerOcc = new();
+    private HashSet<Vector3Int> enemyOcc = new();
+
+    public void Initialize(IBattleMapProvider mapProvider)
+    {
+        this.provider = mapProvider;
+    }
+    public Tilemap GetMap(Team team)
+    {
+        if (team == Team.Player)
+            return provider.PlayerFloor;
+        else
+            return provider.EnemyFloor;
+    }
+
+    public IEnumerable<Vector3Int> GetReachable(Team team, Vector3Int start, int range)
+    {
+        var map = GetMap(team);
+        var visited = new HashSet<Vector3Int> { start };
+        var q = new Queue<(Vector3Int, int)>();
+        q.Enqueue((start, 0));
+        while (q.Count > 0)
+        {
+            var (c, cost) = q.Dequeue();
+            yield return c;
+            if (cost == range) continue;
+
+            bool odd = Mathf.Abs(c.y) % 2 == 1;
+            Vector3Int[] dirs = {
+                new(1,0,0), new(-1,0,0), new(0,1,0), new(0,-1,0), new(1,-1,0), new(-1,1,0)
+            };
+
+            foreach (var d in dirs)
+            {
+                var n = c + d;
+                if (visited.Contains(n)) continue;
+                if (!map.cellBounds.Contains(n) || !map.HasTile(n)) continue;
+                if (IsOccupied(team, n)) continue;
+                visited.Add(n);
+                q.Enqueue((n, cost + 1));
+            }
+        }
+    }
+    // í˜„ì¬ ì…€ ê¸°ì¤€ìœ¼ë¡œ 6ë°©í–¥ ì¸ì ‘ì¹¸(1ì¹¸) ì¤‘ 'ì´ë™ ê°€ëŠ¥' ì¹¸ë§Œ ë°˜í™˜
+    public IEnumerable<Vector3Int> GetAdjacentWalkable(Team team, Vector3Int center)
+    {
+        var map = GetMap(team); // ê¸°ì¡´ì— ì‚¬ìš© ì¤‘ì¸ íŒ€â†’íƒ€ì¼ë§µ ë§¤í•‘ í•¨ìˆ˜
+        var results = new List<Vector3Int>();
+
+        bool odd = Mathf.Abs(center.y) % 2 == 1;
+        // PlayerMovement/PushObjectì™€ ë™ì¼í•œ í¬ì¸í‹°ë“œ-íƒ‘ í—¥ì‚¬ ì˜¤í”„ì…‹
+        Vector3Int[] offsets = odd
+            ? new[] {
+            new Vector3Int(-1, 0, 0), // W
+            new Vector3Int( 1, 0, 0), // E
+            new Vector3Int( 0, 1, 0), // NW
+            new Vector3Int( 1, 1, 0), // NE
+            new Vector3Int( 0,-1, 0), // SW
+            new Vector3Int( 1,-1, 0), // SE
+            }
+            : new[] {
+            new Vector3Int(-1, 0, 0), // W
+            new Vector3Int( 1, 0, 0), // E
+            new Vector3Int(-1, 1, 0), // NW
+            new Vector3Int( 0, 1, 0), // NE
+            new Vector3Int(-1,-1, 0), // SW
+            new Vector3Int( 0,-1, 0), // SE
+            };
+
+        foreach (var d in offsets)
+        {
+            var n = center + d;
+            if (!map.cellBounds.Contains(n)) continue;
+            if (!map.HasTile(n)) continue;                // ë°”ë‹¥ ì—†ìŒ
+            if (IsOccupied(team, n)) continue;            // ìš°ë¦¬ ì§„ì˜ ì ìœ  ì¹¸ì€ ì œì™¸(ê²¹ì¹¨ ë°©ì§€)
+
+            results.Add(n);
+        }
+
+        return results;
+    }
+
+    public bool InRange(Vector3Int a, Vector3Int b, int range)
+    {
+        int dist = (Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y) + Mathf.Abs((a.x + a.y) - (b.x + b.y))) / 2;
+        return dist <= range;
+    }
+
+    public int CrossMapDistance(
+    Tilemap reference,           // ê¸°ì¤€ íƒ€ì¼ë§µ(ê¶Œì¥: PlayerFloor)
+    Tilemap fromMap, Vector3Int fromCell,
+    Tilemap toMap, Vector3Int toCell)
+    {
+        Vector3 aW = fromMap.GetCellCenterWorld(fromCell);
+        Vector3 bW = toMap.GetCellCenterWorld(toCell);
+        Vector3Int aRef = reference.WorldToCell(aW);
+        Vector3Int bRef = reference.WorldToCell(bW);
+        return (Mathf.Abs(aRef.x - bRef.x)
+              + Mathf.Abs(aRef.y - bRef.y)
+              + Mathf.Abs((aRef.x + aRef.y) - (bRef.x + bRef.y))) / 2;
+    }
+    public void RebindProvider()
+    {
+        provider = BattleMapManager.Instance as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>(true);
+    }
+
+    public void SetOccupied(Team t, Vector3Int cell, bool on)
+    {
+        var set = (t == Team.Player) ? playerOcc : enemyOcc;
+        if (on) set.Add(cell); else set.Remove(cell);
+    }
+    public bool IsOccupied(Team t, Vector3Int cell)
+    {
+        var set = (t == Team.Player) ? playerOcc : enemyOcc;
+        return set.Contains(cell);
+    }
+    // ë§µì„ ê¸°ë°˜ìœ¼ë¡œ íŒ€ ì ìœ  ì—¬ë¶€ ìë™ íŒë‹¨
+    public bool IsOccupied(Tilemap map, Vector3Int cell)
+    {
+        if (provider == null) return false;
+        if (map == provider.PlayerFloor) return IsOccupied(Team.Player, cell);
+        if (map == provider.EnemyFloor) return IsOccupied(Team.Enemy, cell);
+        return false;
+    }
+    // ì´ë™ ê°€ëŠ¥ ì—¬ë¶€ (íƒ€ì¼ ì¡´ì¬ O + ì ìœ  X)
+    public bool IsWalkable(Tilemap map, Vector3Int cell)
+    {
+        if (map == null || !map.HasTile(cell)) return false;
+        return !IsOccupied(map, cell);
+    }
+
+    // íŠ¹ì • ì…€ì˜ ìœ ë‹› ì°¾ê¸° (Physics ê¸°ë°˜)
+    public BattleUnit GetUnitAt(Vector3Int cell)
+    {
+        var map = GetMap(Team.Player); // ì¢Œí‘œ ê³„ì‚°ìš© ê¸°ì¤€ ë§µ
+        if (map == null) return null;
+
+        Vector3 worldPos = map.GetCellCenterWorld(cell);
+        Collider2D hit = Physics2D.OverlapCircle(worldPos, 0.2f, unitMask);
+
+        if (hit != null) return hit.GetComponentInParent<BattleUnit>();
+        return null;
+    }
+    public IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells)
+    {
+        if (map == null || cells == null) yield break;
+
+        var valid = new HashSet<Vector3Int>(cells.Where(c => map.HasTile(c)));
+        // ëª¨ë“  ìœ ë‹›ì„ ìˆœíšŒí•˜ë©° ê²€ì‚¬ (UnitManagerê°€ ìƒê¸°ë©´ ê±°ê¸°ì„œ ê°€ì ¸ì˜¤ëŠ” ê±¸ë¡œ ëŒ€ì²´ ì¶”ì²œ)
+        foreach (var u in FindObjectsOfType<BattleUnit>())
+        {
+            if (u == null || u.CurrentMap != map) continue;
+            if (valid.Contains(u.Cell)) yield return u;
+        }
+    }
+}
+

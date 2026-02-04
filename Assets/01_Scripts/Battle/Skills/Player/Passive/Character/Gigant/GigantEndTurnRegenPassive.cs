@@ -1,85 +1,85 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-/// <summary>
-/// ÅÏ Á¾·á ½Ã ÃÖ´ë HPÀÇ ÀÏÁ¤ ºñÀ²¸¸Å­ È¸º¹ÇÏ´Â ÆĞ½Ãºê.
-/// ÀÌ ÆĞ½Ãºê¸¦ °¡Áø À¯´Ö¸¸ ÅÏ Á¾·á È¸º¹À» ¹Ş´Â´Ù.
-/// </summary>
-[CreateAssetMenu(
-    menuName = "Battle/Passives/Gigant/Passive_2",
-    fileName = "Passive_EndTurnRegen")]
-public class GigantEndTurnRegenPassive : PassiveAsset
-{
-    [Header("Regen")]
-    [Tooltip("ÅÏ Á¾·á ½Ã È¸º¹ÇÒ ºñÀ². ¿¹: 0.1 = MaxHPÀÇ 10%")]
-    [Range(0f, 1f)]
-    public float healRatio = 0.10f;
-
-    [Tooltip("°è»êµÈ È¸º¹·®ÀÌ 1 ¹Ì¸¸ÀÏ ¶§ ÃÖ¼Ò 1·Î º¸Á¤ÇÒÁö ¿©ºÎ")]
-    public bool clampToAtLeast1 = true;
-
-    // µ¿½Ã¿¡ ÀÌ ÆĞ½Ãºê¸¦ ¾²´Â ¸ğµç À¯´Öµé
-    private readonly HashSet<BattleUnit> _owners = new();
-
-    // ÇöÀç ÀüÅõÀÇ BattleManager (ÀÌº¥Æ® ±¸µ¶¿ë)
-    private BattleManager _battle;
-
-    public override float GetProgress()
-    {
-        // 1. ÀÌ¹Ì ÇØ±İ »óÅÂ¶ó¸é 1.0 (100%) ¹İÈ¯
-        // (ºÎ¸ğÀÇ IsUnlocked ·ÎÁ÷: unlockedByDefault°¡ true°Å³ª PlayerPrefs¿¡ 1·Î ÀúÀåµÊ)
-        if (IsUnlocked()) return 1.0f;
-
-        // ÇØ±İÀÌ ¾È µÆ´Ù¸é Å×½ºÆ®¿ëÀ¸·Î °­Á¦·Î ÁøÇàµµ ¹İÈ¯
-        return 1.0f;
-    }
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
-    {
-        base.OnAttach(owner, battle);
-        if (owner == null || battle == null)
-            return;
-
-        // Ã³À½ ºÙÀ» ¶§ BattleManager ±â¾ï + ÀÌº¥Æ® ±¸µ¶
-        if (_battle == null)
-        {
-            _battle = battle;
-            _battle.OnUnitEndTurn += HandleUnitEndTurn;
-        }
-
-        _owners.Add(owner);
-    }
-
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
-    {
-        base.OnDetach(owner, battle);
-        if (owner == null)
-            return;
-
-        _owners.Remove(owner);
-
-        // ´õ ÀÌ»ó ÀÌ ÆĞ½Ãºê¸¦ °¡Áø À¯´ÖÀÌ ¾øÀ¸¸é ÀÌº¥Æ® ±¸µ¶ ÇØÁ¦
-        if (_battle != null && _owners.Count == 0)
-        {
-            _battle.OnUnitEndTurn -= HandleUnitEndTurn;
-            _battle = null;
-        }
-    }
-
-    void HandleUnitEndTurn(BattleUnit unit)
-    {
-        if (unit == null) return;
-        if (_battle == null) return;
-
-        // ÀÌ ÆĞ½Ãºê¸¦ °¡Áø À¯´ÖÀÌ ¾Æ´Ï¸é ¹«½Ã
-        if (!_owners.Contains(unit)) return;
-        if (unit.IsDead) return;
-
-        float before = unit.HP;
-
-        unit.HealPercent(healRatio);       // ±âÁ¸ Heal ·ÎÁ÷ »ç¿ë
-        unit.AnnouncePassive(displayName); // ÆĞ½Ãºê ¶óº§ Ç¥½Ã
-
-        Debug.Log($"{name} [Passive Heal] +{unit.HP - before} ¡æ {unit.HP}/{unit.MaxHP}");
-
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// í„´ ì¢…ë£Œ ì‹œ ìµœëŒ€ HPì˜ ì¼ì • ë¹„ìœ¨ë§Œí¼ íšŒë³µí•˜ëŠ” íŒ¨ì‹œë¸Œ.
+/// ì´ íŒ¨ì‹œë¸Œë¥¼ ê°€ì§„ ìœ ë‹›ë§Œ í„´ ì¢…ë£Œ íšŒë³µì„ ë°›ëŠ”ë‹¤.
+/// </summary>
+[CreateAssetMenu(
+    menuName = "Battle/Passives/Gigant/Passive_2",
+    fileName = "Passive_EndTurnRegen")]
+public class GigantEndTurnRegenPassive : PassiveAsset
+{
+    [Header("Regen")]
+    [Tooltip("í„´ ì¢…ë£Œ ì‹œ íšŒë³µí•  ë¹„ìœ¨. ì˜ˆ: 0.1 = MaxHPì˜ 10%")]
+    [Range(0f, 1f)]
+    public float healRatio = 0.10f;
+
+    [Tooltip("ê³„ì‚°ëœ íšŒë³µëŸ‰ì´ 1 ë¯¸ë§Œì¼ ë•Œ ìµœì†Œ 1ë¡œ ë³´ì •í• ì§€ ì—¬ë¶€")]
+    public bool clampToAtLeast1 = true;
+
+    // ë™ì‹œì— ì´ íŒ¨ì‹œë¸Œë¥¼ ì“°ëŠ” ëª¨ë“  ìœ ë‹›ë“¤
+    private readonly HashSet<BattleUnit> _owners = new();
+
+    // í˜„ì¬ ì „íˆ¬ì˜ BattleManager (ì´ë²¤íŠ¸ êµ¬ë…ìš©)
+    private BattleManager _battle;
+
+    public override float GetProgress()
+    {
+        // 1. ì´ë¯¸ í•´ê¸ˆ ìƒíƒœë¼ë©´ 1.0 (100%) ë°˜í™˜
+        // (ë¶€ëª¨ì˜ IsUnlocked ë¡œì§: unlockedByDefaultê°€ trueê±°ë‚˜ PlayerPrefsì— 1ë¡œ ì €ì¥ë¨)
+        if (IsUnlocked()) return 1.0f;
+
+        // í•´ê¸ˆì´ ì•ˆ ëë‹¤ë©´ í…ŒìŠ¤íŠ¸ìš©ìœ¼ë¡œ ê°•ì œë¡œ ì§„í–‰ë„ ë°˜í™˜
+        return 1.0f;
+    }
+    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    {
+        base.OnAttach(owner, battle);
+        if (owner == null || battle == null)
+            return;
+
+        // ì²˜ìŒ ë¶™ì„ ë•Œ BattleManager ê¸°ì–µ + ì´ë²¤íŠ¸ êµ¬ë…
+        if (_battle == null)
+        {
+            _battle = battle;
+            _battle.OnUnitEndTurn += HandleUnitEndTurn;
+        }
+
+        _owners.Add(owner);
+    }
+
+    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    {
+        base.OnDetach(owner, battle);
+        if (owner == null)
+            return;
+
+        _owners.Remove(owner);
+
+        // ë” ì´ìƒ ì´ íŒ¨ì‹œë¸Œë¥¼ ê°€ì§„ ìœ ë‹›ì´ ì—†ìœ¼ë©´ ì´ë²¤íŠ¸ êµ¬ë… í•´ì œ
+        if (_battle != null && _owners.Count == 0)
+        {
+            _battle.OnUnitEndTurn -= HandleUnitEndTurn;
+            _battle = null;
+        }
+    }
+
+    void HandleUnitEndTurn(BattleUnit unit)
+    {
+        if (unit == null) return;
+        if (_battle == null) return;
+
+        // ì´ íŒ¨ì‹œë¸Œë¥¼ ê°€ì§„ ìœ ë‹›ì´ ì•„ë‹ˆë©´ ë¬´ì‹œ
+        if (!_owners.Contains(unit)) return;
+        if (unit.IsDead) return;
+
+        float before = unit.HP;
+
+        unit.HealPercent(healRatio);       // ê¸°ì¡´ Heal ë¡œì§ ì‚¬ìš©
+        unit.AnnouncePassive(displayName); // íŒ¨ì‹œë¸Œ ë¼ë²¨ í‘œì‹œ
+
+        Debug.Log($"{name} [Passive Heal] +{unit.HP - before} â†’ {unit.HP}/{unit.MaxHP}");
+
+    }
+}

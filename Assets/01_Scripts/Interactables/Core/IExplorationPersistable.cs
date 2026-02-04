@@ -1,30 +1,30 @@
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-public interface IExplorationPersistable
-{
-    string PersistID { get; }
-    ExplorationObjectState SaveState();
-    void LoadState(ExplorationObjectState s);
-}
-
-[Serializable]
-public struct ExplorationObjectState
-{
-    public string id;          // PersistID
-    public string kind;        // "Chest" | "Trap" | "Push" µî
-    public string prefabName;  // Àç»ı¼º¿ë ÇÁ¸®ÆÕ¸í
-    public Vector3 position;   // ¿ùµå ÁÂÇ¥
-    public bool b1;            // Chest: isOpened / Trap: isTriggered µî
-    public bool b2;            // Trap: isActive µî È®Àå¿ë
-}
-
-[Serializable]
-public class ExplorationSnapshot
-{
-    public List<ExplorationObjectState> objects = new();
-    // Object °ÔÀÌÁö ½º³À¼¦
-    public int totalBoxes, openedBoxes, triggeredTraps;
-    public bool thresholdReached;
-}
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public interface IExplorationPersistable
+{
+    string PersistID { get; }
+    ExplorationObjectState SaveState();
+    void LoadState(ExplorationObjectState s);
+}
+
+[Serializable]
+public struct ExplorationObjectState
+{
+    public string id;          // PersistID
+    public string kind;        // "Chest" | "Trap" | "Push" ë“±
+    public string prefabName;  // ì¬ìƒì„±ìš© í”„ë¦¬íŒ¹ëª…
+    public Vector3 position;   // ì›”ë“œ ì¢Œí‘œ
+    public bool b1;            // Chest: isOpened / Trap: isTriggered ë“±
+    public bool b2;            // Trap: isActive ë“± í™•ì¥ìš©
+}
+
+[Serializable]
+public class ExplorationSnapshot
+{
+    public List<ExplorationObjectState> objects = new();
+    // Object ê²Œì´ì§€ ìŠ¤ëƒ…ìƒ·
+    public int totalBoxes, openedBoxes, triggeredTraps;
+    public bool thresholdReached;
+}

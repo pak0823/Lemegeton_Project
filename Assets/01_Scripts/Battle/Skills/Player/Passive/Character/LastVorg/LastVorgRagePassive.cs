@@ -1,110 +1,110 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Passives/LastVorg/Passive_2", 
-                 fileName = "Passive_LastVorgRage")]
-public class LastVorgRagePassive : PassiveAsset
-{
-    [Header("Settings")]
-    [Tooltip("ÅÏ Á¾·á ½Ã ¿¬±¸ ±â¼úÀ» ¾È ½èÀ» ¶§ È¸º¹ÇÒ Rage ºñÀ² (0.1 = 10%)")]
-    [Range(0f, 1f)] public float rageRegenRatio = 0.10f;
-
-    // ·±Å¸ÀÓ »óÅÂ °ü¸®¿ë (À¯´Öº° ½ºÅ³ »ç¿ë ¿©ºÎ & ÇÚµé·¯ º¸°ü)
-    private class UnitRuntimeData
-    {
-        public bool usedResearchSkillThisTurn = false;
-        public System.Action<SkillAsset> onSkillUsed;
-        public System.Action<BattleUnit> onTurnEnd;
-        public System.Action<BattleUnit> onTurnStart;
-        public System.Action<BattleUnit> onOverwork;
-    }
-
-    private readonly Dictionary<BattleUnit, UnitRuntimeData> _runtimeDataMap = new Dictionary<BattleUnit, UnitRuntimeData>();
-
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null || battle == null) return;
-
-        // µ¥ÀÌÅÍ ÃÊ±âÈ­
-        var data = new UnitRuntimeData();
-        _runtimeDataMap[owner] = data;
-
-        // 1. ½ºÅ³ »ç¿ë °¨Áö ÇÚµé·¯
-        data.onSkillUsed = (skill) =>
-        {
-            // ¿¬±¸ ±â¼ú(SelfStateSkill)ÀÎÁö È®ÀÎ
-            // (ÀÌÀü ÆĞ½Ãºê ±¸Çö¿¡¼­ ¿¬±¸ ±â¼úÀ» SelfStateSkill·Î Á¤ÀÇÇÔ)
-            if (skill is SelfStateSkill)
-            {
-                data.usedResearchSkillThisTurn = true;
-                // Debug.Log($"[Passive:Rage] {owner.name} ¿¬±¸ ±â¼ú »ç¿ëÇÔ. ÅÏ Á¾·á º¸³Ê½º ¹«È¿È­.");
-            }
-        };
-
-        // 2. ÅÏ Á¾·á ÇÚµé·¯
-        data.onTurnEnd = (unit) =>
-        {
-            if (unit == owner)
-            {
-                // ¿¬±¸ ±â¼úÀ» ¾È ½è´Ù¸é ºĞ³ë È¸º¹
-                if (!data.usedResearchSkillThisTurn)
-                {
-                    // ¼Ò¼öÁ¡ ¹ö¸² Ã³¸®
-                    float rawAmount = owner.MaxRage * rageRegenRatio;
-                    float amount = Mathf.Floor(rawAmount);
-                    if (amount > 0)
-                    {
-                        owner.AddRage(amount);
-                        owner.AnnouncePassive(displayName); // ¹ßµ¿ ¾Ë¸²
-                        Debug.Log($"[Passive:Rage] {owner.name}: ¿¬±¸ ±â¼ú ¹Ì»ç¿ë -> Rage È¸º¹ (+{amount:F1})");
-                    }
-                }
-            }
-        };
-
-        // 3. ÅÏ ½ÃÀÛ ÇÚµé·¯ (ÇÃ·¡±× ¸®¼Â)
-        data.onTurnStart = (unit) =>
-        {
-            if (unit == owner)
-            {
-                data.usedResearchSkillThisTurn = false;
-            }
-        };
-
-        // °ú·Î ÇÚµé·¯ (ÅÏ Á¤»ê + ´ÙÀ½ ÅÏ ÃÊ±âÈ­ µ¿½Ã ¼öÇà)
-        data.onOverwork = (unit) =>
-        {
-            if (unit == owner)
-            {
-                // Áö±İ±îÁöÀÇ Çàµ¿¿¡ ´ëÇÑ º¸»ó Á¤»ê
-                data.onTurnEnd(unit);
-                // »õ·Î¿î Ãß°¡ ÅÏÀ» À§ÇØ ÇÃ·¡±× ÃÊ±âÈ­
-                data.onTurnStart(unit);
-
-                Debug.Log($"[Passive:Rage] {owner.name} °ú·Î ¹ßµ¿ -> ÆĞ½Ãºê ÅÏ Á¤»ê ¹× ¸®¼Â ¿Ï·á");
-            }
-        };
-
-        // ÀÌº¥Æ® ±¸µ¶
-        owner.OnSkillUsed += data.onSkillUsed;
-        battle.OnUnitEndTurn += data.onTurnEnd;
-        BattleManager.OnAnyUnitTurnStarted += data.onTurnStart;
-        battle.OnOverworkTriggered += data.onOverwork;
-    }
-
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null) return;
-
-        if (_runtimeDataMap.TryGetValue(owner, out var data))
-        {
-            // ÀÌº¥Æ® ÇØÁ¦
-            owner.OnSkillUsed -= data.onSkillUsed;
-            if (battle != null) battle.OnUnitEndTurn -= data.onTurnEnd;
-            BattleManager.OnAnyUnitTurnStarted -= data.onTurnStart;
-            battle.OnOverworkTriggered -= data.onOverwork;
-
-            _runtimeDataMap.Remove(owner);
-        }
-    }
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Passives/LastVorg/Passive_2", 
+                 fileName = "Passive_LastVorgRage")]
+public class LastVorgRagePassive : PassiveAsset
+{
+    [Header("Settings")]
+    [Tooltip("í„´ ì¢…ë£Œ ì‹œ ì—°êµ¬ ê¸°ìˆ ì„ ì•ˆ ì¼ì„ ë•Œ íšŒë³µí•  Rage ë¹„ìœ¨ (0.1 = 10%)")]
+    [Range(0f, 1f)] public float rageRegenRatio = 0.10f;
+
+    // ëŸ°íƒ€ì„ ìƒíƒœ ê´€ë¦¬ìš© (ìœ ë‹›ë³„ ìŠ¤í‚¬ ì‚¬ìš© ì—¬ë¶€ & í•¸ë“¤ëŸ¬ ë³´ê´€)
+    private class UnitRuntimeData
+    {
+        public bool usedResearchSkillThisTurn = false;
+        public System.Action<SkillAsset> onSkillUsed;
+        public System.Action<BattleUnit> onTurnEnd;
+        public System.Action<BattleUnit> onTurnStart;
+        public System.Action<BattleUnit> onOverwork;
+    }
+
+    private readonly Dictionary<BattleUnit, UnitRuntimeData> _runtimeDataMap = new Dictionary<BattleUnit, UnitRuntimeData>();
+
+    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null || battle == null) return;
+
+        // ë°ì´í„° ì´ˆê¸°í™”
+        var data = new UnitRuntimeData();
+        _runtimeDataMap[owner] = data;
+
+        // 1. ìŠ¤í‚¬ ì‚¬ìš© ê°ì§€ í•¸ë“¤ëŸ¬
+        data.onSkillUsed = (skill) =>
+        {
+            // ì—°êµ¬ ê¸°ìˆ (SelfStateSkill)ì¸ì§€ í™•ì¸
+            // (ì´ì „ íŒ¨ì‹œë¸Œ êµ¬í˜„ì—ì„œ ì—°êµ¬ ê¸°ìˆ ì„ SelfStateSkillë¡œ ì •ì˜í•¨)
+            if (skill is SelfStateSkill)
+            {
+                data.usedResearchSkillThisTurn = true;
+                // Debug.Log($"[Passive:Rage] {owner.name} ì—°êµ¬ ê¸°ìˆ  ì‚¬ìš©í•¨. í„´ ì¢…ë£Œ ë³´ë„ˆìŠ¤ ë¬´íš¨í™”.");
+            }
+        };
+
+        // 2. í„´ ì¢…ë£Œ í•¸ë“¤ëŸ¬
+        data.onTurnEnd = (unit) =>
+        {
+            if (unit == owner)
+            {
+                // ì—°êµ¬ ê¸°ìˆ ì„ ì•ˆ ì¼ë‹¤ë©´ ë¶„ë…¸ íšŒë³µ
+                if (!data.usedResearchSkillThisTurn)
+                {
+                    // ì†Œìˆ˜ì  ë²„ë¦¼ ì²˜ë¦¬
+                    float rawAmount = owner.MaxRage * rageRegenRatio;
+                    float amount = Mathf.Floor(rawAmount);
+                    if (amount > 0)
+                    {
+                        owner.AddRage(amount);
+                        owner.AnnouncePassive(displayName); // ë°œë™ ì•Œë¦¼
+                        Debug.Log($"[Passive:Rage] {owner.name}: ì—°êµ¬ ê¸°ìˆ  ë¯¸ì‚¬ìš© -> Rage íšŒë³µ (+{amount:F1})");
+                    }
+                }
+            }
+        };
+
+        // 3. í„´ ì‹œì‘ í•¸ë“¤ëŸ¬ (í”Œë˜ê·¸ ë¦¬ì…‹)
+        data.onTurnStart = (unit) =>
+        {
+            if (unit == owner)
+            {
+                data.usedResearchSkillThisTurn = false;
+            }
+        };
+
+        // ê³¼ë¡œ í•¸ë“¤ëŸ¬ (í„´ ì •ì‚° + ë‹¤ìŒ í„´ ì´ˆê¸°í™” ë™ì‹œ ìˆ˜í–‰)
+        data.onOverwork = (unit) =>
+        {
+            if (unit == owner)
+            {
+                // ì§€ê¸ˆê¹Œì§€ì˜ í–‰ë™ì— ëŒ€í•œ ë³´ìƒ ì •ì‚°
+                data.onTurnEnd(unit);
+                // ìƒˆë¡œìš´ ì¶”ê°€ í„´ì„ ìœ„í•´ í”Œë˜ê·¸ ì´ˆê¸°í™”
+                data.onTurnStart(unit);
+
+                Debug.Log($"[Passive:Rage] {owner.name} ê³¼ë¡œ ë°œë™ -> íŒ¨ì‹œë¸Œ í„´ ì •ì‚° ë° ë¦¬ì…‹ ì™„ë£Œ");
+            }
+        };
+
+        // ì´ë²¤íŠ¸ êµ¬ë…
+        owner.OnSkillUsed += data.onSkillUsed;
+        battle.OnUnitEndTurn += data.onTurnEnd;
+        BattleManager.OnAnyUnitTurnStarted += data.onTurnStart;
+        battle.OnOverworkTriggered += data.onOverwork;
+    }
+
+    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null) return;
+
+        if (_runtimeDataMap.TryGetValue(owner, out var data))
+        {
+            // ì´ë²¤íŠ¸ í•´ì œ
+            owner.OnSkillUsed -= data.onSkillUsed;
+            if (battle != null) battle.OnUnitEndTurn -= data.onTurnEnd;
+            BattleManager.OnAnyUnitTurnStarted -= data.onTurnStart;
+            battle.OnOverworkTriggered -= data.onOverwork;
+
+            _runtimeDataMap.Remove(owner);
+        }
+    }
 }

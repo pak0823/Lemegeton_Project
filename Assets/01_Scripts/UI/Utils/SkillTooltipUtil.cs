@@ -1,80 +1,80 @@
-using System.Collections.Generic;
-using System.Text;
-
-public static class SkillTooltipUtil
-{
-    const string TrainingHeaderColor = "#80FF80";
-    const string TrainingSizeTagOpen = "<size=20%>";
-    const string TrainingSizeTagClose = "</size>";
-
-    /// <summary>
-    /// baseDesc µÚ¿¡ [ÈÆ·Ã È¿°ú] ºí·ÏÀ» ºÙ¿© ¹İÈ¯.
-    /// lines°¡ ºñ¾î ÀÖÀ¸¸é baseDesc ±×´ë·Î ¹İÈ¯.
-    /// </summary>
-    //public static string AppendTrainingBlock(string baseDesc, List<string> lines)
-    //{
-    //    if (lines == null || lines.Count == 0) return baseDesc ?? "";
-
-    //    var sb = new StringBuilder();
-    //    sb.Append(baseDesc ?? "");
-    //    sb.Append("\n");
-    //    sb.Append(TrainingSizeTagOpen);
-    //    sb.Append($"<color={TrainingHeaderColor}>[ÈÆ·Ã È¿°ú]</color>");
-
-    //    foreach (var line in lines)
-    //    {
-    //        sb.Append("\n? ");
-    //        sb.Append(line);
-    //    }
-
-    //    sb.Append(TrainingSizeTagClose);
-    //    return sb.ToString();
-    //}
-
-    /// <summary>
-    /// baseDesc µÚ¿¡ [ÈÆ·Ã Title] + ¼³¸í ºí·ÏÀ» ºÙ¿©¼­ ¹İÈ¯.
-    /// title/desc°¡ ºñ¾î ÀÖÀ¸¸é baseDesc ±×´ë·Î ¹İÈ¯.
-    /// </summary>
-    public static string AppendTrainingRouteDescription(string _baseDesc, string _routeTitle, string _routeDescription)
-    {
-        if (string.IsNullOrEmpty(_routeTitle) && string.IsNullOrEmpty(_routeDescription))
-            return _baseDesc ?? "";
-
-        var sb = new StringBuilder();
-        sb.Append(_baseDesc ?? "");
-        sb.Append("\n");
-        sb.Append(TrainingSizeTagOpen);
-
-        // TitleÀÌ ¾øÀ¸¸é ±×³É "ÈÆ·Ã"ÀÌ¶ó°í¸¸ Ç¥½Ã
-        string header = string.IsNullOrEmpty(_routeTitle) ? "ÈÆ·Ã" : _routeTitle;
-        sb.Append($"<color={TrainingHeaderColor}>[{header}]</color>");
-
-        if (!string.IsNullOrEmpty(_routeDescription))
-        {
-            sb.Append("\n");
-            sb.Append(_routeDescription);
-        }
-
-        sb.Append(TrainingSizeTagClose);
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// StatusId/UnitStateBuffId¸¦ ¹Ş¾Æ¼­ DB¿¡¼­ ÀÌ¸§À» °¡Á®¿À´Â ÇïÆÛ.
-    /// </summary>
-    public static string GetStatusLabel(StatusId _statusid)
-    {
-        var db = StatusDescriptionDB.Instance;
-        if (db == null) return _statusid.ToString();
-        var label = db.GetDisplayName(_statusid);
-        return string.IsNullOrEmpty(label) ? _statusid.ToString() : label;
-    }
-
-    public static string GetBuffLabel(UnitStateBuffId _unitstatebuffid)
-    {
-        var db = StatusDescriptionDB.Instance;
-        if (db == null) return _unitstatebuffid.ToString();
-        var label = db.GetDisplayName(_unitstatebuffid);
-        return string.IsNullOrEmpty(label) ? _unitstatebuffid.ToString() : label;
-    }
-}
+using System.Collections.Generic;
+using System.Text;
+
+public static class SkillTooltipUtil
+{
+    const string TrainingHeaderColor = "#80FF80";
+    const string TrainingSizeTagOpen = "<size=20%>";
+    const string TrainingSizeTagClose = "</size>";
+
+    /// <summary>
+    /// baseDesc ë’¤ì— [í›ˆë ¨ íš¨ê³¼] ë¸”ë¡ì„ ë¶™ì—¬ ë°˜í™˜.
+    /// linesê°€ ë¹„ì–´ ìˆìœ¼ë©´ baseDesc ê·¸ëŒ€ë¡œ ë°˜í™˜.
+    /// </summary>
+    //public static string AppendTrainingBlock(string baseDesc, List<string> lines)
+    //{
+    //    if (lines == null || lines.Count == 0) return baseDesc ?? "";
+
+    //    var sb = new StringBuilder();
+    //    sb.Append(baseDesc ?? "");
+    //    sb.Append("\n");
+    //    sb.Append(TrainingSizeTagOpen);
+    //    sb.Append($"<color={TrainingHeaderColor}>[í›ˆë ¨ íš¨ê³¼]</color>");
+
+    //    foreach (var line in lines)
+    //    {
+    //        sb.Append("\n? ");
+    //        sb.Append(line);
+    //    }
+
+    //    sb.Append(TrainingSizeTagClose);
+    //    return sb.ToString();
+    //}
+
+    /// <summary>
+    /// baseDesc ë’¤ì— [í›ˆë ¨ Title] + ì„¤ëª… ë¸”ë¡ì„ ë¶™ì—¬ì„œ ë°˜í™˜.
+    /// title/descê°€ ë¹„ì–´ ìˆìœ¼ë©´ baseDesc ê·¸ëŒ€ë¡œ ë°˜í™˜.
+    /// </summary>
+    public static string AppendTrainingRouteDescription(string _baseDesc, string _routeTitle, string _routeDescription)
+    {
+        if (string.IsNullOrEmpty(_routeTitle) && string.IsNullOrEmpty(_routeDescription))
+            return _baseDesc ?? "";
+
+        var sb = new StringBuilder();
+        sb.Append(_baseDesc ?? "");
+        sb.Append("\n");
+        sb.Append(TrainingSizeTagOpen);
+
+        // Titleì´ ì—†ìœ¼ë©´ ê·¸ëƒ¥ "í›ˆë ¨"ì´ë¼ê³ ë§Œ í‘œì‹œ
+        string header = string.IsNullOrEmpty(_routeTitle) ? "í›ˆë ¨" : _routeTitle;
+        sb.Append($"<color={TrainingHeaderColor}>[{header}]</color>");
+
+        if (!string.IsNullOrEmpty(_routeDescription))
+        {
+            sb.Append("\n");
+            sb.Append(_routeDescription);
+        }
+
+        sb.Append(TrainingSizeTagClose);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// StatusId/UnitStateBuffIdë¥¼ ë°›ì•„ì„œ DBì—ì„œ ì´ë¦„ì„ ê°€ì ¸ì˜¤ëŠ” í—¬í¼.
+    /// </summary>
+    public static string GetStatusLabel(StatusId _statusid)
+    {
+        var db = StatusDescriptionDB.Instance;
+        if (db == null) return _statusid.ToString();
+        var label = db.GetDisplayName(_statusid);
+        return string.IsNullOrEmpty(label) ? _statusid.ToString() : label;
+    }
+
+    public static string GetBuffLabel(UnitStateBuffId _unitstatebuffid)
+    {
+        var db = StatusDescriptionDB.Instance;
+        if (db == null) return _unitstatebuffid.ToString();
+        var label = db.GetDisplayName(_unitstatebuffid);
+        return string.IsNullOrEmpty(label) ? _unitstatebuffid.ToString() : label;
+    }
+}

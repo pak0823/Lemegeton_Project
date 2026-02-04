@@ -1,12 +1,12 @@
-using UnityEngine;
-
-[CreateAssetMenu(
-    menuName = "Battle/Passives/No Eul/Passive_1",
-    fileName = "Passive_DoubleAttack")]
-public class NoEulDoubleAttack : PassiveAsset
-{
-    // ¾Ö´Ï¸ŞÀÌ¼Ç¿¡¼­ °ø°İÀ» 2¹ø ½ÇÇàÇÏ°Ô ¼³Á¤ÇØµ×À½
-    public override void OnAttach(BattleUnit _owner, BattleManager _battlemanager) { }
-
-    public override void OnDetach(BattleUnit _owner, BattleManager _battlemanager){ }
-}
+using UnityEngine;
+
+[CreateAssetMenu(
+    menuName = "Battle/Passives/No Eul/Passive_1",
+    fileName = "Passive_DoubleAttack")]
+public class NoEulDoubleAttack : PassiveAsset
+{
+    // ì• ë‹ˆë©”ì´ì…˜ì—ì„œ ê³µê²©ì„ 2ë²ˆ ì‹¤í–‰í•˜ê²Œ ì„¤ì •í•´ë’€ìŒ
+    public override void OnAttach(BattleUnit _owner, BattleManager _battlemanager) { }
+
+    public override void OnDetach(BattleUnit _owner, BattleManager _battlemanager){ }
+}

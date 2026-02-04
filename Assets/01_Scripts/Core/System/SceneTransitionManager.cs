@@ -1,256 +1,256 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.SceneManagement;
-using UnityEngine.UI;
-
-public class SceneTransitionManager : MonoBehaviour
-{
-    public static SceneTransitionManager Instance;
-
-    [Header("ÆäÀÌµå¿ë CanvasGroup")]
-    public CanvasGroup fader;
-    [Header("ÆäÀÌµå Áö¼Ó½Ã°£")]
-    private float fadeDuration = 2f;
-
-    [Header("ÀüÅõ º¹±Í ÄÁÅØ½ºÆ®")]
-    public string pendingReturnScene;         // µ¹¾Æ°¥ Å½Çè ¾À ÀÌ¸§
-    public Vector3 pendingReturnPosition;     // µ¹¾Æ°¥ ¿ùµå ÁÂÇ¥
-    public bool HasPendingReturn => !string.IsNullOrEmpty(pendingReturnScene);
-
-    [Tooltip("Å½Çè¸Ê Àç·Îµù ½Ã ÀÌ ÇÁ¸®ÆÕÀ» »ç¿ë(·£´ı ÀçÃßÃ· ¹æÁö)")]
-    public GameObject explorationMapPrefabOverride;
-
-    [Header("Å½Çè ½º³À¼¦")]
-    public ExplorationSnapshot explorationSnapshot;
-    public bool HasExplorationSnapshot => explorationSnapshot != null;
-    private bool _isReturning = false;        // º¹±Í Áßº¹ ½ÇÇà °¡µå
-
-    [Header("È°±â ½º³À¼¦")]
-    public int savedVigor = -1;
-    public bool HasSavedVigor => savedVigor >= 0;
-
-    // ÀüÅõ º¹±Í ÈÄ ÀÌ¾î¼­ ÀÌµ¿ÇÒ °æ·Î(¼¿ ±âÁØ)
-    public List<Vector3Int> pendingResumeCells;
-    public bool HasPendingResume => pendingResumeCells != null && pendingResumeCells.Count >= 2;
-
-    [Header("ÀüÅõ º¹±Í ÈÄ Á¤»êÇÒ ÀÌµ¿ È°±â ºñ¿ë(ÀüÅõ Àü ÀÌµ¿ºĞ)")]
-    public int pendingPlannedMoveVigorCost = 0;
-    public bool HasDeferredMoveCost => pendingPlannedMoveVigorCost > 0;
-
-    private float encounterBannerSeconds = 1.5f;
-
-    public void SaveExplorationSnapshot(ExplorationSnapshot snap)
-    {
-        explorationSnapshot = snap;
-        Debug.Log($"[STM] Snapshot saved. objs={(snap?.objects?.Count ?? 0)}");
-    }
-    public void ClearExplorationSnapshot()
-    {
-        explorationSnapshot = null;
-        Debug.Log("[STM] Snapshot cleared (before leaving exploration).");
-    }
-
-    private void Awake()
-    {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        else Destroy(gameObject);
-    }
-
-    // sceneName ¾ÀÀ¸·Î ÆäÀÌµå¾Æ¿ô ¡æ ·Îµå ¡æ ÆäÀÌµåÀÎ
-    public void FadeToScene(string sceneName)
-    {
-        StartCoroutine(FadeCoroutine(sceneName));
-    }
-    IEnumerator FadeCoroutine(string sceneName)
-    {
-        // ÆäÀÌµå ¾Æ¿ô (alpha 0 ¡æ 1)
-        float t = 0f;
-        while (t < fadeDuration)
-        {
-            t += Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
-            yield return null;
-        }
-
-        // ¾À ·Îµå (ºñµ¿±â)
-        yield return SceneManager.LoadSceneAsync(sceneName);
-
-        // ÆäÀÌµå ÀÎ (alpha 1 ¡æ 0)
-        t = fadeDuration;
-        while (t > 0f)
-        {
-            t -= Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
-            yield return null;
-        }
-    }
-
-    public void SaveReturnPoint(string sceneName, Vector3 worldPos)
-    {
-        pendingReturnScene = sceneName;
-        pendingReturnPosition = worldPos;
-        Debug.Log($"[Return] Save: scene={sceneName}, pos={worldPos}");
-    }
-    public void ReturnToSavedPoint()
-    {
-        if (!HasPendingReturn)
-        {
-            Debug.LogWarning("[Return] ÀúÀåµÈ º¹±Í ÁöÁ¡ÀÌ ¾ø½À´Ï´Ù.");
-            return;
-        }
-        if (_isReturning) return;             // Áßº¹ °¡µå
-        _isReturning = true;
-        StartCoroutine(ReturnCoroutine());
-    }
-
-    public void SetResumePath(List<Vector3Int> cells)
-    {
-        pendingResumeCells = cells;
-    }
-
-    public List<Vector3Int> ConsumeResumePath()
-    {
-        var tmp = pendingResumeCells;
-        pendingResumeCells = null;
-        return tmp;
-    }
-
-    public void SetDeferredMoveCost(int cost)
-    {
-        pendingPlannedMoveVigorCost = Mathf.Max(0, cost);
-    }
-
-    public int ConsumeDeferredMoveCost()
-    {
-        int tmp = pendingPlannedMoveVigorCost;
-        pendingPlannedMoveVigorCost = 0;
-        return tmp;
-    }
-
-    IEnumerator ReturnCoroutine()
-    {
-        // ÆäÀÌµå ¾Æ¿ô
-        float t = 0f;
-        while (t < fadeDuration)
-        {
-            t += Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
-            yield return null;
-        }
-
-        // Å½Çè ¾À ·Îµå
-        yield return SceneManager.LoadSceneAsync(pendingReturnScene);
-
-        // Å½Çè ¾À¿¡¼­ PlayerMovement ÁØºñµÉ ¶§±îÁö ´ë±â ÈÄ ¼ø°£ÀÌµ¿
-        int safety = 300; // ~5ÃÊ(60FPS °¡Á¤)
-        while (PlayerMovement.Instance == null && safety-- > 0)
-            yield return null;
-
-        if (PlayerMovement.Instance != null)
-        {
-            PlayerMovement.Instance.TeleportTo(pendingReturnPosition);
-
-            if (HasSavedVigor && VigorManager.Instance != null)
-            {
-                int v = ConsumeVigor();
-                VigorManager.Instance.SetCurrentVigor(v);
-            }
-
-            // ³²Àº °æ·Î°¡ ÀÖÀ¸¸é ÀÌ¾î¼­ ÀÌµ¿
-            var resume = ConsumeResumePath();
-            if (resume != null && resume.Count >= 2)
-            {
-                // º¸»óÃ¢ ´İÈú ¶§±îÁö ÀÔ·Â/ÀÌµ¿ Â÷´Ü
-                PlayerMovement.Instance?.LockMovementIndefinite();
-
-                // ÇÁ·¹Á¨ÅÍ ÁØºñ ´ë±â(Å½Çè ¾À UI°¡ ¾ÆÁ÷ Awake ÀüÀÏ ¼ö ÀÖÀ¸¹Ç·Î)
-                yield return new WaitUntil(() => ExplorationModalPresenter.Instance != null);
-
-                ExplorationModalPresenter.Instance.ShowRewardPopup(() =>
-                {
-                    PlayerMovement.Instance?.UnlockMovementIndefinite();
-                    PlayerMovement.Instance?.ResumePathAfterBattle(resume);
-                });
-            }
-            else
-            {
-                // resume°¡ ¾øÀ¸¸é Àá±İ Ç®±â(È¤½Ã ³²¾ÆÀÖ´Ù¸é)
-                PlayerMovement.Instance?.UnlockMovementIndefinite();
-            }
-            Debug.Log($"[Return] Teleport to {pendingReturnPosition}");
-        }
-        else
-        {
-            Debug.LogWarning("[Return] PlayerMovement ¹Ì¹ß°ß ¡æ ÅÚ·¹Æ÷Æ® »ı·«");
-        }
-
-        // ÆäÀÌµå ÀÎ
-        t = fadeDuration;
-        while (t > 0f)
-        {
-            t -= Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
-            yield return null;
-        }
-
-        // 1È¸¼º ÄÁÅØ½ºÆ® Á¤¸®
-        pendingReturnScene = null;
-        _isReturning = false;   // °¡µå ÇØÁ¦
-    }
-
-    //IExplorationPersistable¸¦ °¡Áö°í ÀÖ´Â ¿ÀºêÁ§Æ®´Â ¸ğµÎ ½º³À¼¦¿¡ Ãß°¡
-    public ExplorationSnapshot BuildExplorationSnapshotFromScene()
-    {
-        var snap = new ExplorationSnapshot();
-
-        // ¾À ³» ¸ğµç Persistable »óÅÂ ¼öÁı
-        foreach (var mb in FindObjectsOfType<MonoBehaviour>(true))
-        {
-            if (mb is IExplorationPersistable ip)
-            {
-                snap.objects.Add(ip.SaveState());
-            }
-        }
-
-        return snap;
-    }
-
-    public void SaveVigor(int v) => savedVigor = Mathf.Max(0, v);
-    public int ConsumeVigor()
-    {
-        int v = savedVigor;
-        savedVigor = -1;
-        return v;
-    }
-
-    public void EnterBattleWithEncounterBanner(string monsterName, string battleScene)
-    {
-        // ÀüÅõ ÁøÀÔ Àü±îÁö ÀÔ·Â Â÷´Ü(Å¸ÀÏ Å¬¸¯ µî)
-        PlayerMovement.Instance?.LockMovementIndefinite();
-
-        string testSecne = "TestScene";//ÀÓ½Ã Å×½ºÆ®¿ë - ÀÎÄ«¿îÅÍ·Î ÀÎÇÑ ÀüÅõ¾ÀÀ¸·Î °¡±â Àü ÈÆ·Ã¾ÀÀ» °ÅÄ¡±â À§ÇØ ÀÓ½Ã Ãß°¡
-
-        var presenter = ExplorationModalPresenter.Instance;
-        if (presenter == null)
-        {
-            // ÇÁ·¹Á¨ÅÍ°¡ ¾øÀ¸¸é Áï½Ã ÁøÀÔ(¾ÈÀü fallback)
-            //FadeToScene(battleScene);
-            FadeToScene(testSecne);//ÀÓ½Ã Å×½ºÆ®¿ë - ÀÎÄ«¿îÅÍ·Î ÀÎÇÑ ÀüÅõ¾ÀÀ¸·Î °¡±â Àü ÈÆ·Ã¾ÀÀ» °ÅÄ¡±â À§ÇØ ÀÓ½Ã Ãß°¡
-            return;
-        }
-
-        string msg = $"{monsterName}°ú ¸¶ÁÖÃÆ½À´Ï´Ù. ÀüÅõ¿¡ µ¹ÀÔÇÕ´Ï´Ù.";
-        presenter.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
-        {
-            FadeToScene(battleScene);
-            //FadeToScene(testSecne); //ÀÓ½Ã Å×½ºÆ®¿ë - ÀÎÄ«¿îÅÍ·Î ÀÎÇÑ ÀüÅõ¾ÀÀ¸·Î °¡±â Àü ÈÆ·Ã¾ÀÀ» °ÅÄ¡±â À§ÇØ ÀÓ½Ã Ãß°¡
-        });
-    }
-
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+public class SceneTransitionManager : MonoBehaviour
+{
+    public static SceneTransitionManager Instance;
+
+    [Header("í˜ì´ë“œìš© CanvasGroup")]
+    public CanvasGroup fader;
+    [Header("í˜ì´ë“œ ì§€ì†ì‹œê°„")]
+    private float fadeDuration = 2f;
+
+    [Header("ì „íˆ¬ ë³µê·€ ì»¨í…ìŠ¤íŠ¸")]
+    public string pendingReturnScene;         // ëŒì•„ê°ˆ íƒí—˜ ì”¬ ì´ë¦„
+    public Vector3 pendingReturnPosition;     // ëŒì•„ê°ˆ ì›”ë“œ ì¢Œí‘œ
+    public bool HasPendingReturn => !string.IsNullOrEmpty(pendingReturnScene);
+
+    [Tooltip("íƒí—˜ë§µ ì¬ë¡œë”© ì‹œ ì´ í”„ë¦¬íŒ¹ì„ ì‚¬ìš©(ëœë¤ ì¬ì¶”ì²¨ ë°©ì§€)")]
+    public GameObject explorationMapPrefabOverride;
+
+    [Header("íƒí—˜ ìŠ¤ëƒ…ìƒ·")]
+    public ExplorationSnapshot explorationSnapshot;
+    public bool HasExplorationSnapshot => explorationSnapshot != null;
+    private bool _isReturning = false;        // ë³µê·€ ì¤‘ë³µ ì‹¤í–‰ ê°€ë“œ
+
+    [Header("í™œê¸° ìŠ¤ëƒ…ìƒ·")]
+    public int savedVigor = -1;
+    public bool HasSavedVigor => savedVigor >= 0;
+
+    // ì „íˆ¬ ë³µê·€ í›„ ì´ì–´ì„œ ì´ë™í•  ê²½ë¡œ(ì…€ ê¸°ì¤€)
+    public List<Vector3Int> pendingResumeCells;
+    public bool HasPendingResume => pendingResumeCells != null && pendingResumeCells.Count >= 2;
+
+    [Header("ì „íˆ¬ ë³µê·€ í›„ ì •ì‚°í•  ì´ë™ í™œê¸° ë¹„ìš©(ì „íˆ¬ ì „ ì´ë™ë¶„)")]
+    public int pendingPlannedMoveVigorCost = 0;
+    public bool HasDeferredMoveCost => pendingPlannedMoveVigorCost > 0;
+
+    private float encounterBannerSeconds = 1.5f;
+
+    public void SaveExplorationSnapshot(ExplorationSnapshot snap)
+    {
+        explorationSnapshot = snap;
+        Debug.Log($"[STM] Snapshot saved. objs={(snap?.objects?.Count ?? 0)}");
+    }
+    public void ClearExplorationSnapshot()
+    {
+        explorationSnapshot = null;
+        Debug.Log("[STM] Snapshot cleared (before leaving exploration).");
+    }
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else Destroy(gameObject);
+    }
+
+    // sceneName ì”¬ìœ¼ë¡œ í˜ì´ë“œì•„ì›ƒ â†’ ë¡œë“œ â†’ í˜ì´ë“œì¸
+    public void FadeToScene(string sceneName)
+    {
+        StartCoroutine(FadeCoroutine(sceneName));
+    }
+    IEnumerator FadeCoroutine(string sceneName)
+    {
+        // í˜ì´ë“œ ì•„ì›ƒ (alpha 0 â†’ 1)
+        float t = 0f;
+        while (t < fadeDuration)
+        {
+            t += Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+
+        // ì”¬ ë¡œë“œ (ë¹„ë™ê¸°)
+        yield return SceneManager.LoadSceneAsync(sceneName);
+
+        // í˜ì´ë“œ ì¸ (alpha 1 â†’ 0)
+        t = fadeDuration;
+        while (t > 0f)
+        {
+            t -= Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+    }
+
+    public void SaveReturnPoint(string sceneName, Vector3 worldPos)
+    {
+        pendingReturnScene = sceneName;
+        pendingReturnPosition = worldPos;
+        Debug.Log($"[Return] Save: scene={sceneName}, pos={worldPos}");
+    }
+    public void ReturnToSavedPoint()
+    {
+        if (!HasPendingReturn)
+        {
+            Debug.LogWarning("[Return] ì €ì¥ëœ ë³µê·€ ì§€ì ì´ ì—†ìŠµë‹ˆë‹¤.");
+            return;
+        }
+        if (_isReturning) return;             // ì¤‘ë³µ ê°€ë“œ
+        _isReturning = true;
+        StartCoroutine(ReturnCoroutine());
+    }
+
+    public void SetResumePath(List<Vector3Int> cells)
+    {
+        pendingResumeCells = cells;
+    }
+
+    public List<Vector3Int> ConsumeResumePath()
+    {
+        var tmp = pendingResumeCells;
+        pendingResumeCells = null;
+        return tmp;
+    }
+
+    public void SetDeferredMoveCost(int cost)
+    {
+        pendingPlannedMoveVigorCost = Mathf.Max(0, cost);
+    }
+
+    public int ConsumeDeferredMoveCost()
+    {
+        int tmp = pendingPlannedMoveVigorCost;
+        pendingPlannedMoveVigorCost = 0;
+        return tmp;
+    }
+
+    IEnumerator ReturnCoroutine()
+    {
+        // í˜ì´ë“œ ì•„ì›ƒ
+        float t = 0f;
+        while (t < fadeDuration)
+        {
+            t += Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+
+        // íƒí—˜ ì”¬ ë¡œë“œ
+        yield return SceneManager.LoadSceneAsync(pendingReturnScene);
+
+        // íƒí—˜ ì”¬ì—ì„œ PlayerMovement ì¤€ë¹„ë  ë•Œê¹Œì§€ ëŒ€ê¸° í›„ ìˆœê°„ì´ë™
+        int safety = 300; // ~5ì´ˆ(60FPS ê°€ì •)
+        while (PlayerMovement.Instance == null && safety-- > 0)
+            yield return null;
+
+        if (PlayerMovement.Instance != null)
+        {
+            PlayerMovement.Instance.TeleportTo(pendingReturnPosition);
+
+            if (HasSavedVigor && VigorManager.Instance != null)
+            {
+                int v = ConsumeVigor();
+                VigorManager.Instance.SetCurrentVigor(v);
+            }
+
+            // ë‚¨ì€ ê²½ë¡œê°€ ìˆìœ¼ë©´ ì´ì–´ì„œ ì´ë™
+            var resume = ConsumeResumePath();
+            if (resume != null && resume.Count >= 2)
+            {
+                // ë³´ìƒì°½ ë‹«í ë•Œê¹Œì§€ ì…ë ¥/ì´ë™ ì°¨ë‹¨
+                PlayerMovement.Instance?.LockMovementIndefinite();
+
+                // í”„ë ˆì  í„° ì¤€ë¹„ ëŒ€ê¸°(íƒí—˜ ì”¬ UIê°€ ì•„ì§ Awake ì „ì¼ ìˆ˜ ìˆìœ¼ë¯€ë¡œ)
+                yield return new WaitUntil(() => ExplorationModalPresenter.Instance != null);
+
+                ExplorationModalPresenter.Instance.ShowRewardPopup(() =>
+                {
+                    PlayerMovement.Instance?.UnlockMovementIndefinite();
+                    PlayerMovement.Instance?.ResumePathAfterBattle(resume);
+                });
+            }
+            else
+            {
+                // resumeê°€ ì—†ìœ¼ë©´ ì ê¸ˆ í’€ê¸°(í˜¹ì‹œ ë‚¨ì•„ìˆë‹¤ë©´)
+                PlayerMovement.Instance?.UnlockMovementIndefinite();
+            }
+            Debug.Log($"[Return] Teleport to {pendingReturnPosition}");
+        }
+        else
+        {
+            Debug.LogWarning("[Return] PlayerMovement ë¯¸ë°œê²¬ â†’ í…”ë ˆí¬íŠ¸ ìƒëµ");
+        }
+
+        // í˜ì´ë“œ ì¸
+        t = fadeDuration;
+        while (t > 0f)
+        {
+            t -= Time.deltaTime;
+            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            yield return null;
+        }
+
+        // 1íšŒì„± ì»¨í…ìŠ¤íŠ¸ ì •ë¦¬
+        pendingReturnScene = null;
+        _isReturning = false;   // ê°€ë“œ í•´ì œ
+    }
+
+    //IExplorationPersistableë¥¼ ê°€ì§€ê³  ìˆëŠ” ì˜¤ë¸Œì íŠ¸ëŠ” ëª¨ë‘ ìŠ¤ëƒ…ìƒ·ì— ì¶”ê°€
+    public ExplorationSnapshot BuildExplorationSnapshotFromScene()
+    {
+        var snap = new ExplorationSnapshot();
+
+        // ì”¬ ë‚´ ëª¨ë“  Persistable ìƒíƒœ ìˆ˜ì§‘
+        foreach (var mb in FindObjectsOfType<MonoBehaviour>(true))
+        {
+            if (mb is IExplorationPersistable ip)
+            {
+                snap.objects.Add(ip.SaveState());
+            }
+        }
+
+        return snap;
+    }
+
+    public void SaveVigor(int v) => savedVigor = Mathf.Max(0, v);
+    public int ConsumeVigor()
+    {
+        int v = savedVigor;
+        savedVigor = -1;
+        return v;
+    }
+
+    public void EnterBattleWithEncounterBanner(string monsterName, string battleScene)
+    {
+        // ì „íˆ¬ ì§„ì… ì „ê¹Œì§€ ì…ë ¥ ì°¨ë‹¨(íƒ€ì¼ í´ë¦­ ë“±)
+        PlayerMovement.Instance?.LockMovementIndefinite();
+
+        string testSecne = "TestScene";//ì„ì‹œ í…ŒìŠ¤íŠ¸ìš© - ì¸ì¹´ìš´í„°ë¡œ ì¸í•œ ì „íˆ¬ì”¬ìœ¼ë¡œ ê°€ê¸° ì „ í›ˆë ¨ì”¬ì„ ê±°ì¹˜ê¸° ìœ„í•´ ì„ì‹œ ì¶”ê°€
+
+        var presenter = ExplorationModalPresenter.Instance;
+        if (presenter == null)
+        {
+            // í”„ë ˆì  í„°ê°€ ì—†ìœ¼ë©´ ì¦‰ì‹œ ì§„ì…(ì•ˆì „ fallback)
+            //FadeToScene(battleScene);
+            FadeToScene(testSecne);//ì„ì‹œ í…ŒìŠ¤íŠ¸ìš© - ì¸ì¹´ìš´í„°ë¡œ ì¸í•œ ì „íˆ¬ì”¬ìœ¼ë¡œ ê°€ê¸° ì „ í›ˆë ¨ì”¬ì„ ê±°ì¹˜ê¸° ìœ„í•´ ì„ì‹œ ì¶”ê°€
+            return;
+        }
+
+        string msg = $"{monsterName}ê³¼ ë§ˆì£¼ì³¤ìŠµë‹ˆë‹¤. ì „íˆ¬ì— ëŒì…í•©ë‹ˆë‹¤.";
+        presenter.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
+        {
+            FadeToScene(battleScene);
+            //FadeToScene(testSecne); //ì„ì‹œ í…ŒìŠ¤íŠ¸ìš© - ì¸ì¹´ìš´í„°ë¡œ ì¸í•œ ì „íˆ¬ì”¬ìœ¼ë¡œ ê°€ê¸° ì „ í›ˆë ¨ì”¬ì„ ê±°ì¹˜ê¸° ìœ„í•´ ì„ì‹œ ì¶”ê°€
+        });
+    }
+
+}

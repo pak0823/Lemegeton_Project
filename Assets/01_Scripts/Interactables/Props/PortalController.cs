@@ -1,40 +1,40 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-public class PortalController : MonoBehaviour
-{
-    [Header("ÀÌµ¿ÇÒ ¾À ÀÌ¸§")]
-    public string targetScene = "BattleScene";
-
-    [Header("ÀüÅõ ÄÁÅØ½ºÆ® Àü´Ş(¼±ÅÃ)")]
-    [Tooltip("ÀÌ Æ÷Å»À» »ç¿ëÇÒ ¶§ ÀüÅõ ÄÁÅØ½ºÆ®¸¦ ¼¼ÆÃÇÒÁö ¿©ºÎ (BattleSceneÀ¸·Î °¥ ¶§¸¸ ÀÇ¹Ì ÀÖÀ½)")]
-    [SerializeField] private bool setBattleContextOnUse = false;
-    [SerializeField] private BattleContext battleContextWhenUsed = BattleContext.AfterPuzzle;
-    [SerializeField] private StageNormalMapData currentStageData; // ÇöÀç ½ºÅ×ÀÌÁö µ¥ÀÌÅÍ
-    [SerializeField] private int stageNumberOverride = -1;        // µ¥ÀÌÅÍ°¡ ¾øÀ¸¸é ÀÌ °ª »ç¿ë
-
-    public string GetHintLabel() => "ÀÌµ¿";
-
-    public void UsePortal()
-    {
-        // ÀüÅõ¾ÀÀ¸·Î ÀÌµ¿ÇÏ´Â Æ÷Å»ÀÌ¶ó¸é ÄÁÅØ½ºÆ®¸¦ ¸ÕÀú ¼¼ÆÃ
-        if (setBattleContextOnUse && targetScene == "BattleScene")
-        {
-            if (StageRuntimeContext.Instance == null)
-                new GameObject("StageRuntimeContext").AddComponent<StageRuntimeContext>();
-
-            int stageNo = (currentStageData != null) ? currentStageData.stageNumber :
-                          (stageNumberOverride >= 0 ? stageNumberOverride : -1);
-
-            if (stageNo < 0)
-                Debug.LogWarning("[PortalController] stage number not set. (currentStageData or stageNumberOverride)");
-
-            StageRuntimeContext.Instance.SetStageNumber(stageNo);
-            StageRuntimeContext.Instance.SetBattleContext(battleContextWhenUsed);
-        }
-
-        SceneTransitionManager.Instance.FadeToScene(targetScene);
-        Debug.Log("[PortalController] UsePortal -> scene transition");
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PortalController : MonoBehaviour
+{
+    [Header("ì´ë™í•  ì”¬ ì´ë¦„")]
+    public string targetScene = "BattleScene";
+
+    [Header("ì „íˆ¬ ì»¨í…ìŠ¤íŠ¸ ì „ë‹¬(ì„ íƒ)")]
+    [Tooltip("ì´ í¬íƒˆì„ ì‚¬ìš©í•  ë•Œ ì „íˆ¬ ì»¨í…ìŠ¤íŠ¸ë¥¼ ì„¸íŒ…í• ì§€ ì—¬ë¶€ (BattleSceneìœ¼ë¡œ ê°ˆ ë•Œë§Œ ì˜ë¯¸ ìˆìŒ)")]
+    [SerializeField] private bool setBattleContextOnUse = false;
+    [SerializeField] private BattleContext battleContextWhenUsed = BattleContext.AfterPuzzle;
+    [SerializeField] private StageNormalMapData currentStageData; // í˜„ì¬ ìŠ¤í…Œì´ì§€ ë°ì´í„°
+    [SerializeField] private int stageNumberOverride = -1;        // ë°ì´í„°ê°€ ì—†ìœ¼ë©´ ì´ ê°’ ì‚¬ìš©
+
+    public string GetHintLabel() => "ì´ë™";
+
+    public void UsePortal()
+    {
+        // ì „íˆ¬ì”¬ìœ¼ë¡œ ì´ë™í•˜ëŠ” í¬íƒˆì´ë¼ë©´ ì»¨í…ìŠ¤íŠ¸ë¥¼ ë¨¼ì € ì„¸íŒ…
+        if (setBattleContextOnUse && targetScene == "BattleScene")
+        {
+            if (StageRuntimeContext.Instance == null)
+                new GameObject("StageRuntimeContext").AddComponent<StageRuntimeContext>();
+
+            int stageNo = (currentStageData != null) ? currentStageData.stageNumber :
+                          (stageNumberOverride >= 0 ? stageNumberOverride : -1);
+
+            if (stageNo < 0)
+                Debug.LogWarning("[PortalController] stage number not set. (currentStageData or stageNumberOverride)");
+
+            StageRuntimeContext.Instance.SetStageNumber(stageNo);
+            StageRuntimeContext.Instance.SetBattleContext(battleContextWhenUsed);
+        }
+
+        SceneTransitionManager.Instance.FadeToScene(targetScene);
+        Debug.Log("[PortalController] UsePortal -> scene transition");
+    }
+}

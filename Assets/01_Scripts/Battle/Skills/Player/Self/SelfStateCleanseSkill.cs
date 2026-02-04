@@ -1,109 +1,109 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-/// <summary>
-/// ¿⁄±‚ ¿⁄Ω≈ø°∞‘ ∞…∏∞ UnitState∏¶ «ÿ¡¶«œ¥¬ Ω∫≈≥.
-/// - removeAll = true: ¿¸∫Œ ¡¶∞≈
-/// - removeAll = false: ¡ˆ¡§µ» stateIds∏∏ ¡¶∞≈
-/// </summary>
-[CreateAssetMenu(menuName = "Battle/Skills/State/Self State Cleanse", fileName = "SelfStateCleanseSkill")]
-public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
-{
-    [Header("Cleanse Options")]
-    public bool removeAll = true;
-    public List<UnitStateId> stateIds = new(); // removeAll=false¿œ ∂ß∏∏ ªÁøÎ
-
-    [Header("Training")]
-    [Header("¿⁄ø¯ ¿˝æ‡ »∆∑√")]
-    public bool trainingUseReducedCost;
-    [Range(-1, 2)] public int routeForReducedCost = -1; // ∑Á∆Æ ¡ˆ¡§
-    public int trainingReducedCost = 2;
-
-    [Header("ø¨º” «‡µø »∆∑√")]
-    public bool trainingUseFreeAction;
-    [Range(-1, 2)] public int routeForFreeAction = -1; // ∑Á∆Æ ¡ˆ¡§
-
-    public bool SelfCastOnSelect => true;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = SkillTargetMode.Unit; }
-#endif
-    void OnEnable() 
-    { 
-        targetMode = SkillTargetMode.Unit;
-        costResource = SkillCostResource.MP;
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
-    {
-        yield break;
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // ≈∏∞Ÿ∆√ ∞˙¡§ æ¯¿Ã, ¡ÔΩ√ ¿⁄±‚ ¿⁄Ω≈(caster)¿ª ¥ÎªÛ¿∏∑Œ Ω««‡ »Â∏ß ¡¯¿‘
-        // PerformStandardUnitSkillFlow∞° æ÷¥œ∏ﬁ¿Ãº« -> ResolveOnUnit »£√‚¿ª ¥Ÿ «ÿ¡‹
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
-    {
-        if (!caster) yield break;
-
-        // »∆∑√±Ó¡ˆ π›øµµ» Ω«¡¶ MP ∫ÒøÎ
-        var res = GetCostResource(caster);
-        int cost = GetEffectiveCost(caster);
-        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
-
-        var usc = caster.GetComponent<UnitStateController>();
-        if (usc == null) yield break;
-
-        if (removeAll)
-        {
-            usc.RemoveAll();
-        }
-        else
-        {
-            foreach (var id in stateIds)
-                usc.Remove(id);
-        }
-        yield break;
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        yield break;
-    }
-
-    public override int GetEffectiveCost(BattleUnit caster)
-    {
-        int cost = base.GetEffectiveCost(caster);
-        if (!trainingUseReducedCost || caster == null) return cost;
-
-        int route = caster.GetTrainingRouteIndex(this);
-
-        // MP ∞®º“
-        if (routeForReducedCost >= 0 && route == routeForReducedCost)
-        {
-            cost = Mathf.Max(0, trainingReducedCost);
-        }
-        return cost;
-    }
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+/// <summary>
+/// ÏûêÍ∏∞ ÏûêÏã†ÏóêÍ≤å Í±∏Î¶∞ UnitStateÎ•º Ìï¥Ï†úÌïòÎäî Ïä§ÌÇ¨.
+/// - removeAll = true: Ï†ÑÎ∂Ä Ï†úÍ±∞
+/// - removeAll = false: ÏßÄÏ†ïÎêú stateIdsÎßå Ï†úÍ±∞
+/// </summary>
+[CreateAssetMenu(menuName = "Battle/Skills/State/Self State Cleanse", fileName = "SelfStateCleanseSkill")]
+public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
+{
+    [Header("Cleanse Options")]
+    public bool removeAll = true;
+    public List<UnitStateId> stateIds = new(); // removeAll=falseÏùº ÎïåÎßå ÏÇ¨Ïö©
+
+    [Header("Training")]
+    [Header("ÏûêÏõê Ï†àÏïΩ ÌõàÎ†®")]
+    public bool trainingUseReducedCost;
+    [Range(-1, 2)] public int routeForReducedCost = -1; // Î£®Ìä∏ ÏßÄÏ†ï
+    public int trainingReducedCost = 2;
+
+    [Header("Ïó∞ÏÜç ÌñâÎèô ÌõàÎ†®")]
+    public bool trainingUseFreeAction;
+    [Range(-1, 2)] public int routeForFreeAction = -1; // Î£®Ìä∏ ÏßÄÏ†ï
+
+    public bool SelfCastOnSelect => true;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = SkillTargetMode.Unit; }
+#endif
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.MP;
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    {
+        yield break;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // ÌÉÄÍ≤üÌåÖ Í≥ºÏ†ï ÏóÜÏù¥, Ï¶âÏãú ÏûêÍ∏∞ ÏûêÏã†(caster)ÏùÑ ÎåÄÏÉÅÏúºÎ°ú Ïã§Ìñâ ÌùêÎ¶Ñ ÏßÑÏûÖ
+        // PerformStandardUnitSkillFlowÍ∞Ä Ïï†ÎãàÎ©îÏù¥ÏÖò -> ResolveOnUnit Ìò∏Ï∂úÏùÑ Îã§ Ìï¥Ï§å
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        if (!caster) yield break;
+
+        // ÌõàÎ†®ÍπåÏßÄ Î∞òÏòÅÎêú Ïã§Ï†ú MP ÎπÑÏö©
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
+
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null) yield break;
+
+        if (removeAll)
+        {
+            usc.RemoveAll();
+        }
+        else
+        {
+            foreach (var id in stateIds)
+                usc.Remove(id);
+        }
+        yield break;
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        yield break;
+    }
+
+    public override int GetEffectiveCost(BattleUnit caster)
+    {
+        int cost = base.GetEffectiveCost(caster);
+        if (!trainingUseReducedCost || caster == null) return cost;
+
+        int route = caster.GetTrainingRouteIndex(this);
+
+        // MP Í∞êÏÜå
+        if (routeForReducedCost >= 0 && route == routeForReducedCost)
+        {
+            cost = Mathf.Max(0, trainingReducedCost);
+        }
+        return cost;
+    }
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

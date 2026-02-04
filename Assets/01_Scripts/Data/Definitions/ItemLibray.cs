@@ -1,32 +1,32 @@
-using UnityEngine;
-using System.Collections.Generic;
-using System.Linq;
-
-[CreateAssetMenu(fileName = "ItemLibrary", menuName = "Data/ItemLibrary")]
-public class ItemLibrary : ScriptableObject
-{
-    // ¿¡µğÅÍ¿¡¼­ ¸ğµç ItemData(SO)¸¦ ¿©±â¿¡ µå·¡±×ÇØ¼­ ³Ö¾î¶ó
-    public List<ItemData> allItems = new List<ItemData>();
-
-    // ID·Î ¾ÆÀÌÅÛ µ¥ÀÌÅÍ¸¦ ºü¸£°Ô Ã£±â À§ÇÑ »çÀü (·±Å¸ÀÓ¿ë)
-    private Dictionary<string, ItemData> _itemDictionary;
-
-    public void Init()
-    {
-        // ¸®½ºÆ®¸¦ µñ¼Å³Ê¸®·Î º¯È¯ÇØ¼­ °Ë»ö ¼Óµµ¸¦ O(1)·Î ÃÖÀûÈ­
-        _itemDictionary = allItems.ToDictionary(item => item.itemID, item => item);
-    }
-
-    public ItemData GetItem(string id)
-    {
-        if (_itemDictionary == null) Init();
-
-        if (_itemDictionary.TryGetValue(id, out var data))
-        {
-            return data;
-        }
-
-        Debug.LogWarning($"[ItemLibrary] ID '{id}'¸¦ °¡Áø ¾ÆÀÌÅÛÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù.");
-        return null;
-    }
+using UnityEngine;
+using System.Collections.Generic;
+using System.Linq;
+
+[CreateAssetMenu(fileName = "ItemLibrary", menuName = "Data/ItemLibrary")]
+public class ItemLibrary : ScriptableObject
+{
+    // ì—ë””í„°ì—ì„œ ëª¨ë“  ItemData(SO)ë¥¼ ì—¬ê¸°ì— ë“œë˜ê·¸í•´ì„œ ë„£ì–´ë¼
+    public List<ItemData> allItems = new List<ItemData>();
+
+    // IDë¡œ ì•„ì´í…œ ë°ì´í„°ë¥¼ ë¹ ë¥´ê²Œ ì°¾ê¸° ìœ„í•œ ì‚¬ì „ (ëŸ°íƒ€ì„ìš©)
+    private Dictionary<string, ItemData> _itemDictionary;
+
+    public void Init()
+    {
+        // ë¦¬ìŠ¤íŠ¸ë¥¼ ë”•ì…”ë„ˆë¦¬ë¡œ ë³€í™˜í•´ì„œ ê²€ìƒ‰ ì†ë„ë¥¼ O(1)ë¡œ ìµœì í™”
+        _itemDictionary = allItems.ToDictionary(item => item.itemID, item => item);
+    }
+
+    public ItemData GetItem(string id)
+    {
+        if (_itemDictionary == null) Init();
+
+        if (_itemDictionary.TryGetValue(id, out var data))
+        {
+            return data;
+        }
+
+        Debug.LogWarning($"[ItemLibrary] ID '{id}'ë¥¼ ê°€ì§„ ì•„ì´í…œì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
+        return null;
+    }
 }

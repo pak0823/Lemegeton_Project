@@ -1,157 +1,157 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Text;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-/// <summary>
-/// ¼±ÅÃ Áï½Ã ÀÚ±â ÀÚ½Å¿¡°Ô »óÅÂ¸¦ ºÎ¿©ÇÏ´Â ½ºÅ³.
-/// Áö¼Ó½Ã°£ ¾øÀ½(¹«±âÇÑ). ÇØÁ¦´Â º°µµ 'ÇØÁ¦ ½ºÅ³'·Î Ã³¸®.
-/// </summary>
-[CreateAssetMenu(menuName = "Battle/Skills/State/Self State (Permanent)", fileName = "SelfStateSkill")]
-public class SelfStateSkill : SkillAsset, ISelfCastSkill
-{
-    [Header("State")]
-    public UnitStateId stateId = UnitStateId.Support;
-
-    [Header("Training")]
-    [Header("ÀÚ¿ø Àı¾à ÈÆ·Ã")]
-    [Tooltip("¼Ò¸ğ ºñ¿ë µ¤¾î¾²±â È°¼ºÈ­")]
-    public bool trainingUseCostOverride = false;
-    [Range(-1, 2)] public int routeForCostOverride = -1; // À¯¿¬ÇÑ ·çÆ® ÁöÁ¤
-    public int trainingCostOverride = -1;
-
-    [Header("Ãß°¡ ¹öÇÁ ºÎ¿© ¼³Á¤")]
-    [Tooltip("Ãß°¡ ¹öÇÁ ºÎ¿© È°¼ºÈ­")]
-    public bool trainingApplyMagicBuff = false;
-    [Range(-1, 2)] public int routeForMagicBuff = -1; // À¯¿¬ÇÑ ·çÆ® ÁöÁ¤
-    public UnitStateBuffId trainingMagicBuffId = UnitStateBuffId.Smoke_MagicUp;
-
-    // Àº½Å(Hidden) ÈÆ·Ã Ãß°¡
-    [Header("»ç°í ¿¹¹æ ÈÆ·Ã")]
-    [Tooltip("Àº½Å »óÅÂ(Hidden) ºÎ¿© È°¼ºÈ­ - Å¸°ÙÆÃ ºÒ°¡")]
-    public bool trainingApplyStealth = false;
-    [Range(-1, 2)] public int routeForStealth = -1;
-    public UnitStateId trainingHiddenStateId = UnitStateId.Hidden;
-    [Min(1)] public int trainingStealthDuration = 1; // 1ÅÏ À¯Áö
-
-    [Header("¿¬¼Ó Çàµ¿ ÈÆ·Ã")]
-    [Tooltip("¹«·á Çàµ¿(ÅÏ ¹Ì¼Ò¸ğ) È°¼ºÈ­")]
-    public bool trainingUseFreeAction = false;
-    [Range(-1, 2)] public int routeForFreeAction = -1; // À¯¿¬ÇÑ ·çÆ® ÁöÁ¤
-
-    public bool SelfCastOnSelect => true;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = SkillTargetMode.Unit; } // ±âÁ¸ ÆÄÀÌÇÁ Àç»ç¿ë
-#endif
-    void OnEnable() 
-    { 
-        targetMode = SkillTargetMode.Unit;
-        costResource = SkillCostResource.MP;
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
-    {
-        yield break; // ÇÁ¸®ºä ºÒÇÊ¿ä
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // Å¸°ÙÆÃ °úÁ¤ ¾øÀÌ, Áï½Ã ÀÚ±â ÀÚ½Å(caster)À» ´ë»óÀ¸·Î ½ÇÇà Èå¸§ ÁøÀÔ
-        // PerformStandardUnitSkillFlow°¡ ¾Ö´Ï¸ŞÀÌ¼Ç -> ResolveOnUnit È£ÃâÀ» ´Ù ÇØÁÜ
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (!_caster) yield break;
-
-        var usc = _caster.GetComponent<UnitStateController>();
-        if (usc == null) usc = _caster.gameObject.AddComponent<UnitStateController>();
-
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost))
-        {
-            Debug.Log($"[SelfStateSkill] ÀÚ¿ø ºÎÁ·: {displayName} (ÇÊ¿ä {cost}, {res})");
-            yield break;
-        }
-
-        // ==== »óÅÂ ºÎ¿© ====
-        usc.Apply(stateId);
-
-        // ==== ÈÆ·Ã ·çÆ®º° Ãß°¡ È¿°ú ====
-        int route = _caster.GetTrainingRouteIndex(this);
-
-        // Buff ºÎ¿©
-        if (trainingApplyMagicBuff && routeForMagicBuff >= 0 && route == routeForMagicBuff && trainingMagicBuffId != UnitStateBuffId.None)
-        {
-            usc.ApplyBuff(trainingMagicBuffId);
-            Debug.Log($"[SelfStateSkill] Training Buff applied: {_caster.name}, Buff={trainingMagicBuffId}");
-        }
-
-        // Àº½Å ºÎ¿©
-        if (trainingApplyStealth && routeForStealth >= 0 && route == routeForStealth && trainingHiddenStateId != UnitStateId.None)
-        {
-            // Àº½Å ¹öÇÁ ºÎ¿© (Áö¼Ó½Ã°£ Àû¿ë)
-            usc.ApplyForTurns(trainingHiddenStateId, trainingStealthDuration);
-            Debug.Log($"[SelfStateSkill] Stealth Applied: {_caster.name}, Duration={trainingStealthDuration}");
-        }
-
-        // ½ºÅ³ »ç¿ë ¿Ï·á ¾Ë¸² (ÆĞ½Ãºê°¡ ÀÌ¸¦ °¨ÁöÇÏ¿© ½ºÅÃ Ã³¸®)
-        _caster.NotifySkillUsed(this);
-
-        yield break;
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-    {
-        yield break; // »ç¿ë ¾È ÇÔ
-    }
-
-    public override int GetEffectiveCost(BattleUnit _caster)
-    {
-        // ±âº» ÈÆ·Ã¿¡ ÀÇÇÑ ºñ¿ë ¿À¹ö¶óÀÌµå °è»ê
-        int finalCost = base.GetEffectiveCost(_caster);
-        if (_caster != null)
-        {
-            int route = _caster.GetTrainingRouteIndex(this);
-            if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
-            {
-                finalCost = Mathf.Max(0, trainingCostOverride);
-            }
-        }
-
-        // ¿¬±¸(Research) ÁßÃ¸ 3ÀÌ¸é ºñ¿ë 0 Ã³¸®
-        if (_caster != null)
-        {
-            var status = _caster.GetComponent<StatusController>();
-            if (status != null)
-            {
-                // ¿¬±¸ ÁßÃ¸ÀÌ 3 ÀÌ»óÀÌ¸é ºñ¿ë ¹«·á
-                if (status.GetStacks(StatusId.Research) >= 3)
-                {
-                    return 0;
-                }
-            }
-        }
-
-        return finalCost;
-    }
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using System.Text;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+/// <summary>
+/// ì„ íƒ ì¦‰ì‹œ ìê¸° ìì‹ ì—ê²Œ ìƒíƒœë¥¼ ë¶€ì—¬í•˜ëŠ” ìŠ¤í‚¬.
+/// ì§€ì†ì‹œê°„ ì—†ìŒ(ë¬´ê¸°í•œ). í•´ì œëŠ” ë³„ë„ 'í•´ì œ ìŠ¤í‚¬'ë¡œ ì²˜ë¦¬.
+/// </summary>
+[CreateAssetMenu(menuName = "Battle/Skills/State/Self State (Permanent)", fileName = "SelfStateSkill")]
+public class SelfStateSkill : SkillAsset, ISelfCastSkill
+{
+    [Header("State")]
+    public UnitStateId stateId = UnitStateId.Support;
+
+    [Header("Training")]
+    [Header("ìì› ì ˆì•½ í›ˆë ¨")]
+    [Tooltip("ì†Œëª¨ ë¹„ìš© ë®ì–´ì“°ê¸° í™œì„±í™”")]
+    public bool trainingUseCostOverride = false;
+    [Range(-1, 2)] public int routeForCostOverride = -1; // ìœ ì—°í•œ ë£¨íŠ¸ ì§€ì •
+    public int trainingCostOverride = -1;
+
+    [Header("ì¶”ê°€ ë²„í”„ ë¶€ì—¬ ì„¤ì •")]
+    [Tooltip("ì¶”ê°€ ë²„í”„ ë¶€ì—¬ í™œì„±í™”")]
+    public bool trainingApplyMagicBuff = false;
+    [Range(-1, 2)] public int routeForMagicBuff = -1; // ìœ ì—°í•œ ë£¨íŠ¸ ì§€ì •
+    public UnitStateBuffId trainingMagicBuffId = UnitStateBuffId.Smoke_MagicUp;
+
+    // ì€ì‹ (Hidden) í›ˆë ¨ ì¶”ê°€
+    [Header("ì‚¬ê³  ì˜ˆë°© í›ˆë ¨")]
+    [Tooltip("ì€ì‹  ìƒíƒœ(Hidden) ë¶€ì—¬ í™œì„±í™” - íƒ€ê²ŸíŒ… ë¶ˆê°€")]
+    public bool trainingApplyStealth = false;
+    [Range(-1, 2)] public int routeForStealth = -1;
+    public UnitStateId trainingHiddenStateId = UnitStateId.Hidden;
+    [Min(1)] public int trainingStealthDuration = 1; // 1í„´ ìœ ì§€
+
+    [Header("ì—°ì† í–‰ë™ í›ˆë ¨")]
+    [Tooltip("ë¬´ë£Œ í–‰ë™(í„´ ë¯¸ì†Œëª¨) í™œì„±í™”")]
+    public bool trainingUseFreeAction = false;
+    [Range(-1, 2)] public int routeForFreeAction = -1; // ìœ ì—°í•œ ë£¨íŠ¸ ì§€ì •
+
+    public bool SelfCastOnSelect => true;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = SkillTargetMode.Unit; } // ê¸°ì¡´ íŒŒì´í”„ ì¬ì‚¬ìš©
+#endif
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.MP;
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
+    {
+        yield break; // í”„ë¦¬ë·° ë¶ˆí•„ìš”
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // íƒ€ê²ŸíŒ… ê³¼ì • ì—†ì´, ì¦‰ì‹œ ìê¸° ìì‹ (caster)ì„ ëŒ€ìƒìœ¼ë¡œ ì‹¤í–‰ íë¦„ ì§„ì…
+        // PerformStandardUnitSkillFlowê°€ ì• ë‹ˆë©”ì´ì…˜ -> ResolveOnUnit í˜¸ì¶œì„ ë‹¤ í•´ì¤Œ
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (!_caster) yield break;
+
+        var usc = _caster.GetComponent<UnitStateController>();
+        if (usc == null) usc = _caster.gameObject.AddComponent<UnitStateController>();
+
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost))
+        {
+            Debug.Log($"[SelfStateSkill] ìì› ë¶€ì¡±: {displayName} (í•„ìš” {cost}, {res})");
+            yield break;
+        }
+
+        // ==== ìƒíƒœ ë¶€ì—¬ ====
+        usc.Apply(stateId);
+
+        // ==== í›ˆë ¨ ë£¨íŠ¸ë³„ ì¶”ê°€ íš¨ê³¼ ====
+        int route = _caster.GetTrainingRouteIndex(this);
+
+        // Buff ë¶€ì—¬
+        if (trainingApplyMagicBuff && routeForMagicBuff >= 0 && route == routeForMagicBuff && trainingMagicBuffId != UnitStateBuffId.None)
+        {
+            usc.ApplyBuff(trainingMagicBuffId);
+            Debug.Log($"[SelfStateSkill] Training Buff applied: {_caster.name}, Buff={trainingMagicBuffId}");
+        }
+
+        // ì€ì‹  ë¶€ì—¬
+        if (trainingApplyStealth && routeForStealth >= 0 && route == routeForStealth && trainingHiddenStateId != UnitStateId.None)
+        {
+            // ì€ì‹  ë²„í”„ ë¶€ì—¬ (ì§€ì†ì‹œê°„ ì ìš©)
+            usc.ApplyForTurns(trainingHiddenStateId, trainingStealthDuration);
+            Debug.Log($"[SelfStateSkill] Stealth Applied: {_caster.name}, Duration={trainingStealthDuration}");
+        }
+
+        // ìŠ¤í‚¬ ì‚¬ìš© ì™„ë£Œ ì•Œë¦¼ (íŒ¨ì‹œë¸Œê°€ ì´ë¥¼ ê°ì§€í•˜ì—¬ ìŠ¤íƒ ì²˜ë¦¬)
+        _caster.NotifySkillUsed(this);
+
+        yield break;
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    {
+        yield break; // ì‚¬ìš© ì•ˆ í•¨
+    }
+
+    public override int GetEffectiveCost(BattleUnit _caster)
+    {
+        // ê¸°ë³¸ í›ˆë ¨ì— ì˜í•œ ë¹„ìš© ì˜¤ë²„ë¼ì´ë“œ ê³„ì‚°
+        int finalCost = base.GetEffectiveCost(_caster);
+        if (_caster != null)
+        {
+            int route = _caster.GetTrainingRouteIndex(this);
+            if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+            {
+                finalCost = Mathf.Max(0, trainingCostOverride);
+            }
+        }
+
+        // ì—°êµ¬(Research) ì¤‘ì²© 3ì´ë©´ ë¹„ìš© 0 ì²˜ë¦¬
+        if (_caster != null)
+        {
+            var status = _caster.GetComponent<StatusController>();
+            if (status != null)
+            {
+                // ì—°êµ¬ ì¤‘ì²©ì´ 3 ì´ìƒì´ë©´ ë¹„ìš© ë¬´ë£Œ
+                if (status.GetStacks(StatusId.Research) >= 3)
+                {
+                    return 0;
+                }
+            }
+        }
+
+        return finalCost;
+    }
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

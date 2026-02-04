@@ -1,104 +1,104 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-
-// ÅÏÀÇ ½Ã°£ Èå¸§°ú ¼ø¼­¸¦ Àü´ãÇÏ´Â Å¬·¡½º
-public class ATBTurnController : MonoBehaviour
-{
-    // === ¼³Á¤ °ª ===
-    [Header("Settings")]
-    [SerializeField] private bool _isPaused = false; // ½Ã°£ Á¤Áö ¿©ºÎ
-
-    // === µ¥ÀÌÅÍ ===
-    private List<BattleUnit> _allUnits = new();
-    private readonly System.Random _rng = new();
-
-    // === ÀÌº¥Æ® ===
-    // À¯´ÖÀÇ ÅÏÀÌ ¿Â °ÍÀ» ¸Å´ÏÀú¿¡°Ô ¾Ë·ÁÁÖ´Â ½ÅÈ£
-    public event Action<BattleUnit> OnTurnReady;
-    // UI °»½Å¿ë (¸Å ÇÁ·¹ÀÓ È£ÃâµÉ ¼ö ÀÖÀ½)
-    public event Action<BattleUnit> OnATBTicked;
-
-    // === ÃÊ±âÈ­ ===
-    public void RegisterUnits(IEnumerable<BattleUnit> units)
-    {
-        _allUnits = units.ToList();
-        // AGI º¯È­¿¡ µû¸¥ ¼Óµµ Àç°è»ê µîÀº ¿©±â¼­ ÇÏ°Å³ª À¯´Öº° ÀÌº¥Æ®·Î Ã³¸®
-        RefreshATBSpeeds();
-    }
-
-    public void RefreshATBSpeeds()
-    {
-        if (_allUnits.Count == 0) return;
-
-        var alive = _allUnits.Where(u => !u.IsDead).ToList();
-        if (alive.Count == 0) return;
-
-        float min = alive.Min(u => u.EffectiveAGI);
-        float max = alive.Max(u => u.EffectiveAGI);
-
-        foreach (var u in alive)
-        {
-            u.InitializeATB(min, max);
-        }
-    }
-
-    // === ÇÙ½É ·çÇÁ ===
-    void Update()
-    {
-        if (_isPaused) return; // ÅÏ ÁøÇà Áß(Çàµ¿ Áß)ÀÌ¸é ½Ã°£ ¸ØÃã
-        if (_allUnits.Count == 0) return;
-
-        // 1. ¸ğµç À¯´Ö ATB ÃæÀü
-        float deltatime = Time.deltaTime;
-        foreach (var unit in _allUnits)
-        {
-            if (unit == null) continue;
-            if (unit.IsDead) continue;
-            unit.UpdateATB(deltatime);
-            OnATBTicked?.Invoke(unit); // UI ÀÛµ¿
-        }
-
-        // 2. Çàµ¿ °¡´ÉÇÑ À¯´Ö Ã£±â (ATB >= 100)
-        var candidates = _allUnits
-                    .Where(u => u != null && u.IsTurnReady && !u.IsDead)
-                    .ToList();
-
-        if (candidates.Count > 0)
-        {
-            // 3. ¿ì¼±¼øÀ§ ÆÇÁ¤ (±âÁ¸ ·ÎÁ÷ À¯Áö: Overfill -> AGI -> Random)
-            var selected = candidates
-                .OrderByDescending(u => u.Overfill)
-                .ThenByDescending(u => u.EffectiveAGI)
-                .ThenBy(u => _rng.NextDouble())
-                .First();
-
-            // 4. ½Ã°£ ¸ØÃß°í ÅÏ ³Ñ±â±â
-            PauseTime();
-            OnTurnReady?.Invoke(selected);
-        }
-    }
-
-    // === Á¦¾î ¸Ş¼­µå ===
-    public void PauseTime() => _isPaused = true;
-    public void ResumeTime() => _isPaused = false;
-
-    // ÅÏ Á¾·á ½Ã È£Ãâ (BattleManager°¡ ºÎ¸¦ °Í)
-    public void CompleteTurn(BattleUnit unit)
-    {
-        if (unit != null)
-        {
-            unit.ResetATB();
-            unit.TickAllCooldowns(); // ÄğÅ¸ÀÓ °¨¼Òµµ ¿©±â¼­ Ã³¸®ÇÏ´Â °Ô ±ò²ûÇÔ
-        }
-        ResumeTime();
-    }
-
-    // ¿şÀÌºê ¹Ù²ğ ¶§ ÃÊ±âÈ­
-    public void ResetAllATB()
-    {
-        foreach (var u in _allUnits) u.ResetATB();
-        _isPaused = false;
-    }
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+// í„´ì˜ ì‹œê°„ íë¦„ê³¼ ìˆœì„œë¥¼ ì „ë‹´í•˜ëŠ” í´ë˜ìŠ¤
+public class ATBTurnController : MonoBehaviour
+{
+    // === ì„¤ì • ê°’ ===
+    [Header("Settings")]
+    [SerializeField] private bool _isPaused = false; // ì‹œê°„ ì •ì§€ ì—¬ë¶€
+
+    // === ë°ì´í„° ===
+    private List<BattleUnit> _allUnits = new();
+    private readonly System.Random _rng = new();
+
+    // === ì´ë²¤íŠ¸ ===
+    // ìœ ë‹›ì˜ í„´ì´ ì˜¨ ê²ƒì„ ë§¤ë‹ˆì €ì—ê²Œ ì•Œë ¤ì£¼ëŠ” ì‹ í˜¸
+    public event Action<BattleUnit> OnTurnReady;
+    // UI ê°±ì‹ ìš© (ë§¤ í”„ë ˆì„ í˜¸ì¶œë  ìˆ˜ ìˆìŒ)
+    public event Action<BattleUnit> OnATBTicked;
+
+    // === ì´ˆê¸°í™” ===
+    public void RegisterUnits(IEnumerable<BattleUnit> units)
+    {
+        _allUnits = units.ToList();
+        // AGI ë³€í™”ì— ë”°ë¥¸ ì†ë„ ì¬ê³„ì‚° ë“±ì€ ì—¬ê¸°ì„œ í•˜ê±°ë‚˜ ìœ ë‹›ë³„ ì´ë²¤íŠ¸ë¡œ ì²˜ë¦¬
+        RefreshATBSpeeds();
+    }
+
+    public void RefreshATBSpeeds()
+    {
+        if (_allUnits.Count == 0) return;
+
+        var alive = _allUnits.Where(u => !u.IsDead).ToList();
+        if (alive.Count == 0) return;
+
+        float min = alive.Min(u => u.EffectiveAGI);
+        float max = alive.Max(u => u.EffectiveAGI);
+
+        foreach (var u in alive)
+        {
+            u.InitializeATB(min, max);
+        }
+    }
+
+    // === í•µì‹¬ ë£¨í”„ ===
+    void Update()
+    {
+        if (_isPaused) return; // í„´ ì§„í–‰ ì¤‘(í–‰ë™ ì¤‘)ì´ë©´ ì‹œê°„ ë©ˆì¶¤
+        if (_allUnits.Count == 0) return;
+
+        // 1. ëª¨ë“  ìœ ë‹› ATB ì¶©ì „
+        float deltatime = Time.deltaTime;
+        foreach (var unit in _allUnits)
+        {
+            if (unit == null) continue;
+            if (unit.IsDead) continue;
+            unit.UpdateATB(deltatime);
+            OnATBTicked?.Invoke(unit); // UI ì‘ë™
+        }
+
+        // 2. í–‰ë™ ê°€ëŠ¥í•œ ìœ ë‹› ì°¾ê¸° (ATB >= 100)
+        var candidates = _allUnits
+                    .Where(u => u != null && u.IsTurnReady && !u.IsDead)
+                    .ToList();
+
+        if (candidates.Count > 0)
+        {
+            // 3. ìš°ì„ ìˆœìœ„ íŒì • (ê¸°ì¡´ ë¡œì§ ìœ ì§€: Overfill -> AGI -> Random)
+            var selected = candidates
+                .OrderByDescending(u => u.Overfill)
+                .ThenByDescending(u => u.EffectiveAGI)
+                .ThenBy(u => _rng.NextDouble())
+                .First();
+
+            // 4. ì‹œê°„ ë©ˆì¶”ê³  í„´ ë„˜ê¸°ê¸°
+            PauseTime();
+            OnTurnReady?.Invoke(selected);
+        }
+    }
+
+    // === ì œì–´ ë©”ì„œë“œ ===
+    public void PauseTime() => _isPaused = true;
+    public void ResumeTime() => _isPaused = false;
+
+    // í„´ ì¢…ë£Œ ì‹œ í˜¸ì¶œ (BattleManagerê°€ ë¶€ë¥¼ ê²ƒ)
+    public void CompleteTurn(BattleUnit unit)
+    {
+        if (unit != null)
+        {
+            unit.ResetATB();
+            unit.TickAllCooldowns(); // ì¿¨íƒ€ì„ ê°ì†Œë„ ì—¬ê¸°ì„œ ì²˜ë¦¬í•˜ëŠ” ê²Œ ê¹”ë”í•¨
+        }
+        ResumeTime();
+    }
+
+    // ì›¨ì´ë¸Œ ë°”ë€” ë•Œ ì´ˆê¸°í™”
+    public void ResetAllATB()
+    {
+        foreach (var u in _allUnits) u.ResetATB();
+        _isPaused = false;
+    }
 }

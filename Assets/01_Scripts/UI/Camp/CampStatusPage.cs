@@ -1,253 +1,253 @@
-using Unity.VisualScripting;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class CampStatusPage : MonoBehaviour
-{
-    [Header("Text Components")]
-    [SerializeField] private Text nameText; // Ä³¸¯ÅÍ ÀÌ¸§
-
-    [Header("Stats Texts")]
-    [SerializeField] private Text strText; // ±Ù·Â (PhysicalDamage)
-    [SerializeField] private Text magText; // ÃÑ¸í (MagicDamage)
-    [SerializeField] private Text agiText; // ¹ÎÃ¸ (AGI)
-    [SerializeField] private Text bdyText; // ½ÅÃ¼ (BDY)
-    [SerializeField] private Text mndText; // Á¤½Å (MND)
-    [SerializeField] private Text insText; // ÅëÂû (INS)
-
-    [Header("Passive/Trait Roots")]
-    [SerializeField] private Transform passiveListRoot; // Left_Passive_Area
-    [SerializeField] private Transform traitListRoot;   // Right_Trait_Area
-
-    [Header("Prefabs")]
-    [SerializeField] private GameObject passiveSlotPrefab; // ÆĞ½Ãºê ½½·Ô ÇÁ¸®ÆÕ
-    [SerializeField] private GameObject traitSlotPrefab; // ¼º°İ ½½·Ô ÇÁ¸®ÆÕ
-    [SerializeField] private Slider bondSlider; // À¯´ë °ÔÀÌÁö
-
-    [Header("Description UI")]
-    [SerializeField] private Text descriptionTitle; // ¼³¸í ÅØ½ºÆ®
-    [SerializeField] private Text descriptionText; // ¼³¸í ÅØ½ºÆ® (Bottom_Context¿¡ ÀÖ´Â°Å)
-    [SerializeField] private RectTransform selectionArrow; // ¾Æ±î ¸¸µç È­»ìÇ¥
-    [SerializeField] private Vector2 arrowOffset = new Vector2(-150f, 0f); // È­»ìÇ¥ À§Ä¡ º¸Á¤°ª
-
-    // ÆäÀÌÁö°¡ ÄÑÁú ¶§¸¶´Ù ÀÚµ¿ °»½Å
-    private void OnEnable()
-    {
-        RefreshUI();
-    }
-
-    // ¼±ÅÃ »óÅÂ ÃÊ±âÈ­ ÇÔ¼ö
-    private void ResetSelection()
-    {
-        // È­»ìÇ¥ ²ô±â
-        if (selectionArrow != null)
-            selectionArrow.gameObject.SetActive(false);
-
-        // Á¦¸ñ ÅØ½ºÆ® ºñ¿ì±â
-        if (descriptionTitle != null)
-            descriptionTitle.text = "";
-
-        // ¼³¸í ÅØ½ºÆ® ºñ¿ì±â
-        if (descriptionText != null)
-            descriptionText.text = "";
-    }
-
-    // ¿ÜºÎ(CampUIManager)¿¡¼­ Ä³¸¯ÅÍ¸¦ ¹Ù²Ü ¶§ È£ÃâÇÒ ÇÔ¼ö
-    public void RefreshUI()
-    {
-        // °»½Å ½ÃÀÛ Àü¿¡ ¹«Á¶°Ç ¼±ÅÃ »óÅÂºÎÅÍ ÃÊ±âÈ­
-        ResetSelection();
-
-        // ÇöÀç ¼±ÅÃµÈ À¯´Ö °¡Á®¿À±â
-        if (CampUIManager.Instance == null) return;
-        UnitData unit = CampUIManager.Instance.selectedUnit;
-
-        // À¯´ÖÀÌ ¾øÀ¸¸é ºñ¿öµÎ±â
-        if (unit == null)
-        {
-            ClearUI();
-            return;
-        }
-
-        // UI °»½Å
-        nameText.text = unit.DisplayName;
-
-        // ½ºÅÈ Ç¥½Ã Çü½Ä: "ÃÖÁ¾°ª (±âº»°ª + Ãß°¡°ª)"
-        // Áö±İÀº Àåºñ°¡ ¾øÀ¸´Ï bonus´Â 0À¸·Î °íÁ¤. ³ªÁß¿¡ ¿©±â¼­ Àåºñ ½ºÅÈÀ» °¡Á®¿À¸é µÊ.
-        strText.text = GetStatString(unit.baseSTR, 0);
-        magText.text = GetStatString(unit.baseCLV, 0);
-        agiText.text = GetStatString(unit.baseAGI, 0);
-        bdyText.text = GetStatString(unit.baseBDY, 0);
-        mndText.text = GetStatString(unit.baseMND, 0);
-        insText.text = GetStatString(unit.baseINS, 0);
-
-        // ¼ÒÁú(Passive) ¸®½ºÆ® °»½Å
-        RefreshPassives(unit);
-        // ¼º°İ(Trait) ¸®½ºÆ® °»½Å
-        RefreshTraits(unit);
-    }
-
-    // Æ÷¸ËÆÃ ÇïÆÛ ÇÔ¼ö
-    private string GetStatString(int baseVal, int bonusVal)
-    {
-        int total = baseVal + bonusVal;
-        // ¿¹: 50 (50 + 0)
-        return $"{total} ({baseVal} + {bonusVal})";
-    }
-
-    private void RefreshPassives(UnitData unit)
-    {
-        // ±âÁ¸ ½½·Ô ½Ï ´Ù Áö¿ì±â (ÃÊ±âÈ­)
-        foreach (Transform child in passiveListRoot)
-        {
-            if (child.name == "Text_Title") continue;
-
-            Destroy(child.gameObject);
-        }
-
-        // À¯´Ö µ¥ÀÌÅÍ¿¡ ÀÖ´Â ÆĞ½Ãºê ¼øÈ¸ÇÏ¸ç »ı¼º
-        if (unit.passives != null)
-        {
-            foreach (var passive in unit.passives)
-            {
-                if (passive == null) continue;
-
-                // ÇÁ¸®ÆÕ »ı¼º
-                GameObject go = Instantiate(passiveSlotPrefab, passiveListRoot);
-                // µ¥ÀÌÅÍ ÁÖÀÔ
-                CampPassiveSlot slot = go.GetComponent<CampPassiveSlot>();
-
-                if (slot != null)
-                {
-                    slot.Setup(passive, OnItemSelected);
-                }
-            }
-        }
-    }
-    // À¯´ë/¼º°İ °»½Å ·ÎÁ÷
-    private void RefreshTraits(UnitData unit)
-    {
-        foreach (Transform child in traitListRoot)
-        {
-            if (child.name == "Trait_Header") continue; // Çì´õ´Â »ì¸²
-            Destroy(child.gameObject);
-        }
-
-        // °ÔÀÌÁö °»½Å
-        if (bondSlider != null)
-        {
-            bondSlider.value = unit.currentBond;
-        }
-
-        // ¼º°İ ½½·Ô »ı¼º (Á¶°ÇºÎ ÇØ±İ)
-        if (unit.traits != null)
-        {
-            // ÇØ±İ ÄÆ¶óÀÎ: 0¹ø->10, 1¹ø->30, 2¹ø->60
-            int[] unlockThresholds = { 10, 30, 60 };
-
-            for (int i = 0; i < unit.traits.Length; i++)
-            {
-                // µ¥ÀÌÅÍ ¾ø°Å³ª ÀÎµ¦½º ÃÊ°ú¸é ÆĞ½º
-                if (unit.traits[i] == null) continue;
-                if (i >= unlockThresholds.Length) break;
-
-                // Á¶°Ç: ÇöÀç À¯´ë ¼öÄ¡°¡ ÇØ±İ ÄÆ¶óÀÎ ÀÌ»óÀÌ¾î¾ß ÇÔ
-                if (unit.currentBond >= unlockThresholds[i])
-                {
-                    GameObject go = Instantiate(traitSlotPrefab, traitListRoot);
-                    CampTraitSlot slot = go.GetComponent<CampTraitSlot>();
-                    if (slot != null)
-                    {
-                        bool isActive = (unit.activeTrait == unit.traits[i]);
-                        // Setup È£Ãâ (OnTraitEquip Äİ¹é Ãß°¡)
-                        slot.Setup(
-                            unit.traits[i],
-                            isActive,
-                            OnItemSelected,
-                            (selectedTrait) => OnTraitEquip(selectedTrait)
-                        );
-                    }
-                }
-                // Á¶°Ç ºÒ¸¸Á· ½Ã ¾Æ¹«°Íµµ ¾È ¸¸µê (Hidden)
-            }
-        }
-    }
-
-    // ¼º°İÀÌ Å¬¸¯(ÀåÂø)µÇ¾úÀ» ¶§ ½ÇÇà
-    private void OnTraitEquip(TraitAsset newTrait)
-    {
-        UnitData unit = CampUIManager.Instance.selectedUnit;
-        if (unit == null) return;
-
-        // µ¥ÀÌÅÍ º¯°æ
-        if (unit.activeTrait != newTrait)
-        {
-            unit.activeTrait = newTrait;
-            Debug.Log($"¼º°İ º¯°æ: {newTrait.displayName}");
-
-            // UI ÀüÃ¼ °»½Å (»ö»ó ´Ù½Ã Ä¥ÇÏ±â À§ÇØ)
-            RefreshTraits(unit);
-        }
-    }
-
-    // ¾ÆÀÌÅÛ ¼±ÅÃ ½Ã ½ÇÇàµÇ´Â ÇÔ¼ö
-    private void OnItemSelected(string title, string desc, Transform targetTransform)
-    {
-        // ¼³¸í ÅØ½ºÆ® °»½Å
-        if (descriptionTitle != null && descriptionText != null)
-        {
-            descriptionTitle.text = title;
-            descriptionText.text = desc;
-        }
-
-        // È­»ìÇ¥ À§Ä¡ ÀÌµ¿ ¹× È°¼ºÈ­
-        if (selectionArrow != null && targetTransform != null)
-        {
-            selectionArrow.gameObject.SetActive(true);
-
-            // Å¸°ÙÀÇ RectTransform °¡Á®¿À±â
-            RectTransform targetRect = targetTransform.GetComponent<RectTransform>();
-
-            if (targetRect != null)
-            {
-                // ¿ùµå ÁÂÇ¥°è ±âÁØÀÇ ³× ¸ğ¼­¸® À§Ä¡¸¦ °¡Á®¿È
-                // corners[0]: ÁÂÇÏ´Ü, [1]: ÁÂ»ó´Ü, [2]: ¿ì»ó´Ü, [3]: ¿ìÇÏ´Ü
-                Vector3[] corners = new Vector3[4];
-                targetRect.GetWorldCorners(corners);
-
-                // ¿ŞÂÊ º¯ÀÇ Áß½ÉÁ¡ °è»ê ((ÁÂÇÏ´Ü + ÁÂ»ó´Ü) / 2)
-                Vector3 leftEdgeCenter = (corners[0] + corners[1]) / 2f;
-
-                // È­»ìÇ¥¸¦ ±× À§Ä¡·Î ÀÌµ¿ + XÃà ¿ÀÇÁ¼Â (arrowOffset.x ¸¸Å­ ¿ŞÂÊÀ¸·Î)
-                // ÁÖÀÇ: È­»ìÇ¥ÀÇ pivotÀÌ (1, 0.5) Áï ¿À¸¥ÂÊ Áß¾ÓÀÌ¾î¾ß ÀÚ¿¬½º·¯¿ò.
-                // ÀÏ´Ü ¿ùµå ÁÂÇ¥ ±âÁØÀ¸·Î ¹Ù·Î ²È¾Æ¹ö¸².
-
-                // ¼³Á¤ÇÑ arrowOffset.x°¡ -150f¶ó¸é ¿©±â¼­ + ÇØÁÖ¸é µÊ.
-                // (¿ùµå ÁÂÇ¥°èÀÌ¹Ç·Î ¹æÇâ¸¸ ¸ÂÀ¸¸é µÊ)
-                Vector3 finalPos = leftEdgeCenter;
-                finalPos.x += arrowOffset.x; // ¿ÀÇÁ¼Â Àû¿ë (¿ŞÂÊÀ¸·Î ¶ç¿ì±â)
-
-                selectionArrow.position = finalPos;
-
-                // YÃà ¹Ì¼¼ Á¶Á¤ÀÌ ÇÊ¿äÇÏ¸é finalPos.y += arrowOffset.y; Ãß°¡
-            }
-            else
-            {
-                // RectTransform ¾øÀ¸¸é ±×³É ±âÁ¸ ¹æ½Ä´ë·Î Áß¾Ó ±âÁØ
-                selectionArrow.position = targetTransform.position;
-            }
-        }
-    }
-    private void ClearUI()
-    {
-        ResetSelection();
-
-        nameText.text = "-";
-        strText.text = "-";
-        magText.text = "-";
-        agiText.text = "-";
-        bdyText.text = "-";
-        mndText.text = "-";
-        insText.text = "-";
-    }
+using Unity.VisualScripting;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class CampStatusPage : MonoBehaviour
+{
+    [Header("Text Components")]
+    [SerializeField] private Text nameText; // ìºë¦­í„° ì´ë¦„
+
+    [Header("Stats Texts")]
+    [SerializeField] private Text strText; // ê·¼ë ¥ (PhysicalDamage)
+    [SerializeField] private Text magText; // ì´ëª… (MagicDamage)
+    [SerializeField] private Text agiText; // ë¯¼ì²© (AGI)
+    [SerializeField] private Text bdyText; // ì‹ ì²´ (BDY)
+    [SerializeField] private Text mndText; // ì •ì‹  (MND)
+    [SerializeField] private Text insText; // í†µì°° (INS)
+
+    [Header("Passive/Trait Roots")]
+    [SerializeField] private Transform passiveListRoot; // Left_Passive_Area
+    [SerializeField] private Transform traitListRoot;   // Right_Trait_Area
+
+    [Header("Prefabs")]
+    [SerializeField] private GameObject passiveSlotPrefab; // íŒ¨ì‹œë¸Œ ìŠ¬ë¡¯ í”„ë¦¬íŒ¹
+    [SerializeField] private GameObject traitSlotPrefab; // ì„±ê²© ìŠ¬ë¡¯ í”„ë¦¬íŒ¹
+    [SerializeField] private Slider bondSlider; // ìœ ëŒ€ ê²Œì´ì§€
+
+    [Header("Description UI")]
+    [SerializeField] private Text descriptionTitle; // ì„¤ëª… í…ìŠ¤íŠ¸
+    [SerializeField] private Text descriptionText; // ì„¤ëª… í…ìŠ¤íŠ¸ (Bottom_Contextì— ìˆëŠ”ê±°)
+    [SerializeField] private RectTransform selectionArrow; // ì•„ê¹Œ ë§Œë“  í™”ì‚´í‘œ
+    [SerializeField] private Vector2 arrowOffset = new Vector2(-150f, 0f); // í™”ì‚´í‘œ ìœ„ì¹˜ ë³´ì •ê°’
+
+    // í˜ì´ì§€ê°€ ì¼œì§ˆ ë•Œë§ˆë‹¤ ìë™ ê°±ì‹ 
+    private void OnEnable()
+    {
+        RefreshUI();
+    }
+
+    // ì„ íƒ ìƒíƒœ ì´ˆê¸°í™” í•¨ìˆ˜
+    private void ResetSelection()
+    {
+        // í™”ì‚´í‘œ ë„ê¸°
+        if (selectionArrow != null)
+            selectionArrow.gameObject.SetActive(false);
+
+        // ì œëª© í…ìŠ¤íŠ¸ ë¹„ìš°ê¸°
+        if (descriptionTitle != null)
+            descriptionTitle.text = "";
+
+        // ì„¤ëª… í…ìŠ¤íŠ¸ ë¹„ìš°ê¸°
+        if (descriptionText != null)
+            descriptionText.text = "";
+    }
+
+    // ì™¸ë¶€(CampUIManager)ì—ì„œ ìºë¦­í„°ë¥¼ ë°”ê¿€ ë•Œ í˜¸ì¶œí•  í•¨ìˆ˜
+    public void RefreshUI()
+    {
+        // ê°±ì‹  ì‹œì‘ ì „ì— ë¬´ì¡°ê±´ ì„ íƒ ìƒíƒœë¶€í„° ì´ˆê¸°í™”
+        ResetSelection();
+
+        // í˜„ì¬ ì„ íƒëœ ìœ ë‹› ê°€ì ¸ì˜¤ê¸°
+        if (CampUIManager.Instance == null) return;
+        UnitData unit = CampUIManager.Instance.selectedUnit;
+
+        // ìœ ë‹›ì´ ì—†ìœ¼ë©´ ë¹„ì›Œë‘ê¸°
+        if (unit == null)
+        {
+            ClearUI();
+            return;
+        }
+
+        // UI ê°±ì‹ 
+        nameText.text = unit.DisplayName;
+
+        // ìŠ¤íƒ¯ í‘œì‹œ í˜•ì‹: "ìµœì¢…ê°’ (ê¸°ë³¸ê°’ + ì¶”ê°€ê°’)"
+        // ì§€ê¸ˆì€ ì¥ë¹„ê°€ ì—†ìœ¼ë‹ˆ bonusëŠ” 0ìœ¼ë¡œ ê³ ì •. ë‚˜ì¤‘ì— ì—¬ê¸°ì„œ ì¥ë¹„ ìŠ¤íƒ¯ì„ ê°€ì ¸ì˜¤ë©´ ë¨.
+        strText.text = GetStatString(unit.baseSTR, 0);
+        magText.text = GetStatString(unit.baseCLV, 0);
+        agiText.text = GetStatString(unit.baseAGI, 0);
+        bdyText.text = GetStatString(unit.baseBDY, 0);
+        mndText.text = GetStatString(unit.baseMND, 0);
+        insText.text = GetStatString(unit.baseINS, 0);
+
+        // ì†Œì§ˆ(Passive) ë¦¬ìŠ¤íŠ¸ ê°±ì‹ 
+        RefreshPassives(unit);
+        // ì„±ê²©(Trait) ë¦¬ìŠ¤íŠ¸ ê°±ì‹ 
+        RefreshTraits(unit);
+    }
+
+    // í¬ë§·íŒ… í—¬í¼ í•¨ìˆ˜
+    private string GetStatString(int baseVal, int bonusVal)
+    {
+        int total = baseVal + bonusVal;
+        // ì˜ˆ: 50 (50 + 0)
+        return $"{total} ({baseVal} + {bonusVal})";
+    }
+
+    private void RefreshPassives(UnitData unit)
+    {
+        // ê¸°ì¡´ ìŠ¬ë¡¯ ì‹¹ ë‹¤ ì§€ìš°ê¸° (ì´ˆê¸°í™”)
+        foreach (Transform child in passiveListRoot)
+        {
+            if (child.name == "Text_Title") continue;
+
+            Destroy(child.gameObject);
+        }
+
+        // ìœ ë‹› ë°ì´í„°ì— ìˆëŠ” íŒ¨ì‹œë¸Œ ìˆœíšŒí•˜ë©° ìƒì„±
+        if (unit.passives != null)
+        {
+            foreach (var passive in unit.passives)
+            {
+                if (passive == null) continue;
+
+                // í”„ë¦¬íŒ¹ ìƒì„±
+                GameObject go = Instantiate(passiveSlotPrefab, passiveListRoot);
+                // ë°ì´í„° ì£¼ì…
+                CampPassiveSlot slot = go.GetComponent<CampPassiveSlot>();
+
+                if (slot != null)
+                {
+                    slot.Setup(passive, OnItemSelected);
+                }
+            }
+        }
+    }
+    // ìœ ëŒ€/ì„±ê²© ê°±ì‹  ë¡œì§
+    private void RefreshTraits(UnitData unit)
+    {
+        foreach (Transform child in traitListRoot)
+        {
+            if (child.name == "Trait_Header") continue; // í—¤ë”ëŠ” ì‚´ë¦¼
+            Destroy(child.gameObject);
+        }
+
+        // ê²Œì´ì§€ ê°±ì‹ 
+        if (bondSlider != null)
+        {
+            bondSlider.value = unit.currentBond;
+        }
+
+        // ì„±ê²© ìŠ¬ë¡¯ ìƒì„± (ì¡°ê±´ë¶€ í•´ê¸ˆ)
+        if (unit.traits != null)
+        {
+            // í•´ê¸ˆ ì»·ë¼ì¸: 0ë²ˆ->10, 1ë²ˆ->30, 2ë²ˆ->60
+            int[] unlockThresholds = { 10, 30, 60 };
+
+            for (int i = 0; i < unit.traits.Length; i++)
+            {
+                // ë°ì´í„° ì—†ê±°ë‚˜ ì¸ë±ìŠ¤ ì´ˆê³¼ë©´ íŒ¨ìŠ¤
+                if (unit.traits[i] == null) continue;
+                if (i >= unlockThresholds.Length) break;
+
+                // ì¡°ê±´: í˜„ì¬ ìœ ëŒ€ ìˆ˜ì¹˜ê°€ í•´ê¸ˆ ì»·ë¼ì¸ ì´ìƒì´ì–´ì•¼ í•¨
+                if (unit.currentBond >= unlockThresholds[i])
+                {
+                    GameObject go = Instantiate(traitSlotPrefab, traitListRoot);
+                    CampTraitSlot slot = go.GetComponent<CampTraitSlot>();
+                    if (slot != null)
+                    {
+                        bool isActive = (unit.activeTrait == unit.traits[i]);
+                        // Setup í˜¸ì¶œ (OnTraitEquip ì½œë°± ì¶”ê°€)
+                        slot.Setup(
+                            unit.traits[i],
+                            isActive,
+                            OnItemSelected,
+                            (selectedTrait) => OnTraitEquip(selectedTrait)
+                        );
+                    }
+                }
+                // ì¡°ê±´ ë¶ˆë§Œì¡± ì‹œ ì•„ë¬´ê²ƒë„ ì•ˆ ë§Œë“¦ (Hidden)
+            }
+        }
+    }
+
+    // ì„±ê²©ì´ í´ë¦­(ì¥ì°©)ë˜ì—ˆì„ ë•Œ ì‹¤í–‰
+    private void OnTraitEquip(TraitAsset newTrait)
+    {
+        UnitData unit = CampUIManager.Instance.selectedUnit;
+        if (unit == null) return;
+
+        // ë°ì´í„° ë³€ê²½
+        if (unit.activeTrait != newTrait)
+        {
+            unit.activeTrait = newTrait;
+            Debug.Log($"ì„±ê²© ë³€ê²½: {newTrait.displayName}");
+
+            // UI ì „ì²´ ê°±ì‹  (ìƒ‰ìƒ ë‹¤ì‹œ ì¹ í•˜ê¸° ìœ„í•´)
+            RefreshTraits(unit);
+        }
+    }
+
+    // ì•„ì´í…œ ì„ íƒ ì‹œ ì‹¤í–‰ë˜ëŠ” í•¨ìˆ˜
+    private void OnItemSelected(string title, string desc, Transform targetTransform)
+    {
+        // ì„¤ëª… í…ìŠ¤íŠ¸ ê°±ì‹ 
+        if (descriptionTitle != null && descriptionText != null)
+        {
+            descriptionTitle.text = title;
+            descriptionText.text = desc;
+        }
+
+        // í™”ì‚´í‘œ ìœ„ì¹˜ ì´ë™ ë° í™œì„±í™”
+        if (selectionArrow != null && targetTransform != null)
+        {
+            selectionArrow.gameObject.SetActive(true);
+
+            // íƒ€ê²Ÿì˜ RectTransform ê°€ì ¸ì˜¤ê¸°
+            RectTransform targetRect = targetTransform.GetComponent<RectTransform>();
+
+            if (targetRect != null)
+            {
+                // ì›”ë“œ ì¢Œí‘œê³„ ê¸°ì¤€ì˜ ë„¤ ëª¨ì„œë¦¬ ìœ„ì¹˜ë¥¼ ê°€ì ¸ì˜´
+                // corners[0]: ì¢Œí•˜ë‹¨, [1]: ì¢Œìƒë‹¨, [2]: ìš°ìƒë‹¨, [3]: ìš°í•˜ë‹¨
+                Vector3[] corners = new Vector3[4];
+                targetRect.GetWorldCorners(corners);
+
+                // ì™¼ìª½ ë³€ì˜ ì¤‘ì‹¬ì  ê³„ì‚° ((ì¢Œí•˜ë‹¨ + ì¢Œìƒë‹¨) / 2)
+                Vector3 leftEdgeCenter = (corners[0] + corners[1]) / 2f;
+
+                // í™”ì‚´í‘œë¥¼ ê·¸ ìœ„ì¹˜ë¡œ ì´ë™ + Xì¶• ì˜¤í”„ì…‹ (arrowOffset.x ë§Œí¼ ì™¼ìª½ìœ¼ë¡œ)
+                // ì£¼ì˜: í™”ì‚´í‘œì˜ pivotì´ (1, 0.5) ì¦‰ ì˜¤ë¥¸ìª½ ì¤‘ì•™ì´ì–´ì•¼ ìì—°ìŠ¤ëŸ¬ì›€.
+                // ì¼ë‹¨ ì›”ë“œ ì¢Œí‘œ ê¸°ì¤€ìœ¼ë¡œ ë°”ë¡œ ê½‚ì•„ë²„ë¦¼.
+
+                // ì„¤ì •í•œ arrowOffset.xê°€ -150fë¼ë©´ ì—¬ê¸°ì„œ + í•´ì£¼ë©´ ë¨.
+                // (ì›”ë“œ ì¢Œí‘œê³„ì´ë¯€ë¡œ ë°©í–¥ë§Œ ë§ìœ¼ë©´ ë¨)
+                Vector3 finalPos = leftEdgeCenter;
+                finalPos.x += arrowOffset.x; // ì˜¤í”„ì…‹ ì ìš© (ì™¼ìª½ìœ¼ë¡œ ë„ìš°ê¸°)
+
+                selectionArrow.position = finalPos;
+
+                // Yì¶• ë¯¸ì„¸ ì¡°ì •ì´ í•„ìš”í•˜ë©´ finalPos.y += arrowOffset.y; ì¶”ê°€
+            }
+            else
+            {
+                // RectTransform ì—†ìœ¼ë©´ ê·¸ëƒ¥ ê¸°ì¡´ ë°©ì‹ëŒ€ë¡œ ì¤‘ì•™ ê¸°ì¤€
+                selectionArrow.position = targetTransform.position;
+            }
+        }
+    }
+    private void ClearUI()
+    {
+        ResetSelection();
+
+        nameText.text = "-";
+        strText.text = "-";
+        magText.text = "-";
+        agiText.text = "-";
+        bdyText.text = "-";
+        mndText.text = "-";
+        insText.text = "-";
+    }
 }

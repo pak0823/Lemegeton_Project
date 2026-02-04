@@ -1,77 +1,77 @@
-// Assets/Scripts/Combat/WebTrapController.cs
-using UnityEngine;
-using UnityEngine.Tilemaps;
-using System.Linq;
-
-public class WebTrapController : MonoBehaviour
-{
-    Tilemap _map;
-    Vector3Int _cell;
-    BattleUnit _owner; // ÇÔÁ¤ ¼ÒÀ¯ÀÚ(Àû)
-
-    bool _armed = false;
-    static BattleUnit s_currentTurnUnit;
-
-    public Tilemap Map => _map;
-    public Vector3Int Cell => _cell;
-
-    public void Init(Tilemap map, Vector3Int cell, BattleUnit owner)
-    {
-        _map = map;
-        _cell = cell;
-        _owner = owner;
-        _armed = true;
-
-        // ¼ÒÀ¯ ÀûÀÇ "´ÙÀ½ ÅÏ ½ÃÀÛ"¿¡ ÀÚµ¿ ¸¸·á
-        BattleManager.OnAnyUnitTurnStarted += OnAnyTurnStarted;
-    }
-
-    void OnDestroy()
-    {
-        BattleManager.OnAnyUnitTurnStarted -= OnAnyTurnStarted;
-    }
-
-    void Update()
-    {
-        if (!_armed || _map == null) return;
-
-        // ÇöÀç ¼¿À» ¹â°í ÀÖ´Â ÇÃ·¹ÀÌ¾î ¼ö»ö(¾Æ¹«³ª 1¸íÀÌ¶óµµ)
-        var players = FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead && u.CurrentMap == _map && u.Cell == _cell)
-            .ToList();
-
-        if (players.Count > 0)
-        {
-            var target = players[0];
-            var sc = target.GetComponent<StatusController>();
-            if (sc == null) sc = target.gameObject.AddComponent<StatusController>();
-
-            sc.ApplyWithTurnContext(StatusId.Slow, 1, 1); // µĞÈ­ 1ÁßÃ¸, 1ÅÏ
-
-            Destroy(gameObject); // ¹ßµ¿ ÈÄ Á¦°Å
-        }
-    }
-
-    void OnAnyTurnStarted(BattleUnit who)
-    {
-        s_currentTurnUnit = who;
-
-        if (!_armed) return;
-        if (_owner == null) { Destroy(gameObject); return; }
-
-        // ¼ÒÀ¯ Àû À¯´ÖÀÇ ´ÙÀ½ ÅÏ ½ÃÀÛ¿¡ ÀÚµ¿ ¸¸·á
-        if (who == _owner)
-        {
-            Destroy(gameObject);
-        }
-    }
-
-    public static void RemoveAt(Tilemap map, Vector3Int cell)
-    {
-        // °°Àº Å¸ÀÏ¿¡ ÀÌ¹Ì ±ò·Á ÀÖ´Â °Å¹ÌÁÙ ¸ğµÎ Á¦°Å
-        var olds = FindObjectsOfType<WebTrapController>()
-            .Where(t => t != null && t._map == map && t._cell == cell)
-            .ToList();
-        foreach (var ot in olds) UnityEngine.Object.Destroy(ot.gameObject);
-    }
-}
+// Assets/Scripts/Combat/WebTrapController.cs
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using System.Linq;
+
+public class WebTrapController : MonoBehaviour
+{
+    Tilemap _map;
+    Vector3Int _cell;
+    BattleUnit _owner; // í•¨ì • ì†Œìœ ì(ì )
+
+    bool _armed = false;
+    static BattleUnit s_currentTurnUnit;
+
+    public Tilemap Map => _map;
+    public Vector3Int Cell => _cell;
+
+    public void Init(Tilemap map, Vector3Int cell, BattleUnit owner)
+    {
+        _map = map;
+        _cell = cell;
+        _owner = owner;
+        _armed = true;
+
+        // ì†Œìœ  ì ì˜ "ë‹¤ìŒ í„´ ì‹œì‘"ì— ìë™ ë§Œë£Œ
+        BattleManager.OnAnyUnitTurnStarted += OnAnyTurnStarted;
+    }
+
+    void OnDestroy()
+    {
+        BattleManager.OnAnyUnitTurnStarted -= OnAnyTurnStarted;
+    }
+
+    void Update()
+    {
+        if (!_armed || _map == null) return;
+
+        // í˜„ì¬ ì…€ì„ ë°Ÿê³  ìˆëŠ” í”Œë ˆì´ì–´ ìˆ˜ìƒ‰(ì•„ë¬´ë‚˜ 1ëª…ì´ë¼ë„)
+        var players = FindObjectsOfType<BattleUnit>()
+            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead && u.CurrentMap == _map && u.Cell == _cell)
+            .ToList();
+
+        if (players.Count > 0)
+        {
+            var target = players[0];
+            var sc = target.GetComponent<StatusController>();
+            if (sc == null) sc = target.gameObject.AddComponent<StatusController>();
+
+            sc.ApplyWithTurnContext(StatusId.Slow, 1, 1); // ë‘”í™” 1ì¤‘ì²©, 1í„´
+
+            Destroy(gameObject); // ë°œë™ í›„ ì œê±°
+        }
+    }
+
+    void OnAnyTurnStarted(BattleUnit who)
+    {
+        s_currentTurnUnit = who;
+
+        if (!_armed) return;
+        if (_owner == null) { Destroy(gameObject); return; }
+
+        // ì†Œìœ  ì  ìœ ë‹›ì˜ ë‹¤ìŒ í„´ ì‹œì‘ì— ìë™ ë§Œë£Œ
+        if (who == _owner)
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    public static void RemoveAt(Tilemap map, Vector3Int cell)
+    {
+        // ê°™ì€ íƒ€ì¼ì— ì´ë¯¸ ê¹”ë ¤ ìˆëŠ” ê±°ë¯¸ì¤„ ëª¨ë‘ ì œê±°
+        var olds = FindObjectsOfType<WebTrapController>()
+            .Where(t => t != null && t._map == map && t._cell == cell)
+            .ToList();
+        foreach (var ot in olds) UnityEngine.Object.Destroy(ot.gameObject);
+    }
+}

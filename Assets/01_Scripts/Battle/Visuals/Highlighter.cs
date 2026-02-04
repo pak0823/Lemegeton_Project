@@ -1,82 +1,82 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class Highlighter : MonoBehaviour
-{
-    public Tilemap overlayMap;       // Overlay Å¸ÀÏ¸Ê
-    public TileBase highlightTile;   // ¹İÅõ¸í Å¸ÀÏ
-
-    [Tooltip("ÄÑ¸é baseMap Å¸ÀÏÀÌ ÀÖ´Â Ä­¿¡¸¸ Ç¥½Ã(Å¬¸®ÇÎ). ²ô¸é ¸Ê ¹Ûµµ Ç¥½Ã")]
-    public bool clipToBaseMap = false;
-
-    const int TRANSIENT_TOKEN = 0;
-
-    // ±×·ì º¸°ü: token ¡æ (baseMap, cells)
-    class Group { public Tilemap baseMap; public HashSet<Vector3Int> cells = new(); }
-    readonly Dictionary<int, Group> _groups = new();
-    int _nextToken = 1;
-
-    // ÀÓ½Ã ÇÁ¸®ºä À¯Áö
-    public void ShowCells(Tilemap baseMap, IEnumerable<Vector3Int> cells)
-    {
-        SetGroupCells(TRANSIENT_TOKEN, baseMap, cells);
-    }
-    // ÀÓ½Ã ÇÁ¸®ºä¸¸ Á¦°Å
-    public void ClearTransient()
-    {
-        if (_groups.Remove(TRANSIENT_TOKEN))
-            RedrawAll();
-    }
-    // === ¿ÏÀü »èÁ¦(¸ğµç ±×·ì) ===
-    public void ClearAll()
-    {
-        _groups.Clear();
-        overlayMap?.ClearAllTiles();
-    }
-    // === »õ ±×·ì ÅäÅ« ¹ß±Ş ===
-    public int CreateGroup() => _nextToken++;
-
-    // === ±×·ì Å¸ÀÏ ¼¼ÆÃ/°»½Å ===
-    public void SetGroupCells(int token, Tilemap baseMap, IEnumerable<Vector3Int> cells)
-    {
-        if (overlayMap == null || baseMap == null || cells == null) return;
-
-        if (!_groups.TryGetValue(token, out var g))
-            g = _groups[token] = new Group();
-
-        g.baseMap = baseMap;
-        g.cells.Clear();
-        foreach (var c in cells) g.cells.Add(c);
-
-        RedrawAll();
-    }
-    // === Æ¯Á¤ ±×·ì¸¸ Á¦°Å ===
-    public void ClearGroup(int token)
-    {
-        if (_groups.Remove(token))
-            RedrawAll();
-    }
-
-    void RedrawAll()
-    {
-        if (overlayMap == null) return;
-        overlayMap.ClearAllTiles();
-
-        foreach (var kv in _groups)
-        {
-            var g = kv.Value;
-            if (g.baseMap == null || g.cells == null) continue;
-
-            foreach (var cell in g.cells)
-            {
-                if (clipToBaseMap && !g.baseMap.HasTile(cell)) continue;
-
-                var world = g.baseMap.GetCellCenterWorld(cell);
-                var ocell = overlayMap.WorldToCell(world);
-                overlayMap.SetTile(ocell, highlightTile);
-            }
-        }
-    }
-
-}
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class Highlighter : MonoBehaviour
+{
+    public Tilemap overlayMap;       // Overlay íƒ€ì¼ë§µ
+    public TileBase highlightTile;   // ë°˜íˆ¬ëª… íƒ€ì¼
+
+    [Tooltip("ì¼œë©´ baseMap íƒ€ì¼ì´ ìˆëŠ” ì¹¸ì—ë§Œ í‘œì‹œ(í´ë¦¬í•‘). ë„ë©´ ë§µ ë°–ë„ í‘œì‹œ")]
+    public bool clipToBaseMap = false;
+
+    const int TRANSIENT_TOKEN = 0;
+
+    // ê·¸ë£¹ ë³´ê´€: token â†’ (baseMap, cells)
+    class Group { public Tilemap baseMap; public HashSet<Vector3Int> cells = new(); }
+    readonly Dictionary<int, Group> _groups = new();
+    int _nextToken = 1;
+
+    // ì„ì‹œ í”„ë¦¬ë·° ìœ ì§€
+    public void ShowCells(Tilemap baseMap, IEnumerable<Vector3Int> cells)
+    {
+        SetGroupCells(TRANSIENT_TOKEN, baseMap, cells);
+    }
+    // ì„ì‹œ í”„ë¦¬ë·°ë§Œ ì œê±°
+    public void ClearTransient()
+    {
+        if (_groups.Remove(TRANSIENT_TOKEN))
+            RedrawAll();
+    }
+    // === ì™„ì „ ì‚­ì œ(ëª¨ë“  ê·¸ë£¹) ===
+    public void ClearAll()
+    {
+        _groups.Clear();
+        overlayMap?.ClearAllTiles();
+    }
+    // === ìƒˆ ê·¸ë£¹ í† í° ë°œê¸‰ ===
+    public int CreateGroup() => _nextToken++;
+
+    // === ê·¸ë£¹ íƒ€ì¼ ì„¸íŒ…/ê°±ì‹  ===
+    public void SetGroupCells(int token, Tilemap baseMap, IEnumerable<Vector3Int> cells)
+    {
+        if (overlayMap == null || baseMap == null || cells == null) return;
+
+        if (!_groups.TryGetValue(token, out var g))
+            g = _groups[token] = new Group();
+
+        g.baseMap = baseMap;
+        g.cells.Clear();
+        foreach (var c in cells) g.cells.Add(c);
+
+        RedrawAll();
+    }
+    // === íŠ¹ì • ê·¸ë£¹ë§Œ ì œê±° ===
+    public void ClearGroup(int token)
+    {
+        if (_groups.Remove(token))
+            RedrawAll();
+    }
+
+    void RedrawAll()
+    {
+        if (overlayMap == null) return;
+        overlayMap.ClearAllTiles();
+
+        foreach (var kv in _groups)
+        {
+            var g = kv.Value;
+            if (g.baseMap == null || g.cells == null) continue;
+
+            foreach (var cell in g.cells)
+            {
+                if (clipToBaseMap && !g.baseMap.HasTile(cell)) continue;
+
+                var world = g.baseMap.GetCellCenterWorld(cell);
+                var ocell = overlayMap.WorldToCell(world);
+                overlayMap.SetTile(ocell, highlightTile);
+            }
+        }
+    }
+
+}

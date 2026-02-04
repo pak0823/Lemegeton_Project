@@ -1,247 +1,247 @@
-using Project.UI;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Events;
-using UnityEngine.UI;
-
-namespace Project.UI
-{
-    public class OptionsMenuUI : ModalWindowBase
-    {
-        [SerializeField] private Button resumeButton;
-        [SerializeField] private Button quitButton;
-
-        [Header("Focus container")]
-        [SerializeField] private RectTransform buttonsContainer; // ButtonList ¿ÀºêÁ§Æ®¸¦ ÇÒ´ç
-        [SerializeField] private bool autoCollect = true;        // ÀÚ½Ä ¹öÆ° ÀÚµ¿ ¼öÁı
-        [SerializeField] private bool excludeResumeFromFocus = true; // resume Á¦¿Ü
-
-        [Header("Focus Arrow")]
-        [SerializeField] private RectTransform focusArrow;              // È­»ìÇ¥ ÀÌ¹ÌÁö RectTransform
-        [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f); // Å¸°Ù ¹öÆ° ±âÁØ ¿ŞÂÊ ¿ÀÇÁ¼Â
-
-        [Header("Key bindings (optional)")]
-        private KeyCode upKey = KeyCode.W;
-        private KeyCode downKey = KeyCode.S;
-        private KeyCode submitKey = KeyCode.E;      // 'ÇöÀç Æ÷Ä¿½ºµÈ ¹öÆ°' ½ÇÇà
-        private KeyCode submit_V2Key = KeyCode.Return;
-        private KeyCode cancelKey = KeyCode.Q;      // Ãë¼Ò
-
-        readonly List<Button> focusButtons = new List<Button>();
-        int focusIndex = 0;
-        public bool IsShow { get; private set; }
-
-        void OnEnable()
-        {
-            RebuildFocusList();
-        }
-
-        void OnTransformChildrenChanged()
-        {
-            if (!buttonsContainer) return;
-            RebuildFocusList();
-            // Ã¹ À¯È¿ Ç×¸ñÀ¸·Î È­»ìÇ¥ °»½Å
-            if (IsOpen && focusButtons.Count > 0)
-            {
-                var idx = FirstEnabledIndex();
-                if (idx >= 0) SetFocus(idx);
-                else if (focusArrow) focusArrow.gameObject.SetActive(false);
-            }
-            else if (focusArrow) focusArrow.gameObject.SetActive(false);
-        }
-
-        protected override void Awake()
-        {
-            base.Awake();
-            if (resumeButton) resumeButton.onClick.AddListener(() => Toggle());
-            if (quitButton) quitButton.onClick.AddListener(OnBtnReturnTitle);
-
-            // È­»ìÇ¥ ÁÂÇ¥°è ¸ÂÃã
-            if (focusArrow && buttonsContainer && focusArrow.parent != buttonsContainer)
-                focusArrow.SetParent(buttonsContainer, worldPositionStays: false);
-
-            if (focusArrow) focusArrow.gameObject.SetActive(false);
-
-            // Æ÷Ä¿½º ¸ñ·Ï ±¸¼º
-            RebuildFocusList();
-        }
-
-        protected override void OnShown() 
-        { 
-            GameSpeedController.Instance?.RequestPause();
-            IsShow = true;
-
-            // ¹Ù·Î ¼¼ÆÃÇÏÁö ¸»°í, ·¹ÀÌ¾Æ¿ô/»óÅÂ(interactable) È®Á¤ ÈÄ º¸Á¤
-            StartCoroutine(ReinitFocusNextFrame());
-        }
-        protected override void OnHidden() 
-        { 
-            GameSpeedController.Instance?.ReleasePause();
-            IsShow = false;
-            if (focusArrow) focusArrow.gameObject.SetActive(false); 
-        }
-
-        void Update()
-        {
-            if (!IsOpen) return; // ModalWindowBase°¡ °ü¸®
-
-            // ÁÂ¿ì ÀÌµ¿
-            if (Input.GetKeyDown(upKey)) MoveFocus(-1);
-            if (Input.GetKeyDown(downKey)) MoveFocus(+1);
-
-            // E = ÇöÀç Æ÷Ä¿½º ¹öÆ° ½ÇÇà
-            if (Input.GetKeyDown(submitKey) || Input.GetKeyDown(submit_V2Key))
-            {
-                var b = GetFocusedButton();
-                b?.onClick?.Invoke();
-            }
-
-            // Q = Ãë¼Ò(¿É¼ÇÃ¢ ´İ±â)
-            if (Input.GetKeyDown(cancelKey))
-            {
-                Toggle(); // UiModalManager ÅëÇØ ´İÈû or Á÷Á¢ Hide()
-            }
-        }
-
-        void RebuildFocusList()
-        {
-            focusButtons.Clear();
-            if (!buttonsContainer) return;
-
-            if (autoCollect)
-            {
-                // º¸ÀÌ´Â(È°¼º/»óÈ£ÀÛ¿ë °¡´ÉÇÑ) ¹öÆ°¸¸ ¼öÁı
-                var found = buttonsContainer.GetComponentsInChildren<Button>(false) // ¡ç false: ºñÈ°¼º ¹ÌÆ÷ÇÔ
-                            .Where(b => b != null
-                                        && b.isActiveAndEnabled
-                                        && b.gameObject.activeInHierarchy
-                                        && b.interactable)
-                            .OrderBy(b => b.transform.GetSiblingIndex())
-                            .ToList();
-
-                // Æ÷Ä¿½º¿¡¼­ Á¦¿ÜÇÒ °Íµé ÇÊÅÍ¸µ
-                if (excludeResumeFromFocus && resumeButton)
-                {
-                    found.RemoveAll(b => b == resumeButton);
-                }
-
-                // È¤½Ã null ¼¯¿´À¸¸é Á¦°Å
-                found.RemoveAll(b => b == null);
-
-                focusButtons.AddRange(found);
-
-                focusIndex = 0; // ¸®½ºÆ®°¡ ¹Ù²î¾úÀ¸´Ï ½ÃÀÛ Æ÷Ä¿½º ¸®¼Â
-            }
-        }
-
-        int FirstEnabledIndex()
-        {
-            for (int i = 0; i < focusButtons.Count; i++)
-            {
-                var b = focusButtons[i];
-                if (b && b.isActiveAndEnabled && b.gameObject.activeInHierarchy && b.interactable)
-                    return i;
-            }
-            return -1;
-        }
-
-        Button GetFocusedButton()
-        {
-            if (focusButtons.Count == 0) return null;
-            focusIndex = Mathf.Clamp(focusIndex, 0, focusButtons.Count - 1);
-            return focusButtons[focusIndex];
-        }
-
-        // ·¹ÀÌ¾Æ¿ô/»óÅÂ°¡ ¸ğµÎ ¾ÈÁ¤µÈ ´ÙÀ½ ÇÁ·¹ÀÓ¿¡ Æ÷Ä¿½º Àç±¸¼º
-        System.Collections.IEnumerator ReinitFocusNextFrame()
-        {
-            // ÇÑ ÇÁ·¹ÀÓ ´ë±â(·¹ÀÌ¾Æ¿ô & °¢ ¹öÆ°ÀÇ interactable º¯°æ ¹İ¿µ ´ë±â)
-            yield return null;
-            RebuildFocusList();
-            var idx = FirstEnabledIndex();
-            if (idx< 0)
-            {
-                if (focusArrow) focusArrow.gameObject.SetActive(false);
-                yield break;
-            }
-            SetFocus(idx);   // ¹«Á¶°Ç Ã¹ À¯È¿ Ç×¸ñÀ¸·Î ½ÃÀÛ
-        }
-
-void MoveFocus(int delta)
-        {
-            if (focusButtons.Count == 0) return;
-
-            int dir = (delta >= 0) ? 1 : -1;
-            int i = focusIndex + dir;
-
-            // ¹üÀ§¸¦ ¹ş¾î³ª¸é ÀÌµ¿ÇÏÁö ¾ÊÀ½
-            if (i < 0 || i >= focusButtons.Count)
-            {
-                UpdateArrowPosition(); // À§Ä¡ À¯Áö
-                return;
-            }
-
-            // À¯È¿ÇÑ ¹öÆ°(È°¼º/ÀÎÅÍ·¢Æ® °¡´É)¸¸ Çã¿ë
-            while (i >= 0 && i < focusButtons.Count)
-            {
-                var b = focusButtons[i];
-                if (b != null && b.isActiveAndEnabled && b.gameObject.activeInHierarchy && b.interactable)
-                {
-                    focusIndex = i;      // ÀÌµ¿ ¼º°ø
-                    break;
-                }
-                // ´ÙÀ½ ÈÄº¸(·¡ÇÎ ¾øÀÌ ÇÑ ¹æÇâÀ¸·Î¸¸ Å½»ö)
-                i += dir;
-            }
-            UpdateArrowPosition();
-        }
-
-        void SetFocus(int idx)
-        {
-            if (focusButtons.Count == 0) return;
-            focusIndex = Mathf.Clamp(idx, 0, focusButtons.Count - 1);
-            UpdateArrowPosition();
-        }
-
-        void UpdateArrowPosition()
-        {
-            if (!focusArrow || focusButtons.Count == 0) return;
-
-            var targetBtn = GetFocusedButton();
-            if (!targetBtn)
-            {
-                focusArrow.gameObject.SetActive(false);
-                return;
-            }
-
-            var target = targetBtn.transform as RectTransform;
-
-            if (!focusArrow.gameObject.activeSelf)
-                focusArrow.gameObject.SetActive(true);
-
-            // °°Àº ºÎ¸ğ(buttonsContainer) ÁÂÇ¥°è¿¡¼­ ¿ÀÇÁ¼Â Àû¿ë
-            // (focusArrow´Â Awake¿¡¼­ buttonsContainer·Î SetParentµÊ)
-            focusArrow.anchoredPosition = target.anchoredPosition + arrowOffset;
-        }
-
-        public void OnBtnQuitGame()
-        {
-            Application.Quit();
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#endif
-        }
-
-        public void OnBtnReturnTitle() 
-        {
-            if (quitButton) quitButton.interactable = false;    //  Áßº¹ Å¬¸¯ ¹æÁö
-            GameSpeedController.Instance?.ReleasePause();  // ÀÏ½ÃÁ¤Áö ÇØÁ¦                                           
-            var mgr = UiModalManager.Instance;  // ¿É¼ÇÃ¢ ´İ±â(¾È ´İ¾Æµµ ÀüÈ¯µÇÁö¸¸, »óÅÂ Á¤¸® °â È£Ãâ)
-            if (mgr != null) mgr.Close(this);
-            else Hide();
-            SceneTransitionManager.Instance.FadeToScene("TitleScene");    //Å¸ÀÌÆ²·Î ÀÌµ¿
-        }
-    }
-}
-
+using Project.UI;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.UI;
+
+namespace Project.UI
+{
+    public class OptionsMenuUI : ModalWindowBase
+    {
+        [SerializeField] private Button resumeButton;
+        [SerializeField] private Button quitButton;
+
+        [Header("Focus container")]
+        [SerializeField] private RectTransform buttonsContainer; // ButtonList ì˜¤ë¸Œì íŠ¸ë¥¼ í• ë‹¹
+        [SerializeField] private bool autoCollect = true;        // ìì‹ ë²„íŠ¼ ìë™ ìˆ˜ì§‘
+        [SerializeField] private bool excludeResumeFromFocus = true; // resume ì œì™¸
+
+        [Header("Focus Arrow")]
+        [SerializeField] private RectTransform focusArrow;              // í™”ì‚´í‘œ ì´ë¯¸ì§€ RectTransform
+        [SerializeField] private Vector2 arrowOffset = new Vector2(-40f, 0f); // íƒ€ê²Ÿ ë²„íŠ¼ ê¸°ì¤€ ì™¼ìª½ ì˜¤í”„ì…‹
+
+        [Header("Key bindings (optional)")]
+        private KeyCode upKey = KeyCode.W;
+        private KeyCode downKey = KeyCode.S;
+        private KeyCode submitKey = KeyCode.E;      // 'í˜„ì¬ í¬ì»¤ìŠ¤ëœ ë²„íŠ¼' ì‹¤í–‰
+        private KeyCode submit_V2Key = KeyCode.Return;
+        private KeyCode cancelKey = KeyCode.Q;      // ì·¨ì†Œ
+
+        readonly List<Button> focusButtons = new List<Button>();
+        int focusIndex = 0;
+        public bool IsShow { get; private set; }
+
+        void OnEnable()
+        {
+            RebuildFocusList();
+        }
+
+        void OnTransformChildrenChanged()
+        {
+            if (!buttonsContainer) return;
+            RebuildFocusList();
+            // ì²« ìœ íš¨ í•­ëª©ìœ¼ë¡œ í™”ì‚´í‘œ ê°±ì‹ 
+            if (IsOpen && focusButtons.Count > 0)
+            {
+                var idx = FirstEnabledIndex();
+                if (idx >= 0) SetFocus(idx);
+                else if (focusArrow) focusArrow.gameObject.SetActive(false);
+            }
+            else if (focusArrow) focusArrow.gameObject.SetActive(false);
+        }
+
+        protected override void Awake()
+        {
+            base.Awake();
+            if (resumeButton) resumeButton.onClick.AddListener(() => Toggle());
+            if (quitButton) quitButton.onClick.AddListener(OnBtnReturnTitle);
+
+            // í™”ì‚´í‘œ ì¢Œí‘œê³„ ë§ì¶¤
+            if (focusArrow && buttonsContainer && focusArrow.parent != buttonsContainer)
+                focusArrow.SetParent(buttonsContainer, worldPositionStays: false);
+
+            if (focusArrow) focusArrow.gameObject.SetActive(false);
+
+            // í¬ì»¤ìŠ¤ ëª©ë¡ êµ¬ì„±
+            RebuildFocusList();
+        }
+
+        protected override void OnShown() 
+        { 
+            GameSpeedController.Instance?.RequestPause();
+            IsShow = true;
+
+            // ë°”ë¡œ ì„¸íŒ…í•˜ì§€ ë§ê³ , ë ˆì´ì•„ì›ƒ/ìƒíƒœ(interactable) í™•ì • í›„ ë³´ì •
+            StartCoroutine(ReinitFocusNextFrame());
+        }
+        protected override void OnHidden() 
+        { 
+            GameSpeedController.Instance?.ReleasePause();
+            IsShow = false;
+            if (focusArrow) focusArrow.gameObject.SetActive(false); 
+        }
+
+        void Update()
+        {
+            if (!IsOpen) return; // ModalWindowBaseê°€ ê´€ë¦¬
+
+            // ì¢Œìš° ì´ë™
+            if (Input.GetKeyDown(upKey)) MoveFocus(-1);
+            if (Input.GetKeyDown(downKey)) MoveFocus(+1);
+
+            // E = í˜„ì¬ í¬ì»¤ìŠ¤ ë²„íŠ¼ ì‹¤í–‰
+            if (Input.GetKeyDown(submitKey) || Input.GetKeyDown(submit_V2Key))
+            {
+                var b = GetFocusedButton();
+                b?.onClick?.Invoke();
+            }
+
+            // Q = ì·¨ì†Œ(ì˜µì…˜ì°½ ë‹«ê¸°)
+            if (Input.GetKeyDown(cancelKey))
+            {
+                Toggle(); // UiModalManager í†µí•´ ë‹«í˜ or ì§ì ‘ Hide()
+            }
+        }
+
+        void RebuildFocusList()
+        {
+            focusButtons.Clear();
+            if (!buttonsContainer) return;
+
+            if (autoCollect)
+            {
+                // ë³´ì´ëŠ”(í™œì„±/ìƒí˜¸ì‘ìš© ê°€ëŠ¥í•œ) ë²„íŠ¼ë§Œ ìˆ˜ì§‘
+                var found = buttonsContainer.GetComponentsInChildren<Button>(false) // â† false: ë¹„í™œì„± ë¯¸í¬í•¨
+                            .Where(b => b != null
+                                        && b.isActiveAndEnabled
+                                        && b.gameObject.activeInHierarchy
+                                        && b.interactable)
+                            .OrderBy(b => b.transform.GetSiblingIndex())
+                            .ToList();
+
+                // í¬ì»¤ìŠ¤ì—ì„œ ì œì™¸í•  ê²ƒë“¤ í•„í„°ë§
+                if (excludeResumeFromFocus && resumeButton)
+                {
+                    found.RemoveAll(b => b == resumeButton);
+                }
+
+                // í˜¹ì‹œ null ì„ì˜€ìœ¼ë©´ ì œê±°
+                found.RemoveAll(b => b == null);
+
+                focusButtons.AddRange(found);
+
+                focusIndex = 0; // ë¦¬ìŠ¤íŠ¸ê°€ ë°”ë€Œì—ˆìœ¼ë‹ˆ ì‹œì‘ í¬ì»¤ìŠ¤ ë¦¬ì…‹
+            }
+        }
+
+        int FirstEnabledIndex()
+        {
+            for (int i = 0; i < focusButtons.Count; i++)
+            {
+                var b = focusButtons[i];
+                if (b && b.isActiveAndEnabled && b.gameObject.activeInHierarchy && b.interactable)
+                    return i;
+            }
+            return -1;
+        }
+
+        Button GetFocusedButton()
+        {
+            if (focusButtons.Count == 0) return null;
+            focusIndex = Mathf.Clamp(focusIndex, 0, focusButtons.Count - 1);
+            return focusButtons[focusIndex];
+        }
+
+        // ë ˆì´ì•„ì›ƒ/ìƒíƒœê°€ ëª¨ë‘ ì•ˆì •ëœ ë‹¤ìŒ í”„ë ˆì„ì— í¬ì»¤ìŠ¤ ì¬êµ¬ì„±
+        System.Collections.IEnumerator ReinitFocusNextFrame()
+        {
+            // í•œ í”„ë ˆì„ ëŒ€ê¸°(ë ˆì´ì•„ì›ƒ & ê° ë²„íŠ¼ì˜ interactable ë³€ê²½ ë°˜ì˜ ëŒ€ê¸°)
+            yield return null;
+            RebuildFocusList();
+            var idx = FirstEnabledIndex();
+            if (idx< 0)
+            {
+                if (focusArrow) focusArrow.gameObject.SetActive(false);
+                yield break;
+            }
+            SetFocus(idx);   // ë¬´ì¡°ê±´ ì²« ìœ íš¨ í•­ëª©ìœ¼ë¡œ ì‹œì‘
+        }
+
+void MoveFocus(int delta)
+        {
+            if (focusButtons.Count == 0) return;
+
+            int dir = (delta >= 0) ? 1 : -1;
+            int i = focusIndex + dir;
+
+            // ë²”ìœ„ë¥¼ ë²—ì–´ë‚˜ë©´ ì´ë™í•˜ì§€ ì•ŠìŒ
+            if (i < 0 || i >= focusButtons.Count)
+            {
+                UpdateArrowPosition(); // ìœ„ì¹˜ ìœ ì§€
+                return;
+            }
+
+            // ìœ íš¨í•œ ë²„íŠ¼(í™œì„±/ì¸í„°ë™íŠ¸ ê°€ëŠ¥)ë§Œ í—ˆìš©
+            while (i >= 0 && i < focusButtons.Count)
+            {
+                var b = focusButtons[i];
+                if (b != null && b.isActiveAndEnabled && b.gameObject.activeInHierarchy && b.interactable)
+                {
+                    focusIndex = i;      // ì´ë™ ì„±ê³µ
+                    break;
+                }
+                // ë‹¤ìŒ í›„ë³´(ë˜í•‘ ì—†ì´ í•œ ë°©í–¥ìœ¼ë¡œë§Œ íƒìƒ‰)
+                i += dir;
+            }
+            UpdateArrowPosition();
+        }
+
+        void SetFocus(int idx)
+        {
+            if (focusButtons.Count == 0) return;
+            focusIndex = Mathf.Clamp(idx, 0, focusButtons.Count - 1);
+            UpdateArrowPosition();
+        }
+
+        void UpdateArrowPosition()
+        {
+            if (!focusArrow || focusButtons.Count == 0) return;
+
+            var targetBtn = GetFocusedButton();
+            if (!targetBtn)
+            {
+                focusArrow.gameObject.SetActive(false);
+                return;
+            }
+
+            var target = targetBtn.transform as RectTransform;
+
+            if (!focusArrow.gameObject.activeSelf)
+                focusArrow.gameObject.SetActive(true);
+
+            // ê°™ì€ ë¶€ëª¨(buttonsContainer) ì¢Œí‘œê³„ì—ì„œ ì˜¤í”„ì…‹ ì ìš©
+            // (focusArrowëŠ” Awakeì—ì„œ buttonsContainerë¡œ SetParentë¨)
+            focusArrow.anchoredPosition = target.anchoredPosition + arrowOffset;
+        }
+
+        public void OnBtnQuitGame()
+        {
+            Application.Quit();
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#endif
+        }
+
+        public void OnBtnReturnTitle() 
+        {
+            if (quitButton) quitButton.interactable = false;    //  ì¤‘ë³µ í´ë¦­ ë°©ì§€
+            GameSpeedController.Instance?.ReleasePause();  // ì¼ì‹œì •ì§€ í•´ì œ                                           
+            var mgr = UiModalManager.Instance;  // ì˜µì…˜ì°½ ë‹«ê¸°(ì•ˆ ë‹«ì•„ë„ ì „í™˜ë˜ì§€ë§Œ, ìƒíƒœ ì •ë¦¬ ê²¸ í˜¸ì¶œ)
+            if (mgr != null) mgr.Close(this);
+            else Hide();
+            SceneTransitionManager.Instance.FadeToScene("TitleScene");    //íƒ€ì´í‹€ë¡œ ì´ë™
+        }
+    }
+}
+

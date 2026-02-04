@@ -1,20 +1,20 @@
-using UnityEngine;
-
-public class DescriptionData : MonoBehaviour
-{
-    [TextArea(2, 4)] public string description;
-
-    // ÈùÆ® È°¼ºÈ­ ´ë»óÀ¸·Îµµ ¾²°í ½Í´Ù¸é Ã¼Å©¹Ú½º ÇÏ³ª
-    public bool enableHintOnContact = true;
-
-    [Header("»óÀÚ ¿ÀºêÁ§Æ®°¡ ¿­¸° µÚ¿¡´Â ÀÌ ÅØ½ºÆ®·Î ±³Ã¼(¼±ÅÃ)")]
-    public bool useAlternateAfterOpened = false;
-    [TextArea(2, 4)] public string descriptionAfterOpened;
-
-    // »óÀÚ°¡ ¿­·ÈÀ» ¶§ È£Ãâ: descriptionÀ» ¿­¸° µÚ ¹®±¸·Î ±³Ã¼
-    public void ApplyOpenedTextIfAny()
-    {
-        if (useAlternateAfterOpened && !string.IsNullOrWhiteSpace(descriptionAfterOpened))
-            description = descriptionAfterOpened;
-    }
-}
+using UnityEngine;
+
+public class DescriptionData : MonoBehaviour
+{
+    [TextArea(2, 4)] public string description;
+
+    // íŒíŠ¸ í™œì„±í™” ëŒ€ìƒìœ¼ë¡œë„ ì“°ê³  ì‹¶ë‹¤ë©´ ì²´í¬ë°•ìŠ¤ í•˜ë‚˜
+    public bool enableHintOnContact = true;
+
+    [Header("ìƒì ì˜¤ë¸Œì íŠ¸ê°€ ì—´ë¦° ë’¤ì—ëŠ” ì´ í…ìŠ¤íŠ¸ë¡œ êµì²´(ì„ íƒ)")]
+    public bool useAlternateAfterOpened = false;
+    [TextArea(2, 4)] public string descriptionAfterOpened;
+
+    // ìƒìê°€ ì—´ë ¸ì„ ë•Œ í˜¸ì¶œ: descriptionì„ ì—´ë¦° ë’¤ ë¬¸êµ¬ë¡œ êµì²´
+    public void ApplyOpenedTextIfAny()
+    {
+        if (useAlternateAfterOpened && !string.IsNullOrWhiteSpace(descriptionAfterOpened))
+            description = descriptionAfterOpened;
+    }
+}

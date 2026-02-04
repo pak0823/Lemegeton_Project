@@ -1,47 +1,47 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public class CampSubSkillSlot : MonoBehaviour
-{
-    [SerializeField] private Text nameText;
-    [SerializeField] private Button button;
-    [SerializeField] private GameObject highlight; // ¼±ÅÃ Ç¥½Ã¿ë
-
-    private SkillAsset mySubSkill;    // ÆÄ»ı ½ºÅ³ (¿¹: ½ºÅ³ 1-1)
-    private SkillAsset myParentSkill; // ¿øº» ½ºÅ³ (¿¹: ½ºÅ³ 1-0)
-    private CampSkillPage parentPage;
-    private UnitData myUnit;
-
-    public void Setup(UnitData unit, SkillAsset subSkill, SkillAsset parentSkill, CampSkillPage page)
-    {
-        myUnit = unit;
-        mySubSkill = subSkill;
-        myParentSkill = parentSkill;
-        parentPage = page;
-
-        // ÀÌ¸§ ¾Õ¿¡ '¤¤'ÀÌ³ª °ø¹éÀ» ³Ö¾î ÆÄ»ıÀÓÀ» Æ¼³»±â
-        if (nameText) nameText.text = $"    ¤¤ {subSkill.displayName}";
-
-        button.onClick.RemoveAllListeners();
-        button.onClick.AddListener(OnClick);
-
-        SetSelected(false);
-    }
-
-    private void OnClick()
-    {
-        parentPage.OnSubSlotClicked(this, mySubSkill, myParentSkill, myUnit);
-    }
-
-    // ¿ÜºÎ¿¡¼­ ÅØ½ºÆ® À§Ä¡¸¦ °¡Á®°¥ ¼ö ÀÖ°Ô ÇÔ¼ö Ãß°¡
-    public Transform GetTextTransform()
-    {
-        return nameText != null ? nameText.transform : this.transform;
-    }
-    public void SetSelected(bool isSelected)
-    {
-        if (highlight) highlight.SetActive(isSelected);
-        // ¶Ç´Â ÅØ½ºÆ® »ö»ó º¯°æ
-        //if (nameText) nameText.color = isSelected ? Color.cyan : Color.gray;
-    }
+using UnityEngine;
+using UnityEngine.UI;
+
+public class CampSubSkillSlot : MonoBehaviour
+{
+    [SerializeField] private Text nameText;
+    [SerializeField] private Button button;
+    [SerializeField] private GameObject highlight; // ì„ íƒ í‘œì‹œìš©
+
+    private SkillAsset mySubSkill;    // íŒŒìƒ ìŠ¤í‚¬ (ì˜ˆ: ìŠ¤í‚¬ 1-1)
+    private SkillAsset myParentSkill; // ì›ë³¸ ìŠ¤í‚¬ (ì˜ˆ: ìŠ¤í‚¬ 1-0)
+    private CampSkillPage parentPage;
+    private UnitData myUnit;
+
+    public void Setup(UnitData unit, SkillAsset subSkill, SkillAsset parentSkill, CampSkillPage page)
+    {
+        myUnit = unit;
+        mySubSkill = subSkill;
+        myParentSkill = parentSkill;
+        parentPage = page;
+
+        // ì´ë¦„ ì•ì— 'ã„´'ì´ë‚˜ ê³µë°±ì„ ë„£ì–´ íŒŒìƒì„ì„ í‹°ë‚´ê¸°
+        if (nameText) nameText.text = $"    ã„´ {subSkill.displayName}";
+
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(OnClick);
+
+        SetSelected(false);
+    }
+
+    private void OnClick()
+    {
+        parentPage.OnSubSlotClicked(this, mySubSkill, myParentSkill, myUnit);
+    }
+
+    // ì™¸ë¶€ì—ì„œ í…ìŠ¤íŠ¸ ìœ„ì¹˜ë¥¼ ê°€ì ¸ê°ˆ ìˆ˜ ìˆê²Œ í•¨ìˆ˜ ì¶”ê°€
+    public Transform GetTextTransform()
+    {
+        return nameText != null ? nameText.transform : this.transform;
+    }
+    public void SetSelected(bool isSelected)
+    {
+        if (highlight) highlight.SetActive(isSelected);
+        // ë˜ëŠ” í…ìŠ¤íŠ¸ ìƒ‰ìƒ ë³€ê²½
+        //if (nameText) nameText.color = isSelected ? Color.cyan : Color.gray;
+    }
 }

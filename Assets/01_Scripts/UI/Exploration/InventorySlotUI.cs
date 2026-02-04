@@ -1,38 +1,38 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public class InventorySlotUI : MonoBehaviour
-{
-    public int slotIndex; // ¿¡µðÅÍ¿¡¼­ 0~11±îÁö Á÷Á¢ ÇÒ´ç
-    public InventoryDragHandler dragHandler; // ÀÚ½ÄÀÇ µå·¡±× ÇÚµé·¯ ÂüÁ¶
-    [SerializeField] private Image itemIcon;
-    [SerializeField] private Text countText;
-
-    // ½½·Ô °»½Å ½Ã ÀÚ½Ä ¾ÆÀÌÄÜÀÇ ÀÌ¹ÌÁöµµ °°ÀÌ º¯°æ
-    public void UpdateSlot(InventoryItem item, ItemData data)
-    {
-        if (item == null || data == null)
-        {
-            // µ¥ÀÌÅÍ°¡ ¾øÀ¸¸é µå·¡±× ÇÚµé·¯(¾ÆÀÌÄÜ)¸¦ ¹«Á¶°Ç ºñÈ°¼ºÈ­
-            if (dragHandler != null) dragHandler.gameObject.SetActive(false);
-            if (countText != null) countText.text = "";
-            return;
-        }
-
-        // ¾ÆÀÌÅÛÀÌ ÀÖ´Â °æ¿ì (°­Á¦ ÃÊ±âÈ­ ·ÎÁ÷)
-        dragHandler.gameObject.SetActive(true);
-
-        // À§Ä¡ ¸®¼Â
-        dragHandler.transform.SetParent(this.transform);
-        dragHandler.transform.localPosition = Vector3.zero;
-
-        // µ¥ÀÌÅÍ·ÎºÎÅÍ Á÷Á¢ ¼ö·®À» °¡Á®¿Í¼­ ÅØ½ºÆ® °»½Å
-        if (countText != null)
-        {
-            // ÇöÀç Àü´Þ¹ÞÀº item °´Ã¼ÀÇ count¸¦ Áï½Ã ¹Ý¿µ
-            countText.text = item.count > 1 ? item.count.ToString() : "";
-        }
-
-        dragHandler.SetIcon(data);
-    }
+using UnityEngine;
+using UnityEngine.UI;
+
+public class InventorySlotUI : MonoBehaviour
+{
+    public int slotIndex; // ì—ë””í„°ì—ì„œ 0~11ê¹Œì§€ ì§ì ‘ í• ë‹¹
+    public InventoryDragHandler dragHandler; // ìžì‹ì˜ ë“œëž˜ê·¸ í•¸ë“¤ëŸ¬ ì°¸ì¡°
+    [SerializeField] private Image itemIcon;
+    [SerializeField] private Text countText;
+
+    // ìŠ¬ë¡¯ ê°±ì‹  ì‹œ ìžì‹ ì•„ì´ì½˜ì˜ ì´ë¯¸ì§€ë„ ê°™ì´ ë³€ê²½
+    public void UpdateSlot(InventoryItem item, ItemData data)
+    {
+        if (item == null || data == null)
+        {
+            // ë°ì´í„°ê°€ ì—†ìœ¼ë©´ ë“œëž˜ê·¸ í•¸ë“¤ëŸ¬(ì•„ì´ì½˜)ë¥¼ ë¬´ì¡°ê±´ ë¹„í™œì„±í™”
+            if (dragHandler != null) dragHandler.gameObject.SetActive(false);
+            if (countText != null) countText.text = "";
+            return;
+        }
+
+        // ì•„ì´í…œì´ ìžˆëŠ” ê²½ìš° (ê°•ì œ ì´ˆê¸°í™” ë¡œì§)
+        dragHandler.gameObject.SetActive(true);
+
+        // ìœ„ì¹˜ ë¦¬ì…‹
+        dragHandler.transform.SetParent(this.transform);
+        dragHandler.transform.localPosition = Vector3.zero;
+
+        // ë°ì´í„°ë¡œë¶€í„° ì§ì ‘ ìˆ˜ëŸ‰ì„ ê°€ì ¸ì™€ì„œ í…ìŠ¤íŠ¸ ê°±ì‹ 
+        if (countText != null)
+        {
+            // í˜„ìž¬ ì „ë‹¬ë°›ì€ item ê°ì²´ì˜ countë¥¼ ì¦‰ì‹œ ë°˜ì˜
+            countText.text = item.count > 1 ? item.count.ToString() : "";
+        }
+
+        dragHandler.SetIcon(data);
+    }
 }

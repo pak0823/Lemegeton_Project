@@ -1,292 +1,292 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Playables;
-using UnityEngine.Tilemaps;
-using static SmokeBombSkill;
-
-public class SmokeZoneRuntime : MonoBehaviour
-{
-    // ==== ¡§¿˚ ∑π¡ˆΩ∫∆Æ∏Æ ====
-    static readonly List<SmokeZoneRuntime> Active = new List<SmokeZoneRuntime>();
-
-    SmokeBombSkill.SmokeEffectMode mode = SmokeBombSkill.SmokeEffectMode.AgilityBuff;
-
-    // ∏µÂ∫∞ ∆ƒ∂ÛπÃ≈Õ
-    UnitStateBuffId smokeHiddenBuffState = UnitStateBuffId.SmokeHidden;
-    UnitStateBuffId agiBuffState = UnitStateBuffId.None;
-    float agiMul = 1f;
-
-    [Header("Training Options")]
-    public bool enableMpRegen = false;
-    [Range(0f, 1f)] public float mpRegenRatio = 0f;
-
-
-    // ==== ¿ŒΩ∫≈œΩ∫ ====
-    BattleManager battleManager;
-    Tilemap map;
-    HashSet<Vector3Int> cells;
-    BattleUnit caster;
-    int turnsLeft;
-
-    // ==== VFX ∞¸∑√ ====
-    Transform vfxRoot;
-    readonly List<GameObject> vfxObjects = new List<GameObject>();
-
-    // «ˆ¿Á ¡∏ ≥ª∫Œ ¿Ø¥÷
-    readonly HashSet<BattleUnit> inside = new HashSet<BattleUnit>();
-
-    // µπˆ±◊ ∑Œ±◊ on/off (»ø∞˙ ¿˚øÎ∞˙¥¬ π´∞¸)
-    public bool debugLogTransitions = true;
-
-    public void SetEffectMode(
-        SmokeBombSkill.SmokeEffectMode m,
-        UnitStateBuffId hiddenBuff,
-        UnitStateBuffId stateForAgi,
-        float mul)
-    {
-        mode = m;
-        smokeHiddenBuffState = hiddenBuff;
-        agiBuffState = stateForAgi;
-        agiMul = mul;
-    }
-
-    public void Initialize(
-        BattleManager _battlemanager,
-        Tilemap map,
-        IEnumerable<Vector3Int> areaCells,
-        BattleUnit caster,
-        int durationCasterTurns)
-    {
-        this.battleManager = _battlemanager;
-        this.map = map;
-        this.cells = new HashSet<Vector3Int>(areaCells);
-        this.caster = caster;
-        this.turnsLeft = Mathf.Max(1, durationCasterTurns);
-
-        if (_battlemanager != null) _battlemanager.OnUnitEndTurn += HandleUnitEndTurn;
-        BattleManager.OnAnyUnitTurnStarted += HandleUnitTurnStart;
-
-        Active.Add(this);
-    }
-
-    public void OverrideAreaCells(IEnumerable<Vector3Int> _newCells)
-    {
-        if (_newCells == null) return;
-        cells = new HashSet<Vector3Int>(_newCells);
-    }
-
-    void HandleUnitTurnStart(BattleUnit unit)
-    {
-        // Ω√¿¸¿⁄¿« ≈œ Ω√¿€ ±‚¡ÿ ¡ˆº”≈œ ∞®º“
-        if (unit == caster)
-        {
-            turnsLeft--;
-            if (turnsLeft <= 0)
-                Destroy(gameObject);
-        }
-    }
-
-    void HandleUnitEndTurn(BattleUnit unit)
-    {
-        // ø¨∏∑¡∏ æ»ø°º≠ ≈œ¿ª ≥°≥Ω æ∆±∫¿« MP »∏∫π
-        if (enableMpRegen && unit != null && caster != null && unit.data.team == caster.data.team)
-        {
-            if (map != null && cells != null && cells.Contains(unit.Cell))
-            {
-                float ratio = Mathf.Clamp01(mpRegenRatio);
-                int amount = Mathf.FloorToInt(unit.MaxMP * ratio);
-                if (amount > 0)
-                {
-                    unit.GainMP(amount);
-                    if (debugLogTransitions)
-                        Debug.Log($"[Smoke MP Regen] {unit.name} +{amount} MP (ratio={ratio})");
-                }
-            }
-        }
-    }
-
-    void OnDestroy()
-    {
-        if (battleManager != null)
-        {
-            battleManager.OnUnitEndTurn -= HandleUnitEndTurn;
-            BattleManager.OnAnyUnitTurnStarted -= HandleUnitTurnStart;
-        }
-
-        Active.Remove(this);
-
-        // ≥≤æ∆¿÷¥¬ πˆ«¡ ¡§∏Æ
-        foreach (var u in inside)
-        {
-            if (!u) continue;
-            var usc = u.GetComponent<UnitStateController>();
-            if (usc == null) continue;
-
-            if (mode == SmokeEffectMode.AgilityBuff && agiBuffState != UnitStateBuffId.None)
-                usc.RemoveBuff(agiBuffState);
-
-            if (mode == SmokeEffectMode.SmokeHiddenBuff && smokeHiddenBuffState != UnitStateBuffId.None)
-                usc.RemoveBuff(smokeHiddenBuffState);
-        }
-        inside.Clear();
-
-        CleanupPlayableGraphs();
-
-        if (vfxObjects.Count > 0)
-        {
-            foreach (var go in vfxObjects)
-                if (go) Destroy(go);
-            vfxObjects.Clear();
-        }
-        if (vfxRoot) Destroy(vfxRoot.gameObject);
-    }
-
-    public void AttachVfx(GameObject prefab, float yOffset, string sortingLayer, int sortingOrder, Team team)
-    {
-        if (prefab == null || map == null || cells == null || cells.Count == 0) return;
-
-        vfxRoot = new GameObject("VFX").transform;
-        vfxRoot.SetParent(transform, false);
-
-        foreach (var cell in cells)
-        {
-            var w = map.GetCellCenterWorld(cell);
-            w.y += yOffset;
-
-            var inst = Instantiate(prefab, w, Quaternion.identity, vfxRoot);
-
-            foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
-            {
-                var psr = r as ParticleSystemRenderer;
-                if (psr != null)
-                {
-                    psr.sortingLayerName = sortingLayer;
-                    psr.sortingOrder = sortingOrder;
-                }
-
-                var sr = r as SpriteRenderer;
-                if (sr != null)
-                {
-                    sr.sortingLayerName = sortingLayer;
-                    sr.sortingOrder = sortingOrder;
-                }
-            }
-
-            vfxObjects.Add(inst);
-        }
-    }
-
-    void CleanupPlayableGraphs()
-    {
-        if (vfxRoot == null) return;
-
-        foreach (var dir in vfxRoot.GetComponentsInChildren<PlayableDirector>(true))
-        {
-            try
-            {
-                dir.Stop();
-                var g = dir.playableGraph;
-                if (g.IsValid()) g.Destroy();
-            }
-            catch { }
-        }
-
-        foreach (var anim in vfxRoot.GetComponentsInChildren<Animator>(true))
-        {
-            try
-            {
-                var g = anim.playableGraph;
-                if (g.IsValid()) g.Destroy();
-            }
-            catch { }
-        }
-    }
-
-    void OnDisable()
-    {
-        CleanupPlayableGraphs();
-    }
-
-    void Update()
-    {
-        if (battleManager == null || map == null || cells == null || cells.Count == 0) return;
-
-        // «ˆ¿Á ¡∏ ¿ß ¿Ø¥÷ ºˆ¡˝
-        var nowSet = new HashSet<BattleUnit>();
-        var units = battleManager.Grid.GetUnitsInArea(map, cells);
-
-        foreach (var u in units)
-        {
-            if (u == null || u.IsDead) continue;
-            if (u.CurrentMap != map) continue;
-            if (!cells.Contains(u.Cell)) continue;
-            nowSet.Add(u);
-        }
-
-        // Enter
-        foreach (var unit in nowSet)
-        {
-            if (inside.Contains(unit)) continue;
-
-            var usc = unit.GetComponent<UnitStateController>();
-            if (usc != null)
-            {
-                if (mode == SmokeEffectMode.SmokeHiddenBuff && smokeHiddenBuffState != UnitStateBuffId.None)
-                {
-                    usc.ApplyBuff(smokeHiddenBuffState);
-                    if (debugLogTransitions)
-                        Debug.Log($"[SmokeHidden ENTER] {unit.name} +{smokeHiddenBuffState}");
-                }
-                else if (mode == SmokeEffectMode.AgilityBuff && agiBuffState != UnitStateBuffId.None)
-                {
-                    float beforeAgi = unit.EffectiveAGI;
-                    bool added = usc.ApplyBuff(agiBuffState);
-                    float afterAgi = unit.EffectiveAGI;
-
-                    if (debugLogTransitions)
-                    {
-                        Debug.Log(
-                        $"[Smoke AGI ENTER] {unit.name} buff={agiBuffState} added={added} " +
-                        $"AGI {beforeAgi:0.###} -> {afterAgi:0.###} " +
-                        $"(zone agiMul={agiMul:0.###})"
-                                                );
-                    }
-                }
-            }
-        }
-
-        // Exit
-        foreach (var unit in inside)
-        {
-            if (nowSet.Contains(unit)) continue;
-
-            var usc = unit ? unit.GetComponent<UnitStateController>() : null;
-            if (usc != null)
-            {
-                if (mode == SmokeEffectMode.SmokeHiddenBuff && smokeHiddenBuffState != UnitStateBuffId.None)
-                {
-                    usc.RemoveBuff(smokeHiddenBuffState);
-                    if (debugLogTransitions)
-                        Debug.Log($"[SmokeHidden EXIT ] {unit.name} -{smokeHiddenBuffState}");
-                }
-                else if (mode == SmokeEffectMode.AgilityBuff && agiBuffState != UnitStateBuffId.None)
-                {
-                    float beforeAgi = unit.EffectiveAGI;
-                    bool removed = usc.RemoveBuff(agiBuffState);
-                    float afterAgi = unit.EffectiveAGI;
-
-                    if (debugLogTransitions)
-                    {
-                        Debug.Log(
-                        $"[Smoke AGI EXIT ] {unit.name} buff={agiBuffState} removed={removed} " +
-                        $"AGI {beforeAgi:0.###} -> {afterAgi:0.###}"
-                                                );
-                    }
-                }
-            }
-        }
-
-        inside.Clear();
-        foreach (var u in nowSet) inside.Add(u);
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Playables;
+using UnityEngine.Tilemaps;
+using static SmokeBombSkill;
+
+public class SmokeZoneRuntime : MonoBehaviour
+{
+    // ==== Ï†ïÏ†Å Î†àÏßÄÏä§Ìä∏Î¶¨ ====
+    static readonly List<SmokeZoneRuntime> Active = new List<SmokeZoneRuntime>();
+
+    SmokeBombSkill.SmokeEffectMode mode = SmokeBombSkill.SmokeEffectMode.AgilityBuff;
+
+    // Î™®ÎìúÎ≥Ñ ÌååÎùºÎØ∏ÌÑ∞
+    UnitStateBuffId smokeHiddenBuffState = UnitStateBuffId.SmokeHidden;
+    UnitStateBuffId agiBuffState = UnitStateBuffId.None;
+    float agiMul = 1f;
+
+    [Header("Training Options")]
+    public bool enableMpRegen = false;
+    [Range(0f, 1f)] public float mpRegenRatio = 0f;
+
+
+    // ==== Ïù∏Ïä§ÌÑ¥Ïä§ ====
+    BattleManager battleManager;
+    Tilemap map;
+    HashSet<Vector3Int> cells;
+    BattleUnit caster;
+    int turnsLeft;
+
+    // ==== VFX Í¥ÄÎ†® ====
+    Transform vfxRoot;
+    readonly List<GameObject> vfxObjects = new List<GameObject>();
+
+    // ÌòÑÏû¨ Ï°¥ ÎÇ¥Î∂Ä Ïú†Îãõ
+    readonly HashSet<BattleUnit> inside = new HashSet<BattleUnit>();
+
+    // ÎîîÎ≤ÑÍ∑∏ Î°úÍ∑∏ on/off (Ìö®Í≥º Ï†ÅÏö©Í≥ºÎäî Î¨¥Í¥Ä)
+    public bool debugLogTransitions = true;
+
+    public void SetEffectMode(
+        SmokeBombSkill.SmokeEffectMode m,
+        UnitStateBuffId hiddenBuff,
+        UnitStateBuffId stateForAgi,
+        float mul)
+    {
+        mode = m;
+        smokeHiddenBuffState = hiddenBuff;
+        agiBuffState = stateForAgi;
+        agiMul = mul;
+    }
+
+    public void Initialize(
+        BattleManager _battlemanager,
+        Tilemap map,
+        IEnumerable<Vector3Int> areaCells,
+        BattleUnit caster,
+        int durationCasterTurns)
+    {
+        this.battleManager = _battlemanager;
+        this.map = map;
+        this.cells = new HashSet<Vector3Int>(areaCells);
+        this.caster = caster;
+        this.turnsLeft = Mathf.Max(1, durationCasterTurns);
+
+        if (_battlemanager != null) _battlemanager.OnUnitEndTurn += HandleUnitEndTurn;
+        BattleManager.OnAnyUnitTurnStarted += HandleUnitTurnStart;
+
+        Active.Add(this);
+    }
+
+    public void OverrideAreaCells(IEnumerable<Vector3Int> _newCells)
+    {
+        if (_newCells == null) return;
+        cells = new HashSet<Vector3Int>(_newCells);
+    }
+
+    void HandleUnitTurnStart(BattleUnit unit)
+    {
+        // ÏãúÏ†ÑÏûêÏùò ÌÑ¥ ÏãúÏûë Í∏∞Ï§Ä ÏßÄÏÜçÌÑ¥ Í∞êÏÜå
+        if (unit == caster)
+        {
+            turnsLeft--;
+            if (turnsLeft <= 0)
+                Destroy(gameObject);
+        }
+    }
+
+    void HandleUnitEndTurn(BattleUnit unit)
+    {
+        // Ïó∞ÎßâÏ°¥ ÏïàÏóêÏÑú ÌÑ¥ÏùÑ ÎÅùÎÇ∏ ÏïÑÍµ∞Ïùò MP ÌöåÎ≥µ
+        if (enableMpRegen && unit != null && caster != null && unit.data.team == caster.data.team)
+        {
+            if (map != null && cells != null && cells.Contains(unit.Cell))
+            {
+                float ratio = Mathf.Clamp01(mpRegenRatio);
+                int amount = Mathf.FloorToInt(unit.MaxMP * ratio);
+                if (amount > 0)
+                {
+                    unit.GainMP(amount);
+                    if (debugLogTransitions)
+                        Debug.Log($"[Smoke MP Regen] {unit.name} +{amount} MP (ratio={ratio})");
+                }
+            }
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (battleManager != null)
+        {
+            battleManager.OnUnitEndTurn -= HandleUnitEndTurn;
+            BattleManager.OnAnyUnitTurnStarted -= HandleUnitTurnStart;
+        }
+
+        Active.Remove(this);
+
+        // ÎÇ®ÏïÑÏûàÎäî Î≤ÑÌîÑ Ï†ïÎ¶¨
+        foreach (var u in inside)
+        {
+            if (!u) continue;
+            var usc = u.GetComponent<UnitStateController>();
+            if (usc == null) continue;
+
+            if (mode == SmokeEffectMode.AgilityBuff && agiBuffState != UnitStateBuffId.None)
+                usc.RemoveBuff(agiBuffState);
+
+            if (mode == SmokeEffectMode.SmokeHiddenBuff && smokeHiddenBuffState != UnitStateBuffId.None)
+                usc.RemoveBuff(smokeHiddenBuffState);
+        }
+        inside.Clear();
+
+        CleanupPlayableGraphs();
+
+        if (vfxObjects.Count > 0)
+        {
+            foreach (var go in vfxObjects)
+                if (go) Destroy(go);
+            vfxObjects.Clear();
+        }
+        if (vfxRoot) Destroy(vfxRoot.gameObject);
+    }
+
+    public void AttachVfx(GameObject prefab, float yOffset, string sortingLayer, int sortingOrder, Team team)
+    {
+        if (prefab == null || map == null || cells == null || cells.Count == 0) return;
+
+        vfxRoot = new GameObject("VFX").transform;
+        vfxRoot.SetParent(transform, false);
+
+        foreach (var cell in cells)
+        {
+            var w = map.GetCellCenterWorld(cell);
+            w.y += yOffset;
+
+            var inst = Instantiate(prefab, w, Quaternion.identity, vfxRoot);
+
+            foreach (var r in inst.GetComponentsInChildren<Renderer>(true))
+            {
+                var psr = r as ParticleSystemRenderer;
+                if (psr != null)
+                {
+                    psr.sortingLayerName = sortingLayer;
+                    psr.sortingOrder = sortingOrder;
+                }
+
+                var sr = r as SpriteRenderer;
+                if (sr != null)
+                {
+                    sr.sortingLayerName = sortingLayer;
+                    sr.sortingOrder = sortingOrder;
+                }
+            }
+
+            vfxObjects.Add(inst);
+        }
+    }
+
+    void CleanupPlayableGraphs()
+    {
+        if (vfxRoot == null) return;
+
+        foreach (var dir in vfxRoot.GetComponentsInChildren<PlayableDirector>(true))
+        {
+            try
+            {
+                dir.Stop();
+                var g = dir.playableGraph;
+                if (g.IsValid()) g.Destroy();
+            }
+            catch { }
+        }
+
+        foreach (var anim in vfxRoot.GetComponentsInChildren<Animator>(true))
+        {
+            try
+            {
+                var g = anim.playableGraph;
+                if (g.IsValid()) g.Destroy();
+            }
+            catch { }
+        }
+    }
+
+    void OnDisable()
+    {
+        CleanupPlayableGraphs();
+    }
+
+    void Update()
+    {
+        if (battleManager == null || map == null || cells == null || cells.Count == 0) return;
+
+        // ÌòÑÏû¨ Ï°¥ ÏúÑ Ïú†Îãõ ÏàòÏßë
+        var nowSet = new HashSet<BattleUnit>();
+        var units = battleManager.Grid.GetUnitsInArea(map, cells);
+
+        foreach (var u in units)
+        {
+            if (u == null || u.IsDead) continue;
+            if (u.CurrentMap != map) continue;
+            if (!cells.Contains(u.Cell)) continue;
+            nowSet.Add(u);
+        }
+
+        // Enter
+        foreach (var unit in nowSet)
+        {
+            if (inside.Contains(unit)) continue;
+
+            var usc = unit.GetComponent<UnitStateController>();
+            if (usc != null)
+            {
+                if (mode == SmokeEffectMode.SmokeHiddenBuff && smokeHiddenBuffState != UnitStateBuffId.None)
+                {
+                    usc.ApplyBuff(smokeHiddenBuffState);
+                    if (debugLogTransitions)
+                        Debug.Log($"[SmokeHidden ENTER] {unit.name} +{smokeHiddenBuffState}");
+                }
+                else if (mode == SmokeEffectMode.AgilityBuff && agiBuffState != UnitStateBuffId.None)
+                {
+                    float beforeAgi = unit.EffectiveAGI;
+                    bool added = usc.ApplyBuff(agiBuffState);
+                    float afterAgi = unit.EffectiveAGI;
+
+                    if (debugLogTransitions)
+                    {
+                        Debug.Log(
+                        $"[Smoke AGI ENTER] {unit.name} buff={agiBuffState} added={added} " +
+                        $"AGI {beforeAgi:0.###} -> {afterAgi:0.###} " +
+                        $"(zone agiMul={agiMul:0.###})"
+                                                );
+                    }
+                }
+            }
+        }
+
+        // Exit
+        foreach (var unit in inside)
+        {
+            if (nowSet.Contains(unit)) continue;
+
+            var usc = unit ? unit.GetComponent<UnitStateController>() : null;
+            if (usc != null)
+            {
+                if (mode == SmokeEffectMode.SmokeHiddenBuff && smokeHiddenBuffState != UnitStateBuffId.None)
+                {
+                    usc.RemoveBuff(smokeHiddenBuffState);
+                    if (debugLogTransitions)
+                        Debug.Log($"[SmokeHidden EXIT ] {unit.name} -{smokeHiddenBuffState}");
+                }
+                else if (mode == SmokeEffectMode.AgilityBuff && agiBuffState != UnitStateBuffId.None)
+                {
+                    float beforeAgi = unit.EffectiveAGI;
+                    bool removed = usc.RemoveBuff(agiBuffState);
+                    float afterAgi = unit.EffectiveAGI;
+
+                    if (debugLogTransitions)
+                    {
+                        Debug.Log(
+                        $"[Smoke AGI EXIT ] {unit.name} buff={agiBuffState} removed={removed} " +
+                        $"AGI {beforeAgi:0.###} -> {afterAgi:0.###}"
+                                                );
+                    }
+                }
+            }
+        }
+
+        inside.Clear();
+        foreach (var u in nowSet) inside.Add(u);
+    }
+}

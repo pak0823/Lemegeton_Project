@@ -1,72 +1,72 @@
-using UnityEngine;
-using UnityEngine.AddressableAssets; // ¾îµå·¹¼­ºí ÇÊ¼ö ³×ÀÓ½ºÆäÀÌ½º
-using UnityEngine.ResourceManagement.AsyncOperations; // ºñµ¿±â ÀÛ¾÷ °ü¸®¿ë
-
-public class AddressableLoaderTest : MonoBehaviour
-{
-    [Header("1. ¿¬°áÇÒ µ¥ÀÌÅÍ (Á÷Á¢ ¿¬°á ´ë½Å ÁÖ¼Ò¸¦ ¾¸)")]
-    // ±âÁ¸: public UnitData unitData;
-    // º¯°æ: AssetReference¸¦ »ç¿ëÇÏ¸é ÀÎ½ºÆåÅÍ¿¡¼­ µå·Ó´Ù¿îÀ¸·Î ¼±ÅÃ °¡´É
-    public AssetReference unitDataReference;
-
-    [Header("2. ·ÎµùµÈ µ¥ÀÌÅÍ º¸°üÅë")]
-    // ½ÇÁ¦·Î ·ÎµùÀÌ ¿Ï·áµÇ¸é ¿©±â¿¡ ´ã¾ÆµÑ °ÍÀÓ
-    private ScriptableObject loadedData;
-
-    // Å×½ºÆ®¸¦ À§ÇØ °ÔÀÓ ½ÃÀÛÇÏÀÚ¸¶ÀÚ ·Îµù ½Ãµµ
-    void Start()
-    {
-        LoadData();
-    }
-
-    // µ¥ÀÌÅÍ ·Îµù ÇÔ¼ö
-    public void LoadData()
-    {
-        if (unitDataReference == null)
-        {
-            Debug.LogWarning("ÀÎ½ºÆåÅÍ¿¡¼­ AssetReference¸¦ ¸ÕÀú ¿¬°áÇØÁÖ¼¼¿ä!");
-            return;
-        }
-
-        Debug.Log("µ¥ÀÌÅÍ ·Îµù ½ÃÀÛ...");
-
-        // ÇÙ½É ÄÚµå: LoadAssetAsync<T>()
-        // "ÀÌ ÁÖ¼Ò¿¡ ÀÖ´Â ¿¡¼ÂÀ» ºñµ¿±â·Î °¡Á®¿Í¶ó"
-        unitDataReference.LoadAssetAsync<ScriptableObject>().Completed += OnLoadCompleted;
-    }
-
-    // ·ÎµùÀÌ ³¡³ª¸é È£ÃâµÇ´Â Äİ¹é ÇÔ¼ö
-    private void OnLoadCompleted(AsyncOperationHandle<ScriptableObject> handle)
-    {
-        if (handle.Status == AsyncOperationStatus.Succeeded)
-        {
-            Debug.Log($"·Îµù ¼º°ø! ºÒ·¯¿Â ÆÄÀÏ ÀÌ¸§: {handle.Result.name}");
-
-            // °á°ú¹°À» º¯¼ö¿¡ ÀúÀå (³ªÁß¿¡ ¾²·Á°í)
-            loadedData = handle.Result;
-
-            // ¸¸¾à UnitData¶ó¸é Ä³½ºÆÃÇØ¼­ µ¥ÀÌÅÍ È®ÀÎ °¡´É
-            if (loadedData is UnitData unit)
-            {
-                Debug.Log($"À¯´Ö ÀÌ¸§: {unit.DisplayName}, °ø°İ·Â: {unit.baseSTR}");
-            }
-        }
-        else
-        {
-            Debug.LogError("·Îµù ½ÇÆĞ! ÁÖ¼Ò°¡ Æ²·È°Å³ª ÆÄÀÏÀÌ ¾ø½À´Ï´Ù.");
-        }
-    }
-
-    // ¸Ş¸ğ¸® ÇØÁ¦ (¸Å¿ì Áß¿ä!)
-    // ÀÌ ¿ÀºêÁ§Æ®°¡ ÆÄ±«µÉ ¶§ ¸Ş¸ğ¸®¿¡¼­µµ ³»·ÁÁà¾ß ÇÔ
-    void OnDestroy()
-    {
-        if (loadedData != null)
-        {
-            Debug.Log("µ¥ÀÌÅÍ ¸Ş¸ğ¸® ÇØÁ¦(Unload)");
-            // ´õ ÀÌ»ó ¾È ¾²¸é ¸Ş¸ğ¸®¿¡¼­ ¹æ »©¶ó°í ¸í·É
-            unitDataReference.ReleaseAsset();
-            loadedData = null;
-        }
-    }
+using UnityEngine;
+using UnityEngine.AddressableAssets; // ì–´ë“œë ˆì„œë¸” í•„ìˆ˜ ë„¤ì„ìŠ¤í˜ì´ìŠ¤
+using UnityEngine.ResourceManagement.AsyncOperations; // ë¹„ë™ê¸° ì‘ì—… ê´€ë¦¬ìš©
+
+public class AddressableLoaderTest : MonoBehaviour
+{
+    [Header("1. ì—°ê²°í•  ë°ì´í„° (ì§ì ‘ ì—°ê²° ëŒ€ì‹  ì£¼ì†Œë¥¼ ì”€)")]
+    // ê¸°ì¡´: public UnitData unitData;
+    // ë³€ê²½: AssetReferenceë¥¼ ì‚¬ìš©í•˜ë©´ ì¸ìŠ¤í™í„°ì—ì„œ ë“œë¡­ë‹¤ìš´ìœ¼ë¡œ ì„ íƒ ê°€ëŠ¥
+    public AssetReference unitDataReference;
+
+    [Header("2. ë¡œë”©ëœ ë°ì´í„° ë³´ê´€í†µ")]
+    // ì‹¤ì œë¡œ ë¡œë”©ì´ ì™„ë£Œë˜ë©´ ì—¬ê¸°ì— ë‹´ì•„ë‘˜ ê²ƒì„
+    private ScriptableObject loadedData;
+
+    // í…ŒìŠ¤íŠ¸ë¥¼ ìœ„í•´ ê²Œì„ ì‹œì‘í•˜ìë§ˆì ë¡œë”© ì‹œë„
+    void Start()
+    {
+        LoadData();
+    }
+
+    // ë°ì´í„° ë¡œë”© í•¨ìˆ˜
+    public void LoadData()
+    {
+        if (unitDataReference == null)
+        {
+            Debug.LogWarning("ì¸ìŠ¤í™í„°ì—ì„œ AssetReferenceë¥¼ ë¨¼ì € ì—°ê²°í•´ì£¼ì„¸ìš”!");
+            return;
+        }
+
+        Debug.Log("ë°ì´í„° ë¡œë”© ì‹œì‘...");
+
+        // í•µì‹¬ ì½”ë“œ: LoadAssetAsync<T>()
+        // "ì´ ì£¼ì†Œì— ìˆëŠ” ì—ì…‹ì„ ë¹„ë™ê¸°ë¡œ ê°€ì ¸ì™€ë¼"
+        unitDataReference.LoadAssetAsync<ScriptableObject>().Completed += OnLoadCompleted;
+    }
+
+    // ë¡œë”©ì´ ëë‚˜ë©´ í˜¸ì¶œë˜ëŠ” ì½œë°± í•¨ìˆ˜
+    private void OnLoadCompleted(AsyncOperationHandle<ScriptableObject> handle)
+    {
+        if (handle.Status == AsyncOperationStatus.Succeeded)
+        {
+            Debug.Log($"ë¡œë”© ì„±ê³µ! ë¶ˆëŸ¬ì˜¨ íŒŒì¼ ì´ë¦„: {handle.Result.name}");
+
+            // ê²°ê³¼ë¬¼ì„ ë³€ìˆ˜ì— ì €ì¥ (ë‚˜ì¤‘ì— ì“°ë ¤ê³ )
+            loadedData = handle.Result;
+
+            // ë§Œì•½ UnitDataë¼ë©´ ìºìŠ¤íŒ…í•´ì„œ ë°ì´í„° í™•ì¸ ê°€ëŠ¥
+            if (loadedData is UnitData unit)
+            {
+                Debug.Log($"ìœ ë‹› ì´ë¦„: {unit.DisplayName}, ê³µê²©ë ¥: {unit.baseSTR}");
+            }
+        }
+        else
+        {
+            Debug.LogError("ë¡œë”© ì‹¤íŒ¨! ì£¼ì†Œê°€ í‹€ë ¸ê±°ë‚˜ íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.");
+        }
+    }
+
+    // ë©”ëª¨ë¦¬ í•´ì œ (ë§¤ìš° ì¤‘ìš”!)
+    // ì´ ì˜¤ë¸Œì íŠ¸ê°€ íŒŒê´´ë  ë•Œ ë©”ëª¨ë¦¬ì—ì„œë„ ë‚´ë ¤ì¤˜ì•¼ í•¨
+    void OnDestroy()
+    {
+        if (loadedData != null)
+        {
+            Debug.Log("ë°ì´í„° ë©”ëª¨ë¦¬ í•´ì œ(Unload)");
+            // ë” ì´ìƒ ì•ˆ ì“°ë©´ ë©”ëª¨ë¦¬ì—ì„œ ë°© ë¹¼ë¼ê³  ëª…ë ¹
+            unitDataReference.ReleaseAsset();
+            loadedData = null;
+        }
+    }
 }

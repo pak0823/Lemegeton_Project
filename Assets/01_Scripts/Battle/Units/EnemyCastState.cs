@@ -1,161 +1,161 @@
-// Assets/Scripts/Combat/EnemyCastState.cs
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class EnemyCastState : MonoBehaviour
-{
-    public class PendingCast
-    {
-        public BattleUnit owner;
-        public BattleManager bm;
-        public Tilemap map;
-        public Vector3Int cell;
-        public WebTrapController trapPrefab;
-        public ProjectileController projectilePrefab;  // ½ºÅ³/À¯´ÖÀÌ ¼±ÅÃÇÑ Åõ»çÃ¼
-        public float projectileSpeed = 3f;        // Åõ»çÃ¼ÀÇ ¼Óµµ
-
-        // Ä³½ºÆÃ ½ºÅ³/Á¦¾Ğ Ä«¿îÆ®
-        public EnemySkill skillSO;   // Ä³½ºÆÃ ÁßÀÎ Àû ½ºÅ³ SO
-        public int suppressMax;      // ÇÊ¿ä Á¦¾Ğ ¼ö(0~3)
-        public int suppressCur;      // ÇöÀç ³²Àº Á¦¾Ğ ¼ö
-    }
-
-    PendingCast _pending;
-    bool _interrupted;
-    int _skillPreviewToken = 0;
-    bool _readyToResolve = false;
-
-    // Ä³½ºÆÃ ¿©ºÎ ³ëÃâ
-    public bool IsCasting => _pending != null;
-
-    void OnEnable()
-    {
-        var u = GetComponent<BattleUnit>();
-        if (u != null) u.OnDamaged += OnOwnerDamaged; // BattleUnit¿¡ ÀÌº¥Æ® Ãß°¡ ÇÊ¿ä
-        BattleManager.OnAnyUnitTurnStarted += OnAnyTurnStarted; // BattleManager¿¡ Àü¿ª ÀÌº¥Æ® Ãß°¡
-    }
-
-    void OnDisable()
-    {
-        var u = GetComponent<BattleUnit>();
-        if (u != null) u.OnDamaged -= OnOwnerDamaged;
-        BattleManager.OnAnyUnitTurnStarted -= OnAnyTurnStarted;
-    }
-
-    public bool TryTakeReady(out PendingCast p)
-    {
-        p = null;
-        if (!_readyToResolve || _pending == null) return false;
-        p = _pending;           // BMÀÌ Ã³¸®ÇÒ ¶§±îÁö º¸Á¸
-        _readyToResolve = false;
-        return true;
-    }
-    public void BeginCasting(PendingCast p)
-    {
-        _pending = p;
-        _interrupted = false;
-
-        // Á¦¾Ğ Ä«¿îÆ® ÃÊ±âÈ­(½ºÅ³º° ¼³Á¤)
-        int need = Mathf.Clamp(_pending?.skillSO ? _pending.skillSO.suppressionRequired : 0, 0, 3);
-        _pending.suppressMax = need;
-        _pending.suppressCur = need;
-
-        // ÇÁ¸®ºä ÅäÅ« »ı¼º & µî·Ï (ÀÌ ½ÃÁ¡¿¡ WebCast°¡ ³Ñ±ä map/cell »ç¿ë)
-        if (_skillPreviewToken == 0 && _pending != null)
-        {
-            _skillPreviewToken = _pending.bm?.CreateSkillPreviewToken() ?? 0;
-            if (_skillPreviewToken != 0)
-                _pending.bm?.SetSkillPreviewForToken(_skillPreviewToken, _pending.map, new[] { _pending.cell });
-        }
-
-        // ¶óº§ ÄÃ·¯ ¹İ¿µ
-        UpdateCastLabelColor();
-    }
-
-    void OnOwnerDamaged(int amount)
-    {
-        if (_pending == null) return;
-    }
-
-    void OnAnyTurnStarted(BattleUnit who)
-    {
-        if (_pending == null || who != _pending.owner) return;
-
-        // ÀÌ ¼ÒÀ¯ÀÚÀÇ "´ÙÀ½ ÅÏ ½ÃÀÛ" ½ÃÁ¡
-        if (_interrupted)
-        {
-            // ½ÇÆĞ ¡æ ÇØ´ç ÅäÅ«¸¸ Á¦°Å
-            if (_skillPreviewToken != 0)
-            {
-                _pending.bm?.ClearSkillPreviewToken(_skillPreviewToken);
-                _skillPreviewToken = 0;
-            }
-            _pending.owner?.SetCasting(false);       // Ä³½ºÆÃ ·çÇÁ Á¾·á
-            _pending.bm?.ReleaseSkillPreview();
-            _pending = null;
-            _interrupted = false;
-            return;
-        }
-
-        _readyToResolve = true;// ¿©±â¼­´Â 'ÇØ°á ÁØºñ'¸¸ Ç¥½Ã(»ı¼º/ÅÏ¼Òºñ´Â BM¿¡¼­)
-    }
-    public bool TryReduceSuppression(int amount)
-    {
-        if (_pending == null || amount <= 0) return false;
-
-        // Á¦¾Ğ Ä«¿îÆ®°¡ ¾ø´Â ½ºÅ³ÀÌ¸é(=need 0) ÀÇ¹Ì ¾øÀ½
-        if (_pending.suppressMax <= 0) return false;
-
-        _pending.suppressCur = Mathf.Max(0, _pending.suppressCur - amount);
-        UpdateCastLabelColor();
-
-        if (_pending.suppressCur > 0) return true;
-
-        _interrupted = true;
-        _pending.owner?.SetCasting(false);
-
-        if (_skillPreviewToken != 0)
-        {
-            _pending.bm?.ClearSkillPreviewToken(_skillPreviewToken);
-            _skillPreviewToken = 0;
-        }
-        _pending.bm?.ReleaseSkillPreview();
-        _pending.bm?.EmitActionLabel(_pending.owner, "");
-
-        var ai = _pending.owner.GetComponent<EnemyAI>();
-        if (ai != null) ai.PlanNextSkill();
-
-        _pending = null;
-        _interrupted = false;
-
-        return true;
-    }
-
-    public void ClearPreviewAndFinalize(BattleManager bm)
-    {
-        if (_skillPreviewToken != 0) { bm?.ClearSkillPreviewToken(_skillPreviewToken); _skillPreviewToken = 0; }
-        bm?.ReleaseSkillPreview();
-        _pending = null;
-        _interrupted = false;
-    }
-
-    void UpdateCastLabelColor()
-    {
-        if (_pending == null) return;
-        // ½ºÅ³¸í °¡Á®¿À±â(¾øÀ¸¸é ºó ¹®ÀÚ¿­)
-        string name = _pending.skillSO ? _pending.skillSO.displayName : "";
-
-        // »ö °áÁ¤(3=»¡°­, 2=ÁÖÈ²(FF9B00), 1=³ë¶û, 0/¾øÀ½=Èò»ö)
-        string hex = "FFFFFF";
-        switch (_pending.suppressCur)
-        {
-            case 3: hex = "FF0000"; break;   // red
-            case 2: hex = "FF9B00"; break;   // orange (255,155,0)
-            case 1: hex = "FFFF00"; break;   // yellow
-            default: hex = "FFFFFF"; break;  // white
-        }
-
-        // ¸®Ä¡ ÅØ½ºÆ®·Î »ö ÀÔÇô¼­ ¹æ¼Û
-        _pending.bm?.EmitActionLabel(_pending.owner, $"<color=#{hex}>{name}</color>");
-    }
-}
+// Assets/Scripts/Combat/EnemyCastState.cs
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class EnemyCastState : MonoBehaviour
+{
+    public class PendingCast
+    {
+        public BattleUnit owner;
+        public BattleManager bm;
+        public Tilemap map;
+        public Vector3Int cell;
+        public WebTrapController trapPrefab;
+        public ProjectileController projectilePrefab;  // ìŠ¤í‚¬/ìœ ë‹›ì´ ì„ íƒí•œ íˆ¬ì‚¬ì²´
+        public float projectileSpeed = 3f;        // íˆ¬ì‚¬ì²´ì˜ ì†ë„
+
+        // ìºìŠ¤íŒ… ìŠ¤í‚¬/ì œì•• ì¹´ìš´íŠ¸
+        public EnemySkill skillSO;   // ìºìŠ¤íŒ… ì¤‘ì¸ ì  ìŠ¤í‚¬ SO
+        public int suppressMax;      // í•„ìš” ì œì•• ìˆ˜(0~3)
+        public int suppressCur;      // í˜„ì¬ ë‚¨ì€ ì œì•• ìˆ˜
+    }
+
+    PendingCast _pending;
+    bool _interrupted;
+    int _skillPreviewToken = 0;
+    bool _readyToResolve = false;
+
+    // ìºìŠ¤íŒ… ì—¬ë¶€ ë…¸ì¶œ
+    public bool IsCasting => _pending != null;
+
+    void OnEnable()
+    {
+        var u = GetComponent<BattleUnit>();
+        if (u != null) u.OnDamaged += OnOwnerDamaged; // BattleUnitì— ì´ë²¤íŠ¸ ì¶”ê°€ í•„ìš”
+        BattleManager.OnAnyUnitTurnStarted += OnAnyTurnStarted; // BattleManagerì— ì „ì—­ ì´ë²¤íŠ¸ ì¶”ê°€
+    }
+
+    void OnDisable()
+    {
+        var u = GetComponent<BattleUnit>();
+        if (u != null) u.OnDamaged -= OnOwnerDamaged;
+        BattleManager.OnAnyUnitTurnStarted -= OnAnyTurnStarted;
+    }
+
+    public bool TryTakeReady(out PendingCast p)
+    {
+        p = null;
+        if (!_readyToResolve || _pending == null) return false;
+        p = _pending;           // BMì´ ì²˜ë¦¬í•  ë•Œê¹Œì§€ ë³´ì¡´
+        _readyToResolve = false;
+        return true;
+    }
+    public void BeginCasting(PendingCast p)
+    {
+        _pending = p;
+        _interrupted = false;
+
+        // ì œì•• ì¹´ìš´íŠ¸ ì´ˆê¸°í™”(ìŠ¤í‚¬ë³„ ì„¤ì •)
+        int need = Mathf.Clamp(_pending?.skillSO ? _pending.skillSO.suppressionRequired : 0, 0, 3);
+        _pending.suppressMax = need;
+        _pending.suppressCur = need;
+
+        // í”„ë¦¬ë·° í† í° ìƒì„± & ë“±ë¡ (ì´ ì‹œì ì— WebCastê°€ ë„˜ê¸´ map/cell ì‚¬ìš©)
+        if (_skillPreviewToken == 0 && _pending != null)
+        {
+            _skillPreviewToken = _pending.bm?.CreateSkillPreviewToken() ?? 0;
+            if (_skillPreviewToken != 0)
+                _pending.bm?.SetSkillPreviewForToken(_skillPreviewToken, _pending.map, new[] { _pending.cell });
+        }
+
+        // ë¼ë²¨ ì»¬ëŸ¬ ë°˜ì˜
+        UpdateCastLabelColor();
+    }
+
+    void OnOwnerDamaged(int amount)
+    {
+        if (_pending == null) return;
+    }
+
+    void OnAnyTurnStarted(BattleUnit who)
+    {
+        if (_pending == null || who != _pending.owner) return;
+
+        // ì´ ì†Œìœ ìì˜ "ë‹¤ìŒ í„´ ì‹œì‘" ì‹œì 
+        if (_interrupted)
+        {
+            // ì‹¤íŒ¨ â†’ í•´ë‹¹ í† í°ë§Œ ì œê±°
+            if (_skillPreviewToken != 0)
+            {
+                _pending.bm?.ClearSkillPreviewToken(_skillPreviewToken);
+                _skillPreviewToken = 0;
+            }
+            _pending.owner?.SetCasting(false);       // ìºìŠ¤íŒ… ë£¨í”„ ì¢…ë£Œ
+            _pending.bm?.ReleaseSkillPreview();
+            _pending = null;
+            _interrupted = false;
+            return;
+        }
+
+        _readyToResolve = true;// ì—¬ê¸°ì„œëŠ” 'í•´ê²° ì¤€ë¹„'ë§Œ í‘œì‹œ(ìƒì„±/í„´ì†Œë¹„ëŠ” BMì—ì„œ)
+    }
+    public bool TryReduceSuppression(int amount)
+    {
+        if (_pending == null || amount <= 0) return false;
+
+        // ì œì•• ì¹´ìš´íŠ¸ê°€ ì—†ëŠ” ìŠ¤í‚¬ì´ë©´(=need 0) ì˜ë¯¸ ì—†ìŒ
+        if (_pending.suppressMax <= 0) return false;
+
+        _pending.suppressCur = Mathf.Max(0, _pending.suppressCur - amount);
+        UpdateCastLabelColor();
+
+        if (_pending.suppressCur > 0) return true;
+
+        _interrupted = true;
+        _pending.owner?.SetCasting(false);
+
+        if (_skillPreviewToken != 0)
+        {
+            _pending.bm?.ClearSkillPreviewToken(_skillPreviewToken);
+            _skillPreviewToken = 0;
+        }
+        _pending.bm?.ReleaseSkillPreview();
+        _pending.bm?.EmitActionLabel(_pending.owner, "");
+
+        var ai = _pending.owner.GetComponent<EnemyAI>();
+        if (ai != null) ai.PlanNextSkill();
+
+        _pending = null;
+        _interrupted = false;
+
+        return true;
+    }
+
+    public void ClearPreviewAndFinalize(BattleManager bm)
+    {
+        if (_skillPreviewToken != 0) { bm?.ClearSkillPreviewToken(_skillPreviewToken); _skillPreviewToken = 0; }
+        bm?.ReleaseSkillPreview();
+        _pending = null;
+        _interrupted = false;
+    }
+
+    void UpdateCastLabelColor()
+    {
+        if (_pending == null) return;
+        // ìŠ¤í‚¬ëª… ê°€ì ¸ì˜¤ê¸°(ì—†ìœ¼ë©´ ë¹ˆ ë¬¸ìì—´)
+        string name = _pending.skillSO ? _pending.skillSO.displayName : "";
+
+        // ìƒ‰ ê²°ì •(3=ë¹¨ê°•, 2=ì£¼í™©(FF9B00), 1=ë…¸ë‘, 0/ì—†ìŒ=í°ìƒ‰)
+        string hex = "FFFFFF";
+        switch (_pending.suppressCur)
+        {
+            case 3: hex = "FF0000"; break;   // red
+            case 2: hex = "FF9B00"; break;   // orange (255,155,0)
+            case 1: hex = "FFFF00"; break;   // yellow
+            default: hex = "FFFFFF"; break;  // white
+        }
+
+        // ë¦¬ì¹˜ í…ìŠ¤íŠ¸ë¡œ ìƒ‰ ì…í˜€ì„œ ë°©ì†¡
+        _pending.bm?.EmitActionLabel(_pending.owner, $"<color=#{hex}>{name}</color>");
+    }
+}

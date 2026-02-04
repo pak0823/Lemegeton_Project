@@ -1,83 +1,83 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(
-    menuName = "Battle/Passives/No Eul/Passive_3",
-    fileName = "Passive_WeakOnLowestHp")]
-
-public class NoEulWeakOnLowestHpPassive : PassiveAsset
-{
-    [Header("³ª¾à ºÎ¿© ¼³Á¤")]
-    [SerializeField] private StatusId weakStatusId = StatusId.Weakness;
-    [SerializeField] private int weakStacks = 1;
-    [SerializeField] private int weakDurationTurns = 3;
-
-    private BattleUnit owner;
-    private BattleManager battle;
-
-    public override void OnAttach(BattleUnit _owner, BattleManager _battlemanager)
-    {
-        owner = _owner;
-        battle = _battlemanager;
-
-        if (owner != null)
-            owner.OnDealtDamage += HandleDealtDamage;
-    }
-
-    public override void OnDetach(BattleUnit _owner, BattleManager _battlemanager)
-    {
-        if (owner != null)
-            owner.OnDealtDamage -= HandleDealtDamage;
-
-        owner = null;
-        battle = null;
-    }
-
-    private void HandleDealtDamage(BattleUnit attacker, BattleUnit target, int damage, SkillAsset skill)
-    {
-        // ´Ù¸¥ À¯´ÖÀÇ °ø°İÀº ¹«½Ã
-        if (attacker != owner) return;
-        if (battle == null) return;
-        if (target == null || target.IsDead) return;
-        if (target.data.team == owner.data.team) return; // ¾Æ±ºÀº Á¦¿Ü
-
-        // ÀÌ °ø°İÀ» ¸Â±â Àü ´ë»ó HP º¹¿ø
-        float targetHpBefore = target.HP + Mathf.Max(0, damage);
-
-        // ÇöÀç »ıÁ¸ ÁßÀÎ Àûµé Áß¿¡¼­ HP°¡ °¡Àå ³·Àº ¾Öµé Ã£±â
-        var candidates = new List<BattleUnit>();
-        float minHp = float.MaxValue;
-
-        foreach (var enemy in battle.GetLivingEnemiesOf(owner))
-        {
-            if (enemy == null) continue;
-
-            float hp = (enemy == target) ? targetHpBefore : enemy.HP;   // °ø°İ¹ŞÀº ´ë»óÀº "¸Â±â Àü HP"·Î ºñ±³
-
-            if (hp < minHp - 0.01f)
-            {
-                minHp = hp;
-                candidates.Clear();
-                candidates.Add(enemy);
-            }
-            else if (Mathf.Abs(hp - minHp) <= 0.01f)
-            {
-                candidates.Add(enemy);
-            }
-        }
-
-        if (candidates.Count == 0) return;
-
-        // ÃÖ¼Ò HP Àûµé Áß ·£´ı ÇÏ³ª ¼±ÅÃ
-        var chosen = candidates[Random.Range(0, candidates.Count)];
-
-        // ÀÌ¹ø¿¡ ¶§¸° ´ë»óÀÌ ±× ·£´ı ¼±ÅÃµÈ "°¡Àå ³·Àº Ã¼·Â Àû"ÀÌ ¾Æ´Ò °æ¿ì ¹ßµ¿ X
-        if (chosen != target) return;
-
-        var sc = target.GetComponent<StatusController>();
-        if (sc == null) return;
-
-        sc.ApplyWithTurnContext(weakStatusId, weakStacks, weakDurationTurns);
-        Debug.Log($"[Passive:WeakOnLowestHp] {owner.name} ¡æ {target.name}¿¡°Ô ³ª¾à {weakStacks}ÁßÃ¸({weakDurationTurns}ÅÏ) ºÎ¿©");
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(
+    menuName = "Battle/Passives/No Eul/Passive_3",
+    fileName = "Passive_WeakOnLowestHp")]
+
+public class NoEulWeakOnLowestHpPassive : PassiveAsset
+{
+    [Header("ë‚˜ì•½ ë¶€ì—¬ ì„¤ì •")]
+    [SerializeField] private StatusId weakStatusId = StatusId.Weakness;
+    [SerializeField] private int weakStacks = 1;
+    [SerializeField] private int weakDurationTurns = 3;
+
+    private BattleUnit owner;
+    private BattleManager battle;
+
+    public override void OnAttach(BattleUnit _owner, BattleManager _battlemanager)
+    {
+        owner = _owner;
+        battle = _battlemanager;
+
+        if (owner != null)
+            owner.OnDealtDamage += HandleDealtDamage;
+    }
+
+    public override void OnDetach(BattleUnit _owner, BattleManager _battlemanager)
+    {
+        if (owner != null)
+            owner.OnDealtDamage -= HandleDealtDamage;
+
+        owner = null;
+        battle = null;
+    }
+
+    private void HandleDealtDamage(BattleUnit attacker, BattleUnit target, int damage, SkillAsset skill)
+    {
+        // ë‹¤ë¥¸ ìœ ë‹›ì˜ ê³µê²©ì€ ë¬´ì‹œ
+        if (attacker != owner) return;
+        if (battle == null) return;
+        if (target == null || target.IsDead) return;
+        if (target.data.team == owner.data.team) return; // ì•„êµ°ì€ ì œì™¸
+
+        // ì´ ê³µê²©ì„ ë§ê¸° ì „ ëŒ€ìƒ HP ë³µì›
+        float targetHpBefore = target.HP + Mathf.Max(0, damage);
+
+        // í˜„ì¬ ìƒì¡´ ì¤‘ì¸ ì ë“¤ ì¤‘ì—ì„œ HPê°€ ê°€ì¥ ë‚®ì€ ì• ë“¤ ì°¾ê¸°
+        var candidates = new List<BattleUnit>();
+        float minHp = float.MaxValue;
+
+        foreach (var enemy in battle.GetLivingEnemiesOf(owner))
+        {
+            if (enemy == null) continue;
+
+            float hp = (enemy == target) ? targetHpBefore : enemy.HP;   // ê³µê²©ë°›ì€ ëŒ€ìƒì€ "ë§ê¸° ì „ HP"ë¡œ ë¹„êµ
+
+            if (hp < minHp - 0.01f)
+            {
+                minHp = hp;
+                candidates.Clear();
+                candidates.Add(enemy);
+            }
+            else if (Mathf.Abs(hp - minHp) <= 0.01f)
+            {
+                candidates.Add(enemy);
+            }
+        }
+
+        if (candidates.Count == 0) return;
+
+        // ìµœì†Œ HP ì ë“¤ ì¤‘ ëœë¤ í•˜ë‚˜ ì„ íƒ
+        var chosen = candidates[Random.Range(0, candidates.Count)];
+
+        // ì´ë²ˆì— ë•Œë¦° ëŒ€ìƒì´ ê·¸ ëœë¤ ì„ íƒëœ "ê°€ì¥ ë‚®ì€ ì²´ë ¥ ì "ì´ ì•„ë‹ ê²½ìš° ë°œë™ X
+        if (chosen != target) return;
+
+        var sc = target.GetComponent<StatusController>();
+        if (sc == null) return;
+
+        sc.ApplyWithTurnContext(weakStatusId, weakStacks, weakDurationTurns);
+        Debug.Log($"[Passive:WeakOnLowestHp] {owner.name} â†’ {target.name}ì—ê²Œ ë‚˜ì•½ {weakStacks}ì¤‘ì²©({weakDurationTurns}í„´) ë¶€ì—¬");
+    }
+}

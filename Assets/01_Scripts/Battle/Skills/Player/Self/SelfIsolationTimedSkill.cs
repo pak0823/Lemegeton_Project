@@ -1,193 +1,193 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-/// <summary>
-/// ÀÚ½Å¿¡°Ô 'nÅÏ µ¿¾È' UnitState¸¦ ºÎ¿©ÇÏ´Â ½ºÅ³ (¼â±¹ 1ÅÏ ¿ë).
-/// - ±âÁ¸ SelfStateSkillÀº ¹«±âÇÑ, ÀÌ°Ç ÅÏ Áö¼ÓÇü.
-/// </summary>
-[CreateAssetMenu(
-    menuName = "Battle/Skills/State/Self State Timed (Isolation)",
-    fileName = "SelfIsolationTimedSkill")]
-public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
-{
-    [Header("±âº» ¹æ¾î ÁßÃ¸ È¿°ú")]
-    [Tooltip("±âº» ¹æ¾î »óÅÂ ID")]
-    public StatusId baseDefenseStatusId = StatusId.Defense;
-    [Min(1)] public int baseDefenseStacks = 3;
-    [Min(1)] public int baseDefenseDurationTurns = 1;
-
-    [Header("Training")]
-
-    [Header("ÀÚ¿ø Àı¾à È¿°ú")]
-    [Tooltip("ÈÆ·Ã¿¡¼­ MP ºñ¿ëÀ» µ¤¾î¾µÁö ¿©ºÎ")]
-    public bool trainingUseMpOverride = false;
-    [Tooltip("MP °¨¼Ò°¡ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º, º¸Åë 0 = 1¹ø ·çÆ®)")]
-    [Range(-1, 2)] public int routeForMpOverride = 0;
-    [Tooltip("ÇØ´ç ·çÆ®¿¡¼­ ½ÇÁ¦·Î »ç¿ëÇÒ MP ºñ¿ë")]
-    public int trainingMpCostRoute0 = 2;
-
-    [Header("°­Á¦ ÀÌµ¿ ¹æÁö")]
-    [Tooltip("ÀÌ ½ºÅ³·Î ºÎ¿©µÈ »óÅÂ°¡ °­Á¦ ÀÌµ¿À» ¸·°Ô ÇÒÁö ¿©ºÎ")]
-    public bool trainingPreventForcedMove = false;
-    [Tooltip("°­Á¦ ÀÌµ¿ ¹æÁö È¿°ú¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)] public int routeForPreventForcedMove = -1;
-    [Tooltip("°­Á¦ ÀÌµ¿À» ¸·´Â µ¥ »ç¿ëÇÒ »óÅÂ ID (¿¹: MoveResist)")]
-    public StatusId moveResistStatusId = StatusId.Fixing;
-    [Tooltip("ÀÌµ¿ ÀúÇ× »óÅÂÀÇ Áö¼Ó ÅÏ¼ö")]
-    [Min(1)] public int moveResistDurationTurns = 1;
-
-    [Header("¹æ¾î ÁßÃ¸ Áö¼ÓÅÏ Áõ°¡")]
-    [Tooltip("ÈÆ·ÃÀ¸·Î ¹æ¾î ÁßÃ¸ Áö¼Ó ÅÏÀ» ´Ã¸±Áö ¿©ºÎ")]
-    public bool trainingExtendDefenseDuration = false;
-    [Tooltip("¹æ¾î ÁßÃ¸ Áö¼Ó ÅÏ Áõ°¡°¡ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)] public int routeForExtendDefenseDuration = -1;
-    [Tooltip("Áö¼Ó ÅÏ Áõ°¡ ½Ã »ç¿ëÇÒ ÅÏ ¼ö")]
-    [Min(1)] public int extendedDefenseDurationTurns = 2;
-
-
-
-    public bool SelfCastOnSelect => true;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = SkillTargetMode.Unit; }
-#endif
-    void OnEnable() 
-    { 
-        targetMode = SkillTargetMode.Unit;
-        costResource = SkillCostResource.MP;
-    }
-
-    int GetRoute(BattleUnit _caster)
-    {
-        if (!_caster) return -1;
-        return _caster.GetTrainingRouteIndex(this);
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
-    {
-        // ÀÚ±â ÀÚ½Å Å¸°ÙÀÌ¶ó ÇÁ¸®ºä ÇÊ¿ä ¾øÀ½
-        yield break;
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // Å¸°ÙÆÃ °úÁ¤ ¾øÀÌ, Áï½Ã ÀÚ±â ÀÚ½Å(caster)À» ´ë»óÀ¸·Î ½ÇÇà Èå¸§ ÁøÀÔ
-        // PerformStandardUnitSkillFlow°¡ ¾Ö´Ï¸ŞÀÌ¼Ç -> ResolveOnUnit È£ÃâÀ» ´Ù ÇØÁÜ
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (!_caster) yield break;
-        if (!_battlemanager) yield break;
-
-        // ½ÇÁ¦ Ä³½ºÅÍ´Â Ç×»ó ÀÚ±â ÀÚ½Å
-        _target = _caster;
-
-        // MP ºñ¿ë °è»ê (ÈÆ·Ã ¹İ¿µ)
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        var usc = _caster.GetComponent<UnitStateController>();
-        if (usc == null)
-            usc = _caster.gameObject.AddComponent<UnitStateController>();
-
-        int route = GetRoute(_caster);
-
-        // ½ÇÁ¦ Àû¿ëÇÒ Áö¼Ó ÅÏ °è»ê
-        int defenseDuration = baseDefenseDurationTurns;
-        if (trainingExtendDefenseDuration &&
-            routeForExtendDefenseDuration >= 0 &&
-            route == routeForExtendDefenseDuration)
-        {
-            defenseDuration = Mathf.Max(defenseDuration, extendedDefenseDurationTurns);
-        }
-
-        StatusId defId = baseDefenseStatusId;
-        int defStacks = Mathf.Max(1, baseDefenseStacks);
-        var allUnits = Object.FindObjectsOfType<BattleUnit>();
-
-        // ¹æ¾î ÁßÃ¸ Àû¿ë
-        if (defId != StatusId.None)
-        {
-            foreach (var u in allUnits)
-            {
-                if (u == null || u.IsDead || u.IsRetreated) continue;
-
-                // ¾Æ±º¸¸
-                if (u.data.team != _caster.data.team) continue;
-
-                var sc = u.GetComponent<StatusController>();
-                if (sc == null) continue;
-
-                sc.ApplyWithTurnContext(
-                    defId,
-                    defStacks,
-                    Mathf.Max(1, defenseDuration)
-                );
-            }
-        }
-
-        // °­Á¦ ÀÌµ¿ ¹æÁö¿ë ÀÌµ¿ ÀúÇ× »óÅÂ 1ÅÏ ºÎ¿©
-        if (trainingPreventForcedMove &&
-            routeForPreventForcedMove >= 0 &&
-            route == routeForPreventForcedMove &&
-            moveResistStatusId != StatusId.None)
-        {
-            foreach (var u in allUnits)
-            {
-                if (u == null || u.IsDead || u.IsRetreated) continue;
-
-                // ¾Æ±º¸¸
-                if (u.data.team != _caster.data.team) continue;
-
-                var sc = u.GetComponent<StatusController>();
-                if (sc == null) continue;
-
-                sc.ApplyWithTurnContext(
-                    moveResistStatusId,
-                    1,                                   // ½ºÅÃ 1
-                    Mathf.Max(1, moveResistDurationTurns) // ±âº» 1ÅÏ
-                );
-            }
-        }
-
-        yield break;
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-    {
-        yield break;
-    }
-
-    public override int GetEffectiveCost(BattleUnit _caster)
-    {
-        int baseCost = base.GetEffectiveCost(_caster);
-        if (!_caster) return baseCost;
-
-        int route = _caster.GetTrainingRouteIndex(this);
-        if (trainingUseMpOverride && routeForMpOverride >= 0 && route == routeForMpOverride)
-            return Mathf.Max(0, trainingMpCostRoute0);
-
-        return baseCost;
-    }
-
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+/// <summary>
+/// ìì‹ ì—ê²Œ 'ní„´ ë™ì•ˆ' UnitStateë¥¼ ë¶€ì—¬í•˜ëŠ” ìŠ¤í‚¬ (ì‡„êµ­ 1í„´ ìš©).
+/// - ê¸°ì¡´ SelfStateSkillì€ ë¬´ê¸°í•œ, ì´ê±´ í„´ ì§€ì†í˜•.
+/// </summary>
+[CreateAssetMenu(
+    menuName = "Battle/Skills/State/Self State Timed (Isolation)",
+    fileName = "SelfIsolationTimedSkill")]
+public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
+{
+    [Header("ê¸°ë³¸ ë°©ì–´ ì¤‘ì²© íš¨ê³¼")]
+    [Tooltip("ê¸°ë³¸ ë°©ì–´ ìƒíƒœ ID")]
+    public StatusId baseDefenseStatusId = StatusId.Defense;
+    [Min(1)] public int baseDefenseStacks = 3;
+    [Min(1)] public int baseDefenseDurationTurns = 1;
+
+    [Header("Training")]
+
+    [Header("ìì› ì ˆì•½ íš¨ê³¼")]
+    [Tooltip("í›ˆë ¨ì—ì„œ MP ë¹„ìš©ì„ ë®ì–´ì“¸ì§€ ì—¬ë¶€")]
+    public bool trainingUseMpOverride = false;
+    [Tooltip("MP ê°ì†Œê°€ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±, ë³´í†µ 0 = 1ë²ˆ ë£¨íŠ¸)")]
+    [Range(-1, 2)] public int routeForMpOverride = 0;
+    [Tooltip("í•´ë‹¹ ë£¨íŠ¸ì—ì„œ ì‹¤ì œë¡œ ì‚¬ìš©í•  MP ë¹„ìš©")]
+    public int trainingMpCostRoute0 = 2;
+
+    [Header("ê°•ì œ ì´ë™ ë°©ì§€")]
+    [Tooltip("ì´ ìŠ¤í‚¬ë¡œ ë¶€ì—¬ëœ ìƒíƒœê°€ ê°•ì œ ì´ë™ì„ ë§‰ê²Œ í• ì§€ ì—¬ë¶€")]
+    public bool trainingPreventForcedMove = false;
+    [Tooltip("ê°•ì œ ì´ë™ ë°©ì§€ íš¨ê³¼ë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)] public int routeForPreventForcedMove = -1;
+    [Tooltip("ê°•ì œ ì´ë™ì„ ë§‰ëŠ” ë° ì‚¬ìš©í•  ìƒíƒœ ID (ì˜ˆ: MoveResist)")]
+    public StatusId moveResistStatusId = StatusId.Fixing;
+    [Tooltip("ì´ë™ ì €í•­ ìƒíƒœì˜ ì§€ì† í„´ìˆ˜")]
+    [Min(1)] public int moveResistDurationTurns = 1;
+
+    [Header("ë°©ì–´ ì¤‘ì²© ì§€ì†í„´ ì¦ê°€")]
+    [Tooltip("í›ˆë ¨ìœ¼ë¡œ ë°©ì–´ ì¤‘ì²© ì§€ì† í„´ì„ ëŠ˜ë¦´ì§€ ì—¬ë¶€")]
+    public bool trainingExtendDefenseDuration = false;
+    [Tooltip("ë°©ì–´ ì¤‘ì²© ì§€ì† í„´ ì¦ê°€ê°€ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)] public int routeForExtendDefenseDuration = -1;
+    [Tooltip("ì§€ì† í„´ ì¦ê°€ ì‹œ ì‚¬ìš©í•  í„´ ìˆ˜")]
+    [Min(1)] public int extendedDefenseDurationTurns = 2;
+
+
+
+    public bool SelfCastOnSelect => true;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = SkillTargetMode.Unit; }
+#endif
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        costResource = SkillCostResource.MP;
+    }
+
+    int GetRoute(BattleUnit _caster)
+    {
+        if (!_caster) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
+    {
+        // ìê¸° ìì‹  íƒ€ê²Ÿì´ë¼ í”„ë¦¬ë·° í•„ìš” ì—†ìŒ
+        yield break;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // íƒ€ê²ŸíŒ… ê³¼ì • ì—†ì´, ì¦‰ì‹œ ìê¸° ìì‹ (caster)ì„ ëŒ€ìƒìœ¼ë¡œ ì‹¤í–‰ íë¦„ ì§„ì…
+        // PerformStandardUnitSkillFlowê°€ ì• ë‹ˆë©”ì´ì…˜ -> ResolveOnUnit í˜¸ì¶œì„ ë‹¤ í•´ì¤Œ
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (!_caster) yield break;
+        if (!_battlemanager) yield break;
+
+        // ì‹¤ì œ ìºìŠ¤í„°ëŠ” í•­ìƒ ìê¸° ìì‹ 
+        _target = _caster;
+
+        // MP ë¹„ìš© ê³„ì‚° (í›ˆë ¨ ë°˜ì˜)
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        var usc = _caster.GetComponent<UnitStateController>();
+        if (usc == null)
+            usc = _caster.gameObject.AddComponent<UnitStateController>();
+
+        int route = GetRoute(_caster);
+
+        // ì‹¤ì œ ì ìš©í•  ì§€ì† í„´ ê³„ì‚°
+        int defenseDuration = baseDefenseDurationTurns;
+        if (trainingExtendDefenseDuration &&
+            routeForExtendDefenseDuration >= 0 &&
+            route == routeForExtendDefenseDuration)
+        {
+            defenseDuration = Mathf.Max(defenseDuration, extendedDefenseDurationTurns);
+        }
+
+        StatusId defId = baseDefenseStatusId;
+        int defStacks = Mathf.Max(1, baseDefenseStacks);
+        var allUnits = Object.FindObjectsOfType<BattleUnit>();
+
+        // ë°©ì–´ ì¤‘ì²© ì ìš©
+        if (defId != StatusId.None)
+        {
+            foreach (var u in allUnits)
+            {
+                if (u == null || u.IsDead || u.IsRetreated) continue;
+
+                // ì•„êµ°ë§Œ
+                if (u.data.team != _caster.data.team) continue;
+
+                var sc = u.GetComponent<StatusController>();
+                if (sc == null) continue;
+
+                sc.ApplyWithTurnContext(
+                    defId,
+                    defStacks,
+                    Mathf.Max(1, defenseDuration)
+                );
+            }
+        }
+
+        // ê°•ì œ ì´ë™ ë°©ì§€ìš© ì´ë™ ì €í•­ ìƒíƒœ 1í„´ ë¶€ì—¬
+        if (trainingPreventForcedMove &&
+            routeForPreventForcedMove >= 0 &&
+            route == routeForPreventForcedMove &&
+            moveResistStatusId != StatusId.None)
+        {
+            foreach (var u in allUnits)
+            {
+                if (u == null || u.IsDead || u.IsRetreated) continue;
+
+                // ì•„êµ°ë§Œ
+                if (u.data.team != _caster.data.team) continue;
+
+                var sc = u.GetComponent<StatusController>();
+                if (sc == null) continue;
+
+                sc.ApplyWithTurnContext(
+                    moveResistStatusId,
+                    1,                                   // ìŠ¤íƒ 1
+                    Mathf.Max(1, moveResistDurationTurns) // ê¸°ë³¸ 1í„´
+                );
+            }
+        }
+
+        yield break;
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    {
+        yield break;
+    }
+
+    public override int GetEffectiveCost(BattleUnit _caster)
+    {
+        int baseCost = base.GetEffectiveCost(_caster);
+        if (!_caster) return baseCost;
+
+        int route = _caster.GetTrainingRouteIndex(this);
+        if (trainingUseMpOverride && routeForMpOverride >= 0 && route == routeForMpOverride)
+            return Mathf.Max(0, trainingMpCostRoute0);
+
+        return baseCost;
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

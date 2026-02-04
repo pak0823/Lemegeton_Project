@@ -1,348 +1,348 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/Skills/Common/AllyRetreatSwapSkill", fileName = "AllyRetreatSwapSkill")]
-public class AllyRetreatSwapSkill : SkillAsset
-{
-    [Header("Retreat Settings")]
-    [Tooltip("¾Æ±ºÀÌ µÚ·Î ¹°·¯³¯ ¼ö ÀÖ´Â ¹æÇâ (ParametricDirection°ú µ¿ÀÏ °³³ä)")]
-    public ParametricDirectionSkill.BackMode backMode = ParametricDirectionSkill.BackMode.W_or_SW;
-
-    [Tooltip("µÚ·Î ¸î Ä­±îÁö Çã¿ëÇÒÁö (º¸Åë 1Ä­¸¸ »ç¿ë)")]
-    public int maxRetreatCells = 1;
-
-    [Tooltip("ÀÌµ¿ ¿¬Ãâ: ´ë½Ã/Á¡ÇÁ¸¦ ¾µÁö ¿©ºÎ (false¸é ¼ø°£ ÀÌµ¿Ã³·³)")]
-    public bool useDashAnimate = false;
-    public float dashDuration = 0.12f;
-    public float dashArc = 0.0f;
-
-    [Header("Training")]
-    [Header("¹æ¾î ÁßÃ¸ ¹öÇÁ")]
-    [Tooltip("Æ¯Á¤ ÈÆ·Ã ·çÆ®¿¡¼­ ´ë»ó¿¡°Ô ¹æ¾î ÁßÃ¸ »óÅÂ¸¦ ºÎ¿©ÇÒÁö ¿©ºÎ")]
-    public bool trainingApplyDefenseStacks = false;
-    [Tooltip("¹æ¾î ÁßÃ¸ »óÅÂ¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ¹Ì»ç¿ë, 0~2)")]
-    [Range(-1, 2)] public int routeForDefenseStacks = -1;
-    [Tooltip("ºÎ¿©ÇÒ StatusId (StackableStatusVisualDB¿¡ ¾ÆÀÌÄÜ/ÀÌ¸§ ¿¬°á °¡´É)")]
-    public StatusId trainingDefenseStatusId = StatusId.None;
-    [Tooltip("ÇÑ ¹ø¿¡ ºÎ¿©ÇÒ ¹æ¾î ÁßÃ¸ ¼ö(¿¹: 3ÁßÃ¸)")]
-    [Min(1)] public int trainingDefenseStacks = 3;
-    [Tooltip("¹æ¾î ÁßÃ¸ Áö¼Ó ÅÏ(¿¹: 3ÅÏ)")]
-    [Min(1)] public int trainingDefenseDurationTurns = 3;
-
-    [Header("Äğ´Ù¿î ´ÜÃà")]
-    [Tooltip("Æ¯Á¤ ÈÆ·Ã ·çÆ®¿¡¼­ ÀÌ ½ºÅ³ÀÇ Àç»ç¿ë ´ë±â ÅÏÀ» ¹Ù²ÜÁö ¿©ºÎ")]
-    public bool trainingUseCooldownOverride = false;
-    [Tooltip("Äğ´Ù¿îÀ» µ¤¾î¾µ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForCooldownOverride = -1;
-    [Tooltip("ÇØ´ç ·çÆ®¿¡¼­ »ç¿ëÇÒ Àç»ç¿ë ´ë±â ÅÏ ¼ö(±âº» Äğº¸´Ù ÀÛ°Ô ¼³Á¤)")]
-    [Min(0)] public int trainingCooldownTurns = 0;
-
-    [Header("ÀûÀÇ °¨¼Ò")]
-    [Tooltip("Æ¯Á¤ ÈÆ·Ã ·çÆ®¿¡¼­ ´ë»óÀÇ ÀûÀÇ¸¦ °¨¼Ò½ÃÅ³Áö ¿©ºÎ")]
-    public bool trainingApplyHostilityDelta = false;
-    [Tooltip("ÀûÀÇ °¨¼Ò¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForHostilityDelta = -1;
-    [Tooltip("´ë»ó À¯´ÖÀÇ ÀûÀÇ¸¦ ÀÌ °ª¸¸Å­ Áï½Ã °¨¼Ò (¾ç¼ö ÀÔ·Â, ³»ºÎ¿¡¼­ À½¼ö·Î Àû¿ë)")]
-    public float trainingHostilityDelta = 0.5f;
-
-    void OnEnable()
-    {
-        targetMode = SkillTargetMode.Unit;
-        power = 0f;                 // ÇÇÇØ ¾øÀ½
-        school = DamageSchool.Physical;
-        costResource = SkillCostResource.MP;
-    }
-    int GetRoute(BattleUnit _caster)
-    {
-        if (!_caster) return -1;
-        return _caster.GetTrainingRouteIndex(this); // ±âÁ¸ TrainingDB/UnitData ±¸Á¶ Àç»ç¿ë
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // 1. ÀÚ±â ÀÚ½Å ¼±ÅÃ ºÒ°¡ ¹× ÆÀ Ã¼Å©
-        if (targetUnit == caster || targetUnit.data.team != caster.data.team) yield break;
-
-        // 2. ÈÄÅğ °¡´ÉÇÑ Ä­ °è»ê (ÀÚ½ÅÀÌ µé°í ÀÖ´ø ·ÎÁ÷ »ç¿ë)
-        var candidates = GetRetreatCandidates(bm, targetUnit).ToList();
-
-        if (candidates.Count == 0)
-        {
-            // ÈùÆ® ¸Ş½ÃÁö Ãâ·Â Ãß°¡
-            Debug.Log($"[AllyRetreat] {targetUnit.name} µÚ¿¡ ÈÄÅğÇÒ °ø°£ÀÌ ¾ø½À´Ï´Ù.");
-            bm.EmitActionLabel(caster, "°ø°£ ºÎÁ·!");
-
-            bm.CancelCurrentAction();
-            yield break;
-        }
-
-        // 3. »ç¿ëÀÚ¿¡°Ô À§Ä¡ ¼±ÅÃ ¿äÃ» (BMÀÇ °ø¿ë µµ±¸ »ç¿ë)
-        Vector3Int? chosen = null;
-        yield return bm.WaitForCellSelection(targetUnit.CurrentMap, candidates, (res) => chosen = res);
-
-        // 4. Ãë¼ÒµÊ?
-        if (chosen == null)
-        {
-            bm.CancelCurrentAction();
-            yield break;
-        }
-
-        // 5. ºñ¿ë ÁöºÒ (MP µî)
-        int cost = GetEffectiveCost(caster);
-        if (cost > 0 && !caster.TryConsumeMP(cost))
-        {
-            bm.CancelCurrentAction();
-            yield break;
-        }
-
-        // 6. ½ÇÁ¦ ½º¿Ò ½ÇÇà (±âÁ¸ ·ÎÁ÷)
-        yield return ResolveSwapWithDest(bm, caster, targetUnit, chosen.Value);
-
-        // 7. ¸¶¹«¸® (Äğ´Ù¿î ¹× ÅÏ ³Ñ±è)
-        caster.ApplyCooldown(this);
-        bm.FinishActionAfterSkill(); // BM¿¡°Ô "³ª ³¡³µ¾î" º¸°í
-    }
-
-    // ÀÌ ½ºÅ³Àº ¹üÀ§ ÇÇÇØ°¡ ¾øÀ¸¹Ç·Î AreaCells´Â ºñ¿öµĞ´Ù.
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
-    {
-        yield break;
-    }
-
-    // Enemy AI°¡ ¾´´Ù°Å³ª, Æ¯¼ö »óÈ²¿¡¼­ ±×³É ÀÚµ¿À¸·Î ¾²°í ½ÍÀ» ¶§ »ç¿ëÇÒ fallback
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (!_battlemanager || _caster == null || _target == null) yield break;
-        if (_caster.IsDead || _target.IsDead) yield break;
-        if (_caster.data.team != _target.data.team) yield break;
-        if (_target.CurrentMap == null || _caster.CurrentMap != _target.CurrentMap) yield break;
-
-        // ÀÌµ¿ ÈÄº¸ °è»ê
-        var candidates = GetRetreatCandidates(_battlemanager, _target).ToList();
-        if (candidates.Count == 0) yield break;   // µÚ·Î ºüÁú ¼ö ÀÖ´Â Ä­ÀÌ ¾ø´Ù¸é ½ÇÆĞ
-
-        // MP Ã¼Å© (ÈÆ·Ã MP ¹İ¿µ)
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        // ÀÏ´Ü Ã¹ ÈÄº¸·Î ÀÚµ¿ Ã³¸® (ÇÃ·¹ÀÌ¾î¿ëÀº BattleManager¿¡¼­ Å¸ÀÏ ¼±ÅÃ ÄÚ·çÆ¾ »ç¿ë)
-        var dest = candidates[0];
-        yield return ResolveSwapWithDest(_battlemanager, _caster, _target, dest);
-    }
-
-    // Å¸ÀÏ Áö¸ñÇüÀÌ ¾Æ´Ï¹Ç·Î ºñ¿öµĞ´Ù.
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-    {
-        yield break;
-    }
-
-    /// <summary>
-    /// target(¾Æ±º)ÀÌ 'µÚ·Î' ¹°·¯³¯ ¼ö ÀÖ´Â ÈÄº¸ Å¸ÀÏµéÀ» ¹İÈ¯
-    /// </summary>
-    public IEnumerable<Vector3Int> GetRetreatCandidates(BattleManager _battlemanager, BattleUnit _teamunit)
-    {
-        var results = new List<Vector3Int>();
-        if (_battlemanager == null || _teamunit == null || _teamunit.CurrentMap == null) return results;
-
-        var map = _teamunit.CurrentMap;
-        var start = _teamunit.Cell;
-        bool odd = SkillLibrary.IsOddColumn(start);
-
-        // ÆÀ ±âÁØ µÚ/¾Õ ½Ö(ParametricDirectionSkill.GetDirectionsFor¿Í µ¿ÀÏ °³³ä) :contentReference[oaicite:0]{index=0}
-        // Player: µÚ = W, SW / Enemy: µÚ = E, NE
-        Vector3Int backA, backB;
-
-        if (_teamunit.data.team == Team.Player)
-        {
-            // ÇÃ·¹ÀÌ¾î ±âÁØ: µÚ(W, SW)
-            backA = new Vector3Int(-1, 0, 0); // W
-            backB = odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0); // SW
-        }
-        else
-        {
-            // Àû ±âÁØ: µÚ(E, NE)
-            backA = new Vector3Int(+1, 0, 0); // E
-            backB = odd ? new Vector3Int(+1, +1, 0) : new Vector3Int(0, +1, 0); // NE
-        }
-
-        var dirs = new List<Vector3Int>();
-        switch (backMode)
-        {
-            case ParametricDirectionSkill.BackMode.W_Only:
-            case ParametricDirectionSkill.BackMode.SW_Only:
-                // ´ÜÀÏ ¹æÇâ¸¸ ¾²°í ½Í´Ù¸é ¿©±â¼­ ¼¼ºĞÈ­ °¡´ÉÇÏÁö¸¸,
-                // ÀÏ´ÜÀº W_Only/SW_Onlyµµ 1°³¾¿À¸·Î Ãë±Ş
-                dirs.Add(backA);
-                break;
-            case ParametricDirectionSkill.BackMode.W_or_SW:
-            default:
-                dirs.Add(backA);
-                dirs.Add(backB);
-                break;
-        }
-
-        foreach (var step in dirs)
-        {
-            var cur = start;
-            int guard = 0;
-
-            while (true)
-            {
-                if (maxRetreatCells > 0 && guard >= maxRetreatCells)
-                    break;
-                guard++;
-
-                var next = new Vector3Int(cur.x + step.x, cur.y + step.y, cur.z);
-                if (!map.cellBounds.Contains(next)) break;
-                if (!map.HasTile(next)) break;
-
-                if (IsCellFree(_battlemanager, map, next))
-                {
-                    results.Add(next);
-                    break; // ÀÌ ¹æÇâ¿¡¼­ Á¦ÀÏ °¡±î¿î Ä­¸¸ »ç¿ë
-                }
-
-                cur = next;
-            }
-        }
-
-        return results;
-    }
-
-    bool IsCellFree(BattleManager _battlemanager, Tilemap _map, Vector3Int _cell)
-    {
-        if (!_map.HasTile(_cell)) return false;
-        var units = _battlemanager.Grid.GetUnitsInArea(_map, new[] { _cell });  // BattleManager À¯Æ¿ Àç»ç¿ë :contentReference[oaicite:1]{index=1}
-        foreach (var u in units)
-        {
-            if (u != null && !u.IsDead && u.Cell == _cell)
-                return false;
-        }
-        return true;
-    }
-
-    /// <summary>
-    /// ¼±ÅÃµÈ retreatCell·Î ¾Æ±ºÀ» ÈÄÅğ½ÃÅ°°í, Ä³½ºÅÍ´Â ±× ÀÚ¸®¿¡ ÀÌµ¿
-    /// </summary>
-    public IEnumerator ResolveSwapWithDest(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _teamunit, Vector3Int _retreatCell)
-    {
-        if (_battlemanager == null || _caster == null || _teamunit == null) yield break;
-        var map = _teamunit.CurrentMap;
-        if (!map || _caster.CurrentMap != map) yield break;
-
-        // ¿©ÀüÈ÷ Å¸ÀÏÀÌ À¯È¿ÇÏ°í ºñ¾îÀÖ´ÂÁö ¸¶Áö¸·À¸·Î È®ÀÎ
-        if (!map.HasTile(_retreatCell)) yield break;
-        if (!IsCellFree(_battlemanager, map, _retreatCell)) yield break;
-
-        var allyStartCell = _teamunit.Cell;
-        var casterStartCell = _caster.Cell;
-
-        // ±×¸®µå Á¡À¯ ÇØÁ¦
-        if (_battlemanager.Grid != null)
-        {
-            _battlemanager.Grid.SetOccupied(_caster.data.team, casterStartCell, false);
-            _battlemanager.Grid.SetOccupied(_teamunit.data.team, allyStartCell, false);
-        }
-
-        // ¿ì¼± ¾Æ±º ÈÄÅğ  ±× ´ÙÀ½ Ä³½ºÅÍ ÀÌµ¿
-        if (useDashAnimate)
-        {
-            // Ä³½ºÅÍ °íÀ¯ Æ®¸®°Å
-            _caster.PlayTrigger("Moving"); // Animator¿¡ Ãß°¡ÇÒ Æ®¸®°Å
-
-            // Ä³½ºÅÍ Á¡ÇÁ/´ë½Ã ÀÌµ¿ ¿¬Ãâ (dashDuration/dashArc È°¿ë)
-            Vector3 casterToW = map.GetCellCenterWorld(allyStartCell);
-            yield return _caster.AnimateJumpToWorld(
-                casterToW,
-                durationOverride: dashDuration,
-                speedUnitsPerSec: null,
-                arcHeight: dashArc
-            );
-
-            // ÀÌµ¿ ÈÄ ¼¿ ½º³À(Á¡ÇÁ´Â transform¸¸ ¿Å±â¹Ç·Î Cell/Map °»½Å ÇÊ¿ä)
-            _caster.MoveTo(map, allyStartCell);
-
-            // ¾Æ±º ±âÁ¸ ±âº» ÀÌµ¿ ¾Ö´Ï¸ŞÀÌ¼Ç(Move bool) À¯Áö
-            yield return _teamunit.AnimateMoveTo(map, _retreatCell);
-        }
-        else
-        {
-            // ¿¬Ãâ ¾øÀÌ Áï½Ã ÀÌµ¿
-            _teamunit.MoveTo(map, _retreatCell);
-            _caster.MoveTo(map, allyStartCell);
-            yield return null;
-        }
-
-        int route = GetRoute(_caster);
-
-        // ¹æ¾î ÁßÃ¸ ºÎ¿©
-        if (trainingApplyDefenseStacks &&
-            routeForDefenseStacks >= 0 &&
-            route == routeForDefenseStacks &&
-            trainingDefenseStatusId != StatusId.None &&
-            _teamunit != null)
-        {
-            var sc = _teamunit.GetComponent<StatusController>();
-            if (sc != null)
-            {
-                sc.ApplyWithTurnContext(
-                    trainingDefenseStatusId,
-                    Mathf.Max(1, trainingDefenseStacks),
-                    Mathf.Max(1, trainingDefenseDurationTurns));
-            }
-        }
-
-        // ´ë»óÀÇ ÀûÀÇ °¨¼Ò
-        if (trainingApplyHostilityDelta &&
-            routeForHostilityDelta >= 0 &&
-            route == routeForHostilityDelta &&
-            _teamunit != null &&
-            trainingHostilityDelta > 0f)
-        {
-            // AddHostility´Â 0 ¾Æ·¡·Î´Â ±ğÀÌÁö ¾Êµµ·Ï ³»ºÎ¿¡¼­ ¸·°í ÀÖÀ½
-            _teamunit.AddHostility(-Mathf.Abs(trainingHostilityDelta));
-        }
-
-        // ±×¸®µå Á¡À¯ Àç¼³Á¤
-        if (_battlemanager.Grid != null)
-        {
-            _battlemanager.Grid.SetOccupied(_teamunit.data.team, _teamunit.Cell, true);
-            _battlemanager.Grid.SetOccupied(_caster.data.team, _caster.Cell, true);
-        }
-    }
-
-    public override int GetEffectiveCooldownTurns(BattleUnit _caster)
-    {
-        int baseCd = base.GetEffectiveCooldownTurns(_caster);
-        if (!trainingUseCooldownOverride || _caster == null)
-            return baseCd;
-
-        int route = GetRoute(_caster);
-        if (routeForCooldownOverride >= 0 && route == routeForCooldownOverride)
-        {
-            // ÈÆ·Ã¿¡¼­ ÁöÁ¤ÇÑ Äğ´Ù¿îÀ¸·Î µ¤¾î¾¸
-            return Mathf.Max(0, trainingCooldownTurns);
-        }
-
-        return baseCd;
-    }
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/Skills/Common/AllyRetreatSwapSkill", fileName = "AllyRetreatSwapSkill")]
+public class AllyRetreatSwapSkill : SkillAsset
+{
+    [Header("Retreat Settings")]
+    [Tooltip("ì•„êµ°ì´ ë’¤ë¡œ ë¬¼ëŸ¬ë‚  ìˆ˜ ìˆëŠ” ë°©í–¥ (ParametricDirectionê³¼ ë™ì¼ ê°œë…)")]
+    public ParametricDirectionSkill.BackMode backMode = ParametricDirectionSkill.BackMode.W_or_SW;
+
+    [Tooltip("ë’¤ë¡œ ëª‡ ì¹¸ê¹Œì§€ í—ˆìš©í• ì§€ (ë³´í†µ 1ì¹¸ë§Œ ì‚¬ìš©)")]
+    public int maxRetreatCells = 1;
+
+    [Tooltip("ì´ë™ ì—°ì¶œ: ëŒ€ì‹œ/ì í”„ë¥¼ ì“¸ì§€ ì—¬ë¶€ (falseë©´ ìˆœê°„ ì´ë™ì²˜ëŸ¼)")]
+    public bool useDashAnimate = false;
+    public float dashDuration = 0.12f;
+    public float dashArc = 0.0f;
+
+    [Header("Training")]
+    [Header("ë°©ì–´ ì¤‘ì²© ë²„í”„")]
+    [Tooltip("íŠ¹ì • í›ˆë ¨ ë£¨íŠ¸ì—ì„œ ëŒ€ìƒì—ê²Œ ë°©ì–´ ì¤‘ì²© ìƒíƒœë¥¼ ë¶€ì—¬í• ì§€ ì—¬ë¶€")]
+    public bool trainingApplyDefenseStacks = false;
+    [Tooltip("ë°©ì–´ ì¤‘ì²© ìƒíƒœë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¯¸ì‚¬ìš©, 0~2)")]
+    [Range(-1, 2)] public int routeForDefenseStacks = -1;
+    [Tooltip("ë¶€ì—¬í•  StatusId (StackableStatusVisualDBì— ì•„ì´ì½˜/ì´ë¦„ ì—°ê²° ê°€ëŠ¥)")]
+    public StatusId trainingDefenseStatusId = StatusId.None;
+    [Tooltip("í•œ ë²ˆì— ë¶€ì—¬í•  ë°©ì–´ ì¤‘ì²© ìˆ˜(ì˜ˆ: 3ì¤‘ì²©)")]
+    [Min(1)] public int trainingDefenseStacks = 3;
+    [Tooltip("ë°©ì–´ ì¤‘ì²© ì§€ì† í„´(ì˜ˆ: 3í„´)")]
+    [Min(1)] public int trainingDefenseDurationTurns = 3;
+
+    [Header("ì¿¨ë‹¤ìš´ ë‹¨ì¶•")]
+    [Tooltip("íŠ¹ì • í›ˆë ¨ ë£¨íŠ¸ì—ì„œ ì´ ìŠ¤í‚¬ì˜ ì¬ì‚¬ìš© ëŒ€ê¸° í„´ì„ ë°”ê¿€ì§€ ì—¬ë¶€")]
+    public bool trainingUseCooldownOverride = false;
+    [Tooltip("ì¿¨ë‹¤ìš´ì„ ë®ì–´ì“¸ í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForCooldownOverride = -1;
+    [Tooltip("í•´ë‹¹ ë£¨íŠ¸ì—ì„œ ì‚¬ìš©í•  ì¬ì‚¬ìš© ëŒ€ê¸° í„´ ìˆ˜(ê¸°ë³¸ ì¿¨ë³´ë‹¤ ì‘ê²Œ ì„¤ì •)")]
+    [Min(0)] public int trainingCooldownTurns = 0;
+
+    [Header("ì ì˜ ê°ì†Œ")]
+    [Tooltip("íŠ¹ì • í›ˆë ¨ ë£¨íŠ¸ì—ì„œ ëŒ€ìƒì˜ ì ì˜ë¥¼ ê°ì†Œì‹œí‚¬ì§€ ì—¬ë¶€")]
+    public bool trainingApplyHostilityDelta = false;
+    [Tooltip("ì ì˜ ê°ì†Œë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForHostilityDelta = -1;
+    [Tooltip("ëŒ€ìƒ ìœ ë‹›ì˜ ì ì˜ë¥¼ ì´ ê°’ë§Œí¼ ì¦‰ì‹œ ê°ì†Œ (ì–‘ìˆ˜ ì…ë ¥, ë‚´ë¶€ì—ì„œ ìŒìˆ˜ë¡œ ì ìš©)")]
+    public float trainingHostilityDelta = 0.5f;
+
+    void OnEnable()
+    {
+        targetMode = SkillTargetMode.Unit;
+        power = 0f;                 // í”¼í•´ ì—†ìŒ
+        school = DamageSchool.Physical;
+        costResource = SkillCostResource.MP;
+    }
+    int GetRoute(BattleUnit _caster)
+    {
+        if (!_caster) return -1;
+        return _caster.GetTrainingRouteIndex(this); // ê¸°ì¡´ TrainingDB/UnitData êµ¬ì¡° ì¬ì‚¬ìš©
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // 1. ìê¸° ìì‹  ì„ íƒ ë¶ˆê°€ ë° íŒ€ ì²´í¬
+        if (targetUnit == caster || targetUnit.data.team != caster.data.team) yield break;
+
+        // 2. í›„í‡´ ê°€ëŠ¥í•œ ì¹¸ ê³„ì‚° (ìì‹ ì´ ë“¤ê³  ìˆë˜ ë¡œì§ ì‚¬ìš©)
+        var candidates = GetRetreatCandidates(bm, targetUnit).ToList();
+
+        if (candidates.Count == 0)
+        {
+            // íŒíŠ¸ ë©”ì‹œì§€ ì¶œë ¥ ì¶”ê°€
+            Debug.Log($"[AllyRetreat] {targetUnit.name} ë’¤ì— í›„í‡´í•  ê³µê°„ì´ ì—†ìŠµë‹ˆë‹¤.");
+            bm.EmitActionLabel(caster, "ê³µê°„ ë¶€ì¡±!");
+
+            bm.CancelCurrentAction();
+            yield break;
+        }
+
+        // 3. ì‚¬ìš©ìì—ê²Œ ìœ„ì¹˜ ì„ íƒ ìš”ì²­ (BMì˜ ê³µìš© ë„êµ¬ ì‚¬ìš©)
+        Vector3Int? chosen = null;
+        yield return bm.WaitForCellSelection(targetUnit.CurrentMap, candidates, (res) => chosen = res);
+
+        // 4. ì·¨ì†Œë¨?
+        if (chosen == null)
+        {
+            bm.CancelCurrentAction();
+            yield break;
+        }
+
+        // 5. ë¹„ìš© ì§€ë¶ˆ (MP ë“±)
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeMP(cost))
+        {
+            bm.CancelCurrentAction();
+            yield break;
+        }
+
+        // 6. ì‹¤ì œ ìŠ¤ì™‘ ì‹¤í–‰ (ê¸°ì¡´ ë¡œì§)
+        yield return ResolveSwapWithDest(bm, caster, targetUnit, chosen.Value);
+
+        // 7. ë§ˆë¬´ë¦¬ (ì¿¨ë‹¤ìš´ ë° í„´ ë„˜ê¹€)
+        caster.ApplyCooldown(this);
+        bm.FinishActionAfterSkill(); // BMì—ê²Œ "ë‚˜ ëë‚¬ì–´" ë³´ê³ 
+    }
+
+    // ì´ ìŠ¤í‚¬ì€ ë²”ìœ„ í”¼í•´ê°€ ì—†ìœ¼ë¯€ë¡œ AreaCellsëŠ” ë¹„ì›Œë‘”ë‹¤.
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
+    {
+        yield break;
+    }
+
+    // Enemy AIê°€ ì“´ë‹¤ê±°ë‚˜, íŠ¹ìˆ˜ ìƒí™©ì—ì„œ ê·¸ëƒ¥ ìë™ìœ¼ë¡œ ì“°ê³  ì‹¶ì„ ë•Œ ì‚¬ìš©í•  fallback
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (!_battlemanager || _caster == null || _target == null) yield break;
+        if (_caster.IsDead || _target.IsDead) yield break;
+        if (_caster.data.team != _target.data.team) yield break;
+        if (_target.CurrentMap == null || _caster.CurrentMap != _target.CurrentMap) yield break;
+
+        // ì´ë™ í›„ë³´ ê³„ì‚°
+        var candidates = GetRetreatCandidates(_battlemanager, _target).ToList();
+        if (candidates.Count == 0) yield break;   // ë’¤ë¡œ ë¹ ì§ˆ ìˆ˜ ìˆëŠ” ì¹¸ì´ ì—†ë‹¤ë©´ ì‹¤íŒ¨
+
+        // MP ì²´í¬ (í›ˆë ¨ MP ë°˜ì˜)
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        // ì¼ë‹¨ ì²« í›„ë³´ë¡œ ìë™ ì²˜ë¦¬ (í”Œë ˆì´ì–´ìš©ì€ BattleManagerì—ì„œ íƒ€ì¼ ì„ íƒ ì½”ë£¨í‹´ ì‚¬ìš©)
+        var dest = candidates[0];
+        yield return ResolveSwapWithDest(_battlemanager, _caster, _target, dest);
+    }
+
+    // íƒ€ì¼ ì§€ëª©í˜•ì´ ì•„ë‹ˆë¯€ë¡œ ë¹„ì›Œë‘”ë‹¤.
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    {
+        yield break;
+    }
+
+    /// <summary>
+    /// target(ì•„êµ°)ì´ 'ë’¤ë¡œ' ë¬¼ëŸ¬ë‚  ìˆ˜ ìˆëŠ” í›„ë³´ íƒ€ì¼ë“¤ì„ ë°˜í™˜
+    /// </summary>
+    public IEnumerable<Vector3Int> GetRetreatCandidates(BattleManager _battlemanager, BattleUnit _teamunit)
+    {
+        var results = new List<Vector3Int>();
+        if (_battlemanager == null || _teamunit == null || _teamunit.CurrentMap == null) return results;
+
+        var map = _teamunit.CurrentMap;
+        var start = _teamunit.Cell;
+        bool odd = SkillLibrary.IsOddColumn(start);
+
+        // íŒ€ ê¸°ì¤€ ë’¤/ì• ìŒ(ParametricDirectionSkill.GetDirectionsForì™€ ë™ì¼ ê°œë…) :contentReference[oaicite:0]{index=0}
+        // Player: ë’¤ = W, SW / Enemy: ë’¤ = E, NE
+        Vector3Int backA, backB;
+
+        if (_teamunit.data.team == Team.Player)
+        {
+            // í”Œë ˆì´ì–´ ê¸°ì¤€: ë’¤(W, SW)
+            backA = new Vector3Int(-1, 0, 0); // W
+            backB = odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0); // SW
+        }
+        else
+        {
+            // ì  ê¸°ì¤€: ë’¤(E, NE)
+            backA = new Vector3Int(+1, 0, 0); // E
+            backB = odd ? new Vector3Int(+1, +1, 0) : new Vector3Int(0, +1, 0); // NE
+        }
+
+        var dirs = new List<Vector3Int>();
+        switch (backMode)
+        {
+            case ParametricDirectionSkill.BackMode.W_Only:
+            case ParametricDirectionSkill.BackMode.SW_Only:
+                // ë‹¨ì¼ ë°©í–¥ë§Œ ì“°ê³  ì‹¶ë‹¤ë©´ ì—¬ê¸°ì„œ ì„¸ë¶„í™” ê°€ëŠ¥í•˜ì§€ë§Œ,
+                // ì¼ë‹¨ì€ W_Only/SW_Onlyë„ 1ê°œì”©ìœ¼ë¡œ ì·¨ê¸‰
+                dirs.Add(backA);
+                break;
+            case ParametricDirectionSkill.BackMode.W_or_SW:
+            default:
+                dirs.Add(backA);
+                dirs.Add(backB);
+                break;
+        }
+
+        foreach (var step in dirs)
+        {
+            var cur = start;
+            int guard = 0;
+
+            while (true)
+            {
+                if (maxRetreatCells > 0 && guard >= maxRetreatCells)
+                    break;
+                guard++;
+
+                var next = new Vector3Int(cur.x + step.x, cur.y + step.y, cur.z);
+                if (!map.cellBounds.Contains(next)) break;
+                if (!map.HasTile(next)) break;
+
+                if (IsCellFree(_battlemanager, map, next))
+                {
+                    results.Add(next);
+                    break; // ì´ ë°©í–¥ì—ì„œ ì œì¼ ê°€ê¹Œìš´ ì¹¸ë§Œ ì‚¬ìš©
+                }
+
+                cur = next;
+            }
+        }
+
+        return results;
+    }
+
+    bool IsCellFree(BattleManager _battlemanager, Tilemap _map, Vector3Int _cell)
+    {
+        if (!_map.HasTile(_cell)) return false;
+        var units = _battlemanager.Grid.GetUnitsInArea(_map, new[] { _cell });  // BattleManager ìœ í‹¸ ì¬ì‚¬ìš© :contentReference[oaicite:1]{index=1}
+        foreach (var u in units)
+        {
+            if (u != null && !u.IsDead && u.Cell == _cell)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// ì„ íƒëœ retreatCellë¡œ ì•„êµ°ì„ í›„í‡´ì‹œí‚¤ê³ , ìºìŠ¤í„°ëŠ” ê·¸ ìë¦¬ì— ì´ë™
+    /// </summary>
+    public IEnumerator ResolveSwapWithDest(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _teamunit, Vector3Int _retreatCell)
+    {
+        if (_battlemanager == null || _caster == null || _teamunit == null) yield break;
+        var map = _teamunit.CurrentMap;
+        if (!map || _caster.CurrentMap != map) yield break;
+
+        // ì—¬ì „íˆ íƒ€ì¼ì´ ìœ íš¨í•˜ê³  ë¹„ì–´ìˆëŠ”ì§€ ë§ˆì§€ë§‰ìœ¼ë¡œ í™•ì¸
+        if (!map.HasTile(_retreatCell)) yield break;
+        if (!IsCellFree(_battlemanager, map, _retreatCell)) yield break;
+
+        var allyStartCell = _teamunit.Cell;
+        var casterStartCell = _caster.Cell;
+
+        // ê·¸ë¦¬ë“œ ì ìœ  í•´ì œ
+        if (_battlemanager.Grid != null)
+        {
+            _battlemanager.Grid.SetOccupied(_caster.data.team, casterStartCell, false);
+            _battlemanager.Grid.SetOccupied(_teamunit.data.team, allyStartCell, false);
+        }
+
+        // ìš°ì„  ì•„êµ° í›„í‡´  ê·¸ ë‹¤ìŒ ìºìŠ¤í„° ì´ë™
+        if (useDashAnimate)
+        {
+            // ìºìŠ¤í„° ê³ ìœ  íŠ¸ë¦¬ê±°
+            _caster.PlayTrigger("Moving"); // Animatorì— ì¶”ê°€í•  íŠ¸ë¦¬ê±°
+
+            // ìºìŠ¤í„° ì í”„/ëŒ€ì‹œ ì´ë™ ì—°ì¶œ (dashDuration/dashArc í™œìš©)
+            Vector3 casterToW = map.GetCellCenterWorld(allyStartCell);
+            yield return _caster.AnimateJumpToWorld(
+                casterToW,
+                durationOverride: dashDuration,
+                speedUnitsPerSec: null,
+                arcHeight: dashArc
+            );
+
+            // ì´ë™ í›„ ì…€ ìŠ¤ëƒ…(ì í”„ëŠ” transformë§Œ ì˜®ê¸°ë¯€ë¡œ Cell/Map ê°±ì‹  í•„ìš”)
+            _caster.MoveTo(map, allyStartCell);
+
+            // ì•„êµ° ê¸°ì¡´ ê¸°ë³¸ ì´ë™ ì• ë‹ˆë©”ì´ì…˜(Move bool) ìœ ì§€
+            yield return _teamunit.AnimateMoveTo(map, _retreatCell);
+        }
+        else
+        {
+            // ì—°ì¶œ ì—†ì´ ì¦‰ì‹œ ì´ë™
+            _teamunit.MoveTo(map, _retreatCell);
+            _caster.MoveTo(map, allyStartCell);
+            yield return null;
+        }
+
+        int route = GetRoute(_caster);
+
+        // ë°©ì–´ ì¤‘ì²© ë¶€ì—¬
+        if (trainingApplyDefenseStacks &&
+            routeForDefenseStacks >= 0 &&
+            route == routeForDefenseStacks &&
+            trainingDefenseStatusId != StatusId.None &&
+            _teamunit != null)
+        {
+            var sc = _teamunit.GetComponent<StatusController>();
+            if (sc != null)
+            {
+                sc.ApplyWithTurnContext(
+                    trainingDefenseStatusId,
+                    Mathf.Max(1, trainingDefenseStacks),
+                    Mathf.Max(1, trainingDefenseDurationTurns));
+            }
+        }
+
+        // ëŒ€ìƒì˜ ì ì˜ ê°ì†Œ
+        if (trainingApplyHostilityDelta &&
+            routeForHostilityDelta >= 0 &&
+            route == routeForHostilityDelta &&
+            _teamunit != null &&
+            trainingHostilityDelta > 0f)
+        {
+            // AddHostilityëŠ” 0 ì•„ë˜ë¡œëŠ” ê¹ì´ì§€ ì•Šë„ë¡ ë‚´ë¶€ì—ì„œ ë§‰ê³  ìˆìŒ
+            _teamunit.AddHostility(-Mathf.Abs(trainingHostilityDelta));
+        }
+
+        // ê·¸ë¦¬ë“œ ì ìœ  ì¬ì„¤ì •
+        if (_battlemanager.Grid != null)
+        {
+            _battlemanager.Grid.SetOccupied(_teamunit.data.team, _teamunit.Cell, true);
+            _battlemanager.Grid.SetOccupied(_caster.data.team, _caster.Cell, true);
+        }
+    }
+
+    public override int GetEffectiveCooldownTurns(BattleUnit _caster)
+    {
+        int baseCd = base.GetEffectiveCooldownTurns(_caster);
+        if (!trainingUseCooldownOverride || _caster == null)
+            return baseCd;
+
+        int route = GetRoute(_caster);
+        if (routeForCooldownOverride >= 0 && route == routeForCooldownOverride)
+        {
+            // í›ˆë ¨ì—ì„œ ì§€ì •í•œ ì¿¨ë‹¤ìš´ìœ¼ë¡œ ë®ì–´ì”€
+            return Mathf.Max(0, trainingCooldownTurns);
+        }
+
+        return baseCd;
+    }
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

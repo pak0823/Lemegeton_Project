@@ -1,141 +1,141 @@
-using UnityEditor;
-using UnityEngine;
-using System.Linq;
-
-namespace Project.UI
-{
-    public class SceneUIOrchestrator : MonoBehaviour
-    {
-        [Header("Profile")]
-        [SerializeField] private SceneUIProfile profile;
-
-        [Header("Modules")]
-        [SerializeField] private HudController hud;           // Battle
-        [SerializeField] private TurnBarUI turnBar;           // Battle
-        [SerializeField] private SkillPanelUI skillPanel;     // Battle
-        [SerializeField] private ActionPanelUI actionPanel;   // Battle
-        [SerializeField] private ExplorationResetUi explorationReset;     // Exploration
-        [SerializeField] private TitleMenuUI titleMenu; // Title
-        [SerializeField] private OptionsMenuUI optionsMenu;   // Common (Exploration/Battle)
-
-        [Header("(Optional) Wiring")]
-        [SerializeField] private bool handlePauseInput = true;
-
-        public SceneUIProfile CurrentProfile => profile;
-
-        [ContextMenu("UI/Auto Wire Modules (Search In Children)")]
-        public void AutoWireModules()
-        {
-            // ∞∞¿∫ ø¿∫Í¡ß∆Æ ∂«¥¬ ¿⁄Ωƒø°º≠ √£æ∆ «“¥Á
-            hud = hud ? hud : GetComponentInChildren<HudController>(true);
-            turnBar = turnBar ? turnBar : GetComponentInChildren<TurnBarUI>(true);
-            skillPanel = skillPanel ? skillPanel : GetComponentInChildren<SkillPanelUI>(true);
-            actionPanel = actionPanel ? actionPanel : GetComponentInChildren<ActionPanelUI>(true);
-            explorationReset = explorationReset ? explorationReset : GetComponentInChildren<ExplorationResetUi>(true);
-            optionsMenu = optionsMenu ? optionsMenu : GetComponentInChildren<OptionsMenuUI>(true);
-
-#if UNITY_EDITOR
-            EditorUtility.SetDirty(this);
-#endif
-            Debug.Log("[SceneUIOrchestrator] Auto-wired modules.", this);
-        }
-
-        private void Awake()
-        {
-            if (profile == null)
-            {
-                Debug.LogWarning("[SceneUIOrchestrator] No profile assigned. UI modules will keep their current states.", this);
-                return;
-            }
-
-            ApplyProfile();
-        }
-
-        private void Update()
-        {
-            if (!handlePauseInput || profile == null) return;
-            if (profile.pauseAvailable && Input.GetKeyDown(profile.pauseKey))
-            {
-                var mgr = UiModalManager.Instance;
-                if (mgr != null) mgr.OnEscape(optionsMenu);
-                else BroadcastMessage("OnPauseKeyPressed", SendMessageOptions.DontRequireReceiver); // ∆˙πÈ
-            }
-        }
-
-        // Public API to replace profile at runtime (e.g., right after scene load).
-        public void SetProfile(SceneUIProfile newProfile, bool applyImmediately = true)
-        {
-            profile = newProfile;
-            if (applyImmediately && profile != null)
-                ApplyProfile();
-        }
-
-        // Apply the currently assigned profile to all registered modules.
-        public void ApplyProfile()
-        {
-            if (profile == null)
-            {
-                Debug.LogWarning("[SceneUIOrchestrator] ApplyProfile called without a profile.");
-                return;
-            }
-
-            if (hud)
-            {
-                if (profile.showHud) hud.Show();
-                else hud.Hide();
-            }
-
-            SetActive(turnBar, profile.showTurnBar);
-            SetActive(skillPanel, profile.showSkillPanel);
-            SetActive(actionPanel, profile.showActionPanel);
-            SetActive(explorationReset, profile.showExplorationResetUi);
-            SetActive(titleMenu, profile.showTitleMenu);
-            SetActive(optionsMenu, profile.showOptionsMenu);
-
-            // Theme propagation (interface ±‚π›¿∏∑Œ∏∏ æ»¿¸«œ∞‘ ¿¸∆ƒ)
-            if (profile.themeAccentColor.HasValue || profile.themeFont)
-            {
-                var themed = GetComponentsInChildren<IThemedUiModule>(true);
-                foreach (var t in themed)
-                {
-                    t.ApplyTheme(profile.themeAccentColor, profile.themeFont);
-                }
-            }
-        }
-
-        private static void SetActive(Behaviour comp, bool on)
-        {
-            if (!comp) return;
-            var go = comp.gameObject;
-            var mod = comp as ISceneUiModule;
-
-            if (on)
-            {
-                // ¿ÃπÃ activeø©µµ ºˆ∏Ì¡÷±‚ »≈¿∫ ∫∏¿Â »£√‚
-                if (!go.activeSelf) go.SetActive(true);
-                mod?.OnUiShown();
-            }
-            else
-            {
-                mod?.OnUiHidden();
-                if (go.activeSelf) go.SetActive(false);
-            }
-        }
-
-#if UNITY_EDITOR
-        private void Reset()
-        {
-            // ƒƒ∆˜≥Õ∆Æ∞° πÊ±› ∫Ÿæ˙¿ª ∂ß ¿⁄µø πËº±
-            AutoWireModules();
-        }
-        private void OnValidate()
-        {
-            // Keep play mode experience tidy when tweaking in inspector.
-            if (Application.isPlaying && isActiveAndEnabled && profile != null)
-            {
-                ApplyProfile();
-            }
-        }
-#endif
-    }
+using UnityEditor;
+using UnityEngine;
+using System.Linq;
+
+namespace Project.UI
+{
+    public class SceneUIOrchestrator : MonoBehaviour
+    {
+        [Header("Profile")]
+        [SerializeField] private SceneUIProfile profile;
+
+        [Header("Modules")]
+        [SerializeField] private HudController hud;           // Battle
+        [SerializeField] private TurnBarUI turnBar;           // Battle
+        [SerializeField] private SkillPanelUI skillPanel;     // Battle
+        [SerializeField] private ActionPanelUI actionPanel;   // Battle
+        [SerializeField] private ExplorationResetUi explorationReset;     // Exploration
+        [SerializeField] private TitleMenuUI titleMenu; // Title
+        [SerializeField] private OptionsMenuUI optionsMenu;   // Common (Exploration/Battle)
+
+        [Header("(Optional) Wiring")]
+        [SerializeField] private bool handlePauseInput = true;
+
+        public SceneUIProfile CurrentProfile => profile;
+
+        [ContextMenu("UI/Auto Wire Modules (Search In Children)")]
+        public void AutoWireModules()
+        {
+            // Í∞ôÏùÄ Ïò§Î∏åÏ†ùÌä∏ ÎòêÎäî ÏûêÏãùÏóêÏÑú Ï∞æÏïÑ Ìï†Îãπ
+            hud = hud ? hud : GetComponentInChildren<HudController>(true);
+            turnBar = turnBar ? turnBar : GetComponentInChildren<TurnBarUI>(true);
+            skillPanel = skillPanel ? skillPanel : GetComponentInChildren<SkillPanelUI>(true);
+            actionPanel = actionPanel ? actionPanel : GetComponentInChildren<ActionPanelUI>(true);
+            explorationReset = explorationReset ? explorationReset : GetComponentInChildren<ExplorationResetUi>(true);
+            optionsMenu = optionsMenu ? optionsMenu : GetComponentInChildren<OptionsMenuUI>(true);
+
+#if UNITY_EDITOR
+            EditorUtility.SetDirty(this);
+#endif
+            Debug.Log("[SceneUIOrchestrator] Auto-wired modules.", this);
+        }
+
+        private void Awake()
+        {
+            if (profile == null)
+            {
+                Debug.LogWarning("[SceneUIOrchestrator] No profile assigned. UI modules will keep their current states.", this);
+                return;
+            }
+
+            ApplyProfile();
+        }
+
+        private void Update()
+        {
+            if (!handlePauseInput || profile == null) return;
+            if (profile.pauseAvailable && Input.GetKeyDown(profile.pauseKey))
+            {
+                var mgr = UiModalManager.Instance;
+                if (mgr != null) mgr.OnEscape(optionsMenu);
+                else BroadcastMessage("OnPauseKeyPressed", SendMessageOptions.DontRequireReceiver); // Ìè¥Î∞±
+            }
+        }
+
+        // Public API to replace profile at runtime (e.g., right after scene load).
+        public void SetProfile(SceneUIProfile newProfile, bool applyImmediately = true)
+        {
+            profile = newProfile;
+            if (applyImmediately && profile != null)
+                ApplyProfile();
+        }
+
+        // Apply the currently assigned profile to all registered modules.
+        public void ApplyProfile()
+        {
+            if (profile == null)
+            {
+                Debug.LogWarning("[SceneUIOrchestrator] ApplyProfile called without a profile.");
+                return;
+            }
+
+            if (hud)
+            {
+                if (profile.showHud) hud.Show();
+                else hud.Hide();
+            }
+
+            SetActive(turnBar, profile.showTurnBar);
+            SetActive(skillPanel, profile.showSkillPanel);
+            SetActive(actionPanel, profile.showActionPanel);
+            SetActive(explorationReset, profile.showExplorationResetUi);
+            SetActive(titleMenu, profile.showTitleMenu);
+            SetActive(optionsMenu, profile.showOptionsMenu);
+
+            // Theme propagation (interface Í∏∞Î∞òÏúºÎ°úÎßå ÏïàÏ†ÑÌïòÍ≤å Ï†ÑÌåå)
+            if (profile.themeAccentColor.HasValue || profile.themeFont)
+            {
+                var themed = GetComponentsInChildren<IThemedUiModule>(true);
+                foreach (var t in themed)
+                {
+                    t.ApplyTheme(profile.themeAccentColor, profile.themeFont);
+                }
+            }
+        }
+
+        private static void SetActive(Behaviour comp, bool on)
+        {
+            if (!comp) return;
+            var go = comp.gameObject;
+            var mod = comp as ISceneUiModule;
+
+            if (on)
+            {
+                // Ïù¥ÎØ∏ activeÏó¨ÎèÑ ÏàòÎ™ÖÏ£ºÍ∏∞ ÌõÖÏùÄ Î≥¥Ïû• Ìò∏Ï∂ú
+                if (!go.activeSelf) go.SetActive(true);
+                mod?.OnUiShown();
+            }
+            else
+            {
+                mod?.OnUiHidden();
+                if (go.activeSelf) go.SetActive(false);
+            }
+        }
+
+#if UNITY_EDITOR
+        private void Reset()
+        {
+            // Ïª¥Ìè¨ÎÑåÌä∏Í∞Ä Î∞©Í∏à Î∂ôÏóàÏùÑ Îïå ÏûêÎèô Î∞∞ÏÑ†
+            AutoWireModules();
+        }
+        private void OnValidate()
+        {
+            // Keep play mode experience tidy when tweaking in inspector.
+            if (Application.isPlaying && isActiveAndEnabled && profile != null)
+            {
+                ApplyProfile();
+            }
+        }
+#endif
+    }
 }

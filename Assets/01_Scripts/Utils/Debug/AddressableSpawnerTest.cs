@@ -1,76 +1,76 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.AddressableAssets; // ÇÊ¼ö
-using UnityEngine.ResourceManagement.AsyncOperations; // ºñµ¿±â ÇÚµé
-
-public class AddressableSpawnerTest : MonoBehaviour
-{
-    [Header("1. ¼ÒÈ¯ÇÒ ÇÁ¸®ÆÕ ÁÖ¼Ò")]
-    // AssetReferenceGameObject´Â GameObject Å¸ÀÔ¸¸ ³Öµµ·Ï °­Á¦ÇÔ (¾ÈÀü)
-    public AssetReferenceGameObject monsterPrefabRef;
-
-    [Header("2. ¼ÒÈ¯µÈ ¸ó½ºÅÍ °ü¸® (¸Ş¸ğ¸® ÇØÁ¦¿ë)")]
-    // ¼ÒÈ¯µÈ ³à¼®µéÀ» ¸®½ºÆ®¿¡ ´ã¾ÆµÖ¾ß ³ªÁß¿¡ »èÁ¦ °¡´É
-    private List<GameObject> spawnedMonsters = new List<GameObject>();
-
-    // Å×½ºÆ®¿ë GUI ¹öÆ°
-    void OnGUI()
-    {
-        if (GUI.Button(new Rect(10, 10, 150, 50), "¸ó½ºÅÍ ¼ÒÈ¯ (Spawn)"))
-        {
-            SpawnMonster();
-        }
-
-        if (GUI.Button(new Rect(10, 70, 150, 50), "¸ğµÎ Á¦°Å (Clear)"))
-        {
-            RemoveAllMonsters();
-        }
-    }
-
-    // === 1. »ı¼º (Instantiate) ===
-    void SpawnMonster()
-    {
-        if (monsterPrefabRef == null)
-        {
-            Debug.LogError("ÇÁ¸®ÆÕ ÁÖ¼Ò°¡ ºñ¾îÀÖ½À´Ï´Ù!");
-            return;
-        }
-
-        // ·£´ı À§Ä¡ °è»ê
-        Vector3 randomPos = Random.insideUnitCircle * 3f;
-
-        // [ÇÙ½É] LoadAssetAsync°¡ ¾Æ´Ï¶ó InstantiateAsync¸¦ ¾´´Ù!
-        // (ÁÖ¼Ò, À§Ä¡, È¸Àü, ºÎ¸ğ)
-        // (º¯¼ö) => { ½ÇÇàÇÒ ³»¿ë }
-        monsterPrefabRef.InstantiateAsync(randomPos, Quaternion.identity).Completed += (handle) =>
-        {
-            if (handle.Status == AsyncOperationStatus.Succeeded)
-            {
-                GameObject newMonster = handle.Result;
-                newMonster.name = $"Monster_{spawnedMonsters.Count}";
-                spawnedMonsters.Add(newMonster);
-
-                Debug.Log($"¼ÒÈ¯ ¼º°ø: {newMonster.name}");
-            }
-            else
-            {
-                Debug.LogError("¼ÒÈ¯ ½ÇÆĞ!");
-            }
-        };
-    }
-
-    // === 2. ÇØÁ¦ (Release Instance) ===
-    void RemoveAllMonsters()
-    {
-        foreach (var monster in spawnedMonsters)
-        {
-            if (monster != null)
-            {
-                // [ÇÙ½É] Destroy(monster) ´ë½Å ÀÌ°É ½á¾ß ÇÔ!
-                Addressables.ReleaseInstance(monster);
-            }
-        }
-        spawnedMonsters.Clear();
-        Debug.Log("¸ğµç ¸ó½ºÅÍ Á¦°Å ¹× ¸Ş¸ğ¸® ÇØÁ¦ ¿Ï·á.");
-    }
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AddressableAssets; // í•„ìˆ˜
+using UnityEngine.ResourceManagement.AsyncOperations; // ë¹„ë™ê¸° í•¸ë“¤
+
+public class AddressableSpawnerTest : MonoBehaviour
+{
+    [Header("1. ì†Œí™˜í•  í”„ë¦¬íŒ¹ ì£¼ì†Œ")]
+    // AssetReferenceGameObjectëŠ” GameObject íƒ€ì…ë§Œ ë„£ë„ë¡ ê°•ì œí•¨ (ì•ˆì „)
+    public AssetReferenceGameObject monsterPrefabRef;
+
+    [Header("2. ì†Œí™˜ëœ ëª¬ìŠ¤í„° ê´€ë¦¬ (ë©”ëª¨ë¦¬ í•´ì œìš©)")]
+    // ì†Œí™˜ëœ ë…€ì„ë“¤ì„ ë¦¬ìŠ¤íŠ¸ì— ë‹´ì•„ë‘¬ì•¼ ë‚˜ì¤‘ì— ì‚­ì œ ê°€ëŠ¥
+    private List<GameObject> spawnedMonsters = new List<GameObject>();
+
+    // í…ŒìŠ¤íŠ¸ìš© GUI ë²„íŠ¼
+    void OnGUI()
+    {
+        if (GUI.Button(new Rect(10, 10, 150, 50), "ëª¬ìŠ¤í„° ì†Œí™˜ (Spawn)"))
+        {
+            SpawnMonster();
+        }
+
+        if (GUI.Button(new Rect(10, 70, 150, 50), "ëª¨ë‘ ì œê±° (Clear)"))
+        {
+            RemoveAllMonsters();
+        }
+    }
+
+    // === 1. ìƒì„± (Instantiate) ===
+    void SpawnMonster()
+    {
+        if (monsterPrefabRef == null)
+        {
+            Debug.LogError("í”„ë¦¬íŒ¹ ì£¼ì†Œê°€ ë¹„ì–´ìˆìŠµë‹ˆë‹¤!");
+            return;
+        }
+
+        // ëœë¤ ìœ„ì¹˜ ê³„ì‚°
+        Vector3 randomPos = Random.insideUnitCircle * 3f;
+
+        // [í•µì‹¬] LoadAssetAsyncê°€ ì•„ë‹ˆë¼ InstantiateAsyncë¥¼ ì“´ë‹¤!
+        // (ì£¼ì†Œ, ìœ„ì¹˜, íšŒì „, ë¶€ëª¨)
+        // (ë³€ìˆ˜) => { ì‹¤í–‰í•  ë‚´ìš© }
+        monsterPrefabRef.InstantiateAsync(randomPos, Quaternion.identity).Completed += (handle) =>
+        {
+            if (handle.Status == AsyncOperationStatus.Succeeded)
+            {
+                GameObject newMonster = handle.Result;
+                newMonster.name = $"Monster_{spawnedMonsters.Count}";
+                spawnedMonsters.Add(newMonster);
+
+                Debug.Log($"ì†Œí™˜ ì„±ê³µ: {newMonster.name}");
+            }
+            else
+            {
+                Debug.LogError("ì†Œí™˜ ì‹¤íŒ¨!");
+            }
+        };
+    }
+
+    // === 2. í•´ì œ (Release Instance) ===
+    void RemoveAllMonsters()
+    {
+        foreach (var monster in spawnedMonsters)
+        {
+            if (monster != null)
+            {
+                // [í•µì‹¬] Destroy(monster) ëŒ€ì‹  ì´ê±¸ ì¨ì•¼ í•¨!
+                Addressables.ReleaseInstance(monster);
+            }
+        }
+        spawnedMonsters.Clear();
+        Debug.Log("ëª¨ë“  ëª¬ìŠ¤í„° ì œê±° ë° ë©”ëª¨ë¦¬ í•´ì œ ì™„ë£Œ.");
+    }
 }

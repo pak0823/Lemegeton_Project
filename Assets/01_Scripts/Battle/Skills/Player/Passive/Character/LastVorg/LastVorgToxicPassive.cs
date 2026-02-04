@@ -1,83 +1,83 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/Passives/LastVorg/Passive_3",
-                 fileName = "Passive_LastVorgToxic")]
-public class LastVorgToxicPassive : PassiveAsset
-{
-    [Header("Resistance Settings")]
-    [Tooltip("ÇÇÇØ¸¦ ¹«È¿È­ÇÒ »óÅÂ ID")]
-    public StatusId targetStatus = StatusId.Poisoning;
-
-    [Header("Tile Change Settings")]
-    [Tooltip("º¯°æÇÒ µ¶ Å¸ÀÏ ¿¡¼Â")]
-    public TileBase poisonTileAsset;
-    [Tooltip("Å¸ÀÏ º¯°æ Áö¼Ó ÅÏ")]
-    public int tileChangeDuration = 2;
-
-    // ·±Å¸ÀÓ ÇÚµé·¯ ÀúÀå¼Ò
-    private Dictionary<BattleUnit, System.Action<SkillAsset>> _handlers = new Dictionary<BattleUnit, System.Action<SkillAsset>>();
-
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null) return;
-
-        // Áßµ¶ ÇÇÇØ ¸é¿ª ¼³Á¤ (ÀúÇ×·Â 0 = ÇÇÇØ 0)
-        var sc = owner.GetComponent<StatusController>();
-        if (sc != null)
-        {
-            // ÀúÇ×·ÂÀ» 0À¸·Î ¼³Á¤ -> StatusController.OnTurnStart¿¡¼­ µ¥¹ÌÁö °è»ê ½Ã 0ÀÌ µÊ
-            sc.SetResistance(targetStatus, 0f);
-            Debug.Log($"[Passive:Toxic] {owner.name}ÀÇ {targetStatus} ÀúÇ×·ÂÀÌ 0ÀÌ µÇ¾ú½À´Ï´Ù. (ÇÇÇØ ¸é¿ª)");
-        }
-
-        // ½ºÅ³ »ç¿ë °¨Áö ÇÚµé·¯ µî·Ï
-        System.Action<SkillAsset> onSkillUsed = (skill) =>
-        {
-            // ¿¬±¸ ±â¼ú(SelfStateSkill) »ç¿ë ½Ã
-            if (skill is SelfStateSkill)
-            {
-                if (battle != null && poisonTileAsset != null)
-                {
-                    // ÇöÀç À§Ä¡¸¦ µ¶ Å¸ÀÏ·Î º¯°æ ¿äÃ»
-                    battle.Field.CreateStatusTileZone(
-                        owner,
-                        owner.CurrentMap,
-                        owner.Cell,
-                        tileChangeDuration,
-                        poisonTileAsset,
-                        StatusId.Poisoning, // ºÎ¿©ÇÒ »óÅÂ
-                        1,                  // ½ºÅÃ
-                        3                   // »óÅÂ Áö¼Ó½Ã°£
-                    );
-                }
-            }
-        };
-
-        if (!_handlers.ContainsKey(owner))
-        {
-            _handlers.Add(owner, onSkillUsed);
-            owner.OnSkillUsed += onSkillUsed;
-        }
-    }
-
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
-    {
-        if (owner == null) return;
-
-        // ÀúÇ×·Â º¹±¸ (1.0f)
-        var sc = owner.GetComponent<StatusController>();
-        if (sc != null)
-        {
-            sc.SetResistance(targetStatus, 1.0f);
-        }
-
-        // ÇÚµé·¯ ÇØÁ¦
-        if (_handlers.TryGetValue(owner, out var handler))
-        {
-            owner.OnSkillUsed -= handler;
-            _handlers.Remove(owner);
-        }
-    }
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/Passives/LastVorg/Passive_3",
+                 fileName = "Passive_LastVorgToxic")]
+public class LastVorgToxicPassive : PassiveAsset
+{
+    [Header("Resistance Settings")]
+    [Tooltip("í”¼í•´ë¥¼ ë¬´íš¨í™”í•  ìƒíƒœ ID")]
+    public StatusId targetStatus = StatusId.Poisoning;
+
+    [Header("Tile Change Settings")]
+    [Tooltip("ë³€ê²½í•  ë… íƒ€ì¼ ì—ì…‹")]
+    public TileBase poisonTileAsset;
+    [Tooltip("íƒ€ì¼ ë³€ê²½ ì§€ì† í„´")]
+    public int tileChangeDuration = 2;
+
+    // ëŸ°íƒ€ì„ í•¸ë“¤ëŸ¬ ì €ì¥ì†Œ
+    private Dictionary<BattleUnit, System.Action<SkillAsset>> _handlers = new Dictionary<BattleUnit, System.Action<SkillAsset>>();
+
+    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null) return;
+
+        // ì¤‘ë… í”¼í•´ ë©´ì—­ ì„¤ì • (ì €í•­ë ¥ 0 = í”¼í•´ 0)
+        var sc = owner.GetComponent<StatusController>();
+        if (sc != null)
+        {
+            // ì €í•­ë ¥ì„ 0ìœ¼ë¡œ ì„¤ì • -> StatusController.OnTurnStartì—ì„œ ë°ë¯¸ì§€ ê³„ì‚° ì‹œ 0ì´ ë¨
+            sc.SetResistance(targetStatus, 0f);
+            Debug.Log($"[Passive:Toxic] {owner.name}ì˜ {targetStatus} ì €í•­ë ¥ì´ 0ì´ ë˜ì—ˆìŠµë‹ˆë‹¤. (í”¼í•´ ë©´ì—­)");
+        }
+
+        // ìŠ¤í‚¬ ì‚¬ìš© ê°ì§€ í•¸ë“¤ëŸ¬ ë“±ë¡
+        System.Action<SkillAsset> onSkillUsed = (skill) =>
+        {
+            // ì—°êµ¬ ê¸°ìˆ (SelfStateSkill) ì‚¬ìš© ì‹œ
+            if (skill is SelfStateSkill)
+            {
+                if (battle != null && poisonTileAsset != null)
+                {
+                    // í˜„ì¬ ìœ„ì¹˜ë¥¼ ë… íƒ€ì¼ë¡œ ë³€ê²½ ìš”ì²­
+                    battle.Field.CreateStatusTileZone(
+                        owner,
+                        owner.CurrentMap,
+                        owner.Cell,
+                        tileChangeDuration,
+                        poisonTileAsset,
+                        StatusId.Poisoning, // ë¶€ì—¬í•  ìƒíƒœ
+                        1,                  // ìŠ¤íƒ
+                        3                   // ìƒíƒœ ì§€ì†ì‹œê°„
+                    );
+                }
+            }
+        };
+
+        if (!_handlers.ContainsKey(owner))
+        {
+            _handlers.Add(owner, onSkillUsed);
+            owner.OnSkillUsed += onSkillUsed;
+        }
+    }
+
+    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    {
+        if (owner == null) return;
+
+        // ì €í•­ë ¥ ë³µêµ¬ (1.0f)
+        var sc = owner.GetComponent<StatusController>();
+        if (sc != null)
+        {
+            sc.SetResistance(targetStatus, 1.0f);
+        }
+
+        // í•¸ë“¤ëŸ¬ í•´ì œ
+        if (_handlers.TryGetValue(owner, out var handler))
+        {
+            owner.OnSkillUsed -= handler;
+            _handlers.Remove(owner);
+        }
+    }
 }

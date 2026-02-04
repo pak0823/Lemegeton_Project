@@ -1,566 +1,566 @@
-using System.Collections.Generic;
-using System.Collections;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class CampSkillPage : MonoBehaviour
-{
-    [Header("List Area")]
-    [SerializeField] private Transform listContent; // Scroll ViewÀÇ Content ¿¬°á
-    [SerializeField] private GameObject skillSlotPrefab; // À§¿¡¼­ ¸¸µç ½½·Ô ÇÁ¸®ÆÕ
-    [SerializeField] private GameObject subSkillSlotPrefab; // ÆÄ»ı ½ºÅ³¿ë ÀÛÀº ½½·Ô
-
-    [Header("Description UI")]
-    [SerializeField] private Text infoTitleText;   // Á¦¸ñ
-    [SerializeField] private Text infoDescText;   // ¼³¸í
-
-    [Header("Unlock UI")]
-    [SerializeField] private GameObject unlockPanelRoot; // ÀçÈ­/ÇØ±İ ¹öÆ° ¹­À½ ±×·ì
-    [SerializeField] private Text currencyText;          // "ÇöÀçº¸À¯ / ÇÊ¿äºñ¿ë" Ç¥½Ã ÅØ½ºÆ®
-    [SerializeField] private Button unlockButton;        // À°°¢Çü ÀÚ¹°¼è ¹öÆ°
-
-    [Header("Apply UI")]
-    [SerializeField] private GameObject applyPanelRoot; // Ã¼Å©/X ¹öÆ° ±×·ì
-    [SerializeField] private Button btnApply;           // Ã¼Å©(V) ¹öÆ°
-    [SerializeField] private Button btnCancel;          // Ãë¼Ò(X) ¹öÆ°
-
-    [Header("Selection UI")]
-    [SerializeField] private RectTransform selectionArrow; // È­»ìÇ¥ ÀÌ¹ÌÁö
-    [SerializeField] private Vector2 arrowOffset = new Vector2(-20f, 0f); // È­»ìÇ¥ À§Ä¡ º¸Á¤°ª
-    private Transform currentArrowTarget;   // È­»ìÇ¥°¡ µû¶ó´Ù³à¾ß ÇÒ Å¸°ÙÀÇ TransformÀ» ÀúÀå
-
-    // »ı¼ºµÈ ½½·Ôµé °ü¸®¿ë ¸®½ºÆ®
-    private List<MonoBehaviour> allSlots = new List<MonoBehaviour>();
-    // ¿ÀºêÁ§Æ® Ç®¸µÀ» À§ÇÑ ºñÈ°¼º ½½·Ô ½ºÅÃ
-    private Stack<CampSkillSlot> inactiveSkillSlots = new Stack<CampSkillSlot>();
-    private Stack<CampSubSkillSlot> inactiveSubSlots = new Stack<CampSubSkillSlot>();
-
-    private CampSkillSlot currentSelectedSlot;
-
-    // ÇöÀç ÇØ±İÇÏ·Á°í ¼±ÅÃÇÑ ÈÆ·Ã Á¤º¸ ÀÓ½Ã ÀúÀå
-    private UnitData targetUnit;
-    private SkillAsset targetSkill;
-    private int targetRouteIndex = -1;
-    private int targetCost = 0;
-
-    private void LateUpdate()
-    {
-        // È­»ìÇ¥°¡ ÄÑÁ® ÀÖ°í, Å¸°ÙÀÌ Á¸ÀçÇÒ ¶§¸¸ µû¶ó´Ù´Ô
-        if (selectionArrow != null && selectionArrow.gameObject.activeSelf && currentArrowTarget != null)
-        {
-            UpdateArrowPos();
-        }
-    }
-
-    private void OnEnable()
-    {
-        // ÅÇÀÌ ÄÑÁú ¶§¸¶´Ù UI °»½Å
-        RefreshUI();
-
-        // ÇØ±İ ¹öÆ° ¸®½º³Ê ¿¬°á
-        if (unlockButton)
-        {
-            unlockButton.onClick.RemoveAllListeners();
-            unlockButton.onClick.AddListener(OnUnlockButtonClicked);
-        }
-        // Àû¿ë/Ãë¼Ò ¹öÆ° ¸®½º³Ê ¿¬°á
-        if (btnApply)
-        {
-            btnApply.onClick.RemoveAllListeners();
-            btnApply.onClick.AddListener(OnApplyButtonClicked);
-        }
-        if (btnCancel)
-        {
-            btnCancel.onClick.RemoveAllListeners();
-            btnCancel.onClick.AddListener(OnCancelButtonClicked);
-        }
-    }
-
-    // CampUIManager¿¡¼­ È£ÃâÇÏ°Å³ª OnEnable¿¡¼­ ½ÇÇà
-    public void RefreshUI(bool autoSelectFirst = true)
-    {
-        // À¯´Ö Á¤º¸ °¡Á®¿À±â
-        if (CampUIManager.Instance == null) return;
-        UnitData unit = CampUIManager.Instance.selectedUnit;
-
-        // ±âÁ¸ ¸ñ·Ï Ã»¼Ò
-        ClearList();
-        ClearDescription();
-
-        // ÇØ±İ UI ÃÊ±âÈ­
-        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
-        // Àû¿ë/Ãë¼Ò UIµµ ÃÊ±âÈ­
-        if (applyPanelRoot) applyPanelRoot.SetActive(false);
-
-        if (unit == null) return;
-
-        // ½ºÅ³ ¸ñ·Ï »ı¼º (UnitData¿¡ skills ¹è¿­ÀÌ ÀÖ´Ù°í °¡Á¤)
-        if (unit.skills != null)
-        {
-            foreach (var skill in unit.skills)
-            {
-                if (skill == null) continue;
-
-                // ¸ŞÀÎ ½ºÅ³ ½½·Ô »ı¼º (Ç®¸µ »ç¿ë)
-                CampSkillSlot slot = GetSkillSlot();
-                slot.Setup(unit, skill, this);
-                allSlots.Add(slot);
-
-                // ¸¸¾à ÀÌ ½ºÅ³ÀÌ '»óÅÂ Á¶°ÇºÎ ½ºÅ³'ÀÌ¶ó¸é ÆÄ»ı ½ºÅ³µéÀ» ÇÏ´Ü¿¡ Ãß°¡
-                if (skill is StateConditionalSkillMulti multiSkill)
-                {
-                    // rules ¸®½ºÆ®¸¦ ¼øÈ¸ÇÏ¸ç ÆÄ»ı ½ºÅ³ ÃßÃâ
-                    foreach (var rule in multiSkill.rules)
-                    {
-                        if (rule.skill != null)
-                        {
-                            CreateSubSlot(unit, rule.skill, multiSkill);
-                        }
-                    }
-
-                    // ±âº» ½ºÅ³(Default Skill)µµ ÆÄ»ıÀ¸·Î º¸¿©ÁÙÁö °áÁ¤ (º¸ÅëÀº ¸ŞÀÎÀÌ ±âº» ½ºÅ³ ¿ªÇÒÀÌ´Ï »ı·«)
-                }
-            }
-        }
-
-        // autoSelectFirst°¡ trueÀÏ ¶§¸¸ Ã¹ ¹øÂ° ½½·Ô ÀÚµ¿ ¼±ÅÃ
-        if (autoSelectFirst && allSlots.Count > 0 && allSlots[0] is CampSkillSlot)
-        {
-            StartCoroutine(AutoSelectFirstSlot());
-        }
-    }
-    // ÆÄ»ı ½½·Ô »ı¼º ÇÔ¼ö
-    private void CreateSubSlot(UnitData unit, SkillAsset subSkill, SkillAsset parentSkill)
-    {
-        // ÆÄ»ı ½½·Ô »ı¼º (Ç®¸µ »ç¿ë)
-        CampSubSkillSlot subSlot = GetSubSkillSlot();
-
-        if (subSlot != null)
-        {
-            subSlot.Setup(unit, subSkill, parentSkill, this);
-            allSlots.Add(subSlot);
-        }
-    }
-
-    // ½ºÅ³ ½½·Ô °¡Á®¿À±â (Ç®¸µ)
-    private CampSkillSlot GetSkillSlot()
-    {
-        CampSkillSlot slot;
-        if (inactiveSkillSlots.Count > 0)
-        {
-            slot = inactiveSkillSlots.Pop();
-            slot.gameObject.SetActive(true);
-            // ¼ø¼­ º¸ÀåÀ» À§ÇØ ¸Ç ¾Æ·¡·Î ÀÌµ¿
-            slot.transform.SetAsLastSibling();
-        }
-        else
-        {
-            GameObject go = Instantiate(skillSlotPrefab, listContent);
-            slot = go.GetComponent<CampSkillSlot>();
-        }
-        return slot;
-    }
-
-    // ÆÄ»ı ½ºÅ³ ½½·Ô °¡Á®¿À±â (Ç®¸µ)
-    private CampSubSkillSlot GetSubSkillSlot()
-    {
-        CampSubSkillSlot slot;
-        if (inactiveSubSlots.Count > 0)
-        {
-            slot = inactiveSubSlots.Pop();
-            slot.gameObject.SetActive(true);
-            slot.transform.SetAsLastSibling();
-        }
-        else
-        {
-            GameObject go = Instantiate(subSkillSlotPrefab, listContent);
-            slot = go.GetComponent<CampSubSkillSlot>();
-        }
-        return slot;
-    }
-
-    // ÅØ½ºÆ® °»½Å ÇïÆÛ ÇÔ¼ö
-    private void UpdateDescriptionUI(string title, string desc)
-    {
-        if (infoTitleText) infoTitleText.text = title;
-        if (infoDescText) infoDescText.text = desc;
-    }
-
-    // ½ºÅ³ ¿¡¼ÂÀ¸·Î ÇöÀç »ı¼ºµÈ ½½·Ô UI¸¦ Ã£¾Æ³»´Â ÇÔ¼ö
-    private CampSkillSlot FindSkillSlot(SkillAsset targetSkill)
-    {
-        if (targetSkill == null) return null;
-
-        foreach (var s in allSlots)
-        {
-            // CampSkillSlotÀÌ¸é¼­ ½ºÅ³ ¿¡¼ÂÀÌ ÀÏÄ¡ÇÏ´Â ³ğÀ» Ã£À½
-            if (s is CampSkillSlot slot && slot.GetSkill() == targetSkill)
-            {
-                return slot;
-            }
-        }
-        return null;
-    }
-
-    // ½½·ÔÀÌ Å¬¸¯µÇ¾úÀ» ¶§ È£ÃâµÇ´Â ÇÔ¼ö
-    public void OnSlotClicked(CampSkillSlot clickedSlot, SkillAsset skill, UnitData unit)
-    {
-        DeselectAllHighlights(); // ÀüÃ¼ ²ô±â
-
-        // ½½·Ô ÇÏÀÌ¶óÀÌÆ® Ã³¸®
-        if (currentSelectedSlot != null) currentSelectedSlot.SetSelected(false);
-        currentSelectedSlot = clickedSlot;
-        if (currentSelectedSlot != null) currentSelectedSlot.SetSelected(true);
-
-        // È­»ìÇ¥ ÀÌµ¿
-        MoveSelectionArrow(clickedSlot.transform);
-
-        // ¼³¸í ÅØ½ºÆ® °áÁ¤ ·ÎÁ÷
-        string titleToShow = skill.displayName;
-        string descToShow = skill.description; // ±âº» ¼³¸í
-
-        // DB¿¡¼­ ÇöÀç ÀÌ ½ºÅ³¿¡ Àû¿ëµÈ ÈÆ·ÃÀÌ ÀÖ´ÂÁö È®ÀÎ
-        int activeRoute = -1;
-        if (TrainingDB.Instance != null)
-        {
-            activeRoute = TrainingDB.Instance.GetRoute(unit, skill);
-        }
-
-        // Àû¿ëµÈ ÈÆ·ÃÀÌ ÀÖ°í, ±× ÈÆ·Ã µ¥ÀÌÅÍ¿¡ 'µ¤¾î¾µ ¼³¸í'ÀÌ ÀÖ´Ù¸é ±³Ã¼
-        if (activeRoute != -1 && skill.trainingRoutes != null && activeRoute < skill.trainingRoutes.Length)
-        {
-            var route = skill.trainingRoutes[activeRoute];
-
-            // µ¥ÀÌÅÍ¿¡ overrideSkillDescriptionÀÌ ºñ¾îÀÖÁö ¾Ê´Ù¸é ±×°É »ç¿ë
-            if (!string.IsNullOrEmpty(route.overrideSkillDescription))
-            {
-                descToShow = route.overrideSkillDescription;
-            }
-        }
-
-        // UI °»½Å
-        UpdateDescriptionUI(titleToShow, descToShow);
-
-        // ÇØ±İ/Àû¿ë UI ¼û±â±â (½ºÅ³ ÀÚÃ¼¸¦ ´­·¶À» ¶§´Â ÈÆ·Ã Á¶ÀÛ ¹öÆ° ¼û±è)
-        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
-        if (applyPanelRoot) applyPanelRoot.SetActive(false);
-
-        // ¼±ÅÃ Á¤º¸ ÃÊ±âÈ­
-        targetRouteIndex = -1;
-    }
-
-    // ÆÄ»ı ½½·Ô Å¬¸¯ ½Ã Ã³¸®
-    public void OnSubSlotClicked(CampSubSkillSlot clickedSlot, SkillAsset subSkill, SkillAsset parentSkill, UnitData unit)
-    {
-        // ÇÏÀÌ¶óÀÌÆ® °»½Å
-        DeselectAllHighlights(); // ÀüÃ¼ ²ô±â
-        clickedSlot.SetSelected(true);
-
-        // È­»ìÇ¥ ÀÌµ¿
-        MoveSelectionArrow(clickedSlot.GetTextTransform());
-
-        // ¼³¸í °»½Å (ÆÄ»ı ½ºÅ³ ±âÁØ)
-        UpdateSkillDescriptionWithTraining(subSkill, unit);
-
-        // Àû¿ë/ÇØ±İ UI ²ô±â (ÆÄ»ı ½ºÅ³ ÀÚÃ¼´Â ÈÆ·Ã Á¶ÀÛ ºÒ°¡)
-        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
-        if (applyPanelRoot) applyPanelRoot.SetActive(false);
-    }
-
-    private IEnumerator AutoSelectFirstSlot()
-    {
-        // ÇÑ ÇÁ·¹ÀÓ ´ë±â (UI ·¹ÀÌ¾Æ¿ô °è»êÀÌ ³¡³¯ ¶§±îÁö ±â´Ù¸²)
-        yield return null;
-        // È¤Àº ·¹ÀÌ¾Æ¿ô °­Á¦ ¾÷µ¥ÀÌÆ®°¡ ÇÊ¿äÇÏ´Ù¸é:
-        // Canvas.ForceUpdateCanvases(); 
-
-        if (allSlots.Count > 0 && allSlots[0] is CampSkillSlot firstSlot)
-        {
-            firstSlot.SimulateClick();
-        }
-    }
-
-    // È­»ìÇ¥ ÀÌµ¿ ÇÔ¼ö
-    private void MoveSelectionArrow(Transform targetTransform)
-    {
-        if (selectionArrow == null || targetTransform == null) return;
-
-        selectionArrow.gameObject.SetActive(true);
-
-        // Å¸°ÙÀ» º¯¼ö¿¡ ÀúÀå (ÀÌÁ¦ Update¿¡¼­ ¾ê¸¦ °è¼Ó ÃÄ´Ùº½)
-        currentArrowTarget = targetTransform;
-
-        // Áï½Ã À§Ä¡ °»½Å
-        UpdateArrowPos();
-    }
-    // ½ÇÁ¦ È­»ìÇ¥ À§Ä¡ °è»ê ·ÎÁ÷
-    private void UpdateArrowPos()
-    {
-        if (selectionArrow == null || currentArrowTarget == null) return;
-
-        RectTransform targetRect = currentArrowTarget.GetComponent<RectTransform>();
-        if (targetRect != null)
-        {
-            Vector3[] corners = new Vector3[4];
-            targetRect.GetWorldCorners(corners);
-
-            // ÁÂÇÏ´Ü(0)°ú ÁÂ»ó´Ü(1)ÀÇ Áß°£Á¡
-            Vector3 leftEdgeCenter = (corners[0] + corners[1]) / 2f;
-
-            Vector3 finalPos = leftEdgeCenter;
-            finalPos.x += arrowOffset.x;
-            finalPos.y += arrowOffset.y;
-
-            selectionArrow.position = finalPos;
-        }
-        else
-        {
-            selectionArrow.position = currentArrowTarget.position;
-        }
-    }
-
-    // ÈÆ·Ã ¹öÆ° Å¬¸¯ ½Ã (Àá±è/ÇØ±İ °øÅë)
-    // ÈÆ·Ã ¹öÆ°À» ´©¸£¸é ±× ÈÆ·ÃÀÇ ÀÌ¸§°ú È¿°ú ¼³¸íÀ» º¸¿©ÁØ´Ù.
-    private void ShowTrainingInfo(string title, string desc)
-    {
-        // ÀÌÁ¦ ½ºÅ³ ¼³¸íÃ¢ À§Ä¡¿¡ ÈÆ·Ã ¼³¸íÀ» ¶ç¿î´Ù
-        UpdateDescriptionUI(title, desc);
-    }
-
-    // Àá±ä ÈÆ·Ã Å¬¸¯ ½Ã È£Ãâ (CampSkillSlot -> Page)
-    public void OnLockedTrainingClicked(UnitData unit, SkillAsset skill, int index, int cost, Transform slotTransform)
-    {
-        MoveSelectionArrow(slotTransform);
-
-        // ÈÆ·Ã ¼³¸í Ç¥½Ã
-        if (skill.trainingRoutes != null && index < skill.trainingRoutes.Length)
-        {
-            var route = skill.trainingRoutes[index];
-            ShowTrainingInfo(route.title, route.description);
-        }
-
-        // ÇØ±İ Å¸°Ù ¼³Á¤
-        targetUnit = unit;
-        targetSkill = skill;
-        targetRouteIndex = index;
-        targetCost = cost;
-
-        // ÇØ±İ UI Ç¥½Ã ¹× °»½Å
-        if (unlockPanelRoot) unlockPanelRoot.SetActive(true);
-        if (applyPanelRoot) applyPanelRoot.SetActive(false);
-        UpdateUnlockUI();
-    }
-
-    // ÇØ±İµÈ ÈÆ·Ã Å¬¸¯ ½Ã È£Ãâ (CampSkillSlot -> Page)
-    public void OnUnlockedTrainingClicked(UnitData unit, SkillAsset skill, int index, Transform slotTransform)
-    {
-        MoveSelectionArrow(slotTransform);
-
-        // ÈÆ·Ã ¼³¸í Ç¥½Ã
-        if (skill != null && skill.trainingRoutes != null && index < skill.trainingRoutes.Length)
-        {
-            var route = skill.trainingRoutes[index];
-            ShowTrainingInfo(route.title, route.description);
-        }
-
-        // Å¸°Ù Á¤º¸ ÀúÀå
-        targetUnit = unit;
-        targetSkill = skill;
-        targetRouteIndex = index;
-
-        // ÇØ±İ UI´Â ²ô°í, Àû¿ë UI¸¦ ÄÒ´Ù
-        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
-        if (applyPanelRoot) applyPanelRoot.SetActive(true);
-
-        // ¹öÆ° »óÅÂ °»½Å (V / X)
-        int currentActiveRoute = -1;
-        if (TrainingDB.Instance != null)
-        {
-            currentActiveRoute = TrainingDB.Instance.GetRoute(unit, skill);
-        }
-
-        if (currentActiveRoute == index)
-        {
-            if (btnApply) btnApply.gameObject.SetActive(false);
-            if (btnCancel) btnCancel.gameObject.SetActive(true);
-        }
-        else
-        {
-            if (btnApply) btnApply.gameObject.SetActive(true);
-            if (btnCancel) btnCancel.gameObject.SetActive(false);
-        }
-    }
-    // ½ºÅ³ ¼³¸í °»½Å ·ÎÁ÷ (Áßº¹ Á¦°Å¿ë)
-    private void UpdateSkillDescriptionWithTraining(SkillAsset skill, UnitData unit)
-    {
-        string title = skill.displayName;
-        string desc = skill.description;
-
-        int activeRoute = -1;
-        if (TrainingDB.Instance != null) activeRoute = TrainingDB.Instance.GetRoute(unit, skill);
-
-        if (activeRoute != -1 && skill.trainingRoutes != null && activeRoute < skill.trainingRoutes.Length)
-        {
-            var route = skill.trainingRoutes[activeRoute];
-            if (!string.IsNullOrEmpty(route.overrideSkillDescription))
-            {
-                desc = route.overrideSkillDescription;
-            }
-        }
-        UpdateDescriptionUI(title, desc);
-    }
-    private void UpdateUnlockUI()
-    {
-        if (CurrencyManager.Instance == null) return;
-
-        int currentGold = CurrencyManager.Instance.gold;
-
-        // ÅØ½ºÆ® °»½Å: "º¸À¯·® / ÇÊ¿ä·®" (¿¹: 88 / 8)
-        // »ö»ó Ã³¸®: µ· ºÎÁ·ÇÏ¸é »¡°£»ö µî
-        string colorTag = currentGold >= targetCost ? "<color=#00FF00>" : "<color=#FF0000>";
-        if (currencyText) currencyText.text = $"{colorTag}{currentGold}</color> / {targetCost}";
-
-        // ¹öÆ° È°¼º/ºñÈ°¼º (µ· ¾øÀ¸¸é ¹öÆ° ¸ø ´©¸£°Ô ÇÒÁö, ´©¸£°í ¸Ş½ÃÁö ¶ç¿ïÁö ¼±ÅÃ)
-        // if (unlockButton) unlockButton.interactable = currentGold >= targetCost;
-    }
-
-    // ÀÚ¹°¼è ¹öÆ°À» ´­·¶À» ¶§ ½ÇÁ¦ ÇØ±İ ½Ãµµ
-    private void OnUnlockButtonClicked()
-    {
-        if (targetRouteIndex == -1 || CurrencyManager.Instance == null) return;
-
-        // RefreshUI¸¦ ÇÏ¸é target º¯¼öµéÀÌ ³¯¾Æ°¥ ¼ö ÀÖÀ¸¹Ç·Î Áö¿ª º¯¼ö¿¡ ¹é¾÷
-        int tempIndex = targetRouteIndex;
-        UnitData tempUnit = targetUnit;
-        SkillAsset tempSkill = targetSkill;
-
-        // µ· È®ÀÎ ¹× ¼Ò¸ğ
-        if (CurrencyManager.Instance.Consume(targetCost))
-        {
-            // DB ÇØ±İ
-            if (TrainingDB.Instance != null)
-            {
-                TrainingDB.Instance.UnlockRoute(targetUnit, targetSkill, targetRouteIndex);
-            }
-
-            // UI °»½Å
-            RefreshUI(false);
-            if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
-
-            // ÄÚ·çÆ¾À¸·Î »óÅÂ º¹±¸
-            StartCoroutine(RestoreStateCoroutine(tempUnit, tempSkill, tempIndex));
-        }
-        else
-        {
-            Debug.Log("ÀçÈ­ ºÎÁ·!");
-            // ¿©±â¿¡ "ÀçÈ­°¡ ºÎÁ·ÇÕ´Ï´Ù" ÆË¾÷ ¶ç¿ì±â
-        }
-    }
-    // ¹öÆ° Å¬¸¯: ÈÆ·Ã Àû¿ë
-    private void OnApplyButtonClicked()
-    {
-        if (targetRouteIndex == -1 || TrainingDB.Instance == null) return;
-
-        // ÇöÀç °ªÀ» ¹Ì¸® Áö¿ª º¯¼ö¿¡ ¹é¾÷
-        int tempIndex = targetRouteIndex;
-        UnitData tempUnit = targetUnit;
-        SkillAsset tempSkill = targetSkill;
-
-        // DB¿¡ ÀúÀå
-        TrainingDB.Instance.SetRoute(tempUnit, tempSkill, tempIndex);
-
-        // UI °»½Å (ÀÌ °úÁ¤¿¡¼­ ¸â¹ö º¯¼ö targetRouteIndex°¡ -1ÀÌ µÊ)
-        RefreshUI(false);
-
-        StartCoroutine(RestoreStateCoroutine(tempUnit, tempSkill, tempIndex));
-    }
-
-    // [X] ¹öÆ° Å¬¸¯: ÈÆ·Ã ÇØÁ¦
-    private void OnCancelButtonClicked()
-    {
-        if (TrainingDB.Instance == null) return;
-
-        int tempIndex = targetRouteIndex;
-        UnitData tempUnit = targetUnit;
-        SkillAsset tempSkill = targetSkill;
-
-        // DB¿¡¼­ ÇØÁ¦ (-1)
-        TrainingDB.Instance.SetRoute(targetUnit, targetSkill, -1);
-
-        // UI °»½Å (Èò»öÀ¸·Î º¯ÇÔ)
-        RefreshUI(false);
-
-        StartCoroutine(RestoreStateCoroutine(tempUnit, tempSkill, tempIndex));
-    }
-    private IEnumerator RestoreStateCoroutine(UnitData unit, SkillAsset skill, int routeIndex)
-    {
-        // UI ·¹ÀÌ¾Æ¿ôÀÌ Á¤·ÄµÉ ¶§±îÁö 1ÇÁ·¹ÀÓ ´ë±â
-        yield return null;
-
-        // ÇØ´ç ½ºÅ³ ½½·Ô Ã£±â
-        CampSkillSlot slot = FindSkillSlot(skill);
-
-        if (slot != null)
-        {
-            // ÈÆ·Ã ½½·ÔÀÇ À§Ä¡ Ã£±â (ÀÌÁ¦ ·¹ÀÌ¾Æ¿ô °è»êÀÌ ³¡³ª¼­ Á¤È®ÇÑ À§Ä¡°¡ ³ª¿È)
-            Transform tTransform = slot.GetTrainingSlotTransform(routeIndex);
-
-            // ½½·Ô¿¡°Ô "ÀÌ ÈÆ·ÃÀÌ ¼±ÅÃµÇ¾ú´Ù"°í ¾Ë¸²
-            // ÀÌ ÇÔ¼ö ¾È¿¡¼­ DeselectAllHighlights()°¡ È£ÃâµÇ¾î ¸ŞÀÎ ½ºÅ³ ÇÏÀÌ¶óÀÌÆ®´Â ²¨Áö°í,
-            // ÈÆ·Ã ½½·Ô ÇÏÀÌ¶óÀÌÆ®°¡ ÄÑÁö¸ç, È­»ìÇ¥µµ ÀÌµ¿ÇÔ.
-            slot.OnTrainingSelected(routeIndex, tTransform);
-        }
-    }
-
-    public void DeselectAllHighlights()
-    {
-        foreach (var s in allSlots)
-        {
-            if (s is CampSkillSlot main)
-            {
-                main.SetSelected(false);       // ½ºÅ³ ½½·Ô º»Ã¼ ²ô±â
-                main.ResetTrainingFocus();     // ÀÚ½Ä ÈÆ·Ã ½½·Ôµé ²ô±â
-            }
-            if (s is CampSubSkillSlot sub)
-            {
-                sub.SetSelected(false);        // ÆÄ»ı ½ºÅ³ ²ô±â
-            }
-        }
-    }
-    public void ClearDescription()
-    {
-        UpdateDescriptionUI("", "½ºÅ³À» ¼±ÅÃÇÏ¼¼¿ä.");
-        if (selectionArrow)
-        {
-            selectionArrow.gameObject.SetActive(false);
-            currentArrowTarget = null; // Å¸°Ù ÇØÁ¦
-        }
-    }
-
-    // ¸®½ºÆ® ÃÊ±âÈ­ (Ç®¸µ ¹İÈ¯)
-    private void ClearList()
-    {
-        foreach (var component in allSlots)
-        {
-            if (component == null) continue;
-
-            if (component is CampSkillSlot skillSlot)
-            {
-                skillSlot.gameObject.SetActive(false);
-                inactiveSkillSlots.Push(skillSlot);
-            }
-            else if (component is CampSubSkillSlot subSlot)
-            {
-                subSlot.gameObject.SetActive(false);
-                inactiveSubSlots.Push(subSlot);
-            }
-            else
-            {
-                // È¤½Ã ¸ğ¸¦ ´Ù¸¥ Å¸ÀÔÀº ±×³É ÆÄ±«
-                Destroy(component.gameObject);
-            }
-        }
-            allSlots.Clear();
-        currentSelectedSlot = null;
-    }
+using System.Collections.Generic;
+using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class CampSkillPage : MonoBehaviour
+{
+    [Header("List Area")]
+    [SerializeField] private Transform listContent; // Scroll Viewì˜ Content ì—°ê²°
+    [SerializeField] private GameObject skillSlotPrefab; // ìœ„ì—ì„œ ë§Œë“  ìŠ¬ë¡¯ í”„ë¦¬íŒ¹
+    [SerializeField] private GameObject subSkillSlotPrefab; // íŒŒìƒ ìŠ¤í‚¬ìš© ì‘ì€ ìŠ¬ë¡¯
+
+    [Header("Description UI")]
+    [SerializeField] private Text infoTitleText;   // ì œëª©
+    [SerializeField] private Text infoDescText;   // ì„¤ëª…
+
+    [Header("Unlock UI")]
+    [SerializeField] private GameObject unlockPanelRoot; // ì¬í™”/í•´ê¸ˆ ë²„íŠ¼ ë¬¶ìŒ ê·¸ë£¹
+    [SerializeField] private Text currencyText;          // "í˜„ì¬ë³´ìœ  / í•„ìš”ë¹„ìš©" í‘œì‹œ í…ìŠ¤íŠ¸
+    [SerializeField] private Button unlockButton;        // ìœ¡ê°í˜• ìë¬¼ì‡  ë²„íŠ¼
+
+    [Header("Apply UI")]
+    [SerializeField] private GameObject applyPanelRoot; // ì²´í¬/X ë²„íŠ¼ ê·¸ë£¹
+    [SerializeField] private Button btnApply;           // ì²´í¬(V) ë²„íŠ¼
+    [SerializeField] private Button btnCancel;          // ì·¨ì†Œ(X) ë²„íŠ¼
+
+    [Header("Selection UI")]
+    [SerializeField] private RectTransform selectionArrow; // í™”ì‚´í‘œ ì´ë¯¸ì§€
+    [SerializeField] private Vector2 arrowOffset = new Vector2(-20f, 0f); // í™”ì‚´í‘œ ìœ„ì¹˜ ë³´ì •ê°’
+    private Transform currentArrowTarget;   // í™”ì‚´í‘œê°€ ë”°ë¼ë‹¤ë…€ì•¼ í•  íƒ€ê²Ÿì˜ Transformì„ ì €ì¥
+
+    // ìƒì„±ëœ ìŠ¬ë¡¯ë“¤ ê´€ë¦¬ìš© ë¦¬ìŠ¤íŠ¸
+    private List<MonoBehaviour> allSlots = new List<MonoBehaviour>();
+    // ì˜¤ë¸Œì íŠ¸ í’€ë§ì„ ìœ„í•œ ë¹„í™œì„± ìŠ¬ë¡¯ ìŠ¤íƒ
+    private Stack<CampSkillSlot> inactiveSkillSlots = new Stack<CampSkillSlot>();
+    private Stack<CampSubSkillSlot> inactiveSubSlots = new Stack<CampSubSkillSlot>();
+
+    private CampSkillSlot currentSelectedSlot;
+
+    // í˜„ì¬ í•´ê¸ˆí•˜ë ¤ê³  ì„ íƒí•œ í›ˆë ¨ ì •ë³´ ì„ì‹œ ì €ì¥
+    private UnitData targetUnit;
+    private SkillAsset targetSkill;
+    private int targetRouteIndex = -1;
+    private int targetCost = 0;
+
+    private void LateUpdate()
+    {
+        // í™”ì‚´í‘œê°€ ì¼œì ¸ ìˆê³ , íƒ€ê²Ÿì´ ì¡´ì¬í•  ë•Œë§Œ ë”°ë¼ë‹¤ë‹˜
+        if (selectionArrow != null && selectionArrow.gameObject.activeSelf && currentArrowTarget != null)
+        {
+            UpdateArrowPos();
+        }
+    }
+
+    private void OnEnable()
+    {
+        // íƒ­ì´ ì¼œì§ˆ ë•Œë§ˆë‹¤ UI ê°±ì‹ 
+        RefreshUI();
+
+        // í•´ê¸ˆ ë²„íŠ¼ ë¦¬ìŠ¤ë„ˆ ì—°ê²°
+        if (unlockButton)
+        {
+            unlockButton.onClick.RemoveAllListeners();
+            unlockButton.onClick.AddListener(OnUnlockButtonClicked);
+        }
+        // ì ìš©/ì·¨ì†Œ ë²„íŠ¼ ë¦¬ìŠ¤ë„ˆ ì—°ê²°
+        if (btnApply)
+        {
+            btnApply.onClick.RemoveAllListeners();
+            btnApply.onClick.AddListener(OnApplyButtonClicked);
+        }
+        if (btnCancel)
+        {
+            btnCancel.onClick.RemoveAllListeners();
+            btnCancel.onClick.AddListener(OnCancelButtonClicked);
+        }
+    }
+
+    // CampUIManagerì—ì„œ í˜¸ì¶œí•˜ê±°ë‚˜ OnEnableì—ì„œ ì‹¤í–‰
+    public void RefreshUI(bool autoSelectFirst = true)
+    {
+        // ìœ ë‹› ì •ë³´ ê°€ì ¸ì˜¤ê¸°
+        if (CampUIManager.Instance == null) return;
+        UnitData unit = CampUIManager.Instance.selectedUnit;
+
+        // ê¸°ì¡´ ëª©ë¡ ì²­ì†Œ
+        ClearList();
+        ClearDescription();
+
+        // í•´ê¸ˆ UI ì´ˆê¸°í™”
+        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
+        // ì ìš©/ì·¨ì†Œ UIë„ ì´ˆê¸°í™”
+        if (applyPanelRoot) applyPanelRoot.SetActive(false);
+
+        if (unit == null) return;
+
+        // ìŠ¤í‚¬ ëª©ë¡ ìƒì„± (UnitDataì— skills ë°°ì—´ì´ ìˆë‹¤ê³  ê°€ì •)
+        if (unit.skills != null)
+        {
+            foreach (var skill in unit.skills)
+            {
+                if (skill == null) continue;
+
+                // ë©”ì¸ ìŠ¤í‚¬ ìŠ¬ë¡¯ ìƒì„± (í’€ë§ ì‚¬ìš©)
+                CampSkillSlot slot = GetSkillSlot();
+                slot.Setup(unit, skill, this);
+                allSlots.Add(slot);
+
+                // ë§Œì•½ ì´ ìŠ¤í‚¬ì´ 'ìƒíƒœ ì¡°ê±´ë¶€ ìŠ¤í‚¬'ì´ë¼ë©´ íŒŒìƒ ìŠ¤í‚¬ë“¤ì„ í•˜ë‹¨ì— ì¶”ê°€
+                if (skill is StateConditionalSkillMulti multiSkill)
+                {
+                    // rules ë¦¬ìŠ¤íŠ¸ë¥¼ ìˆœíšŒí•˜ë©° íŒŒìƒ ìŠ¤í‚¬ ì¶”ì¶œ
+                    foreach (var rule in multiSkill.rules)
+                    {
+                        if (rule.skill != null)
+                        {
+                            CreateSubSlot(unit, rule.skill, multiSkill);
+                        }
+                    }
+
+                    // ê¸°ë³¸ ìŠ¤í‚¬(Default Skill)ë„ íŒŒìƒìœ¼ë¡œ ë³´ì—¬ì¤„ì§€ ê²°ì • (ë³´í†µì€ ë©”ì¸ì´ ê¸°ë³¸ ìŠ¤í‚¬ ì—­í• ì´ë‹ˆ ìƒëµ)
+                }
+            }
+        }
+
+        // autoSelectFirstê°€ trueì¼ ë•Œë§Œ ì²« ë²ˆì§¸ ìŠ¬ë¡¯ ìë™ ì„ íƒ
+        if (autoSelectFirst && allSlots.Count > 0 && allSlots[0] is CampSkillSlot)
+        {
+            StartCoroutine(AutoSelectFirstSlot());
+        }
+    }
+    // íŒŒìƒ ìŠ¬ë¡¯ ìƒì„± í•¨ìˆ˜
+    private void CreateSubSlot(UnitData unit, SkillAsset subSkill, SkillAsset parentSkill)
+    {
+        // íŒŒìƒ ìŠ¬ë¡¯ ìƒì„± (í’€ë§ ì‚¬ìš©)
+        CampSubSkillSlot subSlot = GetSubSkillSlot();
+
+        if (subSlot != null)
+        {
+            subSlot.Setup(unit, subSkill, parentSkill, this);
+            allSlots.Add(subSlot);
+        }
+    }
+
+    // ìŠ¤í‚¬ ìŠ¬ë¡¯ ê°€ì ¸ì˜¤ê¸° (í’€ë§)
+    private CampSkillSlot GetSkillSlot()
+    {
+        CampSkillSlot slot;
+        if (inactiveSkillSlots.Count > 0)
+        {
+            slot = inactiveSkillSlots.Pop();
+            slot.gameObject.SetActive(true);
+            // ìˆœì„œ ë³´ì¥ì„ ìœ„í•´ ë§¨ ì•„ë˜ë¡œ ì´ë™
+            slot.transform.SetAsLastSibling();
+        }
+        else
+        {
+            GameObject go = Instantiate(skillSlotPrefab, listContent);
+            slot = go.GetComponent<CampSkillSlot>();
+        }
+        return slot;
+    }
+
+    // íŒŒìƒ ìŠ¤í‚¬ ìŠ¬ë¡¯ ê°€ì ¸ì˜¤ê¸° (í’€ë§)
+    private CampSubSkillSlot GetSubSkillSlot()
+    {
+        CampSubSkillSlot slot;
+        if (inactiveSubSlots.Count > 0)
+        {
+            slot = inactiveSubSlots.Pop();
+            slot.gameObject.SetActive(true);
+            slot.transform.SetAsLastSibling();
+        }
+        else
+        {
+            GameObject go = Instantiate(subSkillSlotPrefab, listContent);
+            slot = go.GetComponent<CampSubSkillSlot>();
+        }
+        return slot;
+    }
+
+    // í…ìŠ¤íŠ¸ ê°±ì‹  í—¬í¼ í•¨ìˆ˜
+    private void UpdateDescriptionUI(string title, string desc)
+    {
+        if (infoTitleText) infoTitleText.text = title;
+        if (infoDescText) infoDescText.text = desc;
+    }
+
+    // ìŠ¤í‚¬ ì—ì…‹ìœ¼ë¡œ í˜„ì¬ ìƒì„±ëœ ìŠ¬ë¡¯ UIë¥¼ ì°¾ì•„ë‚´ëŠ” í•¨ìˆ˜
+    private CampSkillSlot FindSkillSlot(SkillAsset targetSkill)
+    {
+        if (targetSkill == null) return null;
+
+        foreach (var s in allSlots)
+        {
+            // CampSkillSlotì´ë©´ì„œ ìŠ¤í‚¬ ì—ì…‹ì´ ì¼ì¹˜í•˜ëŠ” ë†ˆì„ ì°¾ìŒ
+            if (s is CampSkillSlot slot && slot.GetSkill() == targetSkill)
+            {
+                return slot;
+            }
+        }
+        return null;
+    }
+
+    // ìŠ¬ë¡¯ì´ í´ë¦­ë˜ì—ˆì„ ë•Œ í˜¸ì¶œë˜ëŠ” í•¨ìˆ˜
+    public void OnSlotClicked(CampSkillSlot clickedSlot, SkillAsset skill, UnitData unit)
+    {
+        DeselectAllHighlights(); // ì „ì²´ ë„ê¸°
+
+        // ìŠ¬ë¡¯ í•˜ì´ë¼ì´íŠ¸ ì²˜ë¦¬
+        if (currentSelectedSlot != null) currentSelectedSlot.SetSelected(false);
+        currentSelectedSlot = clickedSlot;
+        if (currentSelectedSlot != null) currentSelectedSlot.SetSelected(true);
+
+        // í™”ì‚´í‘œ ì´ë™
+        MoveSelectionArrow(clickedSlot.transform);
+
+        // ì„¤ëª… í…ìŠ¤íŠ¸ ê²°ì • ë¡œì§
+        string titleToShow = skill.displayName;
+        string descToShow = skill.description; // ê¸°ë³¸ ì„¤ëª…
+
+        // DBì—ì„œ í˜„ì¬ ì´ ìŠ¤í‚¬ì— ì ìš©ëœ í›ˆë ¨ì´ ìˆëŠ”ì§€ í™•ì¸
+        int activeRoute = -1;
+        if (TrainingDB.Instance != null)
+        {
+            activeRoute = TrainingDB.Instance.GetRoute(unit, skill);
+        }
+
+        // ì ìš©ëœ í›ˆë ¨ì´ ìˆê³ , ê·¸ í›ˆë ¨ ë°ì´í„°ì— 'ë®ì–´ì“¸ ì„¤ëª…'ì´ ìˆë‹¤ë©´ êµì²´
+        if (activeRoute != -1 && skill.trainingRoutes != null && activeRoute < skill.trainingRoutes.Length)
+        {
+            var route = skill.trainingRoutes[activeRoute];
+
+            // ë°ì´í„°ì— overrideSkillDescriptionì´ ë¹„ì–´ìˆì§€ ì•Šë‹¤ë©´ ê·¸ê±¸ ì‚¬ìš©
+            if (!string.IsNullOrEmpty(route.overrideSkillDescription))
+            {
+                descToShow = route.overrideSkillDescription;
+            }
+        }
+
+        // UI ê°±ì‹ 
+        UpdateDescriptionUI(titleToShow, descToShow);
+
+        // í•´ê¸ˆ/ì ìš© UI ìˆ¨ê¸°ê¸° (ìŠ¤í‚¬ ìì²´ë¥¼ ëˆŒë €ì„ ë•ŒëŠ” í›ˆë ¨ ì¡°ì‘ ë²„íŠ¼ ìˆ¨ê¹€)
+        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
+        if (applyPanelRoot) applyPanelRoot.SetActive(false);
+
+        // ì„ íƒ ì •ë³´ ì´ˆê¸°í™”
+        targetRouteIndex = -1;
+    }
+
+    // íŒŒìƒ ìŠ¬ë¡¯ í´ë¦­ ì‹œ ì²˜ë¦¬
+    public void OnSubSlotClicked(CampSubSkillSlot clickedSlot, SkillAsset subSkill, SkillAsset parentSkill, UnitData unit)
+    {
+        // í•˜ì´ë¼ì´íŠ¸ ê°±ì‹ 
+        DeselectAllHighlights(); // ì „ì²´ ë„ê¸°
+        clickedSlot.SetSelected(true);
+
+        // í™”ì‚´í‘œ ì´ë™
+        MoveSelectionArrow(clickedSlot.GetTextTransform());
+
+        // ì„¤ëª… ê°±ì‹  (íŒŒìƒ ìŠ¤í‚¬ ê¸°ì¤€)
+        UpdateSkillDescriptionWithTraining(subSkill, unit);
+
+        // ì ìš©/í•´ê¸ˆ UI ë„ê¸° (íŒŒìƒ ìŠ¤í‚¬ ìì²´ëŠ” í›ˆë ¨ ì¡°ì‘ ë¶ˆê°€)
+        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
+        if (applyPanelRoot) applyPanelRoot.SetActive(false);
+    }
+
+    private IEnumerator AutoSelectFirstSlot()
+    {
+        // í•œ í”„ë ˆì„ ëŒ€ê¸° (UI ë ˆì´ì•„ì›ƒ ê³„ì‚°ì´ ëë‚  ë•Œê¹Œì§€ ê¸°ë‹¤ë¦¼)
+        yield return null;
+        // í˜¹ì€ ë ˆì´ì•„ì›ƒ ê°•ì œ ì—…ë°ì´íŠ¸ê°€ í•„ìš”í•˜ë‹¤ë©´:
+        // Canvas.ForceUpdateCanvases(); 
+
+        if (allSlots.Count > 0 && allSlots[0] is CampSkillSlot firstSlot)
+        {
+            firstSlot.SimulateClick();
+        }
+    }
+
+    // í™”ì‚´í‘œ ì´ë™ í•¨ìˆ˜
+    private void MoveSelectionArrow(Transform targetTransform)
+    {
+        if (selectionArrow == null || targetTransform == null) return;
+
+        selectionArrow.gameObject.SetActive(true);
+
+        // íƒ€ê²Ÿì„ ë³€ìˆ˜ì— ì €ì¥ (ì´ì œ Updateì—ì„œ ì–˜ë¥¼ ê³„ì† ì³ë‹¤ë´„)
+        currentArrowTarget = targetTransform;
+
+        // ì¦‰ì‹œ ìœ„ì¹˜ ê°±ì‹ 
+        UpdateArrowPos();
+    }
+    // ì‹¤ì œ í™”ì‚´í‘œ ìœ„ì¹˜ ê³„ì‚° ë¡œì§
+    private void UpdateArrowPos()
+    {
+        if (selectionArrow == null || currentArrowTarget == null) return;
+
+        RectTransform targetRect = currentArrowTarget.GetComponent<RectTransform>();
+        if (targetRect != null)
+        {
+            Vector3[] corners = new Vector3[4];
+            targetRect.GetWorldCorners(corners);
+
+            // ì¢Œí•˜ë‹¨(0)ê³¼ ì¢Œìƒë‹¨(1)ì˜ ì¤‘ê°„ì 
+            Vector3 leftEdgeCenter = (corners[0] + corners[1]) / 2f;
+
+            Vector3 finalPos = leftEdgeCenter;
+            finalPos.x += arrowOffset.x;
+            finalPos.y += arrowOffset.y;
+
+            selectionArrow.position = finalPos;
+        }
+        else
+        {
+            selectionArrow.position = currentArrowTarget.position;
+        }
+    }
+
+    // í›ˆë ¨ ë²„íŠ¼ í´ë¦­ ì‹œ (ì ê¹€/í•´ê¸ˆ ê³µí†µ)
+    // í›ˆë ¨ ë²„íŠ¼ì„ ëˆ„ë¥´ë©´ ê·¸ í›ˆë ¨ì˜ ì´ë¦„ê³¼ íš¨ê³¼ ì„¤ëª…ì„ ë³´ì—¬ì¤€ë‹¤.
+    private void ShowTrainingInfo(string title, string desc)
+    {
+        // ì´ì œ ìŠ¤í‚¬ ì„¤ëª…ì°½ ìœ„ì¹˜ì— í›ˆë ¨ ì„¤ëª…ì„ ë„ìš´ë‹¤
+        UpdateDescriptionUI(title, desc);
+    }
+
+    // ì ê¸´ í›ˆë ¨ í´ë¦­ ì‹œ í˜¸ì¶œ (CampSkillSlot -> Page)
+    public void OnLockedTrainingClicked(UnitData unit, SkillAsset skill, int index, int cost, Transform slotTransform)
+    {
+        MoveSelectionArrow(slotTransform);
+
+        // í›ˆë ¨ ì„¤ëª… í‘œì‹œ
+        if (skill.trainingRoutes != null && index < skill.trainingRoutes.Length)
+        {
+            var route = skill.trainingRoutes[index];
+            ShowTrainingInfo(route.title, route.description);
+        }
+
+        // í•´ê¸ˆ íƒ€ê²Ÿ ì„¤ì •
+        targetUnit = unit;
+        targetSkill = skill;
+        targetRouteIndex = index;
+        targetCost = cost;
+
+        // í•´ê¸ˆ UI í‘œì‹œ ë° ê°±ì‹ 
+        if (unlockPanelRoot) unlockPanelRoot.SetActive(true);
+        if (applyPanelRoot) applyPanelRoot.SetActive(false);
+        UpdateUnlockUI();
+    }
+
+    // í•´ê¸ˆëœ í›ˆë ¨ í´ë¦­ ì‹œ í˜¸ì¶œ (CampSkillSlot -> Page)
+    public void OnUnlockedTrainingClicked(UnitData unit, SkillAsset skill, int index, Transform slotTransform)
+    {
+        MoveSelectionArrow(slotTransform);
+
+        // í›ˆë ¨ ì„¤ëª… í‘œì‹œ
+        if (skill != null && skill.trainingRoutes != null && index < skill.trainingRoutes.Length)
+        {
+            var route = skill.trainingRoutes[index];
+            ShowTrainingInfo(route.title, route.description);
+        }
+
+        // íƒ€ê²Ÿ ì •ë³´ ì €ì¥
+        targetUnit = unit;
+        targetSkill = skill;
+        targetRouteIndex = index;
+
+        // í•´ê¸ˆ UIëŠ” ë„ê³ , ì ìš© UIë¥¼ ì¼ ë‹¤
+        if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
+        if (applyPanelRoot) applyPanelRoot.SetActive(true);
+
+        // ë²„íŠ¼ ìƒíƒœ ê°±ì‹  (V / X)
+        int currentActiveRoute = -1;
+        if (TrainingDB.Instance != null)
+        {
+            currentActiveRoute = TrainingDB.Instance.GetRoute(unit, skill);
+        }
+
+        if (currentActiveRoute == index)
+        {
+            if (btnApply) btnApply.gameObject.SetActive(false);
+            if (btnCancel) btnCancel.gameObject.SetActive(true);
+        }
+        else
+        {
+            if (btnApply) btnApply.gameObject.SetActive(true);
+            if (btnCancel) btnCancel.gameObject.SetActive(false);
+        }
+    }
+    // ìŠ¤í‚¬ ì„¤ëª… ê°±ì‹  ë¡œì§ (ì¤‘ë³µ ì œê±°ìš©)
+    private void UpdateSkillDescriptionWithTraining(SkillAsset skill, UnitData unit)
+    {
+        string title = skill.displayName;
+        string desc = skill.description;
+
+        int activeRoute = -1;
+        if (TrainingDB.Instance != null) activeRoute = TrainingDB.Instance.GetRoute(unit, skill);
+
+        if (activeRoute != -1 && skill.trainingRoutes != null && activeRoute < skill.trainingRoutes.Length)
+        {
+            var route = skill.trainingRoutes[activeRoute];
+            if (!string.IsNullOrEmpty(route.overrideSkillDescription))
+            {
+                desc = route.overrideSkillDescription;
+            }
+        }
+        UpdateDescriptionUI(title, desc);
+    }
+    private void UpdateUnlockUI()
+    {
+        if (CurrencyManager.Instance == null) return;
+
+        int currentGold = CurrencyManager.Instance.gold;
+
+        // í…ìŠ¤íŠ¸ ê°±ì‹ : "ë³´ìœ ëŸ‰ / í•„ìš”ëŸ‰" (ì˜ˆ: 88 / 8)
+        // ìƒ‰ìƒ ì²˜ë¦¬: ëˆ ë¶€ì¡±í•˜ë©´ ë¹¨ê°„ìƒ‰ ë“±
+        string colorTag = currentGold >= targetCost ? "<color=#00FF00>" : "<color=#FF0000>";
+        if (currencyText) currencyText.text = $"{colorTag}{currentGold}</color> / {targetCost}";
+
+        // ë²„íŠ¼ í™œì„±/ë¹„í™œì„± (ëˆ ì—†ìœ¼ë©´ ë²„íŠ¼ ëª» ëˆ„ë¥´ê²Œ í• ì§€, ëˆ„ë¥´ê³  ë©”ì‹œì§€ ë„ìš¸ì§€ ì„ íƒ)
+        // if (unlockButton) unlockButton.interactable = currentGold >= targetCost;
+    }
+
+    // ìë¬¼ì‡  ë²„íŠ¼ì„ ëˆŒë €ì„ ë•Œ ì‹¤ì œ í•´ê¸ˆ ì‹œë„
+    private void OnUnlockButtonClicked()
+    {
+        if (targetRouteIndex == -1 || CurrencyManager.Instance == null) return;
+
+        // RefreshUIë¥¼ í•˜ë©´ target ë³€ìˆ˜ë“¤ì´ ë‚ ì•„ê°ˆ ìˆ˜ ìˆìœ¼ë¯€ë¡œ ì§€ì—­ ë³€ìˆ˜ì— ë°±ì—…
+        int tempIndex = targetRouteIndex;
+        UnitData tempUnit = targetUnit;
+        SkillAsset tempSkill = targetSkill;
+
+        // ëˆ í™•ì¸ ë° ì†Œëª¨
+        if (CurrencyManager.Instance.Consume(targetCost))
+        {
+            // DB í•´ê¸ˆ
+            if (TrainingDB.Instance != null)
+            {
+                TrainingDB.Instance.UnlockRoute(targetUnit, targetSkill, targetRouteIndex);
+            }
+
+            // UI ê°±ì‹ 
+            RefreshUI(false);
+            if (unlockPanelRoot) unlockPanelRoot.SetActive(false);
+
+            // ì½”ë£¨í‹´ìœ¼ë¡œ ìƒíƒœ ë³µêµ¬
+            StartCoroutine(RestoreStateCoroutine(tempUnit, tempSkill, tempIndex));
+        }
+        else
+        {
+            Debug.Log("ì¬í™” ë¶€ì¡±!");
+            // ì—¬ê¸°ì— "ì¬í™”ê°€ ë¶€ì¡±í•©ë‹ˆë‹¤" íŒì—… ë„ìš°ê¸°
+        }
+    }
+    // ë²„íŠ¼ í´ë¦­: í›ˆë ¨ ì ìš©
+    private void OnApplyButtonClicked()
+    {
+        if (targetRouteIndex == -1 || TrainingDB.Instance == null) return;
+
+        // í˜„ì¬ ê°’ì„ ë¯¸ë¦¬ ì§€ì—­ ë³€ìˆ˜ì— ë°±ì—…
+        int tempIndex = targetRouteIndex;
+        UnitData tempUnit = targetUnit;
+        SkillAsset tempSkill = targetSkill;
+
+        // DBì— ì €ì¥
+        TrainingDB.Instance.SetRoute(tempUnit, tempSkill, tempIndex);
+
+        // UI ê°±ì‹  (ì´ ê³¼ì •ì—ì„œ ë©¤ë²„ ë³€ìˆ˜ targetRouteIndexê°€ -1ì´ ë¨)
+        RefreshUI(false);
+
+        StartCoroutine(RestoreStateCoroutine(tempUnit, tempSkill, tempIndex));
+    }
+
+    // [X] ë²„íŠ¼ í´ë¦­: í›ˆë ¨ í•´ì œ
+    private void OnCancelButtonClicked()
+    {
+        if (TrainingDB.Instance == null) return;
+
+        int tempIndex = targetRouteIndex;
+        UnitData tempUnit = targetUnit;
+        SkillAsset tempSkill = targetSkill;
+
+        // DBì—ì„œ í•´ì œ (-1)
+        TrainingDB.Instance.SetRoute(targetUnit, targetSkill, -1);
+
+        // UI ê°±ì‹  (í°ìƒ‰ìœ¼ë¡œ ë³€í•¨)
+        RefreshUI(false);
+
+        StartCoroutine(RestoreStateCoroutine(tempUnit, tempSkill, tempIndex));
+    }
+    private IEnumerator RestoreStateCoroutine(UnitData unit, SkillAsset skill, int routeIndex)
+    {
+        // UI ë ˆì´ì•„ì›ƒì´ ì •ë ¬ë  ë•Œê¹Œì§€ 1í”„ë ˆì„ ëŒ€ê¸°
+        yield return null;
+
+        // í•´ë‹¹ ìŠ¤í‚¬ ìŠ¬ë¡¯ ì°¾ê¸°
+        CampSkillSlot slot = FindSkillSlot(skill);
+
+        if (slot != null)
+        {
+            // í›ˆë ¨ ìŠ¬ë¡¯ì˜ ìœ„ì¹˜ ì°¾ê¸° (ì´ì œ ë ˆì´ì•„ì›ƒ ê³„ì‚°ì´ ëë‚˜ì„œ ì •í™•í•œ ìœ„ì¹˜ê°€ ë‚˜ì˜´)
+            Transform tTransform = slot.GetTrainingSlotTransform(routeIndex);
+
+            // ìŠ¬ë¡¯ì—ê²Œ "ì´ í›ˆë ¨ì´ ì„ íƒë˜ì—ˆë‹¤"ê³  ì•Œë¦¼
+            // ì´ í•¨ìˆ˜ ì•ˆì—ì„œ DeselectAllHighlights()ê°€ í˜¸ì¶œë˜ì–´ ë©”ì¸ ìŠ¤í‚¬ í•˜ì´ë¼ì´íŠ¸ëŠ” êº¼ì§€ê³ ,
+            // í›ˆë ¨ ìŠ¬ë¡¯ í•˜ì´ë¼ì´íŠ¸ê°€ ì¼œì§€ë©°, í™”ì‚´í‘œë„ ì´ë™í•¨.
+            slot.OnTrainingSelected(routeIndex, tTransform);
+        }
+    }
+
+    public void DeselectAllHighlights()
+    {
+        foreach (var s in allSlots)
+        {
+            if (s is CampSkillSlot main)
+            {
+                main.SetSelected(false);       // ìŠ¤í‚¬ ìŠ¬ë¡¯ ë³¸ì²´ ë„ê¸°
+                main.ResetTrainingFocus();     // ìì‹ í›ˆë ¨ ìŠ¬ë¡¯ë“¤ ë„ê¸°
+            }
+            if (s is CampSubSkillSlot sub)
+            {
+                sub.SetSelected(false);        // íŒŒìƒ ìŠ¤í‚¬ ë„ê¸°
+            }
+        }
+    }
+    public void ClearDescription()
+    {
+        UpdateDescriptionUI("", "ìŠ¤í‚¬ì„ ì„ íƒí•˜ì„¸ìš”.");
+        if (selectionArrow)
+        {
+            selectionArrow.gameObject.SetActive(false);
+            currentArrowTarget = null; // íƒ€ê²Ÿ í•´ì œ
+        }
+    }
+
+    // ë¦¬ìŠ¤íŠ¸ ì´ˆê¸°í™” (í’€ë§ ë°˜í™˜)
+    private void ClearList()
+    {
+        foreach (var component in allSlots)
+        {
+            if (component == null) continue;
+
+            if (component is CampSkillSlot skillSlot)
+            {
+                skillSlot.gameObject.SetActive(false);
+                inactiveSkillSlots.Push(skillSlot);
+            }
+            else if (component is CampSubSkillSlot subSlot)
+            {
+                subSlot.gameObject.SetActive(false);
+                inactiveSubSlots.Push(subSlot);
+            }
+            else
+            {
+                // í˜¹ì‹œ ëª¨ë¥¼ ë‹¤ë¥¸ íƒ€ì…ì€ ê·¸ëƒ¥ íŒŒê´´
+                Destroy(component.gameObject);
+            }
+        }
+            allSlots.Clear();
+        currentSelectedSlot = null;
+    }
 }

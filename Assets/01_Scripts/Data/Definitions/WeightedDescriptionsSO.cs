@@ -1,76 +1,76 @@
-using UnityEngine;
-using UnityEngine.Events;
-
-[CreateAssetMenu(fileName = "WD_Preset", menuName = "Interaction/WeightedDescriptions Preset")]
-public class WeightedDescriptionsSO : ScriptableObject
-{
-    [System.Serializable]
-    public class Entry
-    {
-        public int weight = 10;
-        [TextArea(1, 3)] public string text;
-        [Tooltip("ÀÌ Ç×¸ñÀÌ ¼±ÅÃµÇ¸é ½ÇÇàÇÒ ÀÌº¥Æ®(¼±ÅÃ»çÇ×)")]
-        public UnityEvent onPicked;
-    }
-
-    [Header("¿£Æ®¸®(°¡ÁßÄ¡/¹®±¸/ÀÌº¥Æ® ¼¼Æ®)")]
-    public Entry[] entries = new Entry[]
-    {
-        new Entry{ weight=40, text="(±âº») 40% ¹®±¸" },
-        new Entry{ weight=30, text="(±âº») 30% ¹®±¸" },
-        new Entry{ weight=20, text="(±âº») 20% ¹®±¸" },
-        new Entry{ weight=10, text="(±âº») 10% ¹®±¸" },
-    };
-
-    [Tooltip("¸ğµç ÅØ½ºÆ®°¡ ºñ¾îÀÖÀ¸¸é Ãâ·Â »ı·«")]
-    public bool skipIfAllEmpty = true;
-
-    public Entry PickEntry()
-    {
-        if (entries == null || entries.Length == 0) return null;
-
-        bool anyText = false;
-        int total = 0;
-        foreach (var e in entries)
-        {
-            if (e == null) continue;
-            if (!string.IsNullOrWhiteSpace(e.text)) anyText = true;
-            if (e.weight > 0 && (!string.IsNullOrWhiteSpace(e.text) || e.onPicked != null))
-                total += e.weight;
-        }
-        if (total <= 0) return null;
-        if (skipIfAllEmpty && !anyText)
-            return null;
-
-        int roll = Random.Range(0, total);
-        int acc = 0;
-        foreach (var e in entries)
-        {
-            if (e == null) continue;
-            if (e.weight <= 0) continue;
-            if (string.IsNullOrWhiteSpace(e.text) && e.onPicked == null) continue;
-
-            acc += e.weight;
-            if (roll < acc) return e;
-        }
-        return null;
-    }
-
-    /// <summary>»Ì°í, ÅØ½ºÆ®¿Í ÀÌº¥Æ®¸¦ ÇÑ ¹ø¿¡ Ã³¸®ÇÏ°í ½ÍÀ» ¶§.</summary>
-    public string PickAndInvoke()
-    {
-        var e = PickEntry();
-        if (e == null) return null;
-        e.onPicked?.Invoke();
-        return e.text;
-    }
-
-    public int PickIndex()
-    {
-        var e = PickEntry();
-        if (e == null) return -1;
-        for (int i = 0; i < entries.Length; i++)
-            if (entries[i] == e) return i;
-        return -1;
-    }
-}
+using UnityEngine;
+using UnityEngine.Events;
+
+[CreateAssetMenu(fileName = "WD_Preset", menuName = "Interaction/WeightedDescriptions Preset")]
+public class WeightedDescriptionsSO : ScriptableObject
+{
+    [System.Serializable]
+    public class Entry
+    {
+        public int weight = 10;
+        [TextArea(1, 3)] public string text;
+        [Tooltip("ì´ í•­ëª©ì´ ì„ íƒë˜ë©´ ì‹¤í–‰í•  ì´ë²¤íŠ¸(ì„ íƒì‚¬í•­)")]
+        public UnityEvent onPicked;
+    }
+
+    [Header("ì—”íŠ¸ë¦¬(ê°€ì¤‘ì¹˜/ë¬¸êµ¬/ì´ë²¤íŠ¸ ì„¸íŠ¸)")]
+    public Entry[] entries = new Entry[]
+    {
+        new Entry{ weight=40, text="(ê¸°ë³¸) 40% ë¬¸êµ¬" },
+        new Entry{ weight=30, text="(ê¸°ë³¸) 30% ë¬¸êµ¬" },
+        new Entry{ weight=20, text="(ê¸°ë³¸) 20% ë¬¸êµ¬" },
+        new Entry{ weight=10, text="(ê¸°ë³¸) 10% ë¬¸êµ¬" },
+    };
+
+    [Tooltip("ëª¨ë“  í…ìŠ¤íŠ¸ê°€ ë¹„ì–´ìˆìœ¼ë©´ ì¶œë ¥ ìƒëµ")]
+    public bool skipIfAllEmpty = true;
+
+    public Entry PickEntry()
+    {
+        if (entries == null || entries.Length == 0) return null;
+
+        bool anyText = false;
+        int total = 0;
+        foreach (var e in entries)
+        {
+            if (e == null) continue;
+            if (!string.IsNullOrWhiteSpace(e.text)) anyText = true;
+            if (e.weight > 0 && (!string.IsNullOrWhiteSpace(e.text) || e.onPicked != null))
+                total += e.weight;
+        }
+        if (total <= 0) return null;
+        if (skipIfAllEmpty && !anyText)
+            return null;
+
+        int roll = Random.Range(0, total);
+        int acc = 0;
+        foreach (var e in entries)
+        {
+            if (e == null) continue;
+            if (e.weight <= 0) continue;
+            if (string.IsNullOrWhiteSpace(e.text) && e.onPicked == null) continue;
+
+            acc += e.weight;
+            if (roll < acc) return e;
+        }
+        return null;
+    }
+
+    /// <summary>ë½‘ê³ , í…ìŠ¤íŠ¸ì™€ ì´ë²¤íŠ¸ë¥¼ í•œ ë²ˆì— ì²˜ë¦¬í•˜ê³  ì‹¶ì„ ë•Œ.</summary>
+    public string PickAndInvoke()
+    {
+        var e = PickEntry();
+        if (e == null) return null;
+        e.onPicked?.Invoke();
+        return e.text;
+    }
+
+    public int PickIndex()
+    {
+        var e = PickEntry();
+        if (e == null) return -1;
+        for (int i = 0; i < entries.Length; i++)
+            if (entries[i] == e) return i;
+        return -1;
+    }
+}

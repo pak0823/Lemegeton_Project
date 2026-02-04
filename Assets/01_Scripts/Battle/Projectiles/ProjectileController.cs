@@ -1,70 +1,70 @@
-using System;
-using System.Collections;
-using UnityEngine;
-
-public class ProjectileController : MonoBehaviour
-{
-    [SerializeField] float travelTime = 0.35f;
-    [SerializeField] float arcHeight = 0.3f;
-    [SerializeField] GameObject usePrefab;
-    [SerializeField] float prefabDuration = 0.25f;
-
-    private Vector3 start;
-    private Vector3 target;
-    private Action onArrive; // µµÂø ÈÄ(Æø¹ß Á÷ÈÄ) ÄÝ¹é
-
-    public void Init(Vector3 startWorld, Vector3 targetWorld, Action onArriveCallback,
-                     float? overrideTravelTime = null, float? speedUnitsPerSec = null, float? overrideArc = null)
-    {
-        start = startWorld;
-        target = targetWorld;
-        onArrive = onArriveCallback;
-
-        float dist = Vector3.Distance(start, target);
-        if (speedUnitsPerSec.HasValue)
-            travelTime = dist / Mathf.Max(0.01f, speedUnitsPerSec.Value); // ÀÏÁ¤ ¼Óµµ À¯Áö
-        if (overrideTravelTime.HasValue)
-            travelTime = Mathf.Max(0.01f, overrideTravelTime.Value);      // ½Ã°£ Á÷Á¢ ÁöÁ¤
-        if (overrideArc.HasValue)
-            arcHeight = overrideArc.Value;                                 // ÇÊ¿ä ½Ã Æ÷¹°¼± ³ôÀÌµµ ¿À¹ö¶óÀÌµå
-
-        StartCoroutine(Co_Fly());
-    }
-
-    IEnumerator Co_Fly()
-    {
-        float t = 0f;
-        Vector3 lastPos = transform.position; // ÀÌÀü ÇÁ·¹ÀÓ À§Ä¡ ÀúÀå¿ë
-
-        while (t < 1f)
-        {
-            t += Time.deltaTime / Mathf.Max(0.01f, travelTime);
-            var p = Vector3.Lerp(start, target, t);
-
-            // Æ÷¹°¼± Àû¿ë
-            p.y += Mathf.Sin(t * Mathf.PI) * arcHeight;
-
-            // È¸Àü Ã³¸®: ÀÌµ¿ ¹æÇâÀ» ¹Ù¶óº¸°Ô ÇÔ
-            Vector3 dir = p - lastPos;
-            if (dir != Vector3.zero)
-            {
-                float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
-                transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
-            }
-            lastPos = p; // À§Ä¡ °»½Å
-
-            transform.position = p;
-            yield return null;
-        }
-
-        // Æø¹ß
-        if (usePrefab != null)
-        {
-            var fx = Instantiate(usePrefab, target, Quaternion.identity);
-            Destroy(fx, prefabDuration);
-        }
-
-        onArrive?.Invoke(); // ¿©±â¼­ ¹üÀ§ÇÇÇØ Àû¿ë µîÀ» È£ÃâÇÏµµ·Ï ÇÔ
-        Destroy(gameObject); // Åõ»çÃ¼´Â ½º½º·Î ¼Ò¸ê
-    }
-}
+using System;
+using System.Collections;
+using UnityEngine;
+
+public class ProjectileController : MonoBehaviour
+{
+    [SerializeField] float travelTime = 0.35f;
+    [SerializeField] float arcHeight = 0.3f;
+    [SerializeField] GameObject usePrefab;
+    [SerializeField] float prefabDuration = 0.25f;
+
+    private Vector3 start;
+    private Vector3 target;
+    private Action onArrive; // ë„ì°© í›„(í­ë°œ ì§í›„) ì½œë°±
+
+    public void Init(Vector3 startWorld, Vector3 targetWorld, Action onArriveCallback,
+                     float? overrideTravelTime = null, float? speedUnitsPerSec = null, float? overrideArc = null)
+    {
+        start = startWorld;
+        target = targetWorld;
+        onArrive = onArriveCallback;
+
+        float dist = Vector3.Distance(start, target);
+        if (speedUnitsPerSec.HasValue)
+            travelTime = dist / Mathf.Max(0.01f, speedUnitsPerSec.Value); // ì¼ì • ì†ë„ ìœ ì§€
+        if (overrideTravelTime.HasValue)
+            travelTime = Mathf.Max(0.01f, overrideTravelTime.Value);      // ì‹œê°„ ì§ì ‘ ì§€ì •
+        if (overrideArc.HasValue)
+            arcHeight = overrideArc.Value;                                 // í•„ìš” ì‹œ í¬ë¬¼ì„  ë†’ì´ë„ ì˜¤ë²„ë¼ì´ë“œ
+
+        StartCoroutine(Co_Fly());
+    }
+
+    IEnumerator Co_Fly()
+    {
+        float t = 0f;
+        Vector3 lastPos = transform.position; // ì´ì „ í”„ë ˆìž„ ìœ„ì¹˜ ì €ìž¥ìš©
+
+        while (t < 1f)
+        {
+            t += Time.deltaTime / Mathf.Max(0.01f, travelTime);
+            var p = Vector3.Lerp(start, target, t);
+
+            // í¬ë¬¼ì„  ì ìš©
+            p.y += Mathf.Sin(t * Mathf.PI) * arcHeight;
+
+            // íšŒì „ ì²˜ë¦¬: ì´ë™ ë°©í–¥ì„ ë°”ë¼ë³´ê²Œ í•¨
+            Vector3 dir = p - lastPos;
+            if (dir != Vector3.zero)
+            {
+                float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
+                transform.rotation = Quaternion.AngleAxis(angle, Vector3.forward);
+            }
+            lastPos = p; // ìœ„ì¹˜ ê°±ì‹ 
+
+            transform.position = p;
+            yield return null;
+        }
+
+        // í­ë°œ
+        if (usePrefab != null)
+        {
+            var fx = Instantiate(usePrefab, target, Quaternion.identity);
+            Destroy(fx, prefabDuration);
+        }
+
+        onArrive?.Invoke(); // ì—¬ê¸°ì„œ ë²”ìœ„í”¼í•´ ì ìš© ë“±ì„ í˜¸ì¶œí•˜ë„ë¡ í•¨
+        Destroy(gameObject); // íˆ¬ì‚¬ì²´ëŠ” ìŠ¤ìŠ¤ë¡œ ì†Œë©¸
+    }
+}

@@ -1,388 +1,388 @@
-using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
-public class SkillPanelUI : MonoBehaviour
-{
-    [Header("Refs")]
-    public BattleManager battleManager;        // ÀÎ½ºÆåÅÍ·Î ÇÒ´ç
-    public GameObject panel;            // SkillPanel ¿ÀºêÁ§Æ®
-    public Button[] buttons;            // 4~5°³
-    [SerializeField] private Text descriptionText;   // ½ºÅ³ ¼³¸í Ç¥½Ã
-    [SerializeField] private Image rangeImage;     // ¹üÀ§(¾ÆÀÌÄÜ ÀçÈ°¿ë)
-    [SerializeField] private Text selectTargetHintText; //Çàµ¿ ÅØ½ºÆ® ui
-
-    private SkillAsset[] cachedAssets;  // ¸¶Áö¸·À¸·Î Ã¤¿î SO ¸ñ·Ï Ä³½Ã
-    private bool[] cachedUsable;
-
-    // Àû ¶óº§ÀÌ Ç¥±â ÁßÀÎÁö(ÆĞ³Î Åä±Û°ú ¹«°üÇÏ°Ô À¯Áö)
-    private bool _pinnedEnemyLabel = false;
-
-    void Awake()
-    {
-        if (!battleManager)
-            battleManager =FindAnyObjectByType<BattleManager>();
-
-        // ÀÌº¥Æ® ±¸µ¶
-        if (battleManager != null)
-        {
-            battleManager.OnSkillPanelToggled += HandleToggle;
-            battleManager.OnSkillPanelPopulateSO += HandlePopulateSO;
-            battleManager.OnHint += HandleHint;
-            battleManager.OnUnitActionLabel += HandleUnitActionLabel;
-            battleManager.OnUnitEndTurn += HandleAnyUnitEndTurn_ClearLabel;
-            battleManager.OnWaveStarted += HandleWaveStarted_ClearLabel;
-            battleManager.OnUnitPassiveLabel += HandleUnitPassiveLabel;
-            battleManager.OnUnitTurnLabel += HandleUnitTurnLabel;
-        }
-
-        if (panel != null) panel.SetActive(false); // ±âº» ºñÈ°¼º
-        WireTempButtons(); // ÃÊ±â onClick Á¤¸®
-    }
-
-    void OnDestroy()
-    {
-        if (battleManager != null)
-        {
-            battleManager.OnSkillPanelToggled -= HandleToggle;
-            battleManager.OnSkillPanelPopulateSO -= HandlePopulateSO;
-            battleManager.OnHint -= HandleHint;
-            battleManager.OnUnitActionLabel -= HandleUnitActionLabel;
-            battleManager.OnUnitEndTurn -= HandleAnyUnitEndTurn_ClearLabel;
-            battleManager.OnWaveStarted -= HandleWaveStarted_ClearLabel;
-            battleManager.OnUnitPassiveLabel -= HandleUnitPassiveLabel;
-            battleManager.OnUnitTurnLabel -= HandleUnitTurnLabel;
-        }
-    }
-
-    void LateUpdate()
-    {
-        if (panel == null || !panel.activeInHierarchy) return;
-        if (buttons == null || cachedUsable == null) return;
-
-        int len = Mathf.Min(buttons.Length, cachedUsable.Length);
-        for (int i = 0; i < len; i++)
-        {
-            var b = buttons[i];
-            if (b == null) continue;
-            if (!b.gameObject.activeInHierarchy) continue;
-
-            bool should = cachedUsable[i];
-
-            // ´Ù¸¥ ¾îµğ¼­ ¹Ù²ãµµ ¿©±â¼­ µÇµ¹¸°´Ù
-            if (b.interactable != should)
-                b.interactable = should;
-        }
-    }
-
-    void HandleToggle(bool show)
-    {
-        if (panel != null) panel.SetActive(show);
-
-        // ÆĞ³ÎÀÌ ´İÇôµµ, Àû Çàµ¿ ¶óº§ÀÌ °íÁ¤ÁßÀÌ¸é ÈùÆ® ÅØ½ºÆ®¸¦ Áö¿ìÁö ¾ÊÀ½
-        if (!show && selectTargetHintText && !_pinnedEnemyLabel)
-        {
-            selectTargetHintText.text = string.Empty;
-            selectTargetHintText.gameObject.SetActive(false);
-        }
-    }
-
-    void HandlePopulateSO(SkillAsset[] assets)
-    {
-        if (buttons == null) return;
-        cachedAssets = assets; // Ä³½Ã
-        int n = Mathf.Min(assets?.Length ?? 0, buttons.Length);
-        int last = buttons.Length - 1;
-        if (cachedUsable == null || cachedUsable.Length != buttons.Length)
-            cachedUsable = new bool[buttons.Length];
-
-        for (int i = 0; i < buttons.Length; i++)
-        {
-            Button button = buttons[i];
-            if (button == null) continue;
-
-            // --- ¸¶Áö¸· ¹öÆ°Àº Ç×»ó Cancel·Î ±¸¼º ---
-            if (i == last)
-            {
-                button.gameObject.SetActive(true);
-                button.interactable = true;
-                if (cachedUsable != null && i < cachedUsable.Length)
-                    cachedUsable[i] = true;
-                // Å¬¸¯ ¡æ Ãë¼Ò ÀÌº¥Æ® ¹ß»ı (ÀÎ½ºÆåÅÍ¿¡¼­ ¹èÆ² Ãë¼Ò ÇÔ¼ö ¿¬°á)
-                button.onClick.RemoveAllListeners();
-                button.onClick.AddListener(() =>
-                {
-                    // »ó¼¼¸¦ ºñ¿ì°í ÆĞ³Î »óÅÂ´Â À¯Áö/´İ±â´Â ¹èÆ² ·ÎÁ÷¿¡ ¸Ã±è
-                    UpdateDetail(null, forceClear: true, showCancelDesc: true);
-                });
-
-                // È£¹ö/¼±ÅÃ ½Ã »ó¼¼¸¦ ºñ¿ì±â
-                var et = button.GetComponent<EventTrigger>() ?? button.gameObject.AddComponent<EventTrigger>();
-                ClearTriggers(et);
-                AddTrigger(et, EventTriggerType.PointerEnter, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
-                AddTrigger(et, EventTriggerType.Select, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
-                continue;
-            }
-
-            // --- ½ºÅ³ ¹öÆ° ±¸¼º ---
-            if (i < n)
-            {
-                button.gameObject.SetActive(true);
-                SkillAsset asset = assets[i];
-
-                Text txt = button.GetComponentInChildren<Text>();
-                if (txt != null)
-                {
-                    string label = (asset != null ? asset.displayName : "(empty)");
-
-                    // ³²Àº cooldown Ç¥½Ã
-                    int cooldown = 0;
-                    BattleUnit actor = battleManager != null ? battleManager.GetType().GetField("acting", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(battleManager) as BattleUnit : null;
-                    if (actor != null && asset != null) 
-                        cooldown = actor.GetCooldownRemaining(asset);
-
-                    txt.text = (cooldown > 0) ? $"{label} (CD:{cooldown})" : label;
-                }
-
-                // Äğ´Ù¿î ½ºÅ³ ¹öÆ° Àá±İ
-                bool usable = (battleManager != null && battleManager.IsPlayerTurn && battleManager.currentSkillSO == null);
-                if (usable && asset != null)
-                {
-                    BattleUnit actor = BattleManager.Instance != null ? BattleManager.Instance.GetType()
-                        .GetField("acting", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                        ?.GetValue(BattleManager.Instance) as BattleUnit : null;
-
-                    if (actor != null)
-                    {
-                        // ÈÆ·Ã/»óÅÂ°¡ ¹İ¿µµÈ ½ÇÁ¦ MP ¼Ò¸ğ°ª »ç¿ë
-                        var res = asset.GetCostResource(actor);
-                        int effectiveCost = asset.GetEffectiveCost(actor);
-                        usable = !actor.IsSkillOnCooldown(asset) && actor.HasResource(res, effectiveCost);
-                    }
-                }
-
-                button.interactable = usable;
-                cachedUsable[i] = usable;
-
-                button.onClick.RemoveAllListeners();
-                int capture = i;
-                button.onClick.AddListener(() =>
-                {
-                    //Debug.Log($"[SkillButton] click index={capture}, asset={asset?.name}");
-
-
-                    // ÇÏÀÌ¶óÀÌÆ®¸¦ ¸ÕÀú ÇöÀç ¹öÆ°À¸·Î °íÁ¤
-                    UIArrowNavigator navigator = (panel != null ? panel.GetComponent<UIArrowNavigator>() : null)
-                                ?? GetComponentInChildren<UIArrowNavigator>(true);
-                    navigator?.RebuildAndRefocus(); // ºñÈ°¼º ¹öÆ° °Ç³Ê¶Ùµµ·Ï °»½Å
-
-                    if (navigator != null) navigator.SelectIndexImmediate(capture, focus: false, updateHighlight: true);
-
-                    // EventSystem¿¡µµ ¼±ÅÃÀ¸·Î ¾Ë·ÁÁÖ°í ½Í´Ù¸é
-                    if (EventSystem.current != null)
-                        EventSystem.current.SetSelectedGameObject(button.gameObject);
-
-                    // »ó¼¼ ÆĞ³Î Áï½Ã °»½Å
-                    UpdateDetail(asset);
-
-                    // ±âÁ¸ ¹èÆ² È£Ãâ(ÀÌ ½ÃÁ¡¿¡¼­ Targeting ÁøÀÔ ¡æ Àá±İÀÌ °É·Áµµ OK)
-                    battleManager.SelectSkill(capture);
-                });
-
-                // È£¹ö/¼±ÅÃ ½Ã¿¡µµ »ó¼¼ °»½Å (¸¶¿ì½º/ÆĞµå ¸ğµÎ Ä¿¹ö)
-                EventTrigger eventTrigger = button.GetComponent<EventTrigger>();
-                if (eventTrigger == null) eventTrigger = button.gameObject.AddComponent<EventTrigger>();
-                AddTrigger(eventTrigger, EventTriggerType.PointerEnter, () => UpdateDetail(asset));
-                AddTrigger(eventTrigger, EventTriggerType.Select, () => UpdateDetail(asset));
-            }
-            else
-            {
-                button.gameObject.SetActive(false);
-                if (cachedUsable != null && i < cachedUsable.Length)
-                    cachedUsable[i] = false;
-            }
-        }
-
-        // Ã¹ Ç×¸ñÀ¸·Î »ó¼¼ ÃÊ±âÈ­
-        if (n > 0 && assets[0] != null) UpdateDetail(assets[0]);
-        else UpdateDetail(null);
-
-        var navigator = (panel != null ? panel.GetComponent<UIArrowNavigator>()
-                               : GetComponentInChildren<UIArrowNavigator>(true));
-        navigator?.RebuildAndRefocus();
-    }
-
-    // ÃÊ±â¿¡ ºÒÇÊ¿äÇÑ ¸®½º³Ê »èÁ¦
-    void WireTempButtons()
-    {
-        if (buttons == null) return;
-        foreach (var b in buttons)
-            if (b != null) b.onClick.RemoveAllListeners();
-    }
-
-    // === »ó¼¼ °»½Å ===
-    void UpdateDetail(SkillAsset _skillasset, bool forceClear = false, bool showCancelDesc = false)
-    {
-        // Å¸°ÙÆÃ Áß¿¡´Â ¼³¸íÀ» ¹Ù²ÙÁö ¾Ê´Â´Ù. ´Ü, forceClear(true)ÀÎ °æ¿ì¸¸ ¿¹¿ÜÀûÀ¸·Î Çã¿ë
-        if (battleManager != null && battleManager.IsTargeting)
-            return;
-
-        // Cancel Àü¿ë ¼³¸í
-        if (showCancelDesc)
-        {
-            if (descriptionText) descriptionText.text = "¼±ÅÃÀ» Ãë¼ÒÇÕ´Ï´Ù.";
-            if (rangeImage)
-            {
-                rangeImage.sprite = null;
-                rangeImage.enabled = false;
-            }
-            return;
-        }
-
-        // Cancel ¹öÆ° È¤Àº forceClear=true ¸é Ç×»ó ºñ¿ì±â
-        bool clear = forceClear || _skillasset == null;
-
-        if (descriptionText)
-        {
-            if (_skillasset == null)
-            {
-                descriptionText.text = "";
-            }
-            else
-            {
-                BattleUnit actor = null;
-
-                if (battleManager != null)
-                {
-                    actor = battleManager.ActingUnit;
-                }
-
-                if (actor != null)
-                    descriptionText.text = _skillasset.GetFullDescriptionRich(actor);
-            }
-        }
-
-        if (rangeImage)
-        {
-            // rangeSprite¸¦ µû·Î µÑ °èÈ¹ÀÌ¸é: a.rangeSprite ?? a.descriptionImage
-            rangeImage.sprite = _skillasset != null ? _skillasset.descriptionImage : null;
-            rangeImage.enabled = (rangeImage.sprite != null);
-        }
-        else
-        {
-            rangeImage.sprite = _skillasset.descriptionImage;
-            rangeImage.enabled = true;
-        }
-    }
-
-    // === EventTrigger À¯Æ¿ ===
-    void AddTrigger(EventTrigger _eventtrigger, EventTriggerType type, System.Action _callback)
-    {
-        var entry = new EventTrigger.Entry { eventID = type };
-        entry.callback.AddListener(_ => _callback?.Invoke());
-        _eventtrigger.triggers.RemoveAll(e => e.eventID == type && e.callback == null); // Ã»¼Ò(¿É¼Ç)
-        _eventtrigger.triggers.Add(entry);
-    }
-    void ClearTriggers(EventTrigger _eventtrigger)
-    {
-        if (_eventtrigger == null) return;
-        _eventtrigger.triggers.Clear();
-    }
-
-    void HandleHint(string msg)
-    {
-        if (!selectTargetHintText) return;
-
-        bool show = !string.IsNullOrEmpty(msg);
-        if (show)
-            _pinnedEnemyLabel = false;
-
-        selectTargetHintText.text = show ? msg : string.Empty;
-        selectTargetHintText.gameObject.SetActive(show);
-    }
-    void HandleUnitActionLabel(BattleUnit unit, string label)
-    {
-        if (!selectTargetHintText) return;
-
-        // ºó ¶óº§ÀÌ¸é °íÁ¤ ÇØÁ¦ & ¼û±è
-        if (string.IsNullOrEmpty(label))
-        {
-            _pinnedEnemyLabel = false;
-            selectTargetHintText.text = string.Empty;
-            selectTargetHintText.gameObject.SetActive(false);
-            return;
-        }
-
-        // À¯´Ö Ç¥½Ã ÀÌ¸§(¾øÀ¸¸é GameObject ÀÌ¸§ fallback)
-        string unitName = unit != null && !string.IsNullOrEmpty(unit.name) ? unit.name : "À¯´Ö";
-
-        // º¸±â ÁÁ°Ô »ö¸¸ »ìÂ¦(¿øÇÏ¸é Á¦°Å °¡´É)
-        selectTargetHintText.text = $"<color=#FF5555>{unitName}</color> ÀÇ {label}";
-        selectTargetHintText.gameObject.SetActive(true);
-
-        // ÆĞ³Î ¿­¸²/´İÈû°ú ¹«°üÇÏ°Ô À¯Áö
-        _pinnedEnemyLabel = true;
-    }
-    void HandleUnitPassiveLabel(BattleUnit unit, string label)
-    {
-        if (!selectTargetHintText) return;
-
-        if (string.IsNullOrEmpty(label))
-        {
-            // ÆĞ½Ãºê ¶óº§ Å¬¸®¾î
-            _pinnedEnemyLabel = false;
-            selectTargetHintText.text = string.Empty;
-            selectTargetHintText.gameObject.SetActive(false);
-            return;
-        }
-
-        string unitName = unit != null && !string.IsNullOrEmpty(unit.name) ? unit.name : "À¯´Ö";
-        // ÆĞ½Ãºê´Â »ö»ó¸¸ ´Ù¸£°Ô(¿¹: ³ë¶û)
-        selectTargetHintText.text = $"<color=#F2C94C>{unitName}</color> ÀÇ <b>{label}</b>";
-        selectTargetHintText.gameObject.SetActive(true);
-
-        _pinnedEnemyLabel = true; // ÆĞ½Ãºê Ç¥½Ã Áß¿¡´Â ÈùÆ®/ÆĞ³Î Åä±Û¿¡ ¿µÇâ¹ŞÁö ¾Ê°Ô °íÁ¤
-    }
-    void HandleAnyUnitEndTurn_ClearLabel(BattleUnit u)
-    {
-        // Àû/¾Æ±º °ü°è¾øÀÌ, UI ¶óº§Àº ÀÌ Å¸ÀÌ¹Ö¿¡ Á¤¸®
-        _pinnedEnemyLabel = false;
-        if (selectTargetHintText)
-        {
-            selectTargetHintText.text = string.Empty;
-            selectTargetHintText.gameObject.SetActive(false);
-        }
-    }
-    void HandleWaveStarted_ClearLabel()
-    {
-        _pinnedEnemyLabel = false;
-        if (selectTargetHintText)
-        {
-            selectTargetHintText.text = string.Empty;
-            selectTargetHintText.gameObject.SetActive(false);
-        }
-    }
-    void HandleUnitTurnLabel(BattleUnit unit)
-    {
-        if (!selectTargetHintText) return;
-
-        if (unit == null)
-        {
-            // È¤½Ã null·Î Å¬¸®¾î ½ÅÈ£¸¦ º¸³¾ ÀÏÀÌ »ı±â¸é ¿©±â¼­µµ Ã³¸® °¡´É
-            _pinnedEnemyLabel = false;
-            selectTargetHintText.text = string.Empty;
-            selectTargetHintText.gameObject.SetActive(false);
-            return;
-        }
-
-        string unitName = !string.IsNullOrEmpty(unit.name) ? unit.name : "À¯´Ö";
-
-        // ÅÏ ½ÃÀÛ ¹è³Ê ÅØ½ºÆ®
-        selectTargetHintText.text = $"<color=#FFFFFF>{unitName}</color> ÀÇ ÅÏ";
-
-        selectTargetHintText.gameObject.SetActive(true);
-
-        // ÀÌ ¶óº§µµ "°íÁ¤ ¶óº§" Ãë±ŞÇØ¼­, ÆĞ³Î on/off¿Í ¹«°üÇÏ°Ô À¯Áö
-        // (ÅÏÀÌ ³¡³ª¸é HandleAnyUnitEndTurn_ClearLabel¿¡¼­ Áö¿öÁü)
-        _pinnedEnemyLabel = true;
-    }
-}
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+public class SkillPanelUI : MonoBehaviour
+{
+    [Header("Refs")]
+    public BattleManager battleManager;        // ì¸ìŠ¤í™í„°ë¡œ í• ë‹¹
+    public GameObject panel;            // SkillPanel ì˜¤ë¸Œì íŠ¸
+    public Button[] buttons;            // 4~5ê°œ
+    [SerializeField] private Text descriptionText;   // ìŠ¤í‚¬ ì„¤ëª… í‘œì‹œ
+    [SerializeField] private Image rangeImage;     // ë²”ìœ„(ì•„ì´ì½˜ ì¬í™œìš©)
+    [SerializeField] private Text selectTargetHintText; //í–‰ë™ í…ìŠ¤íŠ¸ ui
+
+    private SkillAsset[] cachedAssets;  // ë§ˆì§€ë§‰ìœ¼ë¡œ ì±„ìš´ SO ëª©ë¡ ìºì‹œ
+    private bool[] cachedUsable;
+
+    // ì  ë¼ë²¨ì´ í‘œê¸° ì¤‘ì¸ì§€(íŒ¨ë„ í† ê¸€ê³¼ ë¬´ê´€í•˜ê²Œ ìœ ì§€)
+    private bool _pinnedEnemyLabel = false;
+
+    void Awake()
+    {
+        if (!battleManager)
+            battleManager =FindAnyObjectByType<BattleManager>();
+
+        // ì´ë²¤íŠ¸ êµ¬ë…
+        if (battleManager != null)
+        {
+            battleManager.OnSkillPanelToggled += HandleToggle;
+            battleManager.OnSkillPanelPopulateSO += HandlePopulateSO;
+            battleManager.OnHint += HandleHint;
+            battleManager.OnUnitActionLabel += HandleUnitActionLabel;
+            battleManager.OnUnitEndTurn += HandleAnyUnitEndTurn_ClearLabel;
+            battleManager.OnWaveStarted += HandleWaveStarted_ClearLabel;
+            battleManager.OnUnitPassiveLabel += HandleUnitPassiveLabel;
+            battleManager.OnUnitTurnLabel += HandleUnitTurnLabel;
+        }
+
+        if (panel != null) panel.SetActive(false); // ê¸°ë³¸ ë¹„í™œì„±
+        WireTempButtons(); // ì´ˆê¸° onClick ì •ë¦¬
+    }
+
+    void OnDestroy()
+    {
+        if (battleManager != null)
+        {
+            battleManager.OnSkillPanelToggled -= HandleToggle;
+            battleManager.OnSkillPanelPopulateSO -= HandlePopulateSO;
+            battleManager.OnHint -= HandleHint;
+            battleManager.OnUnitActionLabel -= HandleUnitActionLabel;
+            battleManager.OnUnitEndTurn -= HandleAnyUnitEndTurn_ClearLabel;
+            battleManager.OnWaveStarted -= HandleWaveStarted_ClearLabel;
+            battleManager.OnUnitPassiveLabel -= HandleUnitPassiveLabel;
+            battleManager.OnUnitTurnLabel -= HandleUnitTurnLabel;
+        }
+    }
+
+    void LateUpdate()
+    {
+        if (panel == null || !panel.activeInHierarchy) return;
+        if (buttons == null || cachedUsable == null) return;
+
+        int len = Mathf.Min(buttons.Length, cachedUsable.Length);
+        for (int i = 0; i < len; i++)
+        {
+            var b = buttons[i];
+            if (b == null) continue;
+            if (!b.gameObject.activeInHierarchy) continue;
+
+            bool should = cachedUsable[i];
+
+            // ë‹¤ë¥¸ ì–´ë””ì„œ ë°”ê¿”ë„ ì—¬ê¸°ì„œ ë˜ëŒë¦°ë‹¤
+            if (b.interactable != should)
+                b.interactable = should;
+        }
+    }
+
+    void HandleToggle(bool show)
+    {
+        if (panel != null) panel.SetActive(show);
+
+        // íŒ¨ë„ì´ ë‹«í˜€ë„, ì  í–‰ë™ ë¼ë²¨ì´ ê³ ì •ì¤‘ì´ë©´ íŒíŠ¸ í…ìŠ¤íŠ¸ë¥¼ ì§€ìš°ì§€ ì•ŠìŒ
+        if (!show && selectTargetHintText && !_pinnedEnemyLabel)
+        {
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+        }
+    }
+
+    void HandlePopulateSO(SkillAsset[] assets)
+    {
+        if (buttons == null) return;
+        cachedAssets = assets; // ìºì‹œ
+        int n = Mathf.Min(assets?.Length ?? 0, buttons.Length);
+        int last = buttons.Length - 1;
+        if (cachedUsable == null || cachedUsable.Length != buttons.Length)
+            cachedUsable = new bool[buttons.Length];
+
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button button = buttons[i];
+            if (button == null) continue;
+
+            // --- ë§ˆì§€ë§‰ ë²„íŠ¼ì€ í•­ìƒ Cancelë¡œ êµ¬ì„± ---
+            if (i == last)
+            {
+                button.gameObject.SetActive(true);
+                button.interactable = true;
+                if (cachedUsable != null && i < cachedUsable.Length)
+                    cachedUsable[i] = true;
+                // í´ë¦­ â†’ ì·¨ì†Œ ì´ë²¤íŠ¸ ë°œìƒ (ì¸ìŠ¤í™í„°ì—ì„œ ë°°í‹€ ì·¨ì†Œ í•¨ìˆ˜ ì—°ê²°)
+                button.onClick.RemoveAllListeners();
+                button.onClick.AddListener(() =>
+                {
+                    // ìƒì„¸ë¥¼ ë¹„ìš°ê³  íŒ¨ë„ ìƒíƒœëŠ” ìœ ì§€/ë‹«ê¸°ëŠ” ë°°í‹€ ë¡œì§ì— ë§¡ê¹€
+                    UpdateDetail(null, forceClear: true, showCancelDesc: true);
+                });
+
+                // í˜¸ë²„/ì„ íƒ ì‹œ ìƒì„¸ë¥¼ ë¹„ìš°ê¸°
+                var et = button.GetComponent<EventTrigger>() ?? button.gameObject.AddComponent<EventTrigger>();
+                ClearTriggers(et);
+                AddTrigger(et, EventTriggerType.PointerEnter, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
+                AddTrigger(et, EventTriggerType.Select, () => UpdateDetail(null, forceClear: true, showCancelDesc: true));
+                continue;
+            }
+
+            // --- ìŠ¤í‚¬ ë²„íŠ¼ êµ¬ì„± ---
+            if (i < n)
+            {
+                button.gameObject.SetActive(true);
+                SkillAsset asset = assets[i];
+
+                Text txt = button.GetComponentInChildren<Text>();
+                if (txt != null)
+                {
+                    string label = (asset != null ? asset.displayName : "(empty)");
+
+                    // ë‚¨ì€ cooldown í‘œì‹œ
+                    int cooldown = 0;
+                    BattleUnit actor = battleManager != null ? battleManager.GetType().GetField("acting", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(battleManager) as BattleUnit : null;
+                    if (actor != null && asset != null) 
+                        cooldown = actor.GetCooldownRemaining(asset);
+
+                    txt.text = (cooldown > 0) ? $"{label} (CD:{cooldown})" : label;
+                }
+
+                // ì¿¨ë‹¤ìš´ ìŠ¤í‚¬ ë²„íŠ¼ ì ê¸ˆ
+                bool usable = (battleManager != null && battleManager.IsPlayerTurn && battleManager.currentSkillSO == null);
+                if (usable && asset != null)
+                {
+                    BattleUnit actor = BattleManager.Instance != null ? BattleManager.Instance.GetType()
+                        .GetField("acting", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                        ?.GetValue(BattleManager.Instance) as BattleUnit : null;
+
+                    if (actor != null)
+                    {
+                        // í›ˆë ¨/ìƒíƒœê°€ ë°˜ì˜ëœ ì‹¤ì œ MP ì†Œëª¨ê°’ ì‚¬ìš©
+                        var res = asset.GetCostResource(actor);
+                        int effectiveCost = asset.GetEffectiveCost(actor);
+                        usable = !actor.IsSkillOnCooldown(asset) && actor.HasResource(res, effectiveCost);
+                    }
+                }
+
+                button.interactable = usable;
+                cachedUsable[i] = usable;
+
+                button.onClick.RemoveAllListeners();
+                int capture = i;
+                button.onClick.AddListener(() =>
+                {
+                    //Debug.Log($"[SkillButton] click index={capture}, asset={asset?.name}");
+
+
+                    // í•˜ì´ë¼ì´íŠ¸ë¥¼ ë¨¼ì € í˜„ì¬ ë²„íŠ¼ìœ¼ë¡œ ê³ ì •
+                    UIArrowNavigator navigator = (panel != null ? panel.GetComponent<UIArrowNavigator>() : null)
+                                ?? GetComponentInChildren<UIArrowNavigator>(true);
+                    navigator?.RebuildAndRefocus(); // ë¹„í™œì„± ë²„íŠ¼ ê±´ë„ˆë›°ë„ë¡ ê°±ì‹ 
+
+                    if (navigator != null) navigator.SelectIndexImmediate(capture, focus: false, updateHighlight: true);
+
+                    // EventSystemì—ë„ ì„ íƒìœ¼ë¡œ ì•Œë ¤ì£¼ê³  ì‹¶ë‹¤ë©´
+                    if (EventSystem.current != null)
+                        EventSystem.current.SetSelectedGameObject(button.gameObject);
+
+                    // ìƒì„¸ íŒ¨ë„ ì¦‰ì‹œ ê°±ì‹ 
+                    UpdateDetail(asset);
+
+                    // ê¸°ì¡´ ë°°í‹€ í˜¸ì¶œ(ì´ ì‹œì ì—ì„œ Targeting ì§„ì… â†’ ì ê¸ˆì´ ê±¸ë ¤ë„ OK)
+                    battleManager.SelectSkill(capture);
+                });
+
+                // í˜¸ë²„/ì„ íƒ ì‹œì—ë„ ìƒì„¸ ê°±ì‹  (ë§ˆìš°ìŠ¤/íŒ¨ë“œ ëª¨ë‘ ì»¤ë²„)
+                EventTrigger eventTrigger = button.GetComponent<EventTrigger>();
+                if (eventTrigger == null) eventTrigger = button.gameObject.AddComponent<EventTrigger>();
+                AddTrigger(eventTrigger, EventTriggerType.PointerEnter, () => UpdateDetail(asset));
+                AddTrigger(eventTrigger, EventTriggerType.Select, () => UpdateDetail(asset));
+            }
+            else
+            {
+                button.gameObject.SetActive(false);
+                if (cachedUsable != null && i < cachedUsable.Length)
+                    cachedUsable[i] = false;
+            }
+        }
+
+        // ì²« í•­ëª©ìœ¼ë¡œ ìƒì„¸ ì´ˆê¸°í™”
+        if (n > 0 && assets[0] != null) UpdateDetail(assets[0]);
+        else UpdateDetail(null);
+
+        var navigator = (panel != null ? panel.GetComponent<UIArrowNavigator>()
+                               : GetComponentInChildren<UIArrowNavigator>(true));
+        navigator?.RebuildAndRefocus();
+    }
+
+    // ì´ˆê¸°ì— ë¶ˆí•„ìš”í•œ ë¦¬ìŠ¤ë„ˆ ì‚­ì œ
+    void WireTempButtons()
+    {
+        if (buttons == null) return;
+        foreach (var b in buttons)
+            if (b != null) b.onClick.RemoveAllListeners();
+    }
+
+    // === ìƒì„¸ ê°±ì‹  ===
+    void UpdateDetail(SkillAsset _skillasset, bool forceClear = false, bool showCancelDesc = false)
+    {
+        // íƒ€ê²ŸíŒ… ì¤‘ì—ëŠ” ì„¤ëª…ì„ ë°”ê¾¸ì§€ ì•ŠëŠ”ë‹¤. ë‹¨, forceClear(true)ì¸ ê²½ìš°ë§Œ ì˜ˆì™¸ì ìœ¼ë¡œ í—ˆìš©
+        if (battleManager != null && battleManager.IsTargeting)
+            return;
+
+        // Cancel ì „ìš© ì„¤ëª…
+        if (showCancelDesc)
+        {
+            if (descriptionText) descriptionText.text = "ì„ íƒì„ ì·¨ì†Œí•©ë‹ˆë‹¤.";
+            if (rangeImage)
+            {
+                rangeImage.sprite = null;
+                rangeImage.enabled = false;
+            }
+            return;
+        }
+
+        // Cancel ë²„íŠ¼ í˜¹ì€ forceClear=true ë©´ í•­ìƒ ë¹„ìš°ê¸°
+        bool clear = forceClear || _skillasset == null;
+
+        if (descriptionText)
+        {
+            if (_skillasset == null)
+            {
+                descriptionText.text = "";
+            }
+            else
+            {
+                BattleUnit actor = null;
+
+                if (battleManager != null)
+                {
+                    actor = battleManager.ActingUnit;
+                }
+
+                if (actor != null)
+                    descriptionText.text = _skillasset.GetFullDescriptionRich(actor);
+            }
+        }
+
+        if (rangeImage)
+        {
+            // rangeSpriteë¥¼ ë”°ë¡œ ë‘˜ ê³„íšì´ë©´: a.rangeSprite ?? a.descriptionImage
+            rangeImage.sprite = _skillasset != null ? _skillasset.descriptionImage : null;
+            rangeImage.enabled = (rangeImage.sprite != null);
+        }
+        else
+        {
+            rangeImage.sprite = _skillasset.descriptionImage;
+            rangeImage.enabled = true;
+        }
+    }
+
+    // === EventTrigger ìœ í‹¸ ===
+    void AddTrigger(EventTrigger _eventtrigger, EventTriggerType type, System.Action _callback)
+    {
+        var entry = new EventTrigger.Entry { eventID = type };
+        entry.callback.AddListener(_ => _callback?.Invoke());
+        _eventtrigger.triggers.RemoveAll(e => e.eventID == type && e.callback == null); // ì²­ì†Œ(ì˜µì…˜)
+        _eventtrigger.triggers.Add(entry);
+    }
+    void ClearTriggers(EventTrigger _eventtrigger)
+    {
+        if (_eventtrigger == null) return;
+        _eventtrigger.triggers.Clear();
+    }
+
+    void HandleHint(string msg)
+    {
+        if (!selectTargetHintText) return;
+
+        bool show = !string.IsNullOrEmpty(msg);
+        if (show)
+            _pinnedEnemyLabel = false;
+
+        selectTargetHintText.text = show ? msg : string.Empty;
+        selectTargetHintText.gameObject.SetActive(show);
+    }
+    void HandleUnitActionLabel(BattleUnit unit, string label)
+    {
+        if (!selectTargetHintText) return;
+
+        // ë¹ˆ ë¼ë²¨ì´ë©´ ê³ ì • í•´ì œ & ìˆ¨ê¹€
+        if (string.IsNullOrEmpty(label))
+        {
+            _pinnedEnemyLabel = false;
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+            return;
+        }
+
+        // ìœ ë‹› í‘œì‹œ ì´ë¦„(ì—†ìœ¼ë©´ GameObject ì´ë¦„ fallback)
+        string unitName = unit != null && !string.IsNullOrEmpty(unit.name) ? unit.name : "ìœ ë‹›";
+
+        // ë³´ê¸° ì¢‹ê²Œ ìƒ‰ë§Œ ì‚´ì§(ì›í•˜ë©´ ì œê±° ê°€ëŠ¥)
+        selectTargetHintText.text = $"<color=#FF5555>{unitName}</color> ì˜ {label}";
+        selectTargetHintText.gameObject.SetActive(true);
+
+        // íŒ¨ë„ ì—´ë¦¼/ë‹«í˜ê³¼ ë¬´ê´€í•˜ê²Œ ìœ ì§€
+        _pinnedEnemyLabel = true;
+    }
+    void HandleUnitPassiveLabel(BattleUnit unit, string label)
+    {
+        if (!selectTargetHintText) return;
+
+        if (string.IsNullOrEmpty(label))
+        {
+            // íŒ¨ì‹œë¸Œ ë¼ë²¨ í´ë¦¬ì–´
+            _pinnedEnemyLabel = false;
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+            return;
+        }
+
+        string unitName = unit != null && !string.IsNullOrEmpty(unit.name) ? unit.name : "ìœ ë‹›";
+        // íŒ¨ì‹œë¸ŒëŠ” ìƒ‰ìƒë§Œ ë‹¤ë¥´ê²Œ(ì˜ˆ: ë…¸ë‘)
+        selectTargetHintText.text = $"<color=#F2C94C>{unitName}</color> ì˜ <b>{label}</b>";
+        selectTargetHintText.gameObject.SetActive(true);
+
+        _pinnedEnemyLabel = true; // íŒ¨ì‹œë¸Œ í‘œì‹œ ì¤‘ì—ëŠ” íŒíŠ¸/íŒ¨ë„ í† ê¸€ì— ì˜í–¥ë°›ì§€ ì•Šê²Œ ê³ ì •
+    }
+    void HandleAnyUnitEndTurn_ClearLabel(BattleUnit u)
+    {
+        // ì /ì•„êµ° ê´€ê³„ì—†ì´, UI ë¼ë²¨ì€ ì´ íƒ€ì´ë°ì— ì •ë¦¬
+        _pinnedEnemyLabel = false;
+        if (selectTargetHintText)
+        {
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+        }
+    }
+    void HandleWaveStarted_ClearLabel()
+    {
+        _pinnedEnemyLabel = false;
+        if (selectTargetHintText)
+        {
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+        }
+    }
+    void HandleUnitTurnLabel(BattleUnit unit)
+    {
+        if (!selectTargetHintText) return;
+
+        if (unit == null)
+        {
+            // í˜¹ì‹œ nullë¡œ í´ë¦¬ì–´ ì‹ í˜¸ë¥¼ ë³´ë‚¼ ì¼ì´ ìƒê¸°ë©´ ì—¬ê¸°ì„œë„ ì²˜ë¦¬ ê°€ëŠ¥
+            _pinnedEnemyLabel = false;
+            selectTargetHintText.text = string.Empty;
+            selectTargetHintText.gameObject.SetActive(false);
+            return;
+        }
+
+        string unitName = !string.IsNullOrEmpty(unit.name) ? unit.name : "ìœ ë‹›";
+
+        // í„´ ì‹œì‘ ë°°ë„ˆ í…ìŠ¤íŠ¸
+        selectTargetHintText.text = $"<color=#FFFFFF>{unitName}</color> ì˜ í„´";
+
+        selectTargetHintText.gameObject.SetActive(true);
+
+        // ì´ ë¼ë²¨ë„ "ê³ ì • ë¼ë²¨" ì·¨ê¸‰í•´ì„œ, íŒ¨ë„ on/offì™€ ë¬´ê´€í•˜ê²Œ ìœ ì§€
+        // (í„´ì´ ëë‚˜ë©´ HandleAnyUnitEndTurn_ClearLabelì—ì„œ ì§€ì›Œì§)
+        _pinnedEnemyLabel = true;
+    }
+}

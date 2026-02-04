@@ -1,224 +1,224 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-/// <summary>
-/// ÀÚ½Å¿¡°Ô 1ÅÏ µ¿¾È Àáº¹ »óÅÂ¸¦ ºÎ¿©ÇÏ´Â ½ºÅ³.
-/// - ÀûÀº ÀÌ À¯´ÖÀ» Å¸°ÙÀ¸·Î ÁöÁ¤ÇÒ ¼ö ¾øÀ½
-/// - AGI 0.40, INS 4.00 (StateStatModifierDB¿¡¼­ ¼³Á¤)
-/// - ³ëÀ»(ÀÌ ½ºÅ³ º¸À¯ À¯´Ö)ÀÌ °ø°İÇÏ¸é Àáº¹ ÇØÁ¦
-/// ÈÆ·Ã:
-///  0¹ø: ÀÚ¿ø ¼Ò¸ğ °¨¼Ò(Àü¿ë MP ÄÚ½ºÆ® override)
-///  1¹ø: »óÅÂ°¡ ¹ÎÃ¸À» ¾àÈ­ÇÏÁö ¾ÊÀ½(AGI Æä³ÎÆ¼ »ó¼â ¹öÇÁ ºÎ¿©)
-///  2¹ø: ½ºÅ³ »ç¿ë ½Ã ÀÚ½Å ÀûÀÇ °¨¼Ò(0.40¹è)
-///  + »óÅÂ À¯Áö Áß ÀÚ½ÅÀÇ Â÷·Ê ½ÃÀÛ ½Ã »ı¸í È¸º¹(CLV¡¿4.00 ¡æ ÀÓ½Ã·Î BDY¡¿4)
-/// </summary>
-[CreateAssetMenu(
-    menuName = "Battle/Skills/State/Self Ambush",
-    fileName = "SelfAmbushSkill")]
-public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
-{
-    [Header("¼Ò¸ğ ÀÚ¿ø °¨¼Ò")]
-    public bool trainingUseMpOverride = false;
-    [Range(-1, 2)]
-    [Tooltip("MP °¨¼Ò°¡ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    public int routeForMpOverride = 0;
-    public int trainingMpCost = 2;
-
-    [Header("¾àÈ­ °¨¼Ò Á¦°Å")]
-    public bool trainingNoAgiPenalty = true;
-    [Range(-1, 2)]
-    [Tooltip("¹ÎÃ¸ ¾àÈ­ Á¦°Å°¡ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    public int routeForNoAgiPenalty = 1;
-
-    [Header("ÀûÀÇ °¨¼Ò")]
-    [Tooltip("ÈÆ·Ã 3¹ø: ÀûÀÇ °¨¼Ò ¹èÀ² (0.40)")]
-    public bool trainingHostilityDown = true;
-    [Range(-1, 2)]
-    [Tooltip("ÀûÀÇ °¨¼Ò°¡ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    public int routeForHostilityDown = 2;
-    public float hostilityMultiplier = 0.40f;
-
-    [Header("ÅÏ ½ÃÀÛ È¸º¹")]
-    [Tooltip("Àáº¹ »óÅÂ°¡ À¯ÁöµÇ´Â µ¿¾È, ÀÚ½ÅÀÇ ÅÏ ½ÃÀÛ ½Ã È¸º¹À» ÁÙÁö ¿©ºÎ")]
-    public bool trainingHealOnTurnStart = true;
-    [Range(-1, 2)]
-    [Tooltip("ÅÏ ½ÃÀÛ È¸º¹ÀÌ Àû¿ëµÉ ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    public int routeForHealOnTurnStart = -1;
-    public float healPerClv = 4.0f;
-
-    public bool SelfCastOnSelect => true;
-
-#if UNITY_EDITOR
-    void OnValidate()
-    {
-        targetMode = SkillTargetMode.Unit;
-    }
-#endif
-
-    void OnEnable()
-    {
-        targetMode = SkillTargetMode.Unit;
-        school = DamageSchool.Physical; // ½ÇÁ¦ ÇÇÇØ ¾øÀ½ÀÌÁö¸¸, È£È¯¼º¿ë ±âº»°ª
-        costResource = SkillCostResource.MP;
-    }
-
-    int GetRoute(BattleUnit caster)
-    {
-        if (!caster) return -1;
-        return caster.GetTrainingRouteIndex(this);
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
-    {
-        // ÀÚ±â ÀÚ½Å ´ë»ó ½ºÅ³ÀÌ¶ó ¹üÀ§ ÇÁ¸®ºä´Â ÇÊ¿ä ¾øÀ½
-        yield break;
-    }
-
-    public override int GetEffectiveCost(BattleUnit caster)
-    {
-        int baseCost = base.GetEffectiveCost(caster);
-        if (caster == null) return baseCost;
-
-        int route = GetRoute(caster);
-
-        if (trainingUseMpOverride &&
-            routeForMpOverride >= 0 &&
-            route == routeForMpOverride)
-        {
-            return trainingMpCost;
-        }
-
-        return baseCost;
-    }
-
-    /// <summary>
-    /// CLV ¡¿ 4.00 À» °è»êÇÏ´Â ÀÚ¸®.
-    /// ÇöÀç ÄÚµå¿¡ CLV ½ºÅÈÀÌ ¾ø¾î, ÀÓ½Ã·Î caster.BDY ¸¦ »ç¿ëÇÏ°í ÀÖÀ½.
-    /// CLV ÇÊµå°¡ »ı±â¸é ÀÌ ¸Ş¼­µå ¾È¸¸ ¼öÁ¤ÇØµµ µÊ.
-    /// </summary>
-    public int ComputeTurnStartHeal(BattleUnit caster)
-    {
-        if (!caster) return 0;
-
-        int amount = Mathf.Max(1, Mathf.FloorToInt(caster.CLV * healPerClv));
-        return amount;
-    }
-
-    /// <summary>
-    /// Àáº¹ »óÅÂ ÇØÁ¦ Æ®¸®°Å: ÀÌ À¯´ÖÀÌ °ø°İ(½ÇÁ¦ ÇÇÇØ¸¦ ÀÔÈû)ÇÏ¸é Àáº¹ Á¦°Å.
-    /// </summary>
-    void RegisterBreakOnAttack(BattleUnit caster)
-    {
-        if (!caster) return;
-
-        System.Action<BattleUnit, BattleUnit, int, SkillAsset> handler = null;
-        handler = (dealer, victim, damage, source) =>
-        {
-            if (dealer != caster) return;
-
-            var usc = caster.GetComponent<UnitStateController>();
-            if (usc == null)
-            {
-                caster.OnDealtDamage -= handler;
-                return;
-            }
-
-            if (usc.Has(UnitStateId.Ambush))
-            {
-                usc.Remove(UnitStateId.Ambush);
-                Debug.Log($"[Ambush] {caster.name}°¡ °ø°İÇÏ¿© Àáº¹ »óÅÂ°¡ ÇØÁ¦µÇ¾ú½À´Ï´Ù.");
-            }
-
-            // ÇÑ ¹ø ¹ßµ¿ ÈÄ ´õ ÀÌ»ó µèÁö ¾ÊÀ½
-            caster.OnDealtDamage -= handler;
-        };
-
-        caster.OnDealtDamage += handler;
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // Å¸°ÙÆÃ °úÁ¤ ¾øÀÌ, Áï½Ã ÀÚ±â ÀÚ½Å(caster)À» ´ë»óÀ¸·Î ½ÇÇà Èå¸§ ÁøÀÔ
-        // PerformStandardUnitSkillFlow°¡ ¾Ö´Ï¸ŞÀÌ¼Ç -> ResolveOnUnit È£ÃâÀ» ´Ù ÇØÁÜ
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
-    {
-        if (!caster) yield break;
-        if (!bm) yield break;
-
-        // ÀÚ±â ÀÚ½Å
-        target = caster;
-
-        // ÀÚ¿ø ¼Òºñ (ÈÆ·Ã ¹İ¿µ)
-        var res = GetCostResource(caster);
-        int cost = GetEffectiveCost(caster);
-        if (cost > 0 && !caster.TryConsumeResource(res, cost))
-            yield break;
-
-        // »óÅÂ ÄÁÆ®·Ñ·¯ È®º¸
-        var usc = caster.GetComponent<UnitStateController>();
-        if (usc == null)
-            usc = caster.gameObject.AddComponent<UnitStateController>();
-
-        // Àáº¹ »óÅÂ ºÎ¿©
-        bool added = usc.Apply(UnitStateId.Ambush);
-        if (added)
-        {
-            Debug.Log($"[Ambush] {caster.name}¿¡°Ô Àáº¹ »óÅÂ ºÎ¿© (°ø°İ ½Ã±îÁö À¯Áö)");
-        }
-
-        int route = GetRoute(caster);
-
-        // ¹ÎÃ¸ ¾àÈ­ ¾øÀ½ ¡æ AGI Æä³ÎÆ¼ »ó¼â ¹öÇÁ ºÎ¿©
-        if (trainingNoAgiPenalty &&
-            routeForNoAgiPenalty >= 0 &&
-            route == routeForNoAgiPenalty)
-        {
-            if (usc.ApplyBuff(UnitStateBuffId.AmbushAgiCancel))
-            {
-                Debug.Log($"[Ambush] Route(NoAgi={routeForNoAgiPenalty}): {caster.name} Àáº¹ AGI Æä³ÎÆ¼ »ó¼â ¹öÇÁ Àû¿ë");
-            }
-        }
-
-        // ÀûÀÇ °¨¼Ò (0.40 ¹è)
-        if (trainingHostilityDown &&
-            routeForHostilityDown >= 0 &&
-            route == routeForHostilityDown)
-        {
-            float before = caster.Hostility;
-            float targetHost = Mathf.Max(0f, before * hostilityMultiplier);
-            float delta = targetHost - before;
-            caster.AddHostility(delta);
-            Debug.Log($"[Ambush] Route(HostDown={routeForHostilityDown}): {caster.name} ÀûÀÇ °¨¼Ò {before:F2} ¡æ {targetHost:F2}");
-        }
-
-        // °ø°İ ½Ã Àáº¹ ÇØÁ¦ Æ®¸®°Å µî·Ï
-        RegisterBreakOnAttack(caster);
-
-        yield break;
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        yield break;
-    }
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+/// <summary>
+/// ìì‹ ì—ê²Œ 1í„´ ë™ì•ˆ ì ë³µ ìƒíƒœë¥¼ ë¶€ì—¬í•˜ëŠ” ìŠ¤í‚¬.
+/// - ì ì€ ì´ ìœ ë‹›ì„ íƒ€ê²Ÿìœ¼ë¡œ ì§€ì •í•  ìˆ˜ ì—†ìŒ
+/// - AGI 0.40, INS 4.00 (StateStatModifierDBì—ì„œ ì„¤ì •)
+/// - ë…¸ì„(ì´ ìŠ¤í‚¬ ë³´ìœ  ìœ ë‹›)ì´ ê³µê²©í•˜ë©´ ì ë³µ í•´ì œ
+/// í›ˆë ¨:
+///  0ë²ˆ: ìì› ì†Œëª¨ ê°ì†Œ(ì „ìš© MP ì½”ìŠ¤íŠ¸ override)
+///  1ë²ˆ: ìƒíƒœê°€ ë¯¼ì²©ì„ ì•½í™”í•˜ì§€ ì•ŠìŒ(AGI í˜ë„í‹° ìƒì‡„ ë²„í”„ ë¶€ì—¬)
+///  2ë²ˆ: ìŠ¤í‚¬ ì‚¬ìš© ì‹œ ìì‹  ì ì˜ ê°ì†Œ(0.40ë°°)
+///  + ìƒíƒœ ìœ ì§€ ì¤‘ ìì‹ ì˜ ì°¨ë¡€ ì‹œì‘ ì‹œ ìƒëª… íšŒë³µ(CLVÃ—4.00 â†’ ì„ì‹œë¡œ BDYÃ—4)
+/// </summary>
+[CreateAssetMenu(
+    menuName = "Battle/Skills/State/Self Ambush",
+    fileName = "SelfAmbushSkill")]
+public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
+{
+    [Header("ì†Œëª¨ ìì› ê°ì†Œ")]
+    public bool trainingUseMpOverride = false;
+    [Range(-1, 2)]
+    [Tooltip("MP ê°ì†Œê°€ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    public int routeForMpOverride = 0;
+    public int trainingMpCost = 2;
+
+    [Header("ì•½í™” ê°ì†Œ ì œê±°")]
+    public bool trainingNoAgiPenalty = true;
+    [Range(-1, 2)]
+    [Tooltip("ë¯¼ì²© ì•½í™” ì œê±°ê°€ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    public int routeForNoAgiPenalty = 1;
+
+    [Header("ì ì˜ ê°ì†Œ")]
+    [Tooltip("í›ˆë ¨ 3ë²ˆ: ì ì˜ ê°ì†Œ ë°°ìœ¨ (0.40)")]
+    public bool trainingHostilityDown = true;
+    [Range(-1, 2)]
+    [Tooltip("ì ì˜ ê°ì†Œê°€ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    public int routeForHostilityDown = 2;
+    public float hostilityMultiplier = 0.40f;
+
+    [Header("í„´ ì‹œì‘ íšŒë³µ")]
+    [Tooltip("ì ë³µ ìƒíƒœê°€ ìœ ì§€ë˜ëŠ” ë™ì•ˆ, ìì‹ ì˜ í„´ ì‹œì‘ ì‹œ íšŒë³µì„ ì¤„ì§€ ì—¬ë¶€")]
+    public bool trainingHealOnTurnStart = true;
+    [Range(-1, 2)]
+    [Tooltip("í„´ ì‹œì‘ íšŒë³µì´ ì ìš©ë  í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    public int routeForHealOnTurnStart = -1;
+    public float healPerClv = 4.0f;
+
+    public bool SelfCastOnSelect => true;
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        targetMode = SkillTargetMode.Unit;
+    }
+#endif
+
+    void OnEnable()
+    {
+        targetMode = SkillTargetMode.Unit;
+        school = DamageSchool.Physical; // ì‹¤ì œ í”¼í•´ ì—†ìŒì´ì§€ë§Œ, í˜¸í™˜ì„±ìš© ê¸°ë³¸ê°’
+        costResource = SkillCostResource.MP;
+    }
+
+    int GetRoute(BattleUnit caster)
+    {
+        if (!caster) return -1;
+        return caster.GetTrainingRouteIndex(this);
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    {
+        // ìê¸° ìì‹  ëŒ€ìƒ ìŠ¤í‚¬ì´ë¼ ë²”ìœ„ í”„ë¦¬ë·°ëŠ” í•„ìš” ì—†ìŒ
+        yield break;
+    }
+
+    public override int GetEffectiveCost(BattleUnit caster)
+    {
+        int baseCost = base.GetEffectiveCost(caster);
+        if (caster == null) return baseCost;
+
+        int route = GetRoute(caster);
+
+        if (trainingUseMpOverride &&
+            routeForMpOverride >= 0 &&
+            route == routeForMpOverride)
+        {
+            return trainingMpCost;
+        }
+
+        return baseCost;
+    }
+
+    /// <summary>
+    /// CLV Ã— 4.00 ì„ ê³„ì‚°í•˜ëŠ” ìë¦¬.
+    /// í˜„ì¬ ì½”ë“œì— CLV ìŠ¤íƒ¯ì´ ì—†ì–´, ì„ì‹œë¡œ caster.BDY ë¥¼ ì‚¬ìš©í•˜ê³  ìˆìŒ.
+    /// CLV í•„ë“œê°€ ìƒê¸°ë©´ ì´ ë©”ì„œë“œ ì•ˆë§Œ ìˆ˜ì •í•´ë„ ë¨.
+    /// </summary>
+    public int ComputeTurnStartHeal(BattleUnit caster)
+    {
+        if (!caster) return 0;
+
+        int amount = Mathf.Max(1, Mathf.FloorToInt(caster.CLV * healPerClv));
+        return amount;
+    }
+
+    /// <summary>
+    /// ì ë³µ ìƒíƒœ í•´ì œ íŠ¸ë¦¬ê±°: ì´ ìœ ë‹›ì´ ê³µê²©(ì‹¤ì œ í”¼í•´ë¥¼ ì…í˜)í•˜ë©´ ì ë³µ ì œê±°.
+    /// </summary>
+    void RegisterBreakOnAttack(BattleUnit caster)
+    {
+        if (!caster) return;
+
+        System.Action<BattleUnit, BattleUnit, int, SkillAsset> handler = null;
+        handler = (dealer, victim, damage, source) =>
+        {
+            if (dealer != caster) return;
+
+            var usc = caster.GetComponent<UnitStateController>();
+            if (usc == null)
+            {
+                caster.OnDealtDamage -= handler;
+                return;
+            }
+
+            if (usc.Has(UnitStateId.Ambush))
+            {
+                usc.Remove(UnitStateId.Ambush);
+                Debug.Log($"[Ambush] {caster.name}ê°€ ê³µê²©í•˜ì—¬ ì ë³µ ìƒíƒœê°€ í•´ì œë˜ì—ˆìŠµë‹ˆë‹¤.");
+            }
+
+            // í•œ ë²ˆ ë°œë™ í›„ ë” ì´ìƒ ë“£ì§€ ì•ŠìŒ
+            caster.OnDealtDamage -= handler;
+        };
+
+        caster.OnDealtDamage += handler;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // íƒ€ê²ŸíŒ… ê³¼ì • ì—†ì´, ì¦‰ì‹œ ìê¸° ìì‹ (caster)ì„ ëŒ€ìƒìœ¼ë¡œ ì‹¤í–‰ íë¦„ ì§„ì…
+        // PerformStandardUnitSkillFlowê°€ ì• ë‹ˆë©”ì´ì…˜ -> ResolveOnUnit í˜¸ì¶œì„ ë‹¤ í•´ì¤Œ
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        if (!caster) yield break;
+        if (!bm) yield break;
+
+        // ìê¸° ìì‹ 
+        target = caster;
+
+        // ìì› ì†Œë¹„ (í›ˆë ¨ ë°˜ì˜)
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost))
+            yield break;
+
+        // ìƒíƒœ ì»¨íŠ¸ë¡¤ëŸ¬ í™•ë³´
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null)
+            usc = caster.gameObject.AddComponent<UnitStateController>();
+
+        // ì ë³µ ìƒíƒœ ë¶€ì—¬
+        bool added = usc.Apply(UnitStateId.Ambush);
+        if (added)
+        {
+            Debug.Log($"[Ambush] {caster.name}ì—ê²Œ ì ë³µ ìƒíƒœ ë¶€ì—¬ (ê³µê²© ì‹œê¹Œì§€ ìœ ì§€)");
+        }
+
+        int route = GetRoute(caster);
+
+        // ë¯¼ì²© ì•½í™” ì—†ìŒ â†’ AGI í˜ë„í‹° ìƒì‡„ ë²„í”„ ë¶€ì—¬
+        if (trainingNoAgiPenalty &&
+            routeForNoAgiPenalty >= 0 &&
+            route == routeForNoAgiPenalty)
+        {
+            if (usc.ApplyBuff(UnitStateBuffId.AmbushAgiCancel))
+            {
+                Debug.Log($"[Ambush] Route(NoAgi={routeForNoAgiPenalty}): {caster.name} ì ë³µ AGI í˜ë„í‹° ìƒì‡„ ë²„í”„ ì ìš©");
+            }
+        }
+
+        // ì ì˜ ê°ì†Œ (0.40 ë°°)
+        if (trainingHostilityDown &&
+            routeForHostilityDown >= 0 &&
+            route == routeForHostilityDown)
+        {
+            float before = caster.Hostility;
+            float targetHost = Mathf.Max(0f, before * hostilityMultiplier);
+            float delta = targetHost - before;
+            caster.AddHostility(delta);
+            Debug.Log($"[Ambush] Route(HostDown={routeForHostilityDown}): {caster.name} ì ì˜ ê°ì†Œ {before:F2} â†’ {targetHost:F2}");
+        }
+
+        // ê³µê²© ì‹œ ì ë³µ í•´ì œ íŠ¸ë¦¬ê±° ë“±ë¡
+        RegisterBreakOnAttack(caster);
+
+        yield break;
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        yield break;
+    }
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

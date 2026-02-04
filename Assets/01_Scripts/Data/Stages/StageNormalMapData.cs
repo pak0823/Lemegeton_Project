@@ -1,13 +1,13 @@
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Game/StageNormalMapData")]
-public class StageNormalMapData : ScriptableObject
-{
-    [Tooltip("½ºÅ×ÀÌÁö ¹øÈ£")] public int stageNumber;
-    [Tooltip("ÀÏ¹İ ¸Ê ÇÁ¸®ÆÕ ¸®½ºÆ®")] public GameObject[] normalMapPrefabs;
-
-    // ÀüÅõ ¿şÀÌºê ¼¼Æ® (ÀüÅõ¾À ÀÚµ¿ ÇÒ´ç¿ë)
-    [Header("Battle")]
-    public WaveSet trapEncounterWave;   // ÇÔÁ¤ °ÔÀÌÁö·Î ÀüÅõ ÁøÀÔ ½Ã
-    public WaveSet postPuzzleWave;      // ÆÛÁñ Å¬¸®¾î ÈÄ ÀüÅõ ÁøÀÔ ½Ã
-}
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Game/StageNormalMapData")]
+public class StageNormalMapData : ScriptableObject
+{
+    [Tooltip("ìŠ¤í…Œì´ì§€ ë²ˆí˜¸")] public int stageNumber;
+    [Tooltip("ì¼ë°˜ ë§µ í”„ë¦¬íŒ¹ ë¦¬ìŠ¤íŠ¸")] public GameObject[] normalMapPrefabs;
+
+    // ì „íˆ¬ ì›¨ì´ë¸Œ ì„¸íŠ¸ (ì „íˆ¬ì”¬ ìë™ í• ë‹¹ìš©)
+    [Header("Battle")]
+    public WaveSet trapEncounterWave;   // í•¨ì • ê²Œì´ì§€ë¡œ ì „íˆ¬ ì§„ì… ì‹œ
+    public WaveSet postPuzzleWave;      // í¼ì¦ í´ë¦¬ì–´ í›„ ì „íˆ¬ ì§„ì… ì‹œ
+}

@@ -1,212 +1,212 @@
-using System;
-using System.Collections;
-using UnityEngine;
-using UnityEngine.UI;
-using Random = UnityEngine.Random;
-
-public class SimpleQTEController : BaseQTEController
-{
-    [Header("UI References")]
-    [SerializeField] private RectTransform barRect; //QTE Bar
-    [SerializeField] private RectTransform targetRect;  //¼º°ø ¹üÀ§
-    [SerializeField] private RectTransform perfectRect; //´ë¼º°ø ¹üÀ§
-    [SerializeField] private RectTransform cursorRect;  //ÀÌµ¿ÇÏ´Â Ä¿¼­
-    [SerializeField] private Text readyText; // ÁØºñ ÅØ½ºÆ®
-    [SerializeField] private Text feedbackText;  // ÆÇÁ¤ °á°ú ÅØ½ºÆ® (Perfect / Good / Fail)
-
-    [Header("Settings")]
-    [SerializeField] private float minDuration = 1.0f; // ÃÖ¼Ò µµ´Ş ½Ã°£
-    [SerializeField] private float maxDuration = 2.0f; // ÃÖ´ë µµ´Ş ½Ã°£
-
-    // ÆÇÁ¤ ÈÄ UI°¡ À¯ÁöµÇ´Â ½Ã°£
-    [Range(0.1f, 3.0f)]
-    [SerializeField] private float resultKeepTime = 1.0f;
-
-    private GameControls _controls; // ÀÚµ¿ »ı¼ºµÈ Å¬·¡½º
-    private Action<QTEResult> _callback;
-    private bool _canInput = false; // ÀÔ·Â °¡´É »óÅÂÀÎÁö Ã¼Å©
-    private float _halfBarWidth;
-    private float _currentSpeed; // ÀÌ¹ø ÆÇ ¼Óµµ
-
-    private void Awake() => _controls = new GameControls();
-    private void OnEnable() => _controls.QTE.Enable();
-    private void OnDisable() => _controls.QTE.Disable();
-
-    public override void Init()
-    {
-        gameObject.SetActive(false);
-    }
-
-    // ºÎ¸ğÀÇ Ãß»ó ¸Ş¼­µå ±¸Çö (override ÇÊ¼ö)
-    public override void StartQTE(Action<QTEResult> onResult)
-    {
-        _callback = onResult;
-        gameObject.SetActive(true);
-        StartCoroutine(Co_PlayQTESequence());
-    }
-    private IEnumerator Co_PlayQTESequence()
-    {
-        // 0. ÃÊ±âÈ­
-        _canInput = false;
-        _halfBarWidth = barRect.rect.width * 0.5f;
-
-        // ¹Ù, Å¸°Ù, Ä¿¼­´Â ÀÏ´Ü ¼û±è (Ready ÅØ½ºÆ®¸¸ º¸¿©ÁÖ±â À§ÇØ)
-        SetUIElementsActive(false);
-        if (feedbackText != null) feedbackText.gameObject.SetActive(false); // °á°ú ÅØ½ºÆ® ¼û±è
-
-        // 1. ·£´ı ¼¼ÆÃ (À§Ä¡ & ¼Óµµ)
-        RandomizeSettings();
-
-        // 2. Ready ÅØ½ºÆ® Ãâ·Â (´Ï ¿äÃ»: ÅØ½ºÆ® Ãâ·Â -> »ç¶óÁü)
-        if (readyText != null)
-        {
-            readyText.gameObject.SetActive(true);
-            readyText.text = "Ready!";
-            yield return new WaitForSeconds(1.0f); // 1ÃÊ°£ ÅØ½ºÆ® º¸¿©ÁÜ
-            readyText.gameObject.SetActive(false);
-        }
-
-        // 3. QTE UI µîÀå
-        SetUIElementsActive(true);
-
-        // 4. 1ÃÊ ´ë±â (³ª¿À°í 1ÃÊ ÈÄ¿¡ ½ÃÀÛ)
-        yield return new WaitForSeconds(1.0f);
-
-        // 5. ½ÃÀÛ (Ä¿¼­ ÀÌµ¿ ¹× ÀÔ·Â Çã¿ë)
-        _canInput = true;
-    }
-    private void SetUIElementsActive(bool isActive)
-    {
-        barRect.gameObject.SetActive(isActive);
-        // targetRect¿Í cursorRect´Â barRectÀÇ ÀÚ½ÄÀÌ¶ó¸é ÀÚµ¿À¸·Î ²¨Áö°ÚÁö¸¸,
-        // È¤½Ã ¸ğ¸£´Ï ¸í½ÃÀûÀ¸·Î Ã³¸®ÇÏ°Å³ª barRect¸¸ ²¨µµ µÊ.
-        // ¿©±â¼± ±ò²ûÇÏ°Ô barRect¸¸ Á¦¾îÇÑ´Ù°í °¡Á¤.
-    }
-    private void RandomizeSettings()
-    {
-        // ¼Óµµ ·£´ı (°Å¸® / ½Ã°£ = ¼Óµµ)
-        float totalDist = barRect.rect.width; // ÀüÃ¼ °Å¸® (¿ŞÂÊ ³¡ -> ¿À¸¥ÂÊ ³¡)
-        float randomDuration = Random.Range(minDuration, maxDuration);
-        _currentSpeed = totalDist / randomDuration;
-
-        // Å¸°Ù À§Ä¡ ·£´ı
-        // Å¸°ÙÀÌ ¹Ù ¹ÛÀ¸·Î »ßÁ®³ª°¡Áö ¾Ê°Ô ¹üÀ§ Á¦ÇÑ ÇÊ¿ä
-        float barWidth = barRect.rect.width;
-        float targetWidth = targetRect.rect.width;
-
-        // ¹èÄ¡ °¡´ÉÇÑ X ¹üÀ§: (-¹Ù/2 + Å¸°Ù/2) ~ (¹Ù/2 - Å¸°Ù/2)
-        float safePadding = 10f; // ¿©À¯ºĞ
-        float minX = -(barWidth * 0.5f) + (targetWidth * 0.5f) + safePadding;
-        float maxX = (barWidth * 0.5f) - (targetWidth * 0.5f) - safePadding;
-
-        float randomX = Random.Range(minX, maxX);
-        targetRect.anchoredPosition = new Vector2(randomX, 0f);
-
-        // Ä¿¼­ ÃÊ±âÈ­ (¿ŞÂÊ ³¡)
-        cursorRect.anchoredPosition = new Vector2(-(barWidth * 0.5f), 0f);
-    }
-
-    void Update()
-    {
-        // ÀÔ·Â °¡´É »óÅÂ°¡ ¾Æ´Ï¸é ¾÷µ¥ÀÌÆ® ¾È ÇÔ
-        if (!_canInput) return;
-
-        // 1. Ä¿¼­ ÀÌµ¿ (·£´ı ¼Óµµ Àû¿ë)
-        float moveStep = _currentSpeed * Time.deltaTime;
-        cursorRect.anchoredPosition += new Vector2(moveStep, 0f);
-        float currentX = cursorRect.anchoredPosition.x;
-
-        // 2. ÀÔ·Â °¨Áö
-        if (_controls.QTE.Trigger.WasPerformedThisFrame())
-        {
-            CheckHit(currentX);
-            return;
-        }
-
-        // 3. ½ÇÆĞ Á¶°Ç (³¡±îÁö °¡¸é)
-        if (currentX > _halfBarWidth)
-        {
-            HandleResult(QTEResult.Fail);
-        }
-    }
-
-    private void CheckHit(float cursorX)
-    {
-        float targetX = targetRect.anchoredPosition.x;
-        float targetHalf = targetRect.rect.width * 0.5f;
-        float tMin = targetX - targetHalf;
-        float tMax = targetX + targetHalf;
-
-        if (cursorX < tMin || cursorX > tMax)
-        {
-            // ½ÇÆĞ Ã³¸® (ºø³ª°¨)
-            HandleResult(QTEResult.Fail);
-            return;
-        }
-
-        float perfectX = targetX + perfectRect.anchoredPosition.x;
-        float perfectHalf = perfectRect.rect.width * 0.5f;
-        float pMin = perfectX - perfectHalf;
-        float pMax = perfectX + perfectHalf;
-
-        if (cursorX >= pMin && cursorX <= pMax)
-        {
-            HandleResult(QTEResult.Perfect);
-        }
-        else
-        {
-            HandleResult(QTEResult.Success);
-        }
-    }
-
-    // [º¯°æ] °á°ú¸¦ Ã³¸®ÇÏ°í µô·¹ÀÌ ÄÚ·çÆ¾À» ½ÃÀÛÇÏ´Â ÇÔ¼ö
-    private void HandleResult(QTEResult result)
-    {
-        _canInput = false; // ÀÔ·Â Â÷´Ü
-
-        // °á°ú ÅØ½ºÆ® Ç¥½Ã
-        if (feedbackText != null)
-        {
-            feedbackText.gameObject.SetActive(true);
-            switch (result)
-            {
-                case QTEResult.Perfect:
-                    feedbackText.text = "Perfect!!";
-                    feedbackText.color = Color.yellow; // È¤Àº ¿øÇÏ´Â »ö»ó
-                    break;
-                case QTEResult.Success:
-                    feedbackText.text = "Good!";
-                    feedbackText.color = Color.green;
-                    break;
-                case QTEResult.Fail:
-                    feedbackText.text = "Fail...";
-                    feedbackText.color = Color.red;
-                    break;
-            }
-        }
-
-        // Áö¿¬ Á¾·á ½ÃÀÛ
-        StartCoroutine(Co_EndSequence(result));
-    }
-
-    // [Ãß°¡] µô·¹ÀÌ ÈÄ UI¸¦ ²ô°í ¸Å´ÏÀú¿¡°Ô °á°ú¸¦ ¾Ë¸²
-    private IEnumerator Co_EndSequence(QTEResult result)
-    {
-        // ¼³Á¤µÈ ½Ã°£¸¸Å­ ´ë±â (ÀÌ ½Ã°£ µ¿¾È ¹Ù¿Í ÅØ½ºÆ®°¡ À¯ÁöµÊ)
-        yield return new WaitForSeconds(resultKeepTime);
-
-        // UI ²ô±â
-        if (feedbackText != null) feedbackText.gameObject.SetActive(false);
-        gameObject.SetActive(false);
-
-        // ¸Å´ÏÀú¿¡°Ô °á°ú Àü´Ş (ÀÌ ½ÃÁ¡¿¡ ¸Å´ÏÀúÀÇ while ·çÇÁ°¡ Ç®¸²)
-        _callback?.Invoke(result);
-    }
-
-    private void EndQTE(QTEResult result)
-    {
-        _canInput = false;
-        gameObject.SetActive(false);
-        _callback?.Invoke(result);
-    }
+using System;
+using System.Collections;
+using UnityEngine;
+using UnityEngine.UI;
+using Random = UnityEngine.Random;
+
+public class SimpleQTEController : BaseQTEController
+{
+    [Header("UI References")]
+    [SerializeField] private RectTransform barRect; //QTE Bar
+    [SerializeField] private RectTransform targetRect;  //ì„±ê³µ ë²”ìœ„
+    [SerializeField] private RectTransform perfectRect; //ëŒ€ì„±ê³µ ë²”ìœ„
+    [SerializeField] private RectTransform cursorRect;  //ì´ë™í•˜ëŠ” ì»¤ì„œ
+    [SerializeField] private Text readyText; // ì¤€ë¹„ í…ìŠ¤íŠ¸
+    [SerializeField] private Text feedbackText;  // íŒì • ê²°ê³¼ í…ìŠ¤íŠ¸ (Perfect / Good / Fail)
+
+    [Header("Settings")]
+    [SerializeField] private float minDuration = 1.0f; // ìµœì†Œ ë„ë‹¬ ì‹œê°„
+    [SerializeField] private float maxDuration = 2.0f; // ìµœëŒ€ ë„ë‹¬ ì‹œê°„
+
+    // íŒì • í›„ UIê°€ ìœ ì§€ë˜ëŠ” ì‹œê°„
+    [Range(0.1f, 3.0f)]
+    [SerializeField] private float resultKeepTime = 1.0f;
+
+    private GameControls _controls; // ìë™ ìƒì„±ëœ í´ë˜ìŠ¤
+    private Action<QTEResult> _callback;
+    private bool _canInput = false; // ì…ë ¥ ê°€ëŠ¥ ìƒíƒœì¸ì§€ ì²´í¬
+    private float _halfBarWidth;
+    private float _currentSpeed; // ì´ë²ˆ íŒ ì†ë„
+
+    private void Awake() => _controls = new GameControls();
+    private void OnEnable() => _controls.QTE.Enable();
+    private void OnDisable() => _controls.QTE.Disable();
+
+    public override void Init()
+    {
+        gameObject.SetActive(false);
+    }
+
+    // ë¶€ëª¨ì˜ ì¶”ìƒ ë©”ì„œë“œ êµ¬í˜„ (override í•„ìˆ˜)
+    public override void StartQTE(Action<QTEResult> onResult)
+    {
+        _callback = onResult;
+        gameObject.SetActive(true);
+        StartCoroutine(Co_PlayQTESequence());
+    }
+    private IEnumerator Co_PlayQTESequence()
+    {
+        // 0. ì´ˆê¸°í™”
+        _canInput = false;
+        _halfBarWidth = barRect.rect.width * 0.5f;
+
+        // ë°”, íƒ€ê²Ÿ, ì»¤ì„œëŠ” ì¼ë‹¨ ìˆ¨ê¹€ (Ready í…ìŠ¤íŠ¸ë§Œ ë³´ì—¬ì£¼ê¸° ìœ„í•´)
+        SetUIElementsActive(false);
+        if (feedbackText != null) feedbackText.gameObject.SetActive(false); // ê²°ê³¼ í…ìŠ¤íŠ¸ ìˆ¨ê¹€
+
+        // 1. ëœë¤ ì„¸íŒ… (ìœ„ì¹˜ & ì†ë„)
+        RandomizeSettings();
+
+        // 2. Ready í…ìŠ¤íŠ¸ ì¶œë ¥ (ë‹ˆ ìš”ì²­: í…ìŠ¤íŠ¸ ì¶œë ¥ -> ì‚¬ë¼ì§)
+        if (readyText != null)
+        {
+            readyText.gameObject.SetActive(true);
+            readyText.text = "Ready!";
+            yield return new WaitForSeconds(1.0f); // 1ì´ˆê°„ í…ìŠ¤íŠ¸ ë³´ì—¬ì¤Œ
+            readyText.gameObject.SetActive(false);
+        }
+
+        // 3. QTE UI ë“±ì¥
+        SetUIElementsActive(true);
+
+        // 4. 1ì´ˆ ëŒ€ê¸° (ë‚˜ì˜¤ê³  1ì´ˆ í›„ì— ì‹œì‘)
+        yield return new WaitForSeconds(1.0f);
+
+        // 5. ì‹œì‘ (ì»¤ì„œ ì´ë™ ë° ì…ë ¥ í—ˆìš©)
+        _canInput = true;
+    }
+    private void SetUIElementsActive(bool isActive)
+    {
+        barRect.gameObject.SetActive(isActive);
+        // targetRectì™€ cursorRectëŠ” barRectì˜ ìì‹ì´ë¼ë©´ ìë™ìœ¼ë¡œ êº¼ì§€ê² ì§€ë§Œ,
+        // í˜¹ì‹œ ëª¨ë¥´ë‹ˆ ëª…ì‹œì ìœ¼ë¡œ ì²˜ë¦¬í•˜ê±°ë‚˜ barRectë§Œ êº¼ë„ ë¨.
+        // ì—¬ê¸°ì„  ê¹”ë”í•˜ê²Œ barRectë§Œ ì œì–´í•œë‹¤ê³  ê°€ì •.
+    }
+    private void RandomizeSettings()
+    {
+        // ì†ë„ ëœë¤ (ê±°ë¦¬ / ì‹œê°„ = ì†ë„)
+        float totalDist = barRect.rect.width; // ì „ì²´ ê±°ë¦¬ (ì™¼ìª½ ë -> ì˜¤ë¥¸ìª½ ë)
+        float randomDuration = Random.Range(minDuration, maxDuration);
+        _currentSpeed = totalDist / randomDuration;
+
+        // íƒ€ê²Ÿ ìœ„ì¹˜ ëœë¤
+        // íƒ€ê²Ÿì´ ë°” ë°–ìœ¼ë¡œ ì‚ì ¸ë‚˜ê°€ì§€ ì•Šê²Œ ë²”ìœ„ ì œí•œ í•„ìš”
+        float barWidth = barRect.rect.width;
+        float targetWidth = targetRect.rect.width;
+
+        // ë°°ì¹˜ ê°€ëŠ¥í•œ X ë²”ìœ„: (-ë°”/2 + íƒ€ê²Ÿ/2) ~ (ë°”/2 - íƒ€ê²Ÿ/2)
+        float safePadding = 10f; // ì—¬ìœ ë¶„
+        float minX = -(barWidth * 0.5f) + (targetWidth * 0.5f) + safePadding;
+        float maxX = (barWidth * 0.5f) - (targetWidth * 0.5f) - safePadding;
+
+        float randomX = Random.Range(minX, maxX);
+        targetRect.anchoredPosition = new Vector2(randomX, 0f);
+
+        // ì»¤ì„œ ì´ˆê¸°í™” (ì™¼ìª½ ë)
+        cursorRect.anchoredPosition = new Vector2(-(barWidth * 0.5f), 0f);
+    }
+
+    void Update()
+    {
+        // ì…ë ¥ ê°€ëŠ¥ ìƒíƒœê°€ ì•„ë‹ˆë©´ ì—…ë°ì´íŠ¸ ì•ˆ í•¨
+        if (!_canInput) return;
+
+        // 1. ì»¤ì„œ ì´ë™ (ëœë¤ ì†ë„ ì ìš©)
+        float moveStep = _currentSpeed * Time.deltaTime;
+        cursorRect.anchoredPosition += new Vector2(moveStep, 0f);
+        float currentX = cursorRect.anchoredPosition.x;
+
+        // 2. ì…ë ¥ ê°ì§€
+        if (_controls.QTE.Trigger.WasPerformedThisFrame())
+        {
+            CheckHit(currentX);
+            return;
+        }
+
+        // 3. ì‹¤íŒ¨ ì¡°ê±´ (ëê¹Œì§€ ê°€ë©´)
+        if (currentX > _halfBarWidth)
+        {
+            HandleResult(QTEResult.Fail);
+        }
+    }
+
+    private void CheckHit(float cursorX)
+    {
+        float targetX = targetRect.anchoredPosition.x;
+        float targetHalf = targetRect.rect.width * 0.5f;
+        float tMin = targetX - targetHalf;
+        float tMax = targetX + targetHalf;
+
+        if (cursorX < tMin || cursorX > tMax)
+        {
+            // ì‹¤íŒ¨ ì²˜ë¦¬ (ë¹—ë‚˜ê°)
+            HandleResult(QTEResult.Fail);
+            return;
+        }
+
+        float perfectX = targetX + perfectRect.anchoredPosition.x;
+        float perfectHalf = perfectRect.rect.width * 0.5f;
+        float pMin = perfectX - perfectHalf;
+        float pMax = perfectX + perfectHalf;
+
+        if (cursorX >= pMin && cursorX <= pMax)
+        {
+            HandleResult(QTEResult.Perfect);
+        }
+        else
+        {
+            HandleResult(QTEResult.Success);
+        }
+    }
+
+    // [ë³€ê²½] ê²°ê³¼ë¥¼ ì²˜ë¦¬í•˜ê³  ë”œë ˆì´ ì½”ë£¨í‹´ì„ ì‹œì‘í•˜ëŠ” í•¨ìˆ˜
+    private void HandleResult(QTEResult result)
+    {
+        _canInput = false; // ì…ë ¥ ì°¨ë‹¨
+
+        // ê²°ê³¼ í…ìŠ¤íŠ¸ í‘œì‹œ
+        if (feedbackText != null)
+        {
+            feedbackText.gameObject.SetActive(true);
+            switch (result)
+            {
+                case QTEResult.Perfect:
+                    feedbackText.text = "Perfect!!";
+                    feedbackText.color = Color.yellow; // í˜¹ì€ ì›í•˜ëŠ” ìƒ‰ìƒ
+                    break;
+                case QTEResult.Success:
+                    feedbackText.text = "Good!";
+                    feedbackText.color = Color.green;
+                    break;
+                case QTEResult.Fail:
+                    feedbackText.text = "Fail...";
+                    feedbackText.color = Color.red;
+                    break;
+            }
+        }
+
+        // ì§€ì—° ì¢…ë£Œ ì‹œì‘
+        StartCoroutine(Co_EndSequence(result));
+    }
+
+    // [ì¶”ê°€] ë”œë ˆì´ í›„ UIë¥¼ ë„ê³  ë§¤ë‹ˆì €ì—ê²Œ ê²°ê³¼ë¥¼ ì•Œë¦¼
+    private IEnumerator Co_EndSequence(QTEResult result)
+    {
+        // ì„¤ì •ëœ ì‹œê°„ë§Œí¼ ëŒ€ê¸° (ì´ ì‹œê°„ ë™ì•ˆ ë°”ì™€ í…ìŠ¤íŠ¸ê°€ ìœ ì§€ë¨)
+        yield return new WaitForSeconds(resultKeepTime);
+
+        // UI ë„ê¸°
+        if (feedbackText != null) feedbackText.gameObject.SetActive(false);
+        gameObject.SetActive(false);
+
+        // ë§¤ë‹ˆì €ì—ê²Œ ê²°ê³¼ ì „ë‹¬ (ì´ ì‹œì ì— ë§¤ë‹ˆì €ì˜ while ë£¨í”„ê°€ í’€ë¦¼)
+        _callback?.Invoke(result);
+    }
+
+    private void EndQTE(QTEResult result)
+    {
+        _canInput = false;
+        gameObject.SetActive(false);
+        _callback?.Invoke(result);
+    }
 }

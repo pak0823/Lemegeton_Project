@@ -1,125 +1,125 @@
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-/// <summary>
-/// À¯´ÖÀÇ »ı¸íÀÌ °¨¼ÒÇÒ ¶§ ´ëÀÀ ÁßÃ¸À» 1 ºÎ¿©.
-/// ´ëÀÀ ÁßÃ¸ÀÌ threshold(±âº» 5)¿¡ µµ´ŞÇÏ¸é ATB¸¦ °¡µæ Ã¤¿ö Áï½Ã ÅÏÀ» ¾ò´Â´Ù.
-/// À¯´ÖÀÌ ÀÚ½ÅÀÇ ÅÏÀ» ³¡³¾ ¶§¸¶´Ù ´ëÀÀ ÁßÃ¸À» ¸ğµÎ Á¦°ÅÇÑ´Ù.
-/// </summary>
-[CreateAssetMenu(
-    menuName = "Battle/Passives/Gigant/Passive_3",
-    fileName = "Passive_CounterStack")]
-public class GigantCounterStackPassive : PassiveAsset
-{
-    [Header("Counter Stack Settings")]
-    [Tooltip("´ëÀÀ ÁßÃ¸À¸·Î »ç¿ëÇÒ StatusId")]
-    public StatusId counterStatusId = StatusId.Action;
-
-    [Tooltip("ÀÌ ¼öÄ¡¿¡ µµ´ŞÇÏ¸é Áï½Ã ÅÏÀ» ¾ò½À´Ï´Ù.")]
-    public int stacksForExtraTurn = 5;
-
-    [Tooltip("Áï½Ã ÅÏÀ» ¾ò¾úÀ» ¶§ ÆĞ½Ãºê ¶óº§À» Ç¥½ÃÇÒÁö ¿©ºÎ")]
-    public bool announceOnTrigger = true;
-
-    // ¿©·¯ À¯´ÖÀÌ ÀÌ ÆĞ½Ãºê¸¦ °øÀ¯ÇÏ¹Ç·Î, ¿À³Êº°·Î ±¸ºĞÇØ¼­ °ü¸®
-    private readonly HashSet<BattleUnit> _owners = new();
-    private readonly Dictionary<BattleUnit, Action<int>> _damageHandlers = new();
-
-    private BattleManager _battle;
-
-    public override void OnAttach(BattleUnit owner, BattleManager battle)
-    {
-        base.OnAttach(owner, battle);
-        if (owner == null || battle == null) return;
-
-        // BattleManager ±¸µ¶(ÇÑ ¹ø¸¸)
-        if (_battle == null)
-        {
-            _battle = battle;
-            _battle.OnUnitEndTurn += HandleUnitEndTurn;
-        }
-
-        if (_owners.Contains(owner)) return;
-
-        _owners.Add(owner);
-
-        // HP °¨¼Ò ÀÌº¥Æ® ±¸µ¶ owner¸¦ Ä¸Ã³ÇÑ ÇÚµé·¯ ÀúÀå
-        Action<int> handler = amount => HandleOwnerDamaged(owner, amount);
-        _damageHandlers[owner] = handler;
-        owner.OnDamaged += handler;
-    }
-
-    public override void OnDetach(BattleUnit owner, BattleManager battle)
-    {
-        base.OnDetach(owner, battle);
-        if (owner == null) return;
-
-        // HP °¨¼Ò ÀÌº¥Æ® ±¸µ¶ ÇØÁ¦
-        if (_damageHandlers.TryGetValue(owner, out var handler))
-        {
-            owner.OnDamaged -= handler;
-            _damageHandlers.Remove(owner);
-        }
-
-        _owners.Remove(owner);
-
-        // ´õ ÀÌ»ó ÀÌ ÆĞ½Ãºê¸¦ °¡Áø À¯´ÖÀÌ ¾øÀ¸¸é BattleManager ÀÌº¥Æ®µµ ÇØÁ¦
-        if (_owners.Count == 0 && _battle != null)
-        {
-            _battle.OnUnitEndTurn -= HandleUnitEndTurn;
-            _battle = null;
-        }
-    }
-
-    /// <summary>
-    /// ¿À³ÊÀÇ HP°¡ °¨¼ÒÇßÀ» ¶§ È£ÃâµÊ.
-    /// </summary>
-    private void HandleOwnerDamaged(BattleUnit owner, int amount)
-    {
-        if (owner == null) return;
-        if (amount <= 0) return;       // È¸º¹/0 ÇÇÇØ´Â ¹«½Ã
-        if (owner.IsDead) return;      // ÀÌ¹Ì »ç¸ÁÇÑ °æ¿ì ¹«½Ã
-
-        var sc = owner.GetComponent<StatusController>();
-        if (sc == null) return;
-
-        // ÇöÀç ´ëÀÀ ÁßÃ¸ ÀĞ°í +1
-        int cur = sc.GetStacks(counterStatusId);
-        int next = cur + 1;
-
-        // UI »óÀ¸·Îµµ 5±îÁö¸¸ º¸ÀÌ°Ô ÇÏ°í ½ÍÀ¸¸é clamp
-        if (stacksForExtraTurn > 0)
-            next = Mathf.Min(next, stacksForExtraTurn);
-
-        // Áö¼Ó ÅÏÀº 0À¸·Î µÎ°í, 'ÅÏ Á¾·á ½ÃÁ¡¿¡ ÀüºÎ Á¦°Å'¸¸ »ç¿ë
-        sc.SetStacks(counterStatusId, next, 0);
-
-        // ÀÓ°èÄ¡ µµ´Ş ¡æ Áï½Ã ÅÏ ÁØºñ(ATB¸¦ °¡µæ Ã¤¿ò)
-        if (stacksForExtraTurn > 0 && next >= stacksForExtraTurn)
-        {
-            // ÀÌ¹Ì ÁØºñ »óÅÂ¶óµµ ÇÑ ¹ø ´õ Ã¤¿öµÎ¸é ¹®Á¦´Â ¾øÀ½
-            owner.ATB = owner.MaxATB;
-
-            if (announceOnTrigger)
-            {
-                // "´ëÀÀ ¹ßµ¿" °°Àº ´À³¦À¸·Î ÆĞ½Ãºê ¶óº§ Ç¥½Ã
-                owner.AnnouncePassive(string.IsNullOrEmpty(displayName) ? "´ëÀÀ ¹ßµ¿" : displayName);
-            }
-        }
-    }
-
-    /// <summary>
-    /// À¯´ÖÀÌ ÅÏÀ» ¸¶Ä¥ ¶§ È£Ãâ. ´ëÀÀ ÁßÃ¸À» ¸ğµÎ Á¦°ÅÇÑ´Ù.
-    /// </summary>
-    private void HandleUnitEndTurn(BattleUnit unit)
-    {
-        if (unit == null) return;
-        if (!_owners.Contains(unit)) return;
-
-        var sc = unit.GetComponent<StatusController>();
-        if (sc == null) return;
-
-        sc.Clear(counterStatusId);
-    }
-}
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// ìœ ë‹›ì˜ ìƒëª…ì´ ê°ì†Œí•  ë•Œ ëŒ€ì‘ ì¤‘ì²©ì„ 1 ë¶€ì—¬.
+/// ëŒ€ì‘ ì¤‘ì²©ì´ threshold(ê¸°ë³¸ 5)ì— ë„ë‹¬í•˜ë©´ ATBë¥¼ ê°€ë“ ì±„ì›Œ ì¦‰ì‹œ í„´ì„ ì–»ëŠ”ë‹¤.
+/// ìœ ë‹›ì´ ìì‹ ì˜ í„´ì„ ëë‚¼ ë•Œë§ˆë‹¤ ëŒ€ì‘ ì¤‘ì²©ì„ ëª¨ë‘ ì œê±°í•œë‹¤.
+/// </summary>
+[CreateAssetMenu(
+    menuName = "Battle/Passives/Gigant/Passive_3",
+    fileName = "Passive_CounterStack")]
+public class GigantCounterStackPassive : PassiveAsset
+{
+    [Header("Counter Stack Settings")]
+    [Tooltip("ëŒ€ì‘ ì¤‘ì²©ìœ¼ë¡œ ì‚¬ìš©í•  StatusId")]
+    public StatusId counterStatusId = StatusId.Action;
+
+    [Tooltip("ì´ ìˆ˜ì¹˜ì— ë„ë‹¬í•˜ë©´ ì¦‰ì‹œ í„´ì„ ì–»ìŠµë‹ˆë‹¤.")]
+    public int stacksForExtraTurn = 5;
+
+    [Tooltip("ì¦‰ì‹œ í„´ì„ ì–»ì—ˆì„ ë•Œ íŒ¨ì‹œë¸Œ ë¼ë²¨ì„ í‘œì‹œí• ì§€ ì—¬ë¶€")]
+    public bool announceOnTrigger = true;
+
+    // ì—¬ëŸ¬ ìœ ë‹›ì´ ì´ íŒ¨ì‹œë¸Œë¥¼ ê³µìœ í•˜ë¯€ë¡œ, ì˜¤ë„ˆë³„ë¡œ êµ¬ë¶„í•´ì„œ ê´€ë¦¬
+    private readonly HashSet<BattleUnit> _owners = new();
+    private readonly Dictionary<BattleUnit, Action<int>> _damageHandlers = new();
+
+    private BattleManager _battle;
+
+    public override void OnAttach(BattleUnit owner, BattleManager battle)
+    {
+        base.OnAttach(owner, battle);
+        if (owner == null || battle == null) return;
+
+        // BattleManager êµ¬ë…(í•œ ë²ˆë§Œ)
+        if (_battle == null)
+        {
+            _battle = battle;
+            _battle.OnUnitEndTurn += HandleUnitEndTurn;
+        }
+
+        if (_owners.Contains(owner)) return;
+
+        _owners.Add(owner);
+
+        // HP ê°ì†Œ ì´ë²¤íŠ¸ êµ¬ë… ownerë¥¼ ìº¡ì²˜í•œ í•¸ë“¤ëŸ¬ ì €ì¥
+        Action<int> handler = amount => HandleOwnerDamaged(owner, amount);
+        _damageHandlers[owner] = handler;
+        owner.OnDamaged += handler;
+    }
+
+    public override void OnDetach(BattleUnit owner, BattleManager battle)
+    {
+        base.OnDetach(owner, battle);
+        if (owner == null) return;
+
+        // HP ê°ì†Œ ì´ë²¤íŠ¸ êµ¬ë… í•´ì œ
+        if (_damageHandlers.TryGetValue(owner, out var handler))
+        {
+            owner.OnDamaged -= handler;
+            _damageHandlers.Remove(owner);
+        }
+
+        _owners.Remove(owner);
+
+        // ë” ì´ìƒ ì´ íŒ¨ì‹œë¸Œë¥¼ ê°€ì§„ ìœ ë‹›ì´ ì—†ìœ¼ë©´ BattleManager ì´ë²¤íŠ¸ë„ í•´ì œ
+        if (_owners.Count == 0 && _battle != null)
+        {
+            _battle.OnUnitEndTurn -= HandleUnitEndTurn;
+            _battle = null;
+        }
+    }
+
+    /// <summary>
+    /// ì˜¤ë„ˆì˜ HPê°€ ê°ì†Œí–ˆì„ ë•Œ í˜¸ì¶œë¨.
+    /// </summary>
+    private void HandleOwnerDamaged(BattleUnit owner, int amount)
+    {
+        if (owner == null) return;
+        if (amount <= 0) return;       // íšŒë³µ/0 í”¼í•´ëŠ” ë¬´ì‹œ
+        if (owner.IsDead) return;      // ì´ë¯¸ ì‚¬ë§í•œ ê²½ìš° ë¬´ì‹œ
+
+        var sc = owner.GetComponent<StatusController>();
+        if (sc == null) return;
+
+        // í˜„ì¬ ëŒ€ì‘ ì¤‘ì²© ì½ê³  +1
+        int cur = sc.GetStacks(counterStatusId);
+        int next = cur + 1;
+
+        // UI ìƒìœ¼ë¡œë„ 5ê¹Œì§€ë§Œ ë³´ì´ê²Œ í•˜ê³  ì‹¶ìœ¼ë©´ clamp
+        if (stacksForExtraTurn > 0)
+            next = Mathf.Min(next, stacksForExtraTurn);
+
+        // ì§€ì† í„´ì€ 0ìœ¼ë¡œ ë‘ê³ , 'í„´ ì¢…ë£Œ ì‹œì ì— ì „ë¶€ ì œê±°'ë§Œ ì‚¬ìš©
+        sc.SetStacks(counterStatusId, next, 0);
+
+        // ì„ê³„ì¹˜ ë„ë‹¬ â†’ ì¦‰ì‹œ í„´ ì¤€ë¹„(ATBë¥¼ ê°€ë“ ì±„ì›€)
+        if (stacksForExtraTurn > 0 && next >= stacksForExtraTurn)
+        {
+            // ì´ë¯¸ ì¤€ë¹„ ìƒíƒœë¼ë„ í•œ ë²ˆ ë” ì±„ì›Œë‘ë©´ ë¬¸ì œëŠ” ì—†ìŒ
+            owner.ATB = owner.MaxATB;
+
+            if (announceOnTrigger)
+            {
+                // "ëŒ€ì‘ ë°œë™" ê°™ì€ ëŠë‚Œìœ¼ë¡œ íŒ¨ì‹œë¸Œ ë¼ë²¨ í‘œì‹œ
+                owner.AnnouncePassive(string.IsNullOrEmpty(displayName) ? "ëŒ€ì‘ ë°œë™" : displayName);
+            }
+        }
+    }
+
+    /// <summary>
+    /// ìœ ë‹›ì´ í„´ì„ ë§ˆì¹  ë•Œ í˜¸ì¶œ. ëŒ€ì‘ ì¤‘ì²©ì„ ëª¨ë‘ ì œê±°í•œë‹¤.
+    /// </summary>
+    private void HandleUnitEndTurn(BattleUnit unit)
+    {
+        if (unit == null) return;
+        if (!_owners.Contains(unit)) return;
+
+        var sc = unit.GetComponent<StatusController>();
+        if (sc == null) return;
+
+        sc.Clear(counterStatusId);
+    }
+}

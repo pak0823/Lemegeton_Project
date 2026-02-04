@@ -1,8 +1,8 @@
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Game/StageQuizMapData")]
-public class StageQuizMapData : ScriptableObject
-{
-    [Tooltip("½ºÅ×ÀÌÁö ¹øÈ£")] public int stageNumber;
-    [Tooltip("ÄûÁî¸Ê ÇÁ¸®ÆÕ ¸®½ºÆ®")] public GameObject[] quizMapPrefabs;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Game/StageQuizMapData")]
+public class StageQuizMapData : ScriptableObject
+{
+    [Tooltip("ìŠ¤í…Œì´ì§€ ë²ˆí˜¸")] public int stageNumber;
+    [Tooltip("í€´ì¦ˆë§µ í”„ë¦¬íŒ¹ ë¦¬ìŠ¤íŠ¸")] public GameObject[] quizMapPrefabs;
 }

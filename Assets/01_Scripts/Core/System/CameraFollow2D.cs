@@ -1,111 +1,111 @@
-// CameraFollow2D.cs
-using UnityEngine;
-using UnityEngine.SceneManagement;
-
-[RequireComponent(typeof(Camera))]
-public class CameraFollow2D : MonoBehaviour
-{
-    [Header("Target")]
-    public Transform target;                 // ÇÃ·¹ÀÌ¾î Transform
-    public Vector2 offset = new Vector2(0f, 1.5f);
-
-    [Header("Follow")]
-    [Tooltip("µû¶ó°¡´Â ºÎµå·¯¿ò(ÀÛÀ»¼ö·Ï ºü¸£°Ô µû¶ó°¨)")]
-    public float smoothTime = 0.15f;
-    public float maxSpeed = 100f;
-    Vector3 _vel;                            // SmoothDamp¿ë
-
-    [Header("Bounds (¼±ÅÃ)")]
-    [Tooltip("¸Ê °æ°è(CompositeCollider2D/BoxCollider2D µî). ºñ¿öµÎ¸é ¹«Á¦ÇÑ.")]
-    public Collider2D worldBounds;
-
-    [Header("ÇÈ¼¿ ½º³À (¼±ÅÃ)")]
-    [Tooltip("ÇÈ¼¿ ´ÜÀ§·Î ½º³À(Å¸ÀÏ/ÇÈ¼¿ ¾ÆÆ®¿¡ À¯¿ë)")]
-    public bool pixelSnap = false;
-    public float pixelsPerUnit = 16f;
-
-    Camera _cam;
-
-    void OnEnable()
-    {
-        SceneManager.sceneLoaded += OnSceneLoaded;
-        // Ã¹ ÇÁ·¹ÀÓ¿¡ ¹Ù·Î ½º³À(ºÎµå·¯¿î ÀÌµ¿ ¾øÀÌ)
-        SnapToTarget();
-    }
-    void OnDisable()
-    {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-    }
-    void OnSceneLoaded(Scene s, LoadSceneMode m) => SnapToTarget();
-
-    void LateUpdate()
-    {
-        if (!target) return;
-
-        // ¸ñÇ¥ À§Ä¡ °è»ê
-        Vector3 desired = target.position + (Vector3)offset;
-        desired.z = transform.position.z; // 2D Ä«¸Ş¶ó Z´Â À¯Áö
-
-        // ºÎµå·´°Ô µû¶ó°¡±â
-        Vector3 next = Vector3.SmoothDamp(transform.position, desired, ref _vel, smoothTime, maxSpeed, Time.deltaTime);
-
-        //// °æ°è Å¬·¥ÇÁ(¼±ÅÃ)
-        //if (worldBounds && _cam.orthographic)
-        //    next = ClampInsideBounds(next);
-
-        //// ÇÈ¼¿ ½º³À(¼±ÅÃ)
-        //if (pixelSnap && pixelsPerUnit > 0f)
-        //    next = PixelSnap(next);
-
-        transform.position = next;
-    }
-
-    Vector3 ClampInsideBounds(Vector3 pos)
-    {
-        var b = worldBounds.bounds;
-
-        // Ä«¸Ş¶ó Àı¹İ Å©±â(Á÷±³)
-        float halfH = _cam.orthographicSize;
-        float halfW = halfH * _cam.aspect;
-
-        float minX = b.min.x + halfW;
-        float maxX = b.max.x - halfW;
-        float minY = b.min.y + halfH;
-        float maxY = b.max.y - halfH;
-
-        // ¸ÊÀÌ Ä«¸Ş¶óº¸´Ù ÀÛÀ¸¸é °¡¿îµ¥ °íÁ¤
-        if (minX > maxX) { float cx = b.center.x; minX = maxX = cx; }
-        if (minY > maxY) { float cy = b.center.y; minY = maxY = cy; }
-
-        pos.x = Mathf.Clamp(pos.x, minX, maxX);
-        pos.y = Mathf.Clamp(pos.y, minY, maxY);
-        return pos;
-    }
-
-    Vector3 PixelSnap(Vector3 pos)
-    {
-        float unitsPerPixel = 1f / pixelsPerUnit;
-        pos.x = Mathf.Round(pos.x / unitsPerPixel) * unitsPerPixel;
-        pos.y = Mathf.Round(pos.y / unitsPerPixel) * unitsPerPixel;
-        return pos;
-    }
-
-    // Ã¹ ¹èÄ¡ ½Ã ºÎµå·¯¿î ÀÌµ¿ ¾øÀÌ Áï½Ã Å¸±ê¿¡ ºÙÀÌ±â
-    public void SnapToTarget()
-    {
-        if (!target) return;
-        Vector3 p = target.position + (Vector3)offset;
-        p.z = transform.position.z;
-        if (worldBounds && _cam.orthographic) p = ClampInsideBounds(p);
-        if (pixelSnap && pixelsPerUnit > 0f) p = PixelSnap(p);
-        transform.position = p;
-        _vel = Vector3.zero;
-    }
-
-    // ·±Å¸ÀÓ Áß Å¸±ê ±³Ã¼ÇÒ ¶§ È£ÃâÇÏ¸é Áï½Ã ½º³À
-    public void SetTarget(Transform t, bool snap = true)
-    {
-        target = t;
-        if (snap) SnapToTarget();
-    }
-}
+// CameraFollow2D.cs
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+[RequireComponent(typeof(Camera))]
+public class CameraFollow2D : MonoBehaviour
+{
+    [Header("Target")]
+    public Transform target;                 // í”Œë ˆì´ì–´ Transform
+    public Vector2 offset = new Vector2(0f, 1.5f);
+
+    [Header("Follow")]
+    [Tooltip("ë”°ë¼ê°€ëŠ” ë¶€ë“œëŸ¬ì›€(ì‘ì„ìˆ˜ë¡ ë¹ ë¥´ê²Œ ë”°ë¼ê°)")]
+    public float smoothTime = 0.15f;
+    public float maxSpeed = 100f;
+    Vector3 _vel;                            // SmoothDampìš©
+
+    [Header("Bounds (ì„ íƒ)")]
+    [Tooltip("ë§µ ê²½ê³„(CompositeCollider2D/BoxCollider2D ë“±). ë¹„ì›Œë‘ë©´ ë¬´ì œí•œ.")]
+    public Collider2D worldBounds;
+
+    [Header("í”½ì…€ ìŠ¤ëƒ… (ì„ íƒ)")]
+    [Tooltip("í”½ì…€ ë‹¨ìœ„ë¡œ ìŠ¤ëƒ…(íƒ€ì¼/í”½ì…€ ì•„íŠ¸ì— ìœ ìš©)")]
+    public bool pixelSnap = false;
+    public float pixelsPerUnit = 16f;
+
+    Camera _cam;
+
+    void OnEnable()
+    {
+        SceneManager.sceneLoaded += OnSceneLoaded;
+        // ì²« í”„ë ˆì„ì— ë°”ë¡œ ìŠ¤ëƒ…(ë¶€ë“œëŸ¬ìš´ ì´ë™ ì—†ì´)
+        SnapToTarget();
+    }
+    void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+    void OnSceneLoaded(Scene s, LoadSceneMode m) => SnapToTarget();
+
+    void LateUpdate()
+    {
+        if (!target) return;
+
+        // ëª©í‘œ ìœ„ì¹˜ ê³„ì‚°
+        Vector3 desired = target.position + (Vector3)offset;
+        desired.z = transform.position.z; // 2D ì¹´ë©”ë¼ ZëŠ” ìœ ì§€
+
+        // ë¶€ë“œëŸ½ê²Œ ë”°ë¼ê°€ê¸°
+        Vector3 next = Vector3.SmoothDamp(transform.position, desired, ref _vel, smoothTime, maxSpeed, Time.deltaTime);
+
+        //// ê²½ê³„ í´ë¨í”„(ì„ íƒ)
+        //if (worldBounds && _cam.orthographic)
+        //    next = ClampInsideBounds(next);
+
+        //// í”½ì…€ ìŠ¤ëƒ…(ì„ íƒ)
+        //if (pixelSnap && pixelsPerUnit > 0f)
+        //    next = PixelSnap(next);
+
+        transform.position = next;
+    }
+
+    Vector3 ClampInsideBounds(Vector3 pos)
+    {
+        var b = worldBounds.bounds;
+
+        // ì¹´ë©”ë¼ ì ˆë°˜ í¬ê¸°(ì§êµ)
+        float halfH = _cam.orthographicSize;
+        float halfW = halfH * _cam.aspect;
+
+        float minX = b.min.x + halfW;
+        float maxX = b.max.x - halfW;
+        float minY = b.min.y + halfH;
+        float maxY = b.max.y - halfH;
+
+        // ë§µì´ ì¹´ë©”ë¼ë³´ë‹¤ ì‘ìœ¼ë©´ ê°€ìš´ë° ê³ ì •
+        if (minX > maxX) { float cx = b.center.x; minX = maxX = cx; }
+        if (minY > maxY) { float cy = b.center.y; minY = maxY = cy; }
+
+        pos.x = Mathf.Clamp(pos.x, minX, maxX);
+        pos.y = Mathf.Clamp(pos.y, minY, maxY);
+        return pos;
+    }
+
+    Vector3 PixelSnap(Vector3 pos)
+    {
+        float unitsPerPixel = 1f / pixelsPerUnit;
+        pos.x = Mathf.Round(pos.x / unitsPerPixel) * unitsPerPixel;
+        pos.y = Mathf.Round(pos.y / unitsPerPixel) * unitsPerPixel;
+        return pos;
+    }
+
+    // ì²« ë°°ì¹˜ ì‹œ ë¶€ë“œëŸ¬ìš´ ì´ë™ ì—†ì´ ì¦‰ì‹œ íƒ€ê¹ƒì— ë¶™ì´ê¸°
+    public void SnapToTarget()
+    {
+        if (!target) return;
+        Vector3 p = target.position + (Vector3)offset;
+        p.z = transform.position.z;
+        if (worldBounds && _cam.orthographic) p = ClampInsideBounds(p);
+        if (pixelSnap && pixelsPerUnit > 0f) p = PixelSnap(p);
+        transform.position = p;
+        _vel = Vector3.zero;
+    }
+
+    // ëŸ°íƒ€ì„ ì¤‘ íƒ€ê¹ƒ êµì²´í•  ë•Œ í˜¸ì¶œí•˜ë©´ ì¦‰ì‹œ ìŠ¤ëƒ…
+    public void SetTarget(Transform t, bool snap = true)
+    {
+        target = t;
+        if (snap) SnapToTarget();
+    }
+}

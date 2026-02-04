@@ -1,312 +1,312 @@
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-using UnityEngine.AddressableAssets; // [ÇÊ¼ö] ¾îµå·¹¼­ºí
-using UnityEngine.ResourceManagement.AsyncOperations; // [ÇÊ¼ö] ÇÚµé
-using System.Threading.Tasks; // [ÇÊ¼ö] Task
-
-public class MapManager : MonoBehaviour
-{
-    public static MapManager Instance;
-    public StageDatabase stageDB;
-    public int currentStage = 1;
-    public Transform gridParent;
-    public GameObject playerPrefab;
-
-    private GameObject currentMap; // ÃÖÃÊ ¼±ÅÃµÈ ¸Ê ÇÁ¸®ÆÕ
-    private GameObject backUpMapPrefab;  // ÃÖÃÊ ¼±ÅÃµÈ ¸Ê ÀúÀå ÇÁ¸®ÆÕ
-    private MapToggleManager mapToggle;
-
-    // [°³¼± 1] »ı¼ºµÈ ¾îµå·¹¼­ºí ¿ÀºêÁ§Æ®¸¦ ÃßÀûÇÏ±â À§ÇÑ ¸®½ºÆ®
-    private List<GameObject> activeSnapshotObjects = new List<GameObject>();
-
-    void Awake()
-    {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-        mapToggle = GetComponent<MapToggleManager>();
-    }
-
-    void Start()
-    {
-        GenerateStageMap();
-    }
-
-    void GenerateStageMap()
-    {
-        if (SceneTransitionManager.Instance != null &&
-            SceneTransitionManager.Instance.explorationMapPrefabOverride != null)
-        {
-            backUpMapPrefab = SceneTransitionManager.Instance.explorationMapPrefabOverride;
-            Debug.Log("[MapManager] Override prefab »ç¿ë(Àç·Îµù À¯Áö)");
-        }
-        else
-        {
-            backUpMapPrefab = GetRandomNormalMapPrefab();
-
-            if (SceneTransitionManager.Instance != null)
-                SceneTransitionManager.Instance.explorationMapPrefabOverride = backUpMapPrefab;
-        }
-
-        ResetExplorationMap();
-    }
-
-    GameObject GetRandomNormalMapPrefab()
-    {
-        if (stageDB == null) return null;
-        var data = stageDB.normalStages.FirstOrDefault(x => x.stageNumber == currentStage);
-        if (data == null || data.normalMapPrefabs == null || data.normalMapPrefabs.Length == 0)
-            return null;
-        return data.normalMapPrefabs[Random.Range(0, data.normalMapPrefabs.Length)];
-    }
-
-    void InstantiatePlayer(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
-    {
-        if (playerPrefab == null) return;
-
-        if (PlayerMovement.Instance != null)
-            Destroy(PlayerMovement.Instance.gameObject);
-
-        GameObject player = Instantiate(playerPrefab);
-        var playermovement = player.GetComponent<PlayerMovement>();
-
-        if (playermovement != null)
-        {
-            playermovement.SetTilemaps(_floors, _obstacles, _walls);
-        }
-
-        if (currentMap != null)
-        {
-            var spawn = currentMap.transform.Find("PlayerStart");
-            if (spawn != null)
-            {
-                Vector3 spawnPos = spawn.position;
-                spawnPos.z = 0f;
-                player.transform.position = spawnPos;
-            }
-            else
-                Debug.LogWarning("[MapManager] ¸Ê¿¡ 'PlayerStart' ¿ÀºêÁ§Æ®°¡ ¾ø½À´Ï´Ù.");
-        }
-
-        var camScript = FindAnyObjectByType<CameraFollow2D>();
-        if (camScript != null)
-        {
-            camScript.target = player.transform;
-            camScript.SnapToTarget();
-        }
-    }
-
-    void SetupMapToggle(Tilemap _floors, Tilemap _wall)
-    {
-        mapToggle.mainMap = currentMap;
-        mapToggle.gridParent = gridParent;
-    }
-
-    void TrySpawnObjects(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
-    {
-        var spawner = currentMap.GetComponentInChildren<MapObjectSpawner>();
-
-        if (spawner == null) return;
-
-        List<Collider2D> excludeList = new List<Collider2D>();
-
-        var tagged = currentMap.GetComponentsInChildren<Collider2D>()
-            .Where(c => c.CompareTag("ExcludeSpawn"));
-        excludeList.AddRange(tagged);
-
-        spawner.Spawn(_floors, _obstacles, _walls, excludeList.ToArray());
-    }
-
-    void HookCameraToPlayer(Transform player)
-    {
-        var cam = Camera.main ? Camera.main.GetComponent<CameraFollow2D>()
-                              : FindObjectOfType<CameraFollow2D>(true);
-        if (!cam) return;
-
-        cam.SetTarget(player, snap: true);
-
-        Collider2D bounds = null;
-        var t = currentMap.transform.Find("WorldBounds");
-        if (t) t.TryGetComponent(out bounds);
-        if (!bounds) bounds = currentMap.GetComponentInChildren<CompositeCollider2D>(true);
-        if (!bounds) bounds = currentMap.GetComponentInChildren<BoxCollider2D>(true);
-
-        if (bounds) cam.worldBounds = bounds;
-    }
-
-    // [°³¼± 2] º´·Ä ·Îµù Àû¿ë (¼Óµµ ÃÖÀûÈ­)
-    async void ApplyExplorationSnapshot(ExplorationSnapshot snap, Tilemap floorMap, List<Tilemap> wallMap)
-    {
-        var existing = new Dictionary<string, IExplorationPersistable>();
-        foreach (var mb in currentMap.GetComponentsInChildren<MonoBehaviour>(true))
-            if (mb is IExplorationPersistable ip && !existing.ContainsKey(ip.PersistID))
-                existing.Add(ip.PersistID, ip);
-
-        Transform container = floorMap.transform.parent.Find("Object");
-        if (container == null) container = (currentMap != null) ? currentMap.transform : gridParent;
-
-        // º´·Ä Ã³¸®¸¦ À§ÇÑ Task ¸®½ºÆ® »ı¼º
-        List<Task> loadingTasks = new List<Task>();
-
-        foreach (var s in snap.objects)
-        {
-            // 1. ÀÌ¹Ì Á¸ÀçÇÏ´Â ¿ÀºêÁ§Æ® º¹±¸ (µ¿±â Ã³¸®)
-            if (existing.TryGetValue(s.id, out var existIp))
-            {
-                if (existIp is PushObject existPush)
-                    existPush.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
-                existIp.LoadState(s);
-                continue;
-            }
-
-            // 2. »õ·Î »ı¼ºÇØ¾ß ÇÏ´Â ¿ÀºêÁ§Æ® (ºñµ¿±â Ã³¸® ´ë»ó)
-            if (s.kind == "Chest" || s.kind == "Trap" || s.kind == "Encounter")
-            {
-                if (s.kind == "Trap" && (s.b1 || !s.b2)) continue;
-                if (s.kind == "Encounter" && s.b1) continue;
-
-                var refObj = FindPrefabByName(s.prefabName);
-                if (refObj == null)
-                {
-                    Debug.LogWarning($"[Snapshot] prefab '{s.prefabName}' not found for {s.kind}/{s.id}");
-                    continue;
-                }
-
-                // ·Îµù ÅÂ½ºÅ©¸¦ ¸®½ºÆ®¿¡ Ãß°¡ (Áï½Ã await ÇÏÁö ¾ÊÀ½ -> º´·Ä ½ÇÇà)
-                //loadingTasks.Add(RestoreSingleObjectAsync(refObj, s, container, floorMap, wallMap));
-            }
-            else
-            {
-                Debug.LogWarning($"[Snapshot] No existing object for ID={s.id} kind={s.kind}. Skipped instantiate.");
-            }
-        }
-
-        // ¸ğµç ·ÎµùÀÌ ³¡³¯ ¶§±îÁö ´ë±â
-        await Task.WhenAll(loadingTasks);
-
-        Debug.Log($"[Snapshot] applied objects = {snap.objects.Count} (Active Addressables: {activeSnapshotObjects.Count})");
-    }
-
-    // [ÇïÆÛ ÇÔ¼ö] ´ÜÀÏ ¿ÀºêÁ§Æ® ºñµ¿±â º¹±¸ ·ÎÁ÷ (ApplyExplorationSnapshot¿¡¼­ È£Ãâ)
-    //async Task RestoreSingleObjectAsync(AssetReferenceGameObject refObj, ExplorationSnapshot.ObjectData s, Transform container, Tilemap floorMap, List<Tilemap> wallMap)
-    //{
-    //    var handle = refObj.InstantiateAsync(s.position, Quaternion.identity, container);
-    //    await handle.Task;
-
-    //    if (handle.Status == AsyncOperationStatus.Succeeded)
-    //    {
-    //        GameObject obj = handle.Result;
-
-    //        // [°³¼± 1] ¸Ş¸ğ¸® °ü¸®¸¦ À§ÇØ ¸®½ºÆ®¿¡ µî·Ï
-    //        activeSnapshotObjects.Add(obj);
-
-    //        var pid = obj.GetComponent<ExplorationPersistId>();
-    //        if (!pid) pid = obj.AddComponent<ExplorationPersistId>();
-    //        pid.OverrideIdForRestore(s.id);
-
-    //        // ÀÌ¸§ ¼³Á¤
-    //        obj.name = refObj.editorAsset != null ? refObj.editorAsset.name : s.prefabName;
-
-    //        if (obj.TryGetComponent<PushObject>(out var push))
-    //            push.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
-
-    //        if (obj.TryGetComponent<MonoBehaviour>(out var mb) && mb is IExplorationPersistable ip2)
-    //            ip2.LoadState(s);
-    //    }
-    //    else
-    //    {
-    //        Debug.LogError($"[Snapshot] Failed to instantiate {s.prefabName}");
-    //    }
-    //}
-
-    AssetReferenceGameObject FindPrefabByName(string prefabName)
-    {
-        var spawner = currentMap != null ? currentMap.GetComponentInChildren<MapObjectSpawner>(true) : null;
-
-        if (spawner != null)
-        {
-            if (spawner.trapRefs != null)
-            {
-                foreach (var p in spawner.trapRefs)
-                    if (CheckNameMatch(p, prefabName)) return p;
-            }
-            if (spawner.chestRefs != null)
-            {
-                foreach (var p in spawner.chestRefs)
-                    if (CheckNameMatch(p, prefabName)) return p;
-            }
-            if (spawner.patternRefs != null)
-            {
-                foreach (var p in spawner.patternRefs)
-                    if (CheckNameMatch(p, prefabName)) return p;
-            }
-        }
-        return null;
-    }
-
-    bool CheckNameMatch(AssetReferenceGameObject refObj, string targetName)
-    {
-        if (refObj == null) return false;
-
-#if UNITY_EDITOR
-        if (refObj.editorAsset != null && refObj.editorAsset.name == targetName) return true;
-#endif
-        string key = refObj.RuntimeKey.ToString();
-        return key.Contains(targetName);
-    }
-
-    public void ResetExplorationMap()
-    {
-        // [°³¼± 1] ¾îµå·¹¼­ºí·Î »ı¼ºµÈ ¿ÀºêÁ§Æ®µé Á¤½Ä ¹İ³³ (¸Ş¸ğ¸® ÇØÁ¦)
-        // ¸®½ºÆ®¸¦ ¿ª¼øÀ¸·Î µ¹°Å³ª, foreach·Î µ¹¸ç ÇØÁ¦ÇÕ´Ï´Ù.
-        foreach (var obj in activeSnapshotObjects)
-        {
-            if (obj != null)
-            {
-                Addressables.ReleaseInstance(obj);
-            }
-        }
-        activeSnapshotObjects.Clear(); // ¸®½ºÆ® ºñ¿ì±â
-
-        // ±âÁ¸ ¸Ê ÆÄ±«
-        if (currentMap != null) Destroy(currentMap);
-        if (PlayerMovement.Instance != null) Destroy(PlayerMovement.Instance.gameObject);
-
-        if (backUpMapPrefab == null)
-        {
-            Debug.LogError("[MapManager] »ı¼ºÇÒ ¸Ê ÇÁ¸®ÆÕÀÌ ¾ø½À´Ï´Ù!");
-            return;
-        }
-
-        currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
-
-        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(currentMap);
-
-        if (floorMaps.Count == 0)
-        {
-            Debug.LogError("Floor Å¸ÀÏ¸ÊÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù! (WalkableLayers ÇÏÀ§¿¡ ÀÖ´ÂÁö È®ÀÎ ÇÊ¿ä)");
-            return;
-        }
-
-        InstantiatePlayer(floorMaps, obstacleMaps, wallMaps);
-        TrySpawnObjects(floorMaps, obstacleMaps, wallMaps);
-    }
-
-    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
-    {
-        List<Tilemap> floors = new List<Tilemap>();
-        List<Tilemap> obstacles = new List<Tilemap>();
-        List<Tilemap> walls = new List<Tilemap>();
-
-        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
-        {
-            if (tm.CompareTag("Wall")) walls.Add(tm);
-            else if (tm.CompareTag("Obstacle")) obstacles.Add(tm);
-            else if (tm.CompareTag("Ground")) floors.Add(tm);
-            else Debug.LogWarning($"[MapManager] Tag°¡ ¼³Á¤µÇÁö ¾ÊÀº Å¸ÀÏ¸Ê ¹ß°ß: {tm.name}");
-        }
-        return (floors, obstacles, walls);
-    }
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using UnityEngine.AddressableAssets; // [í•„ìˆ˜] ì–´ë“œë ˆì„œë¸”
+using UnityEngine.ResourceManagement.AsyncOperations; // [í•„ìˆ˜] í•¸ë“¤
+using System.Threading.Tasks; // [í•„ìˆ˜] Task
+
+public class MapManager : MonoBehaviour
+{
+    public static MapManager Instance;
+    public StageDatabase stageDB;
+    public int currentStage = 1;
+    public Transform gridParent;
+    public GameObject playerPrefab;
+
+    private GameObject currentMap; // ìµœì´ˆ ì„ íƒëœ ë§µ í”„ë¦¬íŒ¹
+    private GameObject backUpMapPrefab;  // ìµœì´ˆ ì„ íƒëœ ë§µ ì €ì¥ í”„ë¦¬íŒ¹
+    private MapToggleManager mapToggle;
+
+    // [ê°œì„  1] ìƒì„±ëœ ì–´ë“œë ˆì„œë¸” ì˜¤ë¸Œì íŠ¸ë¥¼ ì¶”ì í•˜ê¸° ìœ„í•œ ë¦¬ìŠ¤íŠ¸
+    private List<GameObject> activeSnapshotObjects = new List<GameObject>();
+
+    void Awake()
+    {
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        mapToggle = GetComponent<MapToggleManager>();
+    }
+
+    void Start()
+    {
+        GenerateStageMap();
+    }
+
+    void GenerateStageMap()
+    {
+        if (SceneTransitionManager.Instance != null &&
+            SceneTransitionManager.Instance.explorationMapPrefabOverride != null)
+        {
+            backUpMapPrefab = SceneTransitionManager.Instance.explorationMapPrefabOverride;
+            Debug.Log("[MapManager] Override prefab ì‚¬ìš©(ì¬ë¡œë”© ìœ ì§€)");
+        }
+        else
+        {
+            backUpMapPrefab = GetRandomNormalMapPrefab();
+
+            if (SceneTransitionManager.Instance != null)
+                SceneTransitionManager.Instance.explorationMapPrefabOverride = backUpMapPrefab;
+        }
+
+        ResetExplorationMap();
+    }
+
+    GameObject GetRandomNormalMapPrefab()
+    {
+        if (stageDB == null) return null;
+        var data = stageDB.normalStages.FirstOrDefault(x => x.stageNumber == currentStage);
+        if (data == null || data.normalMapPrefabs == null || data.normalMapPrefabs.Length == 0)
+            return null;
+        return data.normalMapPrefabs[Random.Range(0, data.normalMapPrefabs.Length)];
+    }
+
+    void InstantiatePlayer(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
+    {
+        if (playerPrefab == null) return;
+
+        if (PlayerMovement.Instance != null)
+            Destroy(PlayerMovement.Instance.gameObject);
+
+        GameObject player = Instantiate(playerPrefab);
+        var playermovement = player.GetComponent<PlayerMovement>();
+
+        if (playermovement != null)
+        {
+            playermovement.SetTilemaps(_floors, _obstacles, _walls);
+        }
+
+        if (currentMap != null)
+        {
+            var spawn = currentMap.transform.Find("PlayerStart");
+            if (spawn != null)
+            {
+                Vector3 spawnPos = spawn.position;
+                spawnPos.z = 0f;
+                player.transform.position = spawnPos;
+            }
+            else
+                Debug.LogWarning("[MapManager] ë§µì— 'PlayerStart' ì˜¤ë¸Œì íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤.");
+        }
+
+        var camScript = FindAnyObjectByType<CameraFollow2D>();
+        if (camScript != null)
+        {
+            camScript.target = player.transform;
+            camScript.SnapToTarget();
+        }
+    }
+
+    void SetupMapToggle(Tilemap _floors, Tilemap _wall)
+    {
+        mapToggle.mainMap = currentMap;
+        mapToggle.gridParent = gridParent;
+    }
+
+    void TrySpawnObjects(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
+    {
+        var spawner = currentMap.GetComponentInChildren<MapObjectSpawner>();
+
+        if (spawner == null) return;
+
+        List<Collider2D> excludeList = new List<Collider2D>();
+
+        var tagged = currentMap.GetComponentsInChildren<Collider2D>()
+            .Where(c => c.CompareTag("ExcludeSpawn"));
+        excludeList.AddRange(tagged);
+
+        spawner.Spawn(_floors, _obstacles, _walls, excludeList.ToArray());
+    }
+
+    void HookCameraToPlayer(Transform player)
+    {
+        var cam = Camera.main ? Camera.main.GetComponent<CameraFollow2D>()
+                              : FindObjectOfType<CameraFollow2D>(true);
+        if (!cam) return;
+
+        cam.SetTarget(player, snap: true);
+
+        Collider2D bounds = null;
+        var t = currentMap.transform.Find("WorldBounds");
+        if (t) t.TryGetComponent(out bounds);
+        if (!bounds) bounds = currentMap.GetComponentInChildren<CompositeCollider2D>(true);
+        if (!bounds) bounds = currentMap.GetComponentInChildren<BoxCollider2D>(true);
+
+        if (bounds) cam.worldBounds = bounds;
+    }
+
+    // [ê°œì„  2] ë³‘ë ¬ ë¡œë”© ì ìš© (ì†ë„ ìµœì í™”)
+    async void ApplyExplorationSnapshot(ExplorationSnapshot snap, Tilemap floorMap, List<Tilemap> wallMap)
+    {
+        var existing = new Dictionary<string, IExplorationPersistable>();
+        foreach (var mb in currentMap.GetComponentsInChildren<MonoBehaviour>(true))
+            if (mb is IExplorationPersistable ip && !existing.ContainsKey(ip.PersistID))
+                existing.Add(ip.PersistID, ip);
+
+        Transform container = floorMap.transform.parent.Find("Object");
+        if (container == null) container = (currentMap != null) ? currentMap.transform : gridParent;
+
+        // ë³‘ë ¬ ì²˜ë¦¬ë¥¼ ìœ„í•œ Task ë¦¬ìŠ¤íŠ¸ ìƒì„±
+        List<Task> loadingTasks = new List<Task>();
+
+        foreach (var s in snap.objects)
+        {
+            // 1. ì´ë¯¸ ì¡´ì¬í•˜ëŠ” ì˜¤ë¸Œì íŠ¸ ë³µêµ¬ (ë™ê¸° ì²˜ë¦¬)
+            if (existing.TryGetValue(s.id, out var existIp))
+            {
+                if (existIp is PushObject existPush)
+                    existPush.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
+                existIp.LoadState(s);
+                continue;
+            }
+
+            // 2. ìƒˆë¡œ ìƒì„±í•´ì•¼ í•˜ëŠ” ì˜¤ë¸Œì íŠ¸ (ë¹„ë™ê¸° ì²˜ë¦¬ ëŒ€ìƒ)
+            if (s.kind == "Chest" || s.kind == "Trap" || s.kind == "Encounter")
+            {
+                if (s.kind == "Trap" && (s.b1 || !s.b2)) continue;
+                if (s.kind == "Encounter" && s.b1) continue;
+
+                var refObj = FindPrefabByName(s.prefabName);
+                if (refObj == null)
+                {
+                    Debug.LogWarning($"[Snapshot] prefab '{s.prefabName}' not found for {s.kind}/{s.id}");
+                    continue;
+                }
+
+                // ë¡œë”© íƒœìŠ¤í¬ë¥¼ ë¦¬ìŠ¤íŠ¸ì— ì¶”ê°€ (ì¦‰ì‹œ await í•˜ì§€ ì•ŠìŒ -> ë³‘ë ¬ ì‹¤í–‰)
+                //loadingTasks.Add(RestoreSingleObjectAsync(refObj, s, container, floorMap, wallMap));
+            }
+            else
+            {
+                Debug.LogWarning($"[Snapshot] No existing object for ID={s.id} kind={s.kind}. Skipped instantiate.");
+            }
+        }
+
+        // ëª¨ë“  ë¡œë”©ì´ ëë‚  ë•Œê¹Œì§€ ëŒ€ê¸°
+        await Task.WhenAll(loadingTasks);
+
+        Debug.Log($"[Snapshot] applied objects = {snap.objects.Count} (Active Addressables: {activeSnapshotObjects.Count})");
+    }
+
+    // [í—¬í¼ í•¨ìˆ˜] ë‹¨ì¼ ì˜¤ë¸Œì íŠ¸ ë¹„ë™ê¸° ë³µêµ¬ ë¡œì§ (ApplyExplorationSnapshotì—ì„œ í˜¸ì¶œ)
+    //async Task RestoreSingleObjectAsync(AssetReferenceGameObject refObj, ExplorationSnapshot.ObjectData s, Transform container, Tilemap floorMap, List<Tilemap> wallMap)
+    //{
+    //    var handle = refObj.InstantiateAsync(s.position, Quaternion.identity, container);
+    //    await handle.Task;
+
+    //    if (handle.Status == AsyncOperationStatus.Succeeded)
+    //    {
+    //        GameObject obj = handle.Result;
+
+    //        // [ê°œì„  1] ë©”ëª¨ë¦¬ ê´€ë¦¬ë¥¼ ìœ„í•´ ë¦¬ìŠ¤íŠ¸ì— ë“±ë¡
+    //        activeSnapshotObjects.Add(obj);
+
+    //        var pid = obj.GetComponent<ExplorationPersistId>();
+    //        if (!pid) pid = obj.AddComponent<ExplorationPersistId>();
+    //        pid.OverrideIdForRestore(s.id);
+
+    //        // ì´ë¦„ ì„¤ì •
+    //        obj.name = refObj.editorAsset != null ? refObj.editorAsset.name : s.prefabName;
+
+    //        if (obj.TryGetComponent<PushObject>(out var push))
+    //            push.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
+
+    //        if (obj.TryGetComponent<MonoBehaviour>(out var mb) && mb is IExplorationPersistable ip2)
+    //            ip2.LoadState(s);
+    //    }
+    //    else
+    //    {
+    //        Debug.LogError($"[Snapshot] Failed to instantiate {s.prefabName}");
+    //    }
+    //}
+
+    AssetReferenceGameObject FindPrefabByName(string prefabName)
+    {
+        var spawner = currentMap != null ? currentMap.GetComponentInChildren<MapObjectSpawner>(true) : null;
+
+        if (spawner != null)
+        {
+            if (spawner.trapRefs != null)
+            {
+                foreach (var p in spawner.trapRefs)
+                    if (CheckNameMatch(p, prefabName)) return p;
+            }
+            if (spawner.chestRefs != null)
+            {
+                foreach (var p in spawner.chestRefs)
+                    if (CheckNameMatch(p, prefabName)) return p;
+            }
+            if (spawner.patternRefs != null)
+            {
+                foreach (var p in spawner.patternRefs)
+                    if (CheckNameMatch(p, prefabName)) return p;
+            }
+        }
+        return null;
+    }
+
+    bool CheckNameMatch(AssetReferenceGameObject refObj, string targetName)
+    {
+        if (refObj == null) return false;
+
+#if UNITY_EDITOR
+        if (refObj.editorAsset != null && refObj.editorAsset.name == targetName) return true;
+#endif
+        string key = refObj.RuntimeKey.ToString();
+        return key.Contains(targetName);
+    }
+
+    public void ResetExplorationMap()
+    {
+        // [ê°œì„  1] ì–´ë“œë ˆì„œë¸”ë¡œ ìƒì„±ëœ ì˜¤ë¸Œì íŠ¸ë“¤ ì •ì‹ ë°˜ë‚© (ë©”ëª¨ë¦¬ í•´ì œ)
+        // ë¦¬ìŠ¤íŠ¸ë¥¼ ì—­ìˆœìœ¼ë¡œ ëŒê±°ë‚˜, foreachë¡œ ëŒë©° í•´ì œí•©ë‹ˆë‹¤.
+        foreach (var obj in activeSnapshotObjects)
+        {
+            if (obj != null)
+            {
+                Addressables.ReleaseInstance(obj);
+            }
+        }
+        activeSnapshotObjects.Clear(); // ë¦¬ìŠ¤íŠ¸ ë¹„ìš°ê¸°
+
+        // ê¸°ì¡´ ë§µ íŒŒê´´
+        if (currentMap != null) Destroy(currentMap);
+        if (PlayerMovement.Instance != null) Destroy(PlayerMovement.Instance.gameObject);
+
+        if (backUpMapPrefab == null)
+        {
+            Debug.LogError("[MapManager] ìƒì„±í•  ë§µ í”„ë¦¬íŒ¹ì´ ì—†ìŠµë‹ˆë‹¤!");
+            return;
+        }
+
+        currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
+
+        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(currentMap);
+
+        if (floorMaps.Count == 0)
+        {
+            Debug.LogError("Floor íƒ€ì¼ë§µì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤! (WalkableLayers í•˜ìœ„ì— ìˆëŠ”ì§€ í™•ì¸ í•„ìš”)");
+            return;
+        }
+
+        InstantiatePlayer(floorMaps, obstacleMaps, wallMaps);
+        TrySpawnObjects(floorMaps, obstacleMaps, wallMaps);
+    }
+
+    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
+    {
+        List<Tilemap> floors = new List<Tilemap>();
+        List<Tilemap> obstacles = new List<Tilemap>();
+        List<Tilemap> walls = new List<Tilemap>();
+
+        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
+        {
+            if (tm.CompareTag("Wall")) walls.Add(tm);
+            else if (tm.CompareTag("Obstacle")) obstacles.Add(tm);
+            else if (tm.CompareTag("Ground")) floors.Add(tm);
+            else Debug.LogWarning($"[MapManager] Tagê°€ ì„¤ì •ë˜ì§€ ì•Šì€ íƒ€ì¼ë§µ ë°œê²¬: {tm.name}");
+        }
+        return (floors, obstacles, walls);
+    }
 }

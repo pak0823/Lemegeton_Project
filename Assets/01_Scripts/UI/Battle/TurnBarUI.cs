@@ -1,426 +1,426 @@
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class TurnBarUI : MonoBehaviour
-{
-    [Header("UI Settings")]
-    public RectTransform barImage;          // ¹Ù(ÀÌ¹ÌÁö)ÀÇ RectTransform
-    public GameObject unitIconPrefab;  // ¾ÆÀÌÄÜ ÇÁ¸®ÆÕ(Anchor=Left, Pivot=Center ±ÇÀå)
-    [SerializeField] private Text wavelabel;    //wave ÅØ½ºÆ®
-    [SerializeField] private CanvasGroup waveTransitionPanel; // ÀüÈ¯ ¾È³» ÆĞ³Î(Åõ¸íµµ/ÀÔ·ÂÁ¦¾î¿ë)
-    [SerializeField] private Text waveTransitionText;         // ÀüÈ¯ ¾È³» ¹®±¸ ÅØ½ºÆ®
-    [SerializeField] private float transitionDuration = 1.5f; // Ç¥½Ã ½Ã°£(ÃÊ, ½Ç½Ã°£)
-
-    [Header("Active Turn Display")]
-    [SerializeField] RectTransform activeSlot;             // ÅÏ¹Ù ¿À¸¥ÂÊ ¹Ù±ù¿¡ ³õÀ» ºó ÄÁÅ×ÀÌ³Ê
-    [SerializeField] Vector2 activeIconSize = new Vector2(96, 96);
-    [SerializeField] float activePopDuration = 0.12f;      // »ìÂ¦ ÆË¾÷ ¾Ö´Ï
-    [SerializeField] bool hideInBarWhileActive = true;     // È°¼ºÈ­µÈ À¯´ÖÀº ¹Ù¿¡¼­ ¼û±è
-
-    [Tooltip("ÇÃ·¹ÀÌ¾î/Àû ¾ÆÀÌÄÜ Y ¿ÀÇÁ¼Â")]
-    public float playerRowY = 20f;
-    public float enemyRowY = -20f;
-
-    [Tooltip("¾ÆÀÌÄÜ °£ Ãß°¡ °£°İ(¾ÆÀÌÄÜ ³Êºñ¿¡ ´õÇØÁü)")]
-    public float extraSpacing = 0f;
-
-    [Tooltip("Ã¼Å© ½Ã ¾ÆÀÌÄÜ °£°İ º¸Á¤ ¾øÀÌ '°ãÄ¡µµ·Ï' ¹èÄ¡ÇÕ´Ï´Ù.")]
-    public bool allowOverlap = false;
-
-    public float barWidth;  // ÇöÀç ¹Ù ³Êºñ
-    Dictionary<BattleUnit, Image> unitIcons = new();
-    bool uiPaused = false;  // ÀüÈ¯ Áß UI Á¤Áö
-
-    BattleManager battle;
-    BattleUnit activeUnit;        // ÇöÀç ÅÏ ÁÖÀÎ°ø
-    Image activeBigIcon;          // activeSlot¿¡ ¶ç¿î Å« ¾ÆÀÌÄÜ
-    Coroutine activePopCo;
-
-    void Start()
-    {
-        battle = FindObjectOfType<BattleManager>();
-        barWidth = barImage.rect.width;
-
-        if (battle != null)
-        {
-            battle.OnATBChanged += OnATBChanged_RelayoutAll;
-            InitializeIcons();
-            RelayoutAll();// ÃÖÃÊ 1È¸ ÀüÃ¼ ±×¸®±â
-
-            battle.OnWaveChanged += WaveHandle;
-            WaveHandle(battle.CurrentWave, battle.TotalWaves, null); // ÃÊ±â ¿şÀÌºê Ç¥½Ã ´©¶ô ¹æÁö
-
-            // ¿şÀÌºê º¯°æ ½Ã ¾ÆÀÌÄÜ ÀüºÎ Àç»ı¼º
-            battle.OnWaveChanged += (_, __, ___) =>
-            {
-                RebuildIconsFromScene();
-                RelayoutAll();
-            };
-
-            battle.OnATBReset += HandleATBResetToZero;
-            battle.OnWaveTransition += ShowWaveTransition;  // ´ÙÀ½ ¿şÀÌºê ÀüÈ¯ ¾È³» ±¸µ¶
-        }
-
-        BattleManager.OnAnyUnitTurnStarted += HandleTurnStarted;
-    }
-    void OnDestroy()
-    {
-        if (battle)
-        {
-            battle.OnATBChanged -= OnATBChanged_RelayoutAll;
-            battle.OnWaveChanged -= WaveHandle;
-            battle.OnATBReset -= HandleATBResetToZero;
-            battle.OnWaveTransition -= ShowWaveTransition;
-        }
-
-        BattleManager.OnAnyUnitTurnStarted -= HandleTurnStarted;
-    }
-
-    void InitializeIcons()
-    {
-        foreach (var u in FindObjectsOfType<BattleUnit>())
-        {
-            var iconGO = Instantiate(unitIconPrefab, barImage);
-            var img = iconGO.GetComponent<Image>();
-            if (u.data != null) img.sprite = u.data.UnitIcon;
-
-            unitIcons[u] = img;
-
-            var rt = img.rectTransform;
-            // ÃÊ±â Y¸¦ ÆÀº°·Î ºĞ¸®
-            rt.anchoredPosition = new Vector2(0f, u.data.team == Team.Player ? playerRowY : enemyRowY);
-
-            // »ç¸Á,µµÁÖ ÀÌº¥Æ® ±¸µ¶ ¡æ Á¦°Å
-            u.OnDied += RemoveUnitIcon;
-            u.OnRetreated += RemoveUnitIcon;
-        }
-    }
-
-    // ÇöÀç ¾ÀÀÇ À¯´ÖÀ» ±âÁØÀ¸·Î ¾ÆÀÌÄÜ »çÀü µ¿±âÈ­
-    void RebuildIconsFromScene()
-    {
-        // 1) »ç¶óÁø À¯´Ö Á¤¸®
-        foreach (var kv in unitIcons.ToArray())
-        {
-            var unit = kv.Key;
-            if (unit == null)
-            {
-                if (kv.Value) Destroy(kv.Value.gameObject);
-                unitIcons.Remove(unit);
-            }
-        }
-        // 2) Á¸ÀçÇÏÁö¸¸ ¾ÆÀÌÄÜÀÌ ¾ø´Â À¯´Ö Ãß°¡
-        foreach (var u in FindObjectsOfType<BattleUnit>())
-        {
-            if (unitIcons.ContainsKey(u)) continue;
-            var iconGO = Instantiate(unitIconPrefab, barImage);
-            var img = iconGO.GetComponent<Image>();
-            if (u.data != null) img.sprite = u.data.UnitIcon;
-            unitIcons[u] = img;
-            var rt = img.rectTransform;
-            rt.anchoredPosition = new Vector2(0f, u.data.team == Team.Player ? playerRowY : enemyRowY);
-            u.OnDied += RemoveUnitIcon;
-        }
-    }
-
-    void OnATBChanged_RelayoutAll(BattleUnit _battleunit, float _atb, float _maxatb)
-    {
-        //if (_battleunit.name == "LuckySix") Debug.Log($"[TurnBarUI] Received ATB for {_battleunit?.name ?? "null"} : atb={_atb:F3}, max={_maxatb:F3}");  //ActiveIconÀÇ Ãâ·ÂÀÌ ÀÌ»óÇÒ ½Ã Å×½ºÆ®¿ëÀ¸·Î ³²°ÜµÒ
-
-        // º¸Á¶ ÆÇÁ¤: atb°¡ ¾ÆÁÖ ÀÛ¾ÆÁ³À¸¸é(ÅÏÀÌ ¸· ³¡³ª¼­ ¸®¼ÂµÈ »óÅÂ) active ¾ÆÀÌÄÜ Á¤¸®
-        // (¿ø·¡º¸´Ù ´À½¼ÇÑ ÀÓ°è°ªÀ» »ç¿ëÇØ¼­ ½Ç¼ö/¼Ò¼ö ¿À·ù ¹æÁö)
-        const float kEps = 0.25f; // ÇÊ¿ä½Ã 0.05 ~ 0.2 »çÀÌ·Î Á¶Àı
-
-        // ÅÏ Á¾·á(= ATB°¡ 0À¸·Î ¸®¼Â) ÇÁ·¹ÀÓ¿¡ ¾×Æ¼ºê Ç¥½Ã Á¤¸®
-        if (hideInBarWhileActive && activeUnit != null && _battleunit == activeUnit && _atb <= kEps)
-        {
-            ClearActiveIcon(); // ¾Æ·¡ 2¹ø ÆĞÄ¡·Î "ÁÂÃøÀ¸·Î ½º³À"±îÁö ÇÔ²² Ã³¸®
-        }
-
-        RelayoutAll(); // Á¤¸® ÈÄ ¹èÄ¡
-    }
-
-    void RelayoutAll()
-    {
-        if (barImage == null || unitIcons.Count == 0) return;
-        if (uiPaused) return; // ÀüÈ¯ Áß¿£ ¹èÄ¡ Á¤Áö(ÇöÀç À§Ä¡ °íÁ¤)
-        if (barImage == null || unitIcons.Count == 0) return;
-
-        // µÎ ÁÙ·Î ºĞ¸®
-        var players = new List<Item>();
-        var enemies = new List<Item>();
-
-        foreach (var kv in unitIcons.ToArray()) // È¤½Ã ÆÄ±«µÈ À¯´Ö/¾ÆÀÌÄÜÀÌ »çÀü¿¡ ³²¾ÆÀÖÀ» ¼ö ÀÖÀ½
-        {
-            var unit = kv.Key;
-            var img = kv.Value;
-            if (unit == null || img == null) { unitIcons.Remove(unit); continue; }
-
-            // È°¼º À¯´ÖÀº ¹Ù¿¡¼­ ¼û±â°í, ·¹ÀÌ¾Æ¿ô °è»ê ´ë»ó¿¡¼­ Á¦¿Ü
-            if (hideInBarWhileActive && unit == activeUnit)
-            {
-                img.gameObject.SetActive(false);
-                continue;
-            }
-            else if (!img.gameObject.activeSelf)
-            {
-                // È°¼º À¯´ÖÀÌ ¾Æ´Ï¸é ¹İµå½Ã º¸ÀÌ°Ô
-                img.gameObject.SetActive(true);
-            }
-
-            var rt = img.rectTransform;
-            float width = rt.rect.width;
-            float half = Mathf.Max(1f, width * 0.5f);
-            float pivot = rt.pivot.x;
-            float minX = width * pivot;
-            float maxX = Mathf.Max(minX, barWidth - width * (1f - pivot));
-
-            // 0~1 Á¤±ÔÈ­ ATB
-            float normalized = unit.MaxATB > 0 ? Mathf.Clamp01(unit.ATB / unit.MaxATB) : 0f;
-            float desired = Mathf.Lerp(minX, maxX, normalized);
-
-            var item = new Item
-            {
-                unit = unit,
-                rt = rt,
-                half = half,
-                width = width,
-                pivot = pivot,
-                desired = desired,
-                y = (unit.data.team == Team.Player) ? playerRowY : enemyRowY
-            };
-
-            if (unit.data.team == Team.Player) players.Add(item); else enemies.Add(item);
-        }
-
-        ArrangeRow(players);
-        ArrangeRow(enemies);
-    }
-    void ArrangeRow(List<Item> row)
-    {
-        if (row.Count == 0) return;
-
-        // ¿øÇÏ´Â À§Ä¡ ±âÁØÀ¸·Î Á¤·Ä
-        row.Sort((a, b) => a.desired.CompareTo(b.desired));
-
-        //  °ãÄ§ Çã¿ë
-        if (allowOverlap)
-        {
-            for (int i = 0; i < row.Count; i++)
-            {
-                var it = row[i];
-
-                float minX = it.width * it.pivot;
-                float maxX = barWidth - it.width * (1f - it.pivot);
-                float x = Mathf.Clamp(it.desired, minX, maxX);
-
-                it.rt.anchoredPosition = new Vector2(x, it.y);
-
-                // ¿À¸¥ÂÊ(´õ µÚ ¼ø¹ø)ÀÏ¼ö·Ï À§·Î ¿Ã¸®·Á¸é
-                it.rt.SetSiblingIndex(Mathf.Min(barImage.childCount - 1, i));
-
-                // ¹İ´ë·Î ¿ŞÂÊÀÌ À§·Î ¿À°Ô ÇÏ·Á¸é:
-                //it.rt.SetSiblingIndex(Mathf.Min(barImage.childCount - 1, row.Count - 1 - i));
-            }
-            return;
-        }
-
-        // ÁÂ¡æ¿ì·Î ÁøÇàÇÏ¸ç °ãÄ¡Áö ¾Ê°Ô '¿À¸¥ÂÊÀ¸·Î' ¹Î´Ù
-        for (int i = 0; i < row.Count; i++)
-        {
-            var cur = row[i]; // º¹»çº»
-            float minX = cur.width * cur.pivot;                   // ¿ŞÂÊ °æ°è ³» ÇÇ¹ş ÃÖ¼Ò
-            float maxX = barWidth - cur.width * (1f - cur.pivot);        // ¿À¸¥ÂÊ °æ°è ³» ÇÇ¹ş ÃÖ´ë
-
-            float x = Mathf.Clamp(cur.desired, minX, maxX);
-
-            if (i > 0)
-            {
-                var prev = row[i - 1]; // ÀÌ¹Ì È®Á¤µÈ °ª »ç¿ë
-                float minSep = prev.x + prev.half + cur.half + extraSpacing;
-                if (x < minSep) x = minSep; //¿· ¾ÆÀÌÄÜ°ú °ãÄ¡Áö ¾Ê±â
-            }
-
-            cur.x = Mathf.Clamp(x, minX, maxX);
-            row[i] = cur;   // ¼öÁ¤µÈ °ª µÇµ¹·Á³õ±â
-        }
-
-        // 3) ¿ì¡æÁÂ·Î ÁøÇàÇÏ¸ç ¿À¸¥ÂÊ °æ°è ÃÊ°ú/°ãÄ§À» ÁÂÃøÀ¸·Î º¸Á¤
-        for (int i = row.Count - 1; i >= 0; i--)
-        {
-            var cur = row[i]; // º¹»çº»
-            float minX = cur.width * cur.pivot;
-            float maxX = barWidth - cur.width * (1f - cur.pivot);
-
-            if (cur.x > maxX) cur.x = maxX;
-
-            if (i < row.Count - 1)
-            {
-                var next = row[i + 1]; // ¿À¸¥ÂÊ ¾ÆÀÌÄÜ
-                float maxLeft = next.x - (next.half + cur.half + extraSpacing);
-                if (cur.x > maxLeft) cur.x = Mathf.Max(minX, maxLeft);
-            }
-
-            row[i] = cur; // ¼öÁ¤µÈ °ª µÇµ¹·Á³õ±â
-        }
-
-        // Àû¿ë
-        foreach (var it in row)
-        {
-            it.rt.anchoredPosition = new Vector2(it.x, it.y);
-        }
-    }
-    void HandleTurnStarted(BattleUnit u)
-    {
-        if (u == null) return;
-        ClearActiveIcon();  // ÀÌÀü active ¾ÆÀÌÄÜÀ» ¿ÏÀüÈ÷ Á¤¸®
-        ShowActiveIcon(u);  // »õ À¯´ÖÀÇ Å« ¾ÆÀÌÄÜÀ» ¶ç¿ò
-    }
-
-    void ShowActiveIcon(BattleUnit u)
-    {
-        // ÀÌÀü Ç¥½Ã Á¤¸®
-        ClearActiveIcon();
-
-        activeUnit = u;
-
-        // ÅÏ¹ÙÀÇ ÀÛÀº ¾ÆÀÌÄÜ ¼û±è(·¹ÀÌ¾Æ¿ô¿¡¼­ Á¦¿Ü)
-        if (unitIcons.TryGetValue(u, out var small))
-            small.gameObject.SetActive(!hideInBarWhileActive);
-
-        if (!activeSlot) return;
-
-        // Å« ¾ÆÀÌÄÜ »ı¼º
-        var go = Instantiate(unitIconPrefab, activeSlot);
-        activeBigIcon = go.GetComponent<Image>();
-        if (activeBigIcon && u.data) activeBigIcon.sprite = u.data.UnitIcon;
-
-        var rt = activeBigIcon.rectTransform;
-        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta = activeIconSize;
-
-        // ÆË¾÷ ¾Ö´Ï
-        if (activePopCo != null) StopCoroutine(activePopCo);
-        activePopCo = StartCoroutine(Co_PopIn(rt));
-    }
-    System.Collections.IEnumerator Co_PopIn(RectTransform rt)
-    {
-        if (!rt) yield break;
-        float t = 0f, dur = Mathf.Max(0.01f, activePopDuration);
-        Vector3 from = Vector3.one * 0.85f, to = Vector3.one;
-        rt.localScale = from;
-        while (t < dur)
-        {
-            t += Time.unscaledDeltaTime; // UI ¾Ö´Ï´Â ½Ç½Ã°£ ±âÁØ
-            float k = Mathf.Clamp01(t / dur);
-            rt.localScale = Vector3.Lerp(from, to, k);
-            yield return null;
-        }
-        rt.localScale = to;
-        activePopCo = null;
-    }
-
-    void HandleATBResetToZero()
-    {
-        // ÇöÀç ¾ÆÀÌÄÜ ±¸¼º(¿şÀÌºê ±³Ã¼·Î °»½ÅµÈ »óÅÂ)À» 0 ÁöÁ¡À¸·Î ÀÌµ¿
-        foreach (var kv in unitIcons.ToArray())
-        {
-            var unit = kv.Key;
-            var img = kv.Value;
-            if (!img) continue;
-            // Çà(Y)Àº À¯Áö, X¸¸ 0À¸·Î
-            var rt = img.rectTransform;
-            rt.anchoredPosition = new Vector2(0f, rt.anchoredPosition.y);
-        }
-        // ³»ºÎ ·¹ÀÌ¾Æ¿ô °è»ê ·ÎÁ÷ÀÌ ÀÖ´Ù¸é ÇÑ ¹ø ´õ °­Á¦
-        RelayoutAll();
-        ClearActiveIcon();
-    }
-
-
-    // À¯´Ö »ç¸Á ½Ã ¾ÆÀÌÄÜ Á¦°Å
-    void RemoveUnitIcon(BattleUnit unit)
-    {
-        if (!unitIcons.ContainsKey(unit)) return;
-        if (activeUnit == unit) ClearActiveIcon();
-
-        Destroy(unitIcons[unit].gameObject);
-        unitIcons.Remove(unit);
-    }
-    void ClearActiveIcon()
-    {
-        if (activeBigIcon) Destroy(activeBigIcon.gameObject);
-        activeBigIcon = null;
-
-        // ÅÏ¹ÙÀÇ ÀÛÀº ¾ÆÀÌÄÜ ´Ù½Ã º¸ÀÌ°Ô + ÁÂÃøÀ¸·Î ½º³À
-        var u = activeUnit;
-        if (u && unitIcons.TryGetValue(u, out var img) && img)
-        {
-            img.gameObject.SetActive(true);
-            var rt = img.rectTransform;
-            float xMin = rt.rect.width * rt.pivot.x; // ¹ÙÀÇ ¿ŞÂÊ °æ°è ³» ÇÇ¹ş ÃÖ¼Ò
-            float y = (u.data.team == Team.Player) ? playerRowY : enemyRowY;
-            rt.anchoredPosition = new Vector2(xMin, y); // Áï½Ã ¿ŞÂÊÀ¸·Î ½º³À
-        }
-
-        activeUnit = null;
-    }
-
-    // Wave ÅØ½ºÆ® Ç¥½Ã
-    private void WaveHandle(int cur, int total, string waveLabel)
-    {
-        if (!wavelabel) return;
-        wavelabel.text = $"{cur}";
-    }
-
-    // ÀüÈ¯ ¾È³» Ç¥½Ã
-    void ShowWaveTransition(int next, int total)
-    {
-        if (waveTransitionPanel == null) { uiPaused = true; StartCoroutine(Co_AutoUnpause()); return; }
-        StopCoroutineSafe("Co_ShowWaveTransition");
-        StartCoroutine(Co_ShowWaveTransition(next, total));
-    }
-
-    System.Collections.IEnumerator Co_ShowWaveTransition(int next, int total)
-    {
-        uiPaused = true;
-        if (waveTransitionText)
-            waveTransitionText.text = $"´ÙÀ½ ¿şÀÌºê°¡ ÁøÇàµË´Ï´Ù.";
-        waveTransitionPanel.gameObject.SetActive(true);
-        waveTransitionPanel.alpha = 1f;
-        waveTransitionPanel.interactable = false;
-        waveTransitionPanel.blocksRaycasts = false;
-        yield return new WaitForSecondsRealtime(Mathf.Max(0f, transitionDuration));
-        waveTransitionPanel.alpha = 0f;
-        waveTransitionPanel.gameObject.SetActive(false);
-        uiPaused = false;
-    }
-
-    // ÆĞ³ÎÀÌ ¾øÀ» ¶§µµ ÀÏÁ¤ ½Ã°£ ÈÄ ÀÚµ¿ ÇØÁ¦
-    System.Collections.IEnumerator Co_AutoUnpause()
-    {
-        yield return new WaitForSecondsRealtime(Mathf.Max(0f, transitionDuration));
-        uiPaused = false;
-    }
-
-    void StopCoroutineSafe(string name)
-    {
-        var r = GetType().GetMethod(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        // ÀÌ¸§ ±â¹İ StopÀº ºñ±ÇÀåÀÌ¶ó, ¿©±â¼± È£Ãâ Àü StopAllCoroutines·Î °£´ÜÈ÷ Ã³¸®ÇÏ°Å³ª ÇÊ¿ä ¾øÀ¸¸é »ı·«ÇØµµ µË´Ï´Ù.
-    }
-
-    struct Item
-    {
-        public BattleUnit unit;
-        public RectTransform rt;
-        public float half;
-        public float width;
-        public float pivot; // rt.pivot.x
-        public float desired;
-        public float x;
-        public float y;
-    }
-}
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class TurnBarUI : MonoBehaviour
+{
+    [Header("UI Settings")]
+    public RectTransform barImage;          // ë°”(ì´ë¯¸ì§€)ì˜ RectTransform
+    public GameObject unitIconPrefab;  // ì•„ì´ì½˜ í”„ë¦¬íŒ¹(Anchor=Left, Pivot=Center ê¶Œì¥)
+    [SerializeField] private Text wavelabel;    //wave í…ìŠ¤íŠ¸
+    [SerializeField] private CanvasGroup waveTransitionPanel; // ì „í™˜ ì•ˆë‚´ íŒ¨ë„(íˆ¬ëª…ë„/ì…ë ¥ì œì–´ìš©)
+    [SerializeField] private Text waveTransitionText;         // ì „í™˜ ì•ˆë‚´ ë¬¸êµ¬ í…ìŠ¤íŠ¸
+    [SerializeField] private float transitionDuration = 1.5f; // í‘œì‹œ ì‹œê°„(ì´ˆ, ì‹¤ì‹œê°„)
+
+    [Header("Active Turn Display")]
+    [SerializeField] RectTransform activeSlot;             // í„´ë°” ì˜¤ë¥¸ìª½ ë°”ê¹¥ì— ë†“ì„ ë¹ˆ ì»¨í…Œì´ë„ˆ
+    [SerializeField] Vector2 activeIconSize = new Vector2(96, 96);
+    [SerializeField] float activePopDuration = 0.12f;      // ì‚´ì§ íŒì—… ì• ë‹ˆ
+    [SerializeField] bool hideInBarWhileActive = true;     // í™œì„±í™”ëœ ìœ ë‹›ì€ ë°”ì—ì„œ ìˆ¨ê¹€
+
+    [Tooltip("í”Œë ˆì´ì–´/ì  ì•„ì´ì½˜ Y ì˜¤í”„ì…‹")]
+    public float playerRowY = 20f;
+    public float enemyRowY = -20f;
+
+    [Tooltip("ì•„ì´ì½˜ ê°„ ì¶”ê°€ ê°„ê²©(ì•„ì´ì½˜ ë„ˆë¹„ì— ë”í•´ì§)")]
+    public float extraSpacing = 0f;
+
+    [Tooltip("ì²´í¬ ì‹œ ì•„ì´ì½˜ ê°„ê²© ë³´ì • ì—†ì´ 'ê²¹ì¹˜ë„ë¡' ë°°ì¹˜í•©ë‹ˆë‹¤.")]
+    public bool allowOverlap = false;
+
+    public float barWidth;  // í˜„ì¬ ë°” ë„ˆë¹„
+    Dictionary<BattleUnit, Image> unitIcons = new();
+    bool uiPaused = false;  // ì „í™˜ ì¤‘ UI ì •ì§€
+
+    BattleManager battle;
+    BattleUnit activeUnit;        // í˜„ì¬ í„´ ì£¼ì¸ê³µ
+    Image activeBigIcon;          // activeSlotì— ë„ìš´ í° ì•„ì´ì½˜
+    Coroutine activePopCo;
+
+    void Start()
+    {
+        battle = FindObjectOfType<BattleManager>();
+        barWidth = barImage.rect.width;
+
+        if (battle != null)
+        {
+            battle.OnATBChanged += OnATBChanged_RelayoutAll;
+            InitializeIcons();
+            RelayoutAll();// ìµœì´ˆ 1íšŒ ì „ì²´ ê·¸ë¦¬ê¸°
+
+            battle.OnWaveChanged += WaveHandle;
+            WaveHandle(battle.CurrentWave, battle.TotalWaves, null); // ì´ˆê¸° ì›¨ì´ë¸Œ í‘œì‹œ ëˆ„ë½ ë°©ì§€
+
+            // ì›¨ì´ë¸Œ ë³€ê²½ ì‹œ ì•„ì´ì½˜ ì „ë¶€ ì¬ìƒì„±
+            battle.OnWaveChanged += (_, __, ___) =>
+            {
+                RebuildIconsFromScene();
+                RelayoutAll();
+            };
+
+            battle.OnATBReset += HandleATBResetToZero;
+            battle.OnWaveTransition += ShowWaveTransition;  // ë‹¤ìŒ ì›¨ì´ë¸Œ ì „í™˜ ì•ˆë‚´ êµ¬ë…
+        }
+
+        BattleManager.OnAnyUnitTurnStarted += HandleTurnStarted;
+    }
+    void OnDestroy()
+    {
+        if (battle)
+        {
+            battle.OnATBChanged -= OnATBChanged_RelayoutAll;
+            battle.OnWaveChanged -= WaveHandle;
+            battle.OnATBReset -= HandleATBResetToZero;
+            battle.OnWaveTransition -= ShowWaveTransition;
+        }
+
+        BattleManager.OnAnyUnitTurnStarted -= HandleTurnStarted;
+    }
+
+    void InitializeIcons()
+    {
+        foreach (var u in FindObjectsOfType<BattleUnit>())
+        {
+            var iconGO = Instantiate(unitIconPrefab, barImage);
+            var img = iconGO.GetComponent<Image>();
+            if (u.data != null) img.sprite = u.data.UnitIcon;
+
+            unitIcons[u] = img;
+
+            var rt = img.rectTransform;
+            // ì´ˆê¸° Yë¥¼ íŒ€ë³„ë¡œ ë¶„ë¦¬
+            rt.anchoredPosition = new Vector2(0f, u.data.team == Team.Player ? playerRowY : enemyRowY);
+
+            // ì‚¬ë§,ë„ì£¼ ì´ë²¤íŠ¸ êµ¬ë… â†’ ì œê±°
+            u.OnDied += RemoveUnitIcon;
+            u.OnRetreated += RemoveUnitIcon;
+        }
+    }
+
+    // í˜„ì¬ ì”¬ì˜ ìœ ë‹›ì„ ê¸°ì¤€ìœ¼ë¡œ ì•„ì´ì½˜ ì‚¬ì „ ë™ê¸°í™”
+    void RebuildIconsFromScene()
+    {
+        // 1) ì‚¬ë¼ì§„ ìœ ë‹› ì •ë¦¬
+        foreach (var kv in unitIcons.ToArray())
+        {
+            var unit = kv.Key;
+            if (unit == null)
+            {
+                if (kv.Value) Destroy(kv.Value.gameObject);
+                unitIcons.Remove(unit);
+            }
+        }
+        // 2) ì¡´ì¬í•˜ì§€ë§Œ ì•„ì´ì½˜ì´ ì—†ëŠ” ìœ ë‹› ì¶”ê°€
+        foreach (var u in FindObjectsOfType<BattleUnit>())
+        {
+            if (unitIcons.ContainsKey(u)) continue;
+            var iconGO = Instantiate(unitIconPrefab, barImage);
+            var img = iconGO.GetComponent<Image>();
+            if (u.data != null) img.sprite = u.data.UnitIcon;
+            unitIcons[u] = img;
+            var rt = img.rectTransform;
+            rt.anchoredPosition = new Vector2(0f, u.data.team == Team.Player ? playerRowY : enemyRowY);
+            u.OnDied += RemoveUnitIcon;
+        }
+    }
+
+    void OnATBChanged_RelayoutAll(BattleUnit _battleunit, float _atb, float _maxatb)
+    {
+        //if (_battleunit.name == "LuckySix") Debug.Log($"[TurnBarUI] Received ATB for {_battleunit?.name ?? "null"} : atb={_atb:F3}, max={_maxatb:F3}");  //ActiveIconì˜ ì¶œë ¥ì´ ì´ìƒí•  ì‹œ í…ŒìŠ¤íŠ¸ìš©ìœ¼ë¡œ ë‚¨ê²¨ë‘ 
+
+        // ë³´ì¡° íŒì •: atbê°€ ì•„ì£¼ ì‘ì•„ì¡Œìœ¼ë©´(í„´ì´ ë§‰ ëë‚˜ì„œ ë¦¬ì…‹ëœ ìƒíƒœ) active ì•„ì´ì½˜ ì •ë¦¬
+        // (ì›ë˜ë³´ë‹¤ ëŠìŠ¨í•œ ì„ê³„ê°’ì„ ì‚¬ìš©í•´ì„œ ì‹¤ìˆ˜/ì†Œìˆ˜ ì˜¤ë¥˜ ë°©ì§€)
+        const float kEps = 0.25f; // í•„ìš”ì‹œ 0.05 ~ 0.2 ì‚¬ì´ë¡œ ì¡°ì ˆ
+
+        // í„´ ì¢…ë£Œ(= ATBê°€ 0ìœ¼ë¡œ ë¦¬ì…‹) í”„ë ˆì„ì— ì•¡í‹°ë¸Œ í‘œì‹œ ì •ë¦¬
+        if (hideInBarWhileActive && activeUnit != null && _battleunit == activeUnit && _atb <= kEps)
+        {
+            ClearActiveIcon(); // ì•„ë˜ 2ë²ˆ íŒ¨ì¹˜ë¡œ "ì¢Œì¸¡ìœ¼ë¡œ ìŠ¤ëƒ…"ê¹Œì§€ í•¨ê»˜ ì²˜ë¦¬
+        }
+
+        RelayoutAll(); // ì •ë¦¬ í›„ ë°°ì¹˜
+    }
+
+    void RelayoutAll()
+    {
+        if (barImage == null || unitIcons.Count == 0) return;
+        if (uiPaused) return; // ì „í™˜ ì¤‘ì—” ë°°ì¹˜ ì •ì§€(í˜„ì¬ ìœ„ì¹˜ ê³ ì •)
+        if (barImage == null || unitIcons.Count == 0) return;
+
+        // ë‘ ì¤„ë¡œ ë¶„ë¦¬
+        var players = new List<Item>();
+        var enemies = new List<Item>();
+
+        foreach (var kv in unitIcons.ToArray()) // í˜¹ì‹œ íŒŒê´´ëœ ìœ ë‹›/ì•„ì´ì½˜ì´ ì‚¬ì „ì— ë‚¨ì•„ìˆì„ ìˆ˜ ìˆìŒ
+        {
+            var unit = kv.Key;
+            var img = kv.Value;
+            if (unit == null || img == null) { unitIcons.Remove(unit); continue; }
+
+            // í™œì„± ìœ ë‹›ì€ ë°”ì—ì„œ ìˆ¨ê¸°ê³ , ë ˆì´ì•„ì›ƒ ê³„ì‚° ëŒ€ìƒì—ì„œ ì œì™¸
+            if (hideInBarWhileActive && unit == activeUnit)
+            {
+                img.gameObject.SetActive(false);
+                continue;
+            }
+            else if (!img.gameObject.activeSelf)
+            {
+                // í™œì„± ìœ ë‹›ì´ ì•„ë‹ˆë©´ ë°˜ë“œì‹œ ë³´ì´ê²Œ
+                img.gameObject.SetActive(true);
+            }
+
+            var rt = img.rectTransform;
+            float width = rt.rect.width;
+            float half = Mathf.Max(1f, width * 0.5f);
+            float pivot = rt.pivot.x;
+            float minX = width * pivot;
+            float maxX = Mathf.Max(minX, barWidth - width * (1f - pivot));
+
+            // 0~1 ì •ê·œí™” ATB
+            float normalized = unit.MaxATB > 0 ? Mathf.Clamp01(unit.ATB / unit.MaxATB) : 0f;
+            float desired = Mathf.Lerp(minX, maxX, normalized);
+
+            var item = new Item
+            {
+                unit = unit,
+                rt = rt,
+                half = half,
+                width = width,
+                pivot = pivot,
+                desired = desired,
+                y = (unit.data.team == Team.Player) ? playerRowY : enemyRowY
+            };
+
+            if (unit.data.team == Team.Player) players.Add(item); else enemies.Add(item);
+        }
+
+        ArrangeRow(players);
+        ArrangeRow(enemies);
+    }
+    void ArrangeRow(List<Item> row)
+    {
+        if (row.Count == 0) return;
+
+        // ì›í•˜ëŠ” ìœ„ì¹˜ ê¸°ì¤€ìœ¼ë¡œ ì •ë ¬
+        row.Sort((a, b) => a.desired.CompareTo(b.desired));
+
+        //  ê²¹ì¹¨ í—ˆìš©
+        if (allowOverlap)
+        {
+            for (int i = 0; i < row.Count; i++)
+            {
+                var it = row[i];
+
+                float minX = it.width * it.pivot;
+                float maxX = barWidth - it.width * (1f - it.pivot);
+                float x = Mathf.Clamp(it.desired, minX, maxX);
+
+                it.rt.anchoredPosition = new Vector2(x, it.y);
+
+                // ì˜¤ë¥¸ìª½(ë” ë’¤ ìˆœë²ˆ)ì¼ìˆ˜ë¡ ìœ„ë¡œ ì˜¬ë¦¬ë ¤ë©´
+                it.rt.SetSiblingIndex(Mathf.Min(barImage.childCount - 1, i));
+
+                // ë°˜ëŒ€ë¡œ ì™¼ìª½ì´ ìœ„ë¡œ ì˜¤ê²Œ í•˜ë ¤ë©´:
+                //it.rt.SetSiblingIndex(Mathf.Min(barImage.childCount - 1, row.Count - 1 - i));
+            }
+            return;
+        }
+
+        // ì¢Œâ†’ìš°ë¡œ ì§„í–‰í•˜ë©° ê²¹ì¹˜ì§€ ì•Šê²Œ 'ì˜¤ë¥¸ìª½ìœ¼ë¡œ' ë¯¼ë‹¤
+        for (int i = 0; i < row.Count; i++)
+        {
+            var cur = row[i]; // ë³µì‚¬ë³¸
+            float minX = cur.width * cur.pivot;                   // ì™¼ìª½ ê²½ê³„ ë‚´ í”¼ë²— ìµœì†Œ
+            float maxX = barWidth - cur.width * (1f - cur.pivot);        // ì˜¤ë¥¸ìª½ ê²½ê³„ ë‚´ í”¼ë²— ìµœëŒ€
+
+            float x = Mathf.Clamp(cur.desired, minX, maxX);
+
+            if (i > 0)
+            {
+                var prev = row[i - 1]; // ì´ë¯¸ í™•ì •ëœ ê°’ ì‚¬ìš©
+                float minSep = prev.x + prev.half + cur.half + extraSpacing;
+                if (x < minSep) x = minSep; //ì˜† ì•„ì´ì½˜ê³¼ ê²¹ì¹˜ì§€ ì•Šê¸°
+            }
+
+            cur.x = Mathf.Clamp(x, minX, maxX);
+            row[i] = cur;   // ìˆ˜ì •ëœ ê°’ ë˜ëŒë ¤ë†“ê¸°
+        }
+
+        // 3) ìš°â†’ì¢Œë¡œ ì§„í–‰í•˜ë©° ì˜¤ë¥¸ìª½ ê²½ê³„ ì´ˆê³¼/ê²¹ì¹¨ì„ ì¢Œì¸¡ìœ¼ë¡œ ë³´ì •
+        for (int i = row.Count - 1; i >= 0; i--)
+        {
+            var cur = row[i]; // ë³µì‚¬ë³¸
+            float minX = cur.width * cur.pivot;
+            float maxX = barWidth - cur.width * (1f - cur.pivot);
+
+            if (cur.x > maxX) cur.x = maxX;
+
+            if (i < row.Count - 1)
+            {
+                var next = row[i + 1]; // ì˜¤ë¥¸ìª½ ì•„ì´ì½˜
+                float maxLeft = next.x - (next.half + cur.half + extraSpacing);
+                if (cur.x > maxLeft) cur.x = Mathf.Max(minX, maxLeft);
+            }
+
+            row[i] = cur; // ìˆ˜ì •ëœ ê°’ ë˜ëŒë ¤ë†“ê¸°
+        }
+
+        // ì ìš©
+        foreach (var it in row)
+        {
+            it.rt.anchoredPosition = new Vector2(it.x, it.y);
+        }
+    }
+    void HandleTurnStarted(BattleUnit u)
+    {
+        if (u == null) return;
+        ClearActiveIcon();  // ì´ì „ active ì•„ì´ì½˜ì„ ì™„ì „íˆ ì •ë¦¬
+        ShowActiveIcon(u);  // ìƒˆ ìœ ë‹›ì˜ í° ì•„ì´ì½˜ì„ ë„ì›€
+    }
+
+    void ShowActiveIcon(BattleUnit u)
+    {
+        // ì´ì „ í‘œì‹œ ì •ë¦¬
+        ClearActiveIcon();
+
+        activeUnit = u;
+
+        // í„´ë°”ì˜ ì‘ì€ ì•„ì´ì½˜ ìˆ¨ê¹€(ë ˆì´ì•„ì›ƒì—ì„œ ì œì™¸)
+        if (unitIcons.TryGetValue(u, out var small))
+            small.gameObject.SetActive(!hideInBarWhileActive);
+
+        if (!activeSlot) return;
+
+        // í° ì•„ì´ì½˜ ìƒì„±
+        var go = Instantiate(unitIconPrefab, activeSlot);
+        activeBigIcon = go.GetComponent<Image>();
+        if (activeBigIcon && u.data) activeBigIcon.sprite = u.data.UnitIcon;
+
+        var rt = activeBigIcon.rectTransform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = activeIconSize;
+
+        // íŒì—… ì• ë‹ˆ
+        if (activePopCo != null) StopCoroutine(activePopCo);
+        activePopCo = StartCoroutine(Co_PopIn(rt));
+    }
+    System.Collections.IEnumerator Co_PopIn(RectTransform rt)
+    {
+        if (!rt) yield break;
+        float t = 0f, dur = Mathf.Max(0.01f, activePopDuration);
+        Vector3 from = Vector3.one * 0.85f, to = Vector3.one;
+        rt.localScale = from;
+        while (t < dur)
+        {
+            t += Time.unscaledDeltaTime; // UI ì• ë‹ˆëŠ” ì‹¤ì‹œê°„ ê¸°ì¤€
+            float k = Mathf.Clamp01(t / dur);
+            rt.localScale = Vector3.Lerp(from, to, k);
+            yield return null;
+        }
+        rt.localScale = to;
+        activePopCo = null;
+    }
+
+    void HandleATBResetToZero()
+    {
+        // í˜„ì¬ ì•„ì´ì½˜ êµ¬ì„±(ì›¨ì´ë¸Œ êµì²´ë¡œ ê°±ì‹ ëœ ìƒíƒœ)ì„ 0 ì§€ì ìœ¼ë¡œ ì´ë™
+        foreach (var kv in unitIcons.ToArray())
+        {
+            var unit = kv.Key;
+            var img = kv.Value;
+            if (!img) continue;
+            // í–‰(Y)ì€ ìœ ì§€, Xë§Œ 0ìœ¼ë¡œ
+            var rt = img.rectTransform;
+            rt.anchoredPosition = new Vector2(0f, rt.anchoredPosition.y);
+        }
+        // ë‚´ë¶€ ë ˆì´ì•„ì›ƒ ê³„ì‚° ë¡œì§ì´ ìˆë‹¤ë©´ í•œ ë²ˆ ë” ê°•ì œ
+        RelayoutAll();
+        ClearActiveIcon();
+    }
+
+
+    // ìœ ë‹› ì‚¬ë§ ì‹œ ì•„ì´ì½˜ ì œê±°
+    void RemoveUnitIcon(BattleUnit unit)
+    {
+        if (!unitIcons.ContainsKey(unit)) return;
+        if (activeUnit == unit) ClearActiveIcon();
+
+        Destroy(unitIcons[unit].gameObject);
+        unitIcons.Remove(unit);
+    }
+    void ClearActiveIcon()
+    {
+        if (activeBigIcon) Destroy(activeBigIcon.gameObject);
+        activeBigIcon = null;
+
+        // í„´ë°”ì˜ ì‘ì€ ì•„ì´ì½˜ ë‹¤ì‹œ ë³´ì´ê²Œ + ì¢Œì¸¡ìœ¼ë¡œ ìŠ¤ëƒ…
+        var u = activeUnit;
+        if (u && unitIcons.TryGetValue(u, out var img) && img)
+        {
+            img.gameObject.SetActive(true);
+            var rt = img.rectTransform;
+            float xMin = rt.rect.width * rt.pivot.x; // ë°”ì˜ ì™¼ìª½ ê²½ê³„ ë‚´ í”¼ë²— ìµœì†Œ
+            float y = (u.data.team == Team.Player) ? playerRowY : enemyRowY;
+            rt.anchoredPosition = new Vector2(xMin, y); // ì¦‰ì‹œ ì™¼ìª½ìœ¼ë¡œ ìŠ¤ëƒ…
+        }
+
+        activeUnit = null;
+    }
+
+    // Wave í…ìŠ¤íŠ¸ í‘œì‹œ
+    private void WaveHandle(int cur, int total, string waveLabel)
+    {
+        if (!wavelabel) return;
+        wavelabel.text = $"{cur}";
+    }
+
+    // ì „í™˜ ì•ˆë‚´ í‘œì‹œ
+    void ShowWaveTransition(int next, int total)
+    {
+        if (waveTransitionPanel == null) { uiPaused = true; StartCoroutine(Co_AutoUnpause()); return; }
+        StopCoroutineSafe("Co_ShowWaveTransition");
+        StartCoroutine(Co_ShowWaveTransition(next, total));
+    }
+
+    System.Collections.IEnumerator Co_ShowWaveTransition(int next, int total)
+    {
+        uiPaused = true;
+        if (waveTransitionText)
+            waveTransitionText.text = $"ë‹¤ìŒ ì›¨ì´ë¸Œê°€ ì§„í–‰ë©ë‹ˆë‹¤.";
+        waveTransitionPanel.gameObject.SetActive(true);
+        waveTransitionPanel.alpha = 1f;
+        waveTransitionPanel.interactable = false;
+        waveTransitionPanel.blocksRaycasts = false;
+        yield return new WaitForSecondsRealtime(Mathf.Max(0f, transitionDuration));
+        waveTransitionPanel.alpha = 0f;
+        waveTransitionPanel.gameObject.SetActive(false);
+        uiPaused = false;
+    }
+
+    // íŒ¨ë„ì´ ì—†ì„ ë•Œë„ ì¼ì • ì‹œê°„ í›„ ìë™ í•´ì œ
+    System.Collections.IEnumerator Co_AutoUnpause()
+    {
+        yield return new WaitForSecondsRealtime(Mathf.Max(0f, transitionDuration));
+        uiPaused = false;
+    }
+
+    void StopCoroutineSafe(string name)
+    {
+        var r = GetType().GetMethod(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        // ì´ë¦„ ê¸°ë°˜ Stopì€ ë¹„ê¶Œì¥ì´ë¼, ì—¬ê¸°ì„  í˜¸ì¶œ ì „ StopAllCoroutinesë¡œ ê°„ë‹¨íˆ ì²˜ë¦¬í•˜ê±°ë‚˜ í•„ìš” ì—†ìœ¼ë©´ ìƒëµí•´ë„ ë©ë‹ˆë‹¤.
+    }
+
+    struct Item
+    {
+        public BattleUnit unit;
+        public RectTransform rt;
+        public float half;
+        public float width;
+        public float pivot; // rt.pivot.x
+        public float desired;
+        public float x;
+        public float y;
+    }
+}

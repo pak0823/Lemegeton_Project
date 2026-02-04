@@ -1,64 +1,64 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-[RequireComponent(typeof(Toggle))] // Åä±Û ÄÄÆ÷³ÍÆ® ÇÊ¼ö
-public class CharacterSelectToggle : MonoBehaviour
-{
-    [Header("ÀÌ Åä±ÛÀÌ ´ã´çÇÏ´Â À¯´Ö µ¥ÀÌÅÍ")]
-    public UnitData myUnitData;
-    [Header("UI References")]
-    // ¾ÆÀÌÄÜÀ» Ç¥½ÃÇÒ ÀÌ¹ÌÁö ÄÄÆ÷³ÍÆ®
-    [SerializeField] private Image iconImage;
-
-    private Toggle toggle;
-
-    void Start()
-    {
-        toggle = GetComponent<Toggle>();
-
-        // Åä±Û °ªÀÌ ¹Ù²ğ ¶§¸¶´Ù OnToggleChanged ÇÔ¼ö ½ÇÇàÇÏµµ·Ï ¿¬°á
-        toggle.onValueChanged.AddListener(OnToggleChanged);
-
-        UpdateIconVisual();
-
-        // ½ÃÀÛÇÒ ¶§ ÄÑÁ® ÀÖÀ¸¸é ¹Ù·Î ¼±ÅÃ Ã³¸®
-        if (toggle.isOn)
-        {
-            OnToggleChanged(true);
-        }
-    }
-
-    // µ¥ÀÌÅÍ¿¡ ÀÖ´Â ÀÌ¹ÌÁö·Î °¥¾Æ³¢¿ì´Â ÇÔ¼ö
-    private void UpdateIconVisual()
-    {
-        if (myUnitData != null && iconImage != null)
-        {
-            if (myUnitData.UnitIcon != null)
-            {
-                iconImage.sprite = myUnitData.UnitIcon;
-                iconImage.color = Color.white;
-            }
-        }
-    }
-
-    // Åä±Û »óÅÂ°¡ º¯ÇÒ ¶§ È£ÃâµÊ (isOn: ÄÑÁ³´ÂÁö ²¨Á³´ÂÁö)
-    public void OnToggleChanged(bool isOn)
-    {
-        // ÄÑÁ³À» ¶§¸¸(=¼±ÅÃµÆÀ» ¶§¸¸) ¸Å´ÏÀú¿¡°Ô ¾Ë¸²
-        if (isOn)
-        {
-            if (CampUIManager.Instance != null && myUnitData != null)
-            {
-                CampUIManager.Instance.OnSelectCharacter(myUnitData);
-                //Debug.Log($"[Toggle] {myUnitData.DisplayName} ¼±ÅÃµÊ!");
-            }
-        }
-    }
-
-    // (¼±ÅÃ »çÇ×) ³ªÁß¿¡ À¯´Ö µ¥ÀÌÅÍ°¡ ·±Å¸ÀÓ¿¡ ¹Ù²î´Â °æ¿ì¸¦ ´ëºñÇØ
-    public void SetUnitData(UnitData data)
-    {
-        myUnitData = data;
-        UpdateIconVisual();
-    }
+using UnityEngine;
+using UnityEngine.UI;
+
+[RequireComponent(typeof(Toggle))] // í† ê¸€ ì»´í¬ë„ŒíŠ¸ í•„ìˆ˜
+public class CharacterSelectToggle : MonoBehaviour
+{
+    [Header("ì´ í† ê¸€ì´ ë‹´ë‹¹í•˜ëŠ” ìœ ë‹› ë°ì´í„°")]
+    public UnitData myUnitData;
+    [Header("UI References")]
+    // ì•„ì´ì½˜ì„ í‘œì‹œí•  ì´ë¯¸ì§€ ì»´í¬ë„ŒíŠ¸
+    [SerializeField] private Image iconImage;
+
+    private Toggle toggle;
+
+    void Start()
+    {
+        toggle = GetComponent<Toggle>();
+
+        // í† ê¸€ ê°’ì´ ë°”ë€” ë•Œë§ˆë‹¤ OnToggleChanged í•¨ìˆ˜ ì‹¤í–‰í•˜ë„ë¡ ì—°ê²°
+        toggle.onValueChanged.AddListener(OnToggleChanged);
+
+        UpdateIconVisual();
+
+        // ì‹œì‘í•  ë•Œ ì¼œì ¸ ìˆìœ¼ë©´ ë°”ë¡œ ì„ íƒ ì²˜ë¦¬
+        if (toggle.isOn)
+        {
+            OnToggleChanged(true);
+        }
+    }
+
+    // ë°ì´í„°ì— ìˆëŠ” ì´ë¯¸ì§€ë¡œ ê°ˆì•„ë¼ìš°ëŠ” í•¨ìˆ˜
+    private void UpdateIconVisual()
+    {
+        if (myUnitData != null && iconImage != null)
+        {
+            if (myUnitData.UnitIcon != null)
+            {
+                iconImage.sprite = myUnitData.UnitIcon;
+                iconImage.color = Color.white;
+            }
+        }
+    }
+
+    // í† ê¸€ ìƒíƒœê°€ ë³€í•  ë•Œ í˜¸ì¶œë¨ (isOn: ì¼œì¡ŒëŠ”ì§€ êº¼ì¡ŒëŠ”ì§€)
+    public void OnToggleChanged(bool isOn)
+    {
+        // ì¼œì¡Œì„ ë•Œë§Œ(=ì„ íƒëì„ ë•Œë§Œ) ë§¤ë‹ˆì €ì—ê²Œ ì•Œë¦¼
+        if (isOn)
+        {
+            if (CampUIManager.Instance != null && myUnitData != null)
+            {
+                CampUIManager.Instance.OnSelectCharacter(myUnitData);
+                //Debug.Log($"[Toggle] {myUnitData.DisplayName} ì„ íƒë¨!");
+            }
+        }
+    }
+
+    // (ì„ íƒ ì‚¬í•­) ë‚˜ì¤‘ì— ìœ ë‹› ë°ì´í„°ê°€ ëŸ°íƒ€ì„ì— ë°”ë€ŒëŠ” ê²½ìš°ë¥¼ ëŒ€ë¹„í•´
+    public void SetUnitData(UnitData data)
+    {
+        myUnitData = data;
+        UpdateIconVisual();
+    }
 }

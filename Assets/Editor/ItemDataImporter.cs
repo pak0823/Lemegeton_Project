@@ -1,73 +1,73 @@
-using UnityEngine;
-using UnityEditor;
-using UnityEngine.Networking;
-using System.Collections;
-using System.Collections.Generic;
-using System;
-using Unity.EditorCoroutines.Editor;
-
-public class ItemDataImporter
-{
-    // [ÁÖÀÇ] ItemData Àü¿ë ½ÃÆ®ÀÇ CSV À¥ °Ô½Ã URLÀ» ³ÖÀ» °Í
-    private static string sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=113024103&single=true&output=csv";
-    private static string savePath = "Assets/03_Data/Item/Item_Mat"; // ¾ÆÀÌÅÛ ¿¡¼Â ÀúÀå °æ·Î
-
-    [MenuItem("Tools/Sync Item Data (ID Based)")]
-    public static void ImportData() => EditorCoroutineUtility.StartCoroutineOwnerless(DownloadCSV());
-
-    private static IEnumerator DownloadCSV()
-    {
-        using (UnityWebRequest www = UnityWebRequest.Get(sheetUrl))
-        {
-            yield return www.SendWebRequest();
-            if (www.result == UnityWebRequest.Result.Success) ProcessCSV(www.downloadHandler.text);
-        }
-    }
-
-    private static void ProcessCSV(string csv)
-    {
-        string[] rows = csv.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-
-        // ±âÁ¸ ¿¡¼Â ·Îµå (ID ±â¹İ ¸ÅÄª¿ë)
-        string[] guids = AssetDatabase.FindAssets("t:ItemData");
-        Dictionary<string, ItemData> itemDict = new Dictionary<string, ItemData>();
-        foreach (var guid in guids)
-        {
-            var asset = AssetDatabase.LoadAssetAtPath<ItemData>(AssetDatabase.GUIDToAssetPath(guid));
-            if (asset != null) itemDict[asset.itemID] = asset;
-        }
-
-        // µ¥ÀÌÅÍ ÆÄ½Ì (Çì´õ °Ç³Ê¶Ù°í nÇàºÎÅÍ ½ÃÀÛ)
-        for (int i = 3; i < rows.Length; i++)
-        {
-            string[] cols = rows[i].Split(',');
-            if (cols.Length < 7) continue;
-
-            string id = cols[0].Trim(); // A¿­: itemID
-            if (string.IsNullOrEmpty(id)) continue;
-
-            ItemData so;
-            if (!itemDict.TryGetValue(id, out so))
-            {
-                // ¾øÀ¸¸é ÀÚµ¿ »ı¼º
-                so = ScriptableObject.CreateInstance<ItemData>();
-                so.itemID = id;
-                if (!AssetDatabase.IsValidFolder(savePath)) System.IO.Directory.CreateDirectory(savePath);
-                AssetDatabase.CreateAsset(so, $"{savePath}/Item_{id}.asset");
-                Debug.Log($"<color=cyan>½Å±Ô ¾ÆÀÌÅÛ »ı¼º: {id}</color>");
-            }
-
-            // µ¥ÀÌÅÍ °»½Å (¿­ ¹øÈ£´Â º»ÀÎ ½ÃÆ® ¼ø¼­¿¡ ¸Â°Ô Á¶Á¤)
-            so.itemName = cols[2].Trim();         // C¿­: ÀÌ¸§
-            if (Enum.TryParse(cols[3].Trim(), true, out ItemType type)) so.itemType = type; // C¿­: Å¸ÀÔ
-            int.TryParse(cols[5], out so.maxStack); // D¿­: ÃÖ´ëÁßÃ¸
-            so.itemDescription = cols[7].Trim();   // H¿­: ¼³¸í
-            so.atlasAddress = cols[8].Trim();      // F¿­: Atlas ÁÖ¼Ò
-            so.spriteName = cols[9].Trim();        // G¿­: Sprite ÀÌ¸§
-
-            EditorUtility.SetDirty(so);
-        }
-        AssetDatabase.SaveAssets();
-        Debug.Log("<color=green>¾ÆÀÌÅÛ µ¥ÀÌÅÍ µ¿±âÈ­ ¿Ï·á!</color>");
-    }
+using UnityEngine;
+using UnityEditor;
+using UnityEngine.Networking;
+using System.Collections;
+using System.Collections.Generic;
+using System;
+using Unity.EditorCoroutines.Editor;
+
+public class ItemDataImporter
+{
+    // [ì£¼ì˜] ItemData ì „ìš© ì‹œíŠ¸ì˜ CSV ì›¹ ê²Œì‹œ URLì„ ë„£ì„ ê²ƒ
+    private static string sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=113024103&single=true&output=csv";
+    private static string savePath = "Assets/03_Data/Item/Item_Mat"; // ì•„ì´í…œ ì—ì…‹ ì €ì¥ ê²½ë¡œ
+
+    [MenuItem("Tools/Sync Item Data (ID Based)")]
+    public static void ImportData() => EditorCoroutineUtility.StartCoroutineOwnerless(DownloadCSV());
+
+    private static IEnumerator DownloadCSV()
+    {
+        using (UnityWebRequest www = UnityWebRequest.Get(sheetUrl))
+        {
+            yield return www.SendWebRequest();
+            if (www.result == UnityWebRequest.Result.Success) ProcessCSV(www.downloadHandler.text);
+        }
+    }
+
+    private static void ProcessCSV(string csv)
+    {
+        string[] rows = csv.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+        // ê¸°ì¡´ ì—ì…‹ ë¡œë“œ (ID ê¸°ë°˜ ë§¤ì¹­ìš©)
+        string[] guids = AssetDatabase.FindAssets("t:ItemData");
+        Dictionary<string, ItemData> itemDict = new Dictionary<string, ItemData>();
+        foreach (var guid in guids)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<ItemData>(AssetDatabase.GUIDToAssetPath(guid));
+            if (asset != null) itemDict[asset.itemID] = asset;
+        }
+
+        // ë°ì´í„° íŒŒì‹± (í—¤ë” ê±´ë„ˆë›°ê³  ní–‰ë¶€í„° ì‹œì‘)
+        for (int i = 3; i < rows.Length; i++)
+        {
+            string[] cols = rows[i].Split(',');
+            if (cols.Length < 7) continue;
+
+            string id = cols[0].Trim(); // Aì—´: itemID
+            if (string.IsNullOrEmpty(id)) continue;
+
+            ItemData so;
+            if (!itemDict.TryGetValue(id, out so))
+            {
+                // ì—†ìœ¼ë©´ ìë™ ìƒì„±
+                so = ScriptableObject.CreateInstance<ItemData>();
+                so.itemID = id;
+                if (!AssetDatabase.IsValidFolder(savePath)) System.IO.Directory.CreateDirectory(savePath);
+                AssetDatabase.CreateAsset(so, $"{savePath}/Item_{id}.asset");
+                Debug.Log($"<color=cyan>ì‹ ê·œ ì•„ì´í…œ ìƒì„±: {id}</color>");
+            }
+
+            // ë°ì´í„° ê°±ì‹  (ì—´ ë²ˆí˜¸ëŠ” ë³¸ì¸ ì‹œíŠ¸ ìˆœì„œì— ë§ê²Œ ì¡°ì •)
+            so.itemName = cols[2].Trim();         // Cì—´: ì´ë¦„
+            if (Enum.TryParse(cols[3].Trim(), true, out ItemType type)) so.itemType = type; // Cì—´: íƒ€ì…
+            int.TryParse(cols[5], out so.maxStack); // Dì—´: ìµœëŒ€ì¤‘ì²©
+            so.itemDescription = cols[7].Trim();   // Hì—´: ì„¤ëª…
+            so.atlasAddress = cols[8].Trim();      // Fì—´: Atlas ì£¼ì†Œ
+            so.spriteName = cols[9].Trim();        // Gì—´: Sprite ì´ë¦„
+
+            EditorUtility.SetDirty(so);
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log("<color=green>ì•„ì´í…œ ë°ì´í„° ë™ê¸°í™” ì™„ë£Œ!</color>");
+    }
 }

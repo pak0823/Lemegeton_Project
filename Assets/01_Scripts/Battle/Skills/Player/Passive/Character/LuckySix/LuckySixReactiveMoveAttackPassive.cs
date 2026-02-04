@@ -1,138 +1,138 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Passives/LuckySix/Passive_2", fileName = "Passive_AttackOnEnemyMove")]
-public class LuckySixReactiveMoveAttackPassive : PassiveAsset
-{
-    [Tooltip("ÀÌ ½½·ÔÀÇ ½ºÅ³À» »ç¿ë (0 = Ã¹ ¹øÂ° ½ºÅ³ = '1¹ø ½ºÅ³')")]
-    public int skillSlotIndex = 0;
-
-    [Tooltip("¸®¾×¼Ç °ø°İ ½Ã gap close Á¡ÇÁ¸¦ »ç¿ëÇÒÁö ¿©ºÎ")]
-    public bool useGapClose = true;
-
-    private BattleUnit _owner;
-    private BattleManager _battle;
-
-    private readonly List<BattleUnit> _candidates = new();
-    private bool _reactionScheduled;
-
-    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
-    {
-        this._owner = _owner;
-        this._battle = _battle;
-        _candidates.Clear();
-        _reactionScheduled = false;
-
-        BattleUnit.OnAnyMoved += HandleAnyMoved;
-    }
-
-    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
-    {
-        BattleUnit.OnAnyMoved -= HandleAnyMoved;
-        _candidates.Clear();
-        _reactionScheduled = false;
-
-        this._owner = null;
-        this._battle = null;
-    }
-
-    private void HandleAnyMoved(BattleUnit _mover)
-    {
-        if (_owner == null || _battle == null) return;
-        if (_mover == null || _mover.IsDead || _mover.IsRetreated) return;
-        if (_owner.IsDead || _owner.IsRetreated) return;
-
-        // ÀÚ±â ÀÚ½Å ¹«½Ã
-        if (_mover == _owner) return;
-
-        // ¾Æ±º ÀÌµ¿Àº ¹«½Ã (¿ä±¸»çÇ×: Àû±º À¯´ÖÀÌ ÀÌµ¿ÇßÀ» ¶§)
-        if (_mover.data.team == _owner.data.team) return;
-
-        // "ÀÌ À¯´ÖÀÇ Â÷·Ê°¡ ¾Æ´Ò ¶§"¸¸ ¹ßµ¿
-        if (_battle.ActingUnit == _owner) return;
-
-        // ÈÄº¸ ¸ñ·Ï¿¡ Ãß°¡
-        if (!_candidates.Contains(_mover))
-            _candidates.Add(_mover);
-
-        // ÇÑ ¹ø¸¸ ½ºÄÉÁÙ: °°Àº ÇÁ·¹ÀÓ¿¡ ¿©·¯ ¹ø ÀÌµ¿ÇØµµ 1È¸ Ã³¸®
-        if (!_reactionScheduled)
-        {
-            _reactionScheduled = true;
-
-            if (_battle != null) _battle.RegisterReactionLock();
-
-            _battle.StartCoroutine(Co_ReactiveAttack());
-        }
-    }
-
-    private IEnumerator Co_ReactiveAttack()
-    {
-        // °°Àº ÇÁ·¹ÀÓ¿¡ ¿©·¯ ÀÌµ¿ÀÌ µé¾î¿À¸é ¸ğ¾Æ¼­ Ã³¸®ÇÏ±â À§ÇØ ÇÑ ÇÁ·¹ÀÓ ´ë±â
-        yield return null;
-
-        _reactionScheduled = false;
-
-        // Á¶°ÇÀ» ¸¸Á·ÇÏÁö ¸øÇØ Áß´ÜµÉ °æ¿ì ¶ô ÇØÁ¦ ÇÊ¼ö
-        if (_owner == null || _battle == null || _owner.IsDead || _owner.IsRetreated || _battle.ActingUnit == _owner)
-        {
-            _battle?.UnregisterReactionLock(); // [ÇØÁ¦]
-            yield break;
-        }
-
-        // À¯È¿ÇÑ Àû¸¸ ³²±â±â
-        _candidates.RemoveAll(u => u == null || u.IsDead || u.IsRetreated || u.data.team == _owner.data.team);
-        if (_candidates.Count == 0)
-        {
-            _battle.UnregisterReactionLock();
-            yield break;
-        }
-
-        // ÀÌµ¿ÇÑ ÀûÀÌ µÑ ÀÌ»óÀÌ¸é ±× Áß ÇÏ³ª¸¦ ¹«ÀÛÀ§·Î ¼±ÅÃ
-        var target = _candidates[Random.Range(0, _candidates.Count)];
-        _candidates.Clear();
-
-        if (target == null || target.IsDead || target.IsRetreated)
-        {
-            _battle.UnregisterReactionLock();
-            yield break;
-        }
-
-        var skill = GetReactiveSkill();
-        if (skill == null)
-        {
-            _battle.UnregisterReactionLock();
-            yield break;
-        }
-
-        SkillAsset skillToUse = skill;
-
-        bool doGapClose = useGapClose && skill.ShouldGapCloseToTarget(_owner, target);
-
-        _owner.AnnouncePassive(displayName);    // ÆĞ½Ãºê ¹ßµ¿ ¶óº§ È£Ãâ
-
-        // Çàµ¿ ÅäÅ«/ÅÏ¿¡ ¿µÇâ ¾ø´Â ¸®¾×¼Ç °ø°İ ½ÇÇà
-        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose);
-
-        // °ø°İÀÌ ´Ù ³¡³­ µÚ¿¡ ¶ô ÇØÁ¦
-        _battle.UnregisterReactionLock();
-    }
-
-    private SkillAsset GetReactiveSkill()
-    {
-        if (_owner == null || _owner.data == null) return null;
-
-        var arr = _owner.data.skills;
-        if (arr == null || arr.Length == 0) return null;
-
-        int idx = Mathf.Clamp(skillSlotIndex, 0, arr.Length - 1);
-        var s = arr[idx];
-
-        // »óÅÂ¿¡ µû¶ó Ä¡È¯µÇ´Â ½ºÅ³(StateConditionalMulti µî) ´ëÀÀ
-        if (s is ISkillForStateResolver resolver)
-            s = resolver.ResolveForCaster(_owner) ?? s;
-
-        return s;
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Passives/LuckySix/Passive_2", fileName = "Passive_AttackOnEnemyMove")]
+public class LuckySixReactiveMoveAttackPassive : PassiveAsset
+{
+    [Tooltip("ì´ ìŠ¬ë¡¯ì˜ ìŠ¤í‚¬ì„ ì‚¬ìš© (0 = ì²« ë²ˆì§¸ ìŠ¤í‚¬ = '1ë²ˆ ìŠ¤í‚¬')")]
+    public int skillSlotIndex = 0;
+
+    [Tooltip("ë¦¬ì•¡ì…˜ ê³µê²© ì‹œ gap close ì í”„ë¥¼ ì‚¬ìš©í• ì§€ ì—¬ë¶€")]
+    public bool useGapClose = true;
+
+    private BattleUnit _owner;
+    private BattleManager _battle;
+
+    private readonly List<BattleUnit> _candidates = new();
+    private bool _reactionScheduled;
+
+    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
+    {
+        this._owner = _owner;
+        this._battle = _battle;
+        _candidates.Clear();
+        _reactionScheduled = false;
+
+        BattleUnit.OnAnyMoved += HandleAnyMoved;
+    }
+
+    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
+    {
+        BattleUnit.OnAnyMoved -= HandleAnyMoved;
+        _candidates.Clear();
+        _reactionScheduled = false;
+
+        this._owner = null;
+        this._battle = null;
+    }
+
+    private void HandleAnyMoved(BattleUnit _mover)
+    {
+        if (_owner == null || _battle == null) return;
+        if (_mover == null || _mover.IsDead || _mover.IsRetreated) return;
+        if (_owner.IsDead || _owner.IsRetreated) return;
+
+        // ìê¸° ìì‹  ë¬´ì‹œ
+        if (_mover == _owner) return;
+
+        // ì•„êµ° ì´ë™ì€ ë¬´ì‹œ (ìš”êµ¬ì‚¬í•­: ì êµ° ìœ ë‹›ì´ ì´ë™í–ˆì„ ë•Œ)
+        if (_mover.data.team == _owner.data.team) return;
+
+        // "ì´ ìœ ë‹›ì˜ ì°¨ë¡€ê°€ ì•„ë‹ ë•Œ"ë§Œ ë°œë™
+        if (_battle.ActingUnit == _owner) return;
+
+        // í›„ë³´ ëª©ë¡ì— ì¶”ê°€
+        if (!_candidates.Contains(_mover))
+            _candidates.Add(_mover);
+
+        // í•œ ë²ˆë§Œ ìŠ¤ì¼€ì¤„: ê°™ì€ í”„ë ˆì„ì— ì—¬ëŸ¬ ë²ˆ ì´ë™í•´ë„ 1íšŒ ì²˜ë¦¬
+        if (!_reactionScheduled)
+        {
+            _reactionScheduled = true;
+
+            if (_battle != null) _battle.RegisterReactionLock();
+
+            _battle.StartCoroutine(Co_ReactiveAttack());
+        }
+    }
+
+    private IEnumerator Co_ReactiveAttack()
+    {
+        // ê°™ì€ í”„ë ˆì„ì— ì—¬ëŸ¬ ì´ë™ì´ ë“¤ì–´ì˜¤ë©´ ëª¨ì•„ì„œ ì²˜ë¦¬í•˜ê¸° ìœ„í•´ í•œ í”„ë ˆì„ ëŒ€ê¸°
+        yield return null;
+
+        _reactionScheduled = false;
+
+        // ì¡°ê±´ì„ ë§Œì¡±í•˜ì§€ ëª»í•´ ì¤‘ë‹¨ë  ê²½ìš° ë½ í•´ì œ í•„ìˆ˜
+        if (_owner == null || _battle == null || _owner.IsDead || _owner.IsRetreated || _battle.ActingUnit == _owner)
+        {
+            _battle?.UnregisterReactionLock(); // [í•´ì œ]
+            yield break;
+        }
+
+        // ìœ íš¨í•œ ì ë§Œ ë‚¨ê¸°ê¸°
+        _candidates.RemoveAll(u => u == null || u.IsDead || u.IsRetreated || u.data.team == _owner.data.team);
+        if (_candidates.Count == 0)
+        {
+            _battle.UnregisterReactionLock();
+            yield break;
+        }
+
+        // ì´ë™í•œ ì ì´ ë‘˜ ì´ìƒì´ë©´ ê·¸ ì¤‘ í•˜ë‚˜ë¥¼ ë¬´ì‘ìœ„ë¡œ ì„ íƒ
+        var target = _candidates[Random.Range(0, _candidates.Count)];
+        _candidates.Clear();
+
+        if (target == null || target.IsDead || target.IsRetreated)
+        {
+            _battle.UnregisterReactionLock();
+            yield break;
+        }
+
+        var skill = GetReactiveSkill();
+        if (skill == null)
+        {
+            _battle.UnregisterReactionLock();
+            yield break;
+        }
+
+        SkillAsset skillToUse = skill;
+
+        bool doGapClose = useGapClose && skill.ShouldGapCloseToTarget(_owner, target);
+
+        _owner.AnnouncePassive(displayName);    // íŒ¨ì‹œë¸Œ ë°œë™ ë¼ë²¨ í˜¸ì¶œ
+
+        // í–‰ë™ í† í°/í„´ì— ì˜í–¥ ì—†ëŠ” ë¦¬ì•¡ì…˜ ê³µê²© ì‹¤í–‰
+        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose);
+
+        // ê³µê²©ì´ ë‹¤ ëë‚œ ë’¤ì— ë½ í•´ì œ
+        _battle.UnregisterReactionLock();
+    }
+
+    private SkillAsset GetReactiveSkill()
+    {
+        if (_owner == null || _owner.data == null) return null;
+
+        var arr = _owner.data.skills;
+        if (arr == null || arr.Length == 0) return null;
+
+        int idx = Mathf.Clamp(skillSlotIndex, 0, arr.Length - 1);
+        var s = arr[idx];
+
+        // ìƒíƒœì— ë”°ë¼ ì¹˜í™˜ë˜ëŠ” ìŠ¤í‚¬(StateConditionalMulti ë“±) ëŒ€ì‘
+        if (s is ISkillForStateResolver resolver)
+            s = resolver.ResolveForCaster(_owner) ?? s;
+
+        return s;
+    }
+}

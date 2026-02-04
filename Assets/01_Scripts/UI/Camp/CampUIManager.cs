@@ -1,239 +1,239 @@
-using Project.UI;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-
-
-// Çì´õ Á¾·ù Á¤ÀÇ
-public enum CampHeaderType
-{
-    None,       // ¾Æ¹«°Íµµ ¾È ¶ç¿ò (Option µî)
-    Character,  // Ä³¸¯ÅÍ ¼±ÅÃÃ¢ (Status, Skill µî)
-    Item        // ¾ÆÀÌÅÛ ¼±ÅÃÃ¢ (Inventory µî)
-}
-
-[System.Serializable]
-public struct CampTab
-{
-    public string tabName;       // ¿¡µğÅÍ ½Äº°¿ë ÀÌ¸§
-    public Toggle tabToggle;     // »ó´Ü ÅÇ Åä±Û ¹öÆ°
-    public GameObject contentPage; // ¿¬°áµÈ ÆäÀÌÁö ¿ÀºêÁ§Æ® (Page_Status µî)
-    public CampHeaderType headerType;   // ÀÌ ÅÇÀ» ´­·¶À» ¶§ »ó´Ü¿¡ ¹» ¶ç¿ïÁö °áÁ¤
-
-    [Header("Visual Settings")]
-    public Image tabImage;           // ÅÇ ¹öÆ°ÀÇ ¹è°æ ÀÌ¹ÌÁö°¡ ÀÖ´Â ÄÄÆ÷³ÍÆ®
-    public Sprite normalSprite;      // ¼±ÅÃ ¾È µÆÀ» ¶§ (Å×µÎ¸® 4¸é ´Ù ÀÖÀ½)
-    public Sprite selectedSprite;    // ¼±ÅÃ µÆÀ» ¶§ (ÇÏ´Ü Å×µÎ¸® ¾øÀ½, ¹è°æ»ö°ú ÀÏÄ¡)
-    // ÇÊ¿äÇÏ´Ù¸é ÅØ½ºÆ® »ö»óµµ Ãß°¡ °¡´É
-    // public TextMeshProUGUI tabText;
-    // public Color normalColor;
-    // public Color selectedColor;
-}
-
-public class CampUIManager : ModalWindowBase
-{
-    public static CampUIManager Instance {  get; private set; }
-
-    // °ü¸® ÄÄÆ÷³ÍÆ®µé
-    [SerializeField] private CampTabController tabController;
-    [SerializeField] private CampHeaderController headerController;
-    [SerializeField] private CharacterHeaderController charHeader;
-    //[SerializeField] private CraftHeaderController itemHeader;
-
-    private CampHeaderType currentHeaderType;
-
-    [Header("UI Control")]
-    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
-    [SerializeField] private bool pauseTimerWhileOpen = true;
-
-    [Header("Tabs Configuration")]
-    public List<CampTab> tabs = new List<CampTab>(); // ¿©±â¿¡ ÅÇ°ú ÆäÀÌÁö¸¦ µî·Ï
-
-    [Header("Character Selection")]
-    public UnitData selectedUnit;
-
-    [Header("Drag & Drop Visuals")]
-    [SerializeField] private Image dragGhostImage; // ¸¶¿ì½º µû¶ó´Ù´Ò Åõ¸í ÀÌ¹ÌÁö
-
-    [Header("UI Pages References")]
-    public CampStatusPage statusPage;
-    public CampSkillPage skillPage;
-
-    [Header("Databases")]
-    public TrainingDB trainingDB;
-
-    [Header("Button")]
-    public Button closeCampBtn; 
-
-    private bool isOpen = false;
-
-    protected override void Awake()
-    {
-        base.Awake();
-
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-        InitializeTabs(); // ÅÇ ¸®½º³Ê µî·ÏÀº ¹Ì¸® ÇØµÒ
-
-        // ·Îµù ¿Ï·á ÀÌº¥Æ® ±¸µ¶
-        if (PlayerDataManager.Instance != null)
-        {
-            PlayerDataManager.Instance.OnUnitsLoaded += OnDataLoaded;
-        }
-
-
-        // °í½ºÆ® ÀÌ¹ÌÁö´Â Æò¼Ò¿¡ ²¨µÒ + ·¹ÀÌÄ³½ºÆ® Â÷´Ü
-        if (dragGhostImage)
-        {
-            dragGhostImage.gameObject.SetActive(false);
-            dragGhostImage.raycastTarget = false; // ÀÌ°Ô ²¨Á® ÀÖ¾î¾ß Drop ÀÌº¥Æ®°¡ ¾Æ·¡ ½½·Ô¿¡ Àü´ŞµÊ
-        }
-
-        if (closeCampBtn != null) closeCampBtn.onClick.AddListener(OnClickClose);
-    }
-    private void Start()
-    {
-        // Awake¸¸À¸·Î´Â ´Ù¸¥ ÄÄÆ÷³ÍÆ® ÃÊ±âÈ­ ¼ø¼­¿¡ ¹Ğ¸± ¼ö ÀÖÀ¸¹Ç·Î Start¿¡¼­ È®½ÇÇÏ°Ô Ã³¸®
-        if (root == null) root = GetComponent<CanvasGroup>();
-        Hide();
-
-        if (PlayerDataManager.Instance != null && !PlayerDataManager.Instance.IsLoading)
-        {
-            OnDataLoaded();
-        }
-    }
-    private void OnDataLoaded()
-    {
-        // µ¥ÀÌÅÍ°¡ ·ÎµåµÈ ÈÄ¿¡¾ß Ä³¸¯ÅÍ Çì´õ¸¦ ÃÊ±âÈ­ÇÔ
-        charHeader.Initialize((index) => {
-            UnitData data = PlayerDataManager.Instance.GetOwnedUnit(index);
-            if (data != null) OnSelectCharacter(data);
-        });
-
-        // Ã¹ ¹øÂ° ÅÇ °­Á¦ ½ÇÇà (µ¥ÀÌÅÍ°¡ ÀÖÀ¸´Ï ÀÌÁ¦ ¾ÈÀüÇÔ)
-        ResetToFirstTab();
-    }
-
-    private void Update()
-    {
-        // Å° ÀÔ·ÂÀ¸·Î ¿­°í ´İ±â
-        if (Input.GetKeyDown(toggleKey))
-        {
-            Toggle();
-        }
-    }
-
-    // --- µå·¡±× Áö¿ø ÇÔ¼öµé (FormationSlotUI¿¡¼­ È£Ãâ) ---
-
-    public void StartDrag(Sprite sprite)
-    {
-        if (dragGhostImage == null) return;
-
-        dragGhostImage.sprite = sprite;
-        dragGhostImage.gameObject.SetActive(true);
-        // ¸Ç À§·Î ¿Ã·Á¼­ ´Ù¸¥ UI¿¡ ¾È °¡·ÁÁö°Ô ÇÔ
-        dragGhostImage.transform.SetAsLastSibling();
-    }
-
-    public void UpdateDragPosition(Vector2 position)
-    {
-        if (dragGhostImage == null) return;
-        dragGhostImage.transform.position = position;
-    }
-
-    public void EndDrag()
-    {
-        if (dragGhostImage == null) return;
-        dragGhostImage.gameObject.SetActive(false);
-    }
-
-    // --- ÅÇ ÃÊ±âÈ­ ¹× ÀÌº¥Æ® µî·Ï ---
-    private void InitializeTabs()
-    {
-        foreach (var tab in tabs)
-        {
-            if (tab.tabToggle != null)
-            {
-                // Åä±Û °ªÀÌ ¹Ù²ğ ¶§(Å¬¸¯µÉ ¶§) ½ÇÇàµÉ ÇÔ¼ö ¿¬°á
-                tab.tabToggle.onValueChanged.AddListener((isOn) =>
-                {
-                    if (isOn) OnTabSelected(tab);
-                });
-            }
-        }
-    }
-
-    // ÅÇ ¼±ÅÃ ½Ã ½ÇÇàµÇ´Â ·ÎÁ÷
-    private void OnTabSelected(CampTab activeTab)
-    {
-        currentHeaderType = activeTab.headerType; // ÇöÀç Çì´õ Å¸ÀÔ ÀúÀå
-
-        // ÆäÀÌÁö ½ºÀ§Äª
-        foreach (var tab in tabs)
-        {
-            if (tab.contentPage != null)
-                tab.contentPage.SetActive(tab.contentPage == activeTab.contentPage);
-        }
-
-        // ºñÁÖ¾ó À§ÀÓ
-        tabController.UpdateTabVisuals(tabs, activeTab);
-
-        // Çì´õ À§ÀÓ
-        headerController.UpdateHeader(activeTab.headerType);
-    }
-
-    private void OnClickClose()
-    {
-        Hide();
-    }
-
-    public override void Show()
-    {
-        base.Show();
-        ResetToFirstTab();
-    }
-
-    public override void Hide()
-    {
-        base.Hide();
-
-        if (isOpen)
-        {
-            // ÀÌµ¿ Àá±İ ÇØÁ¦
-            if (pauseTimerWhileOpen)
-                PlayerMovement.Instance?.UnlockMovementIndefinite();
-        }
-
-        isOpen = false;
-    }
-
-    // ÅÇ °­Á¦ ÃÊ±âÈ­ ÇÔ¼ö
-    private void ResetToFirstTab()
-    {
-        if (tabs.Count > 0)
-        {
-            tabs[0].tabToggle.isOn = true; // ¸®½º³Ê°¡ OnTabSelected È£ÃâÇÔ
-            OnTabSelected(tabs[0]);
-        }
-    }
-
-    // Ä³¸¯ÅÍ ¼±ÅÃ ·ÎÁ÷ 
-    public void OnSelectCharacter(UnitData unit)
-    {
-        selectedUnit = unit;
-
-        // »óÅÂÃ¢ Á¤º¸ °»½Å
-        if (statusPage != null && statusPage.gameObject.activeInHierarchy)
-        {
-            // ÆäÀÌÁö°¡ Á÷Á¢ selectedUnitÀ» ÂüÁ¶ÇÏ°Å³ª, ¾Æ·¡Ã³·³ ¸í½ÃÀûÀ¸·Î °»½Å ¸í·É
-            statusPage.RefreshUI();
-        }
-
-        // ½ºÅ³Ã¢ Á¤º¸ °»½Å
-        if (skillPage != null && skillPage.gameObject.activeInHierarchy)
-        {
-            skillPage.RefreshUI();
-        }
-    }
+using Project.UI;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+
+// í—¤ë” ì¢…ë¥˜ ì •ì˜
+public enum CampHeaderType
+{
+    None,       // ì•„ë¬´ê²ƒë„ ì•ˆ ë„ì›€ (Option ë“±)
+    Character,  // ìºë¦­í„° ì„ íƒì°½ (Status, Skill ë“±)
+    Item        // ì•„ì´í…œ ì„ íƒì°½ (Inventory ë“±)
+}
+
+[System.Serializable]
+public struct CampTab
+{
+    public string tabName;       // ì—ë””í„° ì‹ë³„ìš© ì´ë¦„
+    public Toggle tabToggle;     // ìƒë‹¨ íƒ­ í† ê¸€ ë²„íŠ¼
+    public GameObject contentPage; // ì—°ê²°ëœ í˜ì´ì§€ ì˜¤ë¸Œì íŠ¸ (Page_Status ë“±)
+    public CampHeaderType headerType;   // ì´ íƒ­ì„ ëˆŒë €ì„ ë•Œ ìƒë‹¨ì— ë­˜ ë„ìš¸ì§€ ê²°ì •
+
+    [Header("Visual Settings")]
+    public Image tabImage;           // íƒ­ ë²„íŠ¼ì˜ ë°°ê²½ ì´ë¯¸ì§€ê°€ ìˆëŠ” ì»´í¬ë„ŒíŠ¸
+    public Sprite normalSprite;      // ì„ íƒ ì•ˆ ëì„ ë•Œ (í…Œë‘ë¦¬ 4ë©´ ë‹¤ ìˆìŒ)
+    public Sprite selectedSprite;    // ì„ íƒ ëì„ ë•Œ (í•˜ë‹¨ í…Œë‘ë¦¬ ì—†ìŒ, ë°°ê²½ìƒ‰ê³¼ ì¼ì¹˜)
+    // í•„ìš”í•˜ë‹¤ë©´ í…ìŠ¤íŠ¸ ìƒ‰ìƒë„ ì¶”ê°€ ê°€ëŠ¥
+    // public TextMeshProUGUI tabText;
+    // public Color normalColor;
+    // public Color selectedColor;
+}
+
+public class CampUIManager : ModalWindowBase
+{
+    public static CampUIManager Instance {  get; private set; }
+
+    // ê´€ë¦¬ ì»´í¬ë„ŒíŠ¸ë“¤
+    [SerializeField] private CampTabController tabController;
+    [SerializeField] private CampHeaderController headerController;
+    [SerializeField] private CharacterHeaderController charHeader;
+    //[SerializeField] private CraftHeaderController itemHeader;
+
+    private CampHeaderType currentHeaderType;
+
+    [Header("UI Control")]
+    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
+    [SerializeField] private bool pauseTimerWhileOpen = true;
+
+    [Header("Tabs Configuration")]
+    public List<CampTab> tabs = new List<CampTab>(); // ì—¬ê¸°ì— íƒ­ê³¼ í˜ì´ì§€ë¥¼ ë“±ë¡
+
+    [Header("Character Selection")]
+    public UnitData selectedUnit;
+
+    [Header("Drag & Drop Visuals")]
+    [SerializeField] private Image dragGhostImage; // ë§ˆìš°ìŠ¤ ë”°ë¼ë‹¤ë‹ íˆ¬ëª… ì´ë¯¸ì§€
+
+    [Header("UI Pages References")]
+    public CampStatusPage statusPage;
+    public CampSkillPage skillPage;
+
+    [Header("Databases")]
+    public TrainingDB trainingDB;
+
+    [Header("Button")]
+    public Button closeCampBtn; 
+
+    private bool isOpen = false;
+
+    protected override void Awake()
+    {
+        base.Awake();
+
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        InitializeTabs(); // íƒ­ ë¦¬ìŠ¤ë„ˆ ë“±ë¡ì€ ë¯¸ë¦¬ í•´ë‘ 
+
+        // ë¡œë”© ì™„ë£Œ ì´ë²¤íŠ¸ êµ¬ë…
+        if (PlayerDataManager.Instance != null)
+        {
+            PlayerDataManager.Instance.OnUnitsLoaded += OnDataLoaded;
+        }
+
+
+        // ê³ ìŠ¤íŠ¸ ì´ë¯¸ì§€ëŠ” í‰ì†Œì— êº¼ë‘  + ë ˆì´ìºìŠ¤íŠ¸ ì°¨ë‹¨
+        if (dragGhostImage)
+        {
+            dragGhostImage.gameObject.SetActive(false);
+            dragGhostImage.raycastTarget = false; // ì´ê²Œ êº¼ì ¸ ìˆì–´ì•¼ Drop ì´ë²¤íŠ¸ê°€ ì•„ë˜ ìŠ¬ë¡¯ì— ì „ë‹¬ë¨
+        }
+
+        if (closeCampBtn != null) closeCampBtn.onClick.AddListener(OnClickClose);
+    }
+    private void Start()
+    {
+        // Awakeë§Œìœ¼ë¡œëŠ” ë‹¤ë¥¸ ì»´í¬ë„ŒíŠ¸ ì´ˆê¸°í™” ìˆœì„œì— ë°€ë¦´ ìˆ˜ ìˆìœ¼ë¯€ë¡œ Startì—ì„œ í™•ì‹¤í•˜ê²Œ ì²˜ë¦¬
+        if (root == null) root = GetComponent<CanvasGroup>();
+        Hide();
+
+        if (PlayerDataManager.Instance != null && !PlayerDataManager.Instance.IsLoading)
+        {
+            OnDataLoaded();
+        }
+    }
+    private void OnDataLoaded()
+    {
+        // ë°ì´í„°ê°€ ë¡œë“œëœ í›„ì—ì•¼ ìºë¦­í„° í—¤ë”ë¥¼ ì´ˆê¸°í™”í•¨
+        charHeader.Initialize((index) => {
+            UnitData data = PlayerDataManager.Instance.GetOwnedUnit(index);
+            if (data != null) OnSelectCharacter(data);
+        });
+
+        // ì²« ë²ˆì§¸ íƒ­ ê°•ì œ ì‹¤í–‰ (ë°ì´í„°ê°€ ìˆìœ¼ë‹ˆ ì´ì œ ì•ˆì „í•¨)
+        ResetToFirstTab();
+    }
+
+    private void Update()
+    {
+        // í‚¤ ì…ë ¥ìœ¼ë¡œ ì—´ê³  ë‹«ê¸°
+        if (Input.GetKeyDown(toggleKey))
+        {
+            Toggle();
+        }
+    }
+
+    // --- ë“œë˜ê·¸ ì§€ì› í•¨ìˆ˜ë“¤ (FormationSlotUIì—ì„œ í˜¸ì¶œ) ---
+
+    public void StartDrag(Sprite sprite)
+    {
+        if (dragGhostImage == null) return;
+
+        dragGhostImage.sprite = sprite;
+        dragGhostImage.gameObject.SetActive(true);
+        // ë§¨ ìœ„ë¡œ ì˜¬ë ¤ì„œ ë‹¤ë¥¸ UIì— ì•ˆ ê°€ë ¤ì§€ê²Œ í•¨
+        dragGhostImage.transform.SetAsLastSibling();
+    }
+
+    public void UpdateDragPosition(Vector2 position)
+    {
+        if (dragGhostImage == null) return;
+        dragGhostImage.transform.position = position;
+    }
+
+    public void EndDrag()
+    {
+        if (dragGhostImage == null) return;
+        dragGhostImage.gameObject.SetActive(false);
+    }
+
+    // --- íƒ­ ì´ˆê¸°í™” ë° ì´ë²¤íŠ¸ ë“±ë¡ ---
+    private void InitializeTabs()
+    {
+        foreach (var tab in tabs)
+        {
+            if (tab.tabToggle != null)
+            {
+                // í† ê¸€ ê°’ì´ ë°”ë€” ë•Œ(í´ë¦­ë  ë•Œ) ì‹¤í–‰ë  í•¨ìˆ˜ ì—°ê²°
+                tab.tabToggle.onValueChanged.AddListener((isOn) =>
+                {
+                    if (isOn) OnTabSelected(tab);
+                });
+            }
+        }
+    }
+
+    // íƒ­ ì„ íƒ ì‹œ ì‹¤í–‰ë˜ëŠ” ë¡œì§
+    private void OnTabSelected(CampTab activeTab)
+    {
+        currentHeaderType = activeTab.headerType; // í˜„ì¬ í—¤ë” íƒ€ì… ì €ì¥
+
+        // í˜ì´ì§€ ìŠ¤ìœ„ì¹­
+        foreach (var tab in tabs)
+        {
+            if (tab.contentPage != null)
+                tab.contentPage.SetActive(tab.contentPage == activeTab.contentPage);
+        }
+
+        // ë¹„ì£¼ì–¼ ìœ„ì„
+        tabController.UpdateTabVisuals(tabs, activeTab);
+
+        // í—¤ë” ìœ„ì„
+        headerController.UpdateHeader(activeTab.headerType);
+    }
+
+    private void OnClickClose()
+    {
+        Hide();
+    }
+
+    public override void Show()
+    {
+        base.Show();
+        ResetToFirstTab();
+    }
+
+    public override void Hide()
+    {
+        base.Hide();
+
+        if (isOpen)
+        {
+            // ì´ë™ ì ê¸ˆ í•´ì œ
+            if (pauseTimerWhileOpen)
+                PlayerMovement.Instance?.UnlockMovementIndefinite();
+        }
+
+        isOpen = false;
+    }
+
+    // íƒ­ ê°•ì œ ì´ˆê¸°í™” í•¨ìˆ˜
+    private void ResetToFirstTab()
+    {
+        if (tabs.Count > 0)
+        {
+            tabs[0].tabToggle.isOn = true; // ë¦¬ìŠ¤ë„ˆê°€ OnTabSelected í˜¸ì¶œí•¨
+            OnTabSelected(tabs[0]);
+        }
+    }
+
+    // ìºë¦­í„° ì„ íƒ ë¡œì§ 
+    public void OnSelectCharacter(UnitData unit)
+    {
+        selectedUnit = unit;
+
+        // ìƒíƒœì°½ ì •ë³´ ê°±ì‹ 
+        if (statusPage != null && statusPage.gameObject.activeInHierarchy)
+        {
+            // í˜ì´ì§€ê°€ ì§ì ‘ selectedUnitì„ ì°¸ì¡°í•˜ê±°ë‚˜, ì•„ë˜ì²˜ëŸ¼ ëª…ì‹œì ìœ¼ë¡œ ê°±ì‹  ëª…ë ¹
+            statusPage.RefreshUI();
+        }
+
+        // ìŠ¤í‚¬ì°½ ì •ë³´ ê°±ì‹ 
+        if (skillPage != null && skillPage.gameObject.activeInHierarchy)
+        {
+            skillPage.RefreshUI();
+        }
+    }
 }

@@ -1,24 +1,24 @@
-using UnityEngine;
-using System.Collections.Generic;
-
-[CreateAssetMenu(fileName = "New Recipe", menuName = "Data/CraftRecipe")]
-public class CraftRecipe : ScriptableObject
-{
-    [Header("·¹½ÃÇÇ ID (ÇØ±İ ÀúÀå¿ë)")]
-    public string recipeID;         // ¿¹: "RECIPE_WOOD_SWORD"
-
-    [Header("Á¦ÀÛ °á°ú¹°")]
-    public ItemData resultItem;     // ¸¸µé¾îÁú ¾ÆÀÌÅÛ
-    public int resultCount = 1;     // ¸î °³ ¸¸µé¾îÁö´ÂÁö
-
-    [Header("ÇÊ¿ä Àç·á ¸ñ·Ï")]
-    public List<Ingredient> ingredients;
-
-    // Àç·á ±¸Á¶Ã¼ (³»ºÎ Å¬·¡½º·Î Á¤ÀÇ)
-    [System.Serializable]
-    public struct Ingredient
-    {
-        public ItemData material;   // Àç·á ¾ÆÀÌÅÛ µ¥ÀÌÅÍ
-        public int requiredCount;   // ÇÊ¿ä °³¼ö
-    }
+using UnityEngine;
+using System.Collections.Generic;
+
+[CreateAssetMenu(fileName = "New Recipe", menuName = "Data/CraftRecipe")]
+public class CraftRecipe : ScriptableObject
+{
+    [Header("ë ˆì‹œí”¼ ID (í•´ê¸ˆ ì €ì¥ìš©)")]
+    public string recipeID;         // ì˜ˆ: "RECIPE_WOOD_SWORD"
+
+    [Header("ì œì‘ ê²°ê³¼ë¬¼")]
+    public ItemData resultItem;     // ë§Œë“¤ì–´ì§ˆ ì•„ì´í…œ
+    public int resultCount = 1;     // ëª‡ ê°œ ë§Œë“¤ì–´ì§€ëŠ”ì§€
+
+    [Header("í•„ìš” ì¬ë£Œ ëª©ë¡")]
+    public List<Ingredient> ingredients;
+
+    // ì¬ë£Œ êµ¬ì¡°ì²´ (ë‚´ë¶€ í´ë˜ìŠ¤ë¡œ ì •ì˜)
+    [System.Serializable]
+    public struct Ingredient
+    {
+        public ItemData material;   // ì¬ë£Œ ì•„ì´í…œ ë°ì´í„°
+        public int requiredCount;   // í•„ìš” ê°œìˆ˜
+    }
 }

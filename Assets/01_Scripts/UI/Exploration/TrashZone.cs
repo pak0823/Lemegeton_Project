@@ -1,38 +1,38 @@
-using UnityEngine;
-using UnityEngine.EventSystems;
-
-public class TrashZone : MonoBehaviour, IDropHandler, IPointerEnterHandler, IPointerExitHandler
-{
-    [SerializeField] private GameObject trashVisual; // ·Î±×¸¦ °¡¸± ¾²·¹±âÅë ÀÌ¹ÌÁö
-
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        // ¾ÆÀÌÅÛÀ» µå·¡±× ÁßÀÏ ¶§¸¸ ½Ã°¢Àû ÇÇµå¹é Á¦°ø
-        if (eventData.dragging && eventData.pointerDrag.CompareTag("InventoryIcon"))
-        {
-            trashVisual.SetActive(true);
-        }
-    }
-
-    public void OnPointerExit(PointerEventData eventData)
-    {
-        trashVisual.SetActive(false);
-    }
-
-    public void OnDrop(PointerEventData eventData)
-    {
-        trashVisual.SetActive(false);
-
-        // µå·¡±× ÁßÀÎ ¾ÆÀÌÅÛ ÇÚµé·¯ °¡Á®¿À±â
-        var dragHandler = eventData.pointerDrag.GetComponent<InventoryDragHandler>();
-        if (dragHandler != null)
-        {
-            int index = dragHandler.GetFromIndex();
-
-            // ½ÇÁ¦ »èÁ¦ ¹× ÀúÀå ·ÎÁ÷ ½ÇÇà
-            InventoryManager.Instance.RemoveItemAtSlot(index);
-            PlayerDataManager.Instance.SaveGame();
-            Debug.Log("¾ÆÀÌÅÛÀ» ¾²·¹±âÅë¿¡ ¹ö·È½À´Ï´Ù.");
-        }
-    }
+using UnityEngine;
+using UnityEngine.EventSystems;
+
+public class TrashZone : MonoBehaviour, IDropHandler, IPointerEnterHandler, IPointerExitHandler
+{
+    [SerializeField] private GameObject trashVisual; // ë¡œê·¸ë¥¼ ê°€ë¦´ ì“°ë ˆê¸°í†µ ì´ë¯¸ì§€
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        // ì•„ì´í…œì„ ë“œë˜ê·¸ ì¤‘ì¼ ë•Œë§Œ ì‹œê°ì  í”¼ë“œë°± ì œê³µ
+        if (eventData.dragging && eventData.pointerDrag.CompareTag("InventoryIcon"))
+        {
+            trashVisual.SetActive(true);
+        }
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        trashVisual.SetActive(false);
+    }
+
+    public void OnDrop(PointerEventData eventData)
+    {
+        trashVisual.SetActive(false);
+
+        // ë“œë˜ê·¸ ì¤‘ì¸ ì•„ì´í…œ í•¸ë“¤ëŸ¬ ê°€ì ¸ì˜¤ê¸°
+        var dragHandler = eventData.pointerDrag.GetComponent<InventoryDragHandler>();
+        if (dragHandler != null)
+        {
+            int index = dragHandler.GetFromIndex();
+
+            // ì‹¤ì œ ì‚­ì œ ë° ì €ì¥ ë¡œì§ ì‹¤í–‰
+            InventoryManager.Instance.RemoveItemAtSlot(index);
+            PlayerDataManager.Instance.SaveGame();
+            Debug.Log("ì•„ì´í…œì„ ì“°ë ˆê¸°í†µì— ë²„ë ¸ìŠµë‹ˆë‹¤.");
+        }
+    }
 }

@@ -1,205 +1,205 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class BattleWaveManager : MonoBehaviour
-{
-    private BattleManager battleManager;
-    private IGridProvider grid;
-    private IBattleMapProvider map;
-
-    #region Variables
-    [Header("Configuration")]
-    [SerializeField] private WaveSet waveSet;
-    [SerializeField] private StageDatabase stageDB;
-    [SerializeField] private bool autoAssignWaveSet = true;
-    [SerializeField] private Transform enemyRoot;
-    [SerializeField] private float waveTransitionDelay = 1.5f;
-
-    [Header("Debug")]
-    [SerializeField] private BattleContext debugContext = BattleContext.TrapEncounter;
-    [SerializeField] private int debugStageNumber = -1;
-
-    // ³»ºÎ »óÅÂ
-    private int _currentWaveIndex = -1;
-    private GameObject _spawnedEnemyLayout;
-    private bool _isWaveTransitioning = false;
-    private bool _battleEndedOnce = false;
-
-    // ÇÁ·ÎÆÛÆ¼
-    public int CurrentWave => _currentWaveIndex + 1;
-    public int TotalWaves => waveSet ? waveSet.waves.Count : 0;
-    public bool IsWaveTransitioning => _isWaveTransitioning;
-    public WaveSet CurrentWaveSet => waveSet;
-
-    // BattleManager¿¡°Ô »óÈ²À» ¾Ë¸± ÀÌº¥Æ®
-    // (ÇöÀç¿şÀÌºê, ÃÑ¿şÀÌºê, ¶óº§)
-    public event System.Action<int, int, string> OnWaveInfoUpdated;
-    // (´ÙÀ½¿şÀÌºê, ÃÑ¿şÀÌºê) - ÀüÈ¯ ¿¬Ãâ¿ë
-    public event System.Action<int, int> OnWaveTransitionStarted;
-    // ¿şÀÌºê ·Îµå ¿Ï·á! (Àû ¸Ê ¸Å´ÏÀú, Àû ¿À¹ö·¹ÀÌ) -> BMÀÌ ¹Ş¾Æ¼­ À¯´Ö ¸®¹ÙÀÎµù ÇØ¾ß ÇÔ
-    public event System.Action<BattleMapManager, Tilemap, Tilemap> OnWaveLoaded;
-    // ¸ğµç ¿şÀÌºê Å¬¸®¾î!
-    public event System.Action OnAllWavesCleared;
-    #endregion
-
-    public void Initialize(BattleManager _battleManager, IGridProvider _grid, IBattleMapProvider _map)
-    {
-        battleManager = _battleManager;
-        grid = _grid;
-        map = _map;
-    }
-
-    // ÃÊ±âÈ­ È¤Àº Ã¹ ¿şÀÌºê ½ÃÀÛ
-    public void StartFirstWave()
-    {
-        if (waveSet == null || waveSet.waves == null || waveSet.waves.Count == 0)
-        {
-            Debug.LogWarning("[WaveManager] ¿şÀÌºê ¼¼Æ®°¡ ¾ø½À´Ï´Ù. Å×½ºÆ® ¸ğµå È¤Àº ¹èÄ¡µÈ À¯´Ö »ç¿ë.");
-            // ¿şÀÌºê°¡ ¾ø¾îµµ ·Îµå ¿Ï·á ½ÅÈ£´Â º¸³»¾ß BMÀÌ À¯´ÖÀ» ÀâÀ½
-            OnWaveLoaded?.Invoke(null, null, null);
-        }
-        else
-        {
-            LoadWave(0);
-        }
-    }
-
-    public void LoadWave(int index)
-    {
-        if (waveSet == null || waveSet.waves == null || index < 0 || index >= waveSet.waves.Count)
-        {
-            Debug.LogError($"[WaveManager] Invalid Wave Index: {index}");
-            return;
-        }
-
-        // 1. ±âÁ¸ Àû Ã»¼Ò
-        CleanupEnemiesAndLayouts();
-
-        _currentWaveIndex = index;
-        var w = waveSet.waves[index];
-
-        // 2. Àû ·¹ÀÌ¾Æ¿ô ½ºÆù
-        Tilemap waveEnemyFloor = null;
-        Tilemap waveEnemyOverlay = null;
-        BattleMapManager localProvider = null;
-
-        if (w.enemyLayoutPrefab)
-        {
-            _spawnedEnemyLayout = Instantiate(w.enemyLayoutPrefab, enemyRoot ? enemyRoot : transform);
-
-            // ¸Ê ÇÁ·Î¹ÙÀÌ´õ Å½»ö
-            localProvider = _spawnedEnemyLayout.GetComponentInChildren<BattleMapManager>(true);
-
-            if (localProvider != null)
-            {
-                waveEnemyFloor = localProvider.EnemyFloor;
-            }
-            else
-            {
-                // Fallback: ÀÌ¸§À¸·Î Ã£±â
-                waveEnemyFloor = _spawnedEnemyLayout.GetComponentsInChildren<Tilemap>(true)
-                    .FirstOrDefault(t => t.name.IndexOf("Enemy", System.StringComparison.OrdinalIgnoreCase) >= 0);
-            }
-
-            // ¿À¹ö·¹ÀÌ Ã£±â
-            waveEnemyOverlay = _spawnedEnemyLayout.GetComponentsInChildren<Tilemap>(true)
-                .FirstOrDefault(t => t.name.IndexOf("Overlay_Skill", System.StringComparison.OrdinalIgnoreCase) >= 0);
-        }
-
-        // 3. UI ¾Ë¸² ÀÌº¥Æ® ¹ß¼Û
-        OnWaveInfoUpdated?.Invoke(CurrentWave, TotalWaves, w.label);
-
-        // 4. BM¿¡°Ô "¾ß, ¸ÊÀÌ¶û Àû ±ò¾Æ³ùÀ¸´Ï±î ³×°¡ Ã³¸®ÇØ(Rebind)"¶ó°í ½ÅÈ£ º¸³¿
-        OnWaveLoaded?.Invoke(localProvider, waveEnemyFloor, waveEnemyOverlay);
-
-        Debug.Log($"[WaveManager] Wave {CurrentWave}/{TotalWaves} ·Îµå ¿Ï·á - {w.label}");
-    }
-
-    public void TryAdvanceToNextWave()
-    {
-        if (_isWaveTransitioning) return;
-        StartCoroutine(Co_NextWave());
-    }
-
-    private IEnumerator Co_NextWave()
-    {
-        _isWaveTransitioning = true;
-        int nextIndex = _currentWaveIndex + 1;
-
-        // ´ÙÀ½ ¿şÀÌºê°¡ ÀÖ´Ù¸é ¿¬Ãâ
-        if (waveSet != null && waveSet.waves != null && nextIndex < TotalWaves)
-        {
-            OnWaveTransitionStarted?.Invoke(nextIndex + 1, TotalWaves);
-            yield return new WaitForSecondsRealtime(Mathf.Max(0f, waveTransitionDelay));
-        }
-
-        // ¿şÀÌºê ³¡?
-        if (waveSet == null || waveSet.waves == null || nextIndex >= TotalWaves)
-        {
-            _isWaveTransitioning = false;
-            if (!_battleEndedOnce)
-            {
-                _battleEndedOnce = true;
-                OnAllWavesCleared?.Invoke(); // ½Â¸® Ã³¸®´Â BMÀÌ ÇÔ
-            }
-            yield break;
-        }
-
-        LoadWave(nextIndex);
-        _isWaveTransitioning = false;
-    }
-
-    private void CleanupEnemiesAndLayouts()
-    {
-        // 1) ·¹ÀÌ¾Æ¿ô ÇÁ¸®ÆÕ Á¦°Å
-        if (_spawnedEnemyLayout)
-        {
-            var enemyUnits = _spawnedEnemyLayout.GetComponentsInChildren<BattleUnit>(true);
-            foreach (var u in enemyUnits)
-            {
-                if (u == null) continue;
-                if (!u.IsDead)
-                {
-                    grid?.SetOccupied(u.data.team, u.Cell, false);
-                }
-                Destroy(u.gameObject);
-            }
-            Destroy(_spawnedEnemyLayout);
-            _spawnedEnemyLayout = null;
-        }
-
-        // 2) ÀÜ¿© Àû Á¦°Å (È¤½Ã ·¹ÀÌ¾Æ¿ô ¹Û¿¡¼­ »ı¼ºµÈ ³ğµé)
-        var leftovers = FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy).ToList();
-        foreach (var u in leftovers)
-        {
-            Destroy(u.gameObject);
-        }
-    }
-
-    private void AutoResolveWaveSet()
-    {
-        if (stageDB == null) stageDB = Resources.Load<StageDatabase>("DB/StageDatabase");
-
-        // ½Ì±ÛÅæ ÂüÁ¶ (BM¿¡ ÀÖ´ø ·ÎÁ÷ ±×´ë·Î)
-        int stageNo = StageRuntimeContext.Instance != null && StageRuntimeContext.Instance.CurrentStageNumber >= 0
-            ? StageRuntimeContext.Instance.CurrentStageNumber
-            : debugStageNumber;
-
-        var ctx = StageRuntimeContext.Instance != null
-            ? StageRuntimeContext.Instance.CurrentBattleContext
-            : debugContext;
-
-        if (stageDB == null || stageNo < 0) return;
-
-        StageNormalMapData found = stageDB.normalStages.FirstOrDefault(s => s != null && s.stageNumber == stageNo);
-
-        if (found != null)
-        {
-            waveSet = (ctx == BattleContext.TrapEncounter) ? found.trapEncounterWave : found.postPuzzleWave;
-            Debug.Log($"[WaveManager] Auto-assigned: Stage {stageNo}, {ctx} -> {waveSet?.name}");
-        }
-    }
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class BattleWaveManager : MonoBehaviour
+{
+    private BattleManager battleManager;
+    private IGridProvider grid;
+    private IBattleMapProvider map;
+
+    #region Variables
+    [Header("Configuration")]
+    [SerializeField] private WaveSet waveSet;
+    [SerializeField] private StageDatabase stageDB;
+    [SerializeField] private bool autoAssignWaveSet = true;
+    [SerializeField] private Transform enemyRoot;
+    [SerializeField] private float waveTransitionDelay = 1.5f;
+
+    [Header("Debug")]
+    [SerializeField] private BattleContext debugContext = BattleContext.TrapEncounter;
+    [SerializeField] private int debugStageNumber = -1;
+
+    // ë‚´ë¶€ ìƒíƒœ
+    private int _currentWaveIndex = -1;
+    private GameObject _spawnedEnemyLayout;
+    private bool _isWaveTransitioning = false;
+    private bool _battleEndedOnce = false;
+
+    // í”„ë¡œí¼í‹°
+    public int CurrentWave => _currentWaveIndex + 1;
+    public int TotalWaves => waveSet ? waveSet.waves.Count : 0;
+    public bool IsWaveTransitioning => _isWaveTransitioning;
+    public WaveSet CurrentWaveSet => waveSet;
+
+    // BattleManagerì—ê²Œ ìƒí™©ì„ ì•Œë¦´ ì´ë²¤íŠ¸
+    // (í˜„ì¬ì›¨ì´ë¸Œ, ì´ì›¨ì´ë¸Œ, ë¼ë²¨)
+    public event System.Action<int, int, string> OnWaveInfoUpdated;
+    // (ë‹¤ìŒì›¨ì´ë¸Œ, ì´ì›¨ì´ë¸Œ) - ì „í™˜ ì—°ì¶œìš©
+    public event System.Action<int, int> OnWaveTransitionStarted;
+    // ì›¨ì´ë¸Œ ë¡œë“œ ì™„ë£Œ! (ì  ë§µ ë§¤ë‹ˆì €, ì  ì˜¤ë²„ë ˆì´) -> BMì´ ë°›ì•„ì„œ ìœ ë‹› ë¦¬ë°”ì¸ë”© í•´ì•¼ í•¨
+    public event System.Action<BattleMapManager, Tilemap, Tilemap> OnWaveLoaded;
+    // ëª¨ë“  ì›¨ì´ë¸Œ í´ë¦¬ì–´!
+    public event System.Action OnAllWavesCleared;
+    #endregion
+
+    public void Initialize(BattleManager _battleManager, IGridProvider _grid, IBattleMapProvider _map)
+    {
+        battleManager = _battleManager;
+        grid = _grid;
+        map = _map;
+    }
+
+    // ì´ˆê¸°í™” í˜¹ì€ ì²« ì›¨ì´ë¸Œ ì‹œì‘
+    public void StartFirstWave()
+    {
+        if (waveSet == null || waveSet.waves == null || waveSet.waves.Count == 0)
+        {
+            Debug.LogWarning("[WaveManager] ì›¨ì´ë¸Œ ì„¸íŠ¸ê°€ ì—†ìŠµë‹ˆë‹¤. í…ŒìŠ¤íŠ¸ ëª¨ë“œ í˜¹ì€ ë°°ì¹˜ëœ ìœ ë‹› ì‚¬ìš©.");
+            // ì›¨ì´ë¸Œê°€ ì—†ì–´ë„ ë¡œë“œ ì™„ë£Œ ì‹ í˜¸ëŠ” ë³´ë‚´ì•¼ BMì´ ìœ ë‹›ì„ ì¡ìŒ
+            OnWaveLoaded?.Invoke(null, null, null);
+        }
+        else
+        {
+            LoadWave(0);
+        }
+    }
+
+    public void LoadWave(int index)
+    {
+        if (waveSet == null || waveSet.waves == null || index < 0 || index >= waveSet.waves.Count)
+        {
+            Debug.LogError($"[WaveManager] Invalid Wave Index: {index}");
+            return;
+        }
+
+        // 1. ê¸°ì¡´ ì  ì²­ì†Œ
+        CleanupEnemiesAndLayouts();
+
+        _currentWaveIndex = index;
+        var w = waveSet.waves[index];
+
+        // 2. ì  ë ˆì´ì•„ì›ƒ ìŠ¤í°
+        Tilemap waveEnemyFloor = null;
+        Tilemap waveEnemyOverlay = null;
+        BattleMapManager localProvider = null;
+
+        if (w.enemyLayoutPrefab)
+        {
+            _spawnedEnemyLayout = Instantiate(w.enemyLayoutPrefab, enemyRoot ? enemyRoot : transform);
+
+            // ë§µ í”„ë¡œë°”ì´ë” íƒìƒ‰
+            localProvider = _spawnedEnemyLayout.GetComponentInChildren<BattleMapManager>(true);
+
+            if (localProvider != null)
+            {
+                waveEnemyFloor = localProvider.EnemyFloor;
+            }
+            else
+            {
+                // Fallback: ì´ë¦„ìœ¼ë¡œ ì°¾ê¸°
+                waveEnemyFloor = _spawnedEnemyLayout.GetComponentsInChildren<Tilemap>(true)
+                    .FirstOrDefault(t => t.name.IndexOf("Enemy", System.StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+
+            // ì˜¤ë²„ë ˆì´ ì°¾ê¸°
+            waveEnemyOverlay = _spawnedEnemyLayout.GetComponentsInChildren<Tilemap>(true)
+                .FirstOrDefault(t => t.name.IndexOf("Overlay_Skill", System.StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        // 3. UI ì•Œë¦¼ ì´ë²¤íŠ¸ ë°œì†¡
+        OnWaveInfoUpdated?.Invoke(CurrentWave, TotalWaves, w.label);
+
+        // 4. BMì—ê²Œ "ì•¼, ë§µì´ë‘ ì  ê¹”ì•„ë†¨ìœ¼ë‹ˆê¹Œ ë„¤ê°€ ì²˜ë¦¬í•´(Rebind)"ë¼ê³  ì‹ í˜¸ ë³´ëƒ„
+        OnWaveLoaded?.Invoke(localProvider, waveEnemyFloor, waveEnemyOverlay);
+
+        Debug.Log($"[WaveManager] Wave {CurrentWave}/{TotalWaves} ë¡œë“œ ì™„ë£Œ - {w.label}");
+    }
+
+    public void TryAdvanceToNextWave()
+    {
+        if (_isWaveTransitioning) return;
+        StartCoroutine(Co_NextWave());
+    }
+
+    private IEnumerator Co_NextWave()
+    {
+        _isWaveTransitioning = true;
+        int nextIndex = _currentWaveIndex + 1;
+
+        // ë‹¤ìŒ ì›¨ì´ë¸Œê°€ ìˆë‹¤ë©´ ì—°ì¶œ
+        if (waveSet != null && waveSet.waves != null && nextIndex < TotalWaves)
+        {
+            OnWaveTransitionStarted?.Invoke(nextIndex + 1, TotalWaves);
+            yield return new WaitForSecondsRealtime(Mathf.Max(0f, waveTransitionDelay));
+        }
+
+        // ì›¨ì´ë¸Œ ë?
+        if (waveSet == null || waveSet.waves == null || nextIndex >= TotalWaves)
+        {
+            _isWaveTransitioning = false;
+            if (!_battleEndedOnce)
+            {
+                _battleEndedOnce = true;
+                OnAllWavesCleared?.Invoke(); // ìŠ¹ë¦¬ ì²˜ë¦¬ëŠ” BMì´ í•¨
+            }
+            yield break;
+        }
+
+        LoadWave(nextIndex);
+        _isWaveTransitioning = false;
+    }
+
+    private void CleanupEnemiesAndLayouts()
+    {
+        // 1) ë ˆì´ì•„ì›ƒ í”„ë¦¬íŒ¹ ì œê±°
+        if (_spawnedEnemyLayout)
+        {
+            var enemyUnits = _spawnedEnemyLayout.GetComponentsInChildren<BattleUnit>(true);
+            foreach (var u in enemyUnits)
+            {
+                if (u == null) continue;
+                if (!u.IsDead)
+                {
+                    grid?.SetOccupied(u.data.team, u.Cell, false);
+                }
+                Destroy(u.gameObject);
+            }
+            Destroy(_spawnedEnemyLayout);
+            _spawnedEnemyLayout = null;
+        }
+
+        // 2) ì”ì—¬ ì  ì œê±° (í˜¹ì‹œ ë ˆì´ì•„ì›ƒ ë°–ì—ì„œ ìƒì„±ëœ ë†ˆë“¤)
+        var leftovers = FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy).ToList();
+        foreach (var u in leftovers)
+        {
+            Destroy(u.gameObject);
+        }
+    }
+
+    private void AutoResolveWaveSet()
+    {
+        if (stageDB == null) stageDB = Resources.Load<StageDatabase>("DB/StageDatabase");
+
+        // ì‹±ê¸€í†¤ ì°¸ì¡° (BMì— ìˆë˜ ë¡œì§ ê·¸ëŒ€ë¡œ)
+        int stageNo = StageRuntimeContext.Instance != null && StageRuntimeContext.Instance.CurrentStageNumber >= 0
+            ? StageRuntimeContext.Instance.CurrentStageNumber
+            : debugStageNumber;
+
+        var ctx = StageRuntimeContext.Instance != null
+            ? StageRuntimeContext.Instance.CurrentBattleContext
+            : debugContext;
+
+        if (stageDB == null || stageNo < 0) return;
+
+        StageNormalMapData found = stageDB.normalStages.FirstOrDefault(s => s != null && s.stageNumber == stageNo);
+
+        if (found != null)
+        {
+            waveSet = (ctx == BattleContext.TrapEncounter) ? found.trapEncounterWave : found.postPuzzleWave;
+            Debug.Log($"[WaveManager] Auto-assigned: Stage {stageNo}, {ctx} -> {waveSet?.name}");
+        }
+    }
 }

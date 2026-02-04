@@ -1,42 +1,42 @@
-using System;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class CampTraitSlot : MonoBehaviour
-{
-    [SerializeField] private Text nameText;
-    [SerializeField] private Button selfButton; // ¹öÆ° ÄÄÆ÷³ÍÆ®
-    [SerializeField] private UI_ButtonFeedback visualFeedback; // ¹öÆ° ÀÌÆåÆ® Ã³¸®
-
-    // ³ªÁß¿¡ ¼³¸í ¶ç¿ï ¶§ ¾µ µ¥ÀÌÅÍ ÀúÀå¿ë
-    private TraitAsset _trait;
-
-    public void Setup(TraitAsset trait, bool isActive, Action<string, string, Transform> onSelected, Action<TraitAsset> onEquip)
-    {
-        _trait = trait;
-
-        if (selfButton == null) selfButton = GetComponent<Button>();
-
-        // ÀÌ¸§ ¼³Á¤
-        if (nameText) nameText.text = trait.displayName;
-
-        // »ö»ó °áÁ¤ (È°¼ºÈ­¸é ÃÊ·Ï, ¾Æ´Ï¸é Èò»ö)
-        Color displayColor = isActive ? Color.green : Color.white;
-
-        // ÅØ½ºÆ® »ö»ó Àû¿ë (Feedback ½ºÅ©¸³Æ® ÅëÇØ¾ß ´­·¶´Ù ¶¼µµ »ö À¯ÁöµÊ)
-        if (visualFeedback) visualFeedback.SetNormalColor(displayColor);
-        else nameText.color = displayColor;
-
-        // Å¬¸¯ ÀÌº¥Æ®
-        selfButton.onClick.RemoveAllListeners();
-        selfButton.onClick.AddListener(() =>
-        {
-            if (_trait != null)
-            {
-                Transform target = (nameText != null) ? nameText.transform : this.transform;
-                onSelected?.Invoke(_trait.displayName, _trait.description, target);
-                onEquip?.Invoke(_trait);
-            }
-        });
-    }
+using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class CampTraitSlot : MonoBehaviour
+{
+    [SerializeField] private Text nameText;
+    [SerializeField] private Button selfButton; // ë²„íŠ¼ ì»´í¬ë„ŒíŠ¸
+    [SerializeField] private UI_ButtonFeedback visualFeedback; // ë²„íŠ¼ ì´í™íŠ¸ ì²˜ë¦¬
+
+    // ë‚˜ì¤‘ì— ì„¤ëª… ë„ìš¸ ë•Œ ì“¸ ë°ì´í„° ì €ì¥ìš©
+    private TraitAsset _trait;
+
+    public void Setup(TraitAsset trait, bool isActive, Action<string, string, Transform> onSelected, Action<TraitAsset> onEquip)
+    {
+        _trait = trait;
+
+        if (selfButton == null) selfButton = GetComponent<Button>();
+
+        // ì´ë¦„ ì„¤ì •
+        if (nameText) nameText.text = trait.displayName;
+
+        // ìƒ‰ìƒ ê²°ì • (í™œì„±í™”ë©´ ì´ˆë¡, ì•„ë‹ˆë©´ í°ìƒ‰)
+        Color displayColor = isActive ? Color.green : Color.white;
+
+        // í…ìŠ¤íŠ¸ ìƒ‰ìƒ ì ìš© (Feedback ìŠ¤í¬ë¦½íŠ¸ í†µí•´ì•¼ ëˆŒë €ë‹¤ ë–¼ë„ ìƒ‰ ìœ ì§€ë¨)
+        if (visualFeedback) visualFeedback.SetNormalColor(displayColor);
+        else nameText.color = displayColor;
+
+        // í´ë¦­ ì´ë²¤íŠ¸
+        selfButton.onClick.RemoveAllListeners();
+        selfButton.onClick.AddListener(() =>
+        {
+            if (_trait != null)
+            {
+                Transform target = (nameText != null) ? nameText.transform : this.transform;
+                onSelected?.Invoke(_trait.displayName, _trait.description, target);
+                onEquip?.Invoke(_trait);
+            }
+        });
+    }
 }

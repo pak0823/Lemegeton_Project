@@ -1,163 +1,163 @@
-using System.Collections;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(
-    menuName = "Battle/Passives/LuckySix/Passive_3",
-    fileName = "Passive_AttackAfterSelfMove")]
-public class LuckySixReactiveAfterMoveAttackPassive : PassiveAsset
-{
-    [Header("Skill")]
-    [Tooltip("ÀÌ ½½·ÔÀÇ ½ºÅ³À» »ç¿ë (0 = 1¹ø ½ºÅ³)")]
-    public int skillSlotIndex = 0;
-
-    [Tooltip("¸®¾×¼Ç °ø°İ ½Ã ´ë»ó¿¡°Ô Á¡ÇÁ(gap close)¸¦ »ç¿ëÇÒÁö ¿©ºÎ")]
-    public bool useGapClose = false;
-
-    [Tooltip("true¸é ÀÌ À¯´ÖÀÇ 'ÀÚ±â ÅÏ¿¡ ÇÑ ÀÌµ¿'¸¸ ¹ßµ¿. false¸é ¹ĞÄ§/½ºÅ³ ÀÌµ¿ µî ¸ğµç ÀÌµ¿ Æ÷ÇÔ.")]
-    public bool onlyOnOwnTurn = false;
-
-    [Header("Advanced")]
-    [Tooltip("ÆĞ½Ãºê¿¡¼­´Â »óÅÂ ±â¹İ ½ºÅ³ Ä¡È¯(ISkillForStateResolver)À» ¹«½ÃÇÕ´Ï´Ù. (±ÇÀå: true)")]
-    public bool ignoreStateResolver = true;
-
-    private BattleUnit _owner;
-    private BattleManager _battle;
-
-    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
-    {
-        this._owner = _owner;
-        this._battle = _battle;
-
-        if (this._owner != null)
-            this._owner.OnMoved += HandleOwnerMoved;
-    }
-
-    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
-    {
-        if (this._owner != null)
-            this._owner.OnMoved -= HandleOwnerMoved;
-
-        this._owner = null;
-        this._battle = null;
-    }
-
-    private void HandleOwnerMoved(BattleUnit unit, Tilemap fromMap, Vector3Int fromCell, Vector3Int toCell)
-    {
-        if (_owner == null || _battle == null) return;
-        if (unit != _owner) return;
-        if (_owner.IsDead || _owner.IsRetreated) return;
-
-        // ÀÚ±â ÅÏ ÀÌµ¿¸¸ ¹İÀÀ ¿É¼Ç
-        if (onlyOnOwnTurn && _battle.ActingUnit != _owner)
-            return;
-
-        // ÀÌµ¿ ¼ø°£¿¡ »ç¿ëÇÒ ½ºÅ³À» "È®Á¤(capture)"ÇÑ´Ù.
-        var capturedSkill = GetReactiveSkill_Captured();
-        if (capturedSkill == null)
-            return;
-
-        _battle.RegisterReactionLock();
-
-        _battle.StartCoroutine(Co_AttackRandomEnemyAfterMove(capturedSkill));
-    }
-
-    private IEnumerator Co_AttackRandomEnemyAfterMove(SkillAsset capturedSkill)
-    {
-        // ÀÌµ¿ ¿¬Ãâ/»óÅÂ Á¤¸® ÈÄ Ã³¸®¸¦ À§ÇØ 1ÇÁ·¹ÀÓ ´ë±â
-        yield return null;
-
-        if (_owner == null || _battle == null || _owner.IsDead || _owner.IsRetreated)
-        {
-            _battle?.UnregisterReactionLock(); // ¶ô ÇØÁ¦
-            yield break;
-        }
-
-        var enemies = _battle.GetLivingEnemiesOf(_owner).ToList();
-        if (enemies.Count == 0)
-        {
-            _battle.UnregisterReactionLock(); // ¶ô ÇØÁ¦
-            yield break;
-        }
-
-        var target = enemies[Random.Range(0, enemies.Count)];
-        if (target == null || target.IsDead || target.IsRetreated)
-        {
-            _battle.UnregisterReactionLock(); // ¶ô ÇØÁ¦
-            yield break;
-        }
-
-        var skill = capturedSkill;
-        if (skill == null)
-        {
-            _battle.UnregisterReactionLock(); // ¶ô ÇØÁ¦
-            yield break;
-        }
-
-        // Äğ/MP Ã¼Å© (ÆĞ½Ãºê Á¶°Ç¿¡ µû¶ó ´Ù¸§)
-        if (_owner.IsSkillOnCooldown(skill))
-        {
-            _battle.UnregisterReactionLock(); // ¶ô ÇØÁ¦
-            yield break;
-        }
-
-        int realCost = skill.GetEffectiveCost(_owner);
-        SkillAsset skillToUse = skill;
-
-        // ºñ¿ëÀÌ 0º¸´Ù Å©´Ù¸é -> °­Á¦·Î 0À¸·Î ¸¸µé±â À§ÇØ º¹Á¦(Clone)
-        if (realCost > 0)
-        {
-            skillToUse = Instantiate(skill);
-            skillToUse.cost = 0;
-            skillToUse.mpCost = 0;
-        }
-        else
-        {
-            // ºñ¿ëÀÌ ÀÌ¹Ì 0ÀÌ¶ó¸é -> ¿øº»À» ±×´ë·Î »ç¿ë (¼º´É ÀÌµæ)
-            skillToUse = skill;
-        }
-
-        bool doGapClose = useGapClose && skill.ShouldGapCloseToTarget(_owner, target);
-
-        _owner.AnnouncePassive(displayName);
-
-        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose);
-
-        // ¸ğµç µ¿ÀÛÀÌ ³¡³µÀ¸¹Ç·Î ¶ô ÇØÁ¦
-        _battle.UnregisterReactionLock();
-    }
-
-    private SkillAsset GetReactiveSkill_Captured()
-    {
-        if (_owner == null || _owner.data == null) return null;
-
-        var skills = _owner.data.skills;
-        if (skills == null || skills.Length == 0) return null;
-
-        int idx = Mathf.Clamp(skillSlotIndex, 0, skills.Length - 1);
-        var s = skills[idx];
-        if (s == null) return null;
-
-        // 1) ½½·Ô ½ºÅ³ÀÌ "¶ó¿ìÅÍ(StateConditionalSkillMulti)"¸é
-        //    ÆĞ½Ãºê¿¡¼­´Â ¶ó¿ìÅÍ¸¦ Á÷Á¢ ½ÃÀüÇÏÁö ¸»°í, defaultSkill(=ÀÇµµÇÑ ±âº» °ø°İ)¸¸ °íÁ¤ÇØ¼­ »ç¿ëÇÑ´Ù.
-        if (s is StateConditionalSkillMulti multiRouter)
-        {
-            if (multiRouter.defaultSkill != null)
-                return multiRouter.defaultSkill;
-
-            // defaultSkillÀÌ ºñ¾îÀÖÀ¸¸é: ¿©±â¼­ ¶ó¿ìÅÍ¸¦ ±×´ë·Î ¾²¸é Áö±İ °°Àº ¹®Á¦°¡ Àç¹ßÇÒ ¼ö ÀÖÀ½.
-            // ¿øÀÎ ÃßÀûÀ» ½±°Ô ÇÏ·Á¸é null·Î ¸·¾Æ¹ö¸®´Â °Ô ¾ÈÀüÇÏ´Ù.
-            Debug.LogWarning(
-                $"[Passive_AttackAfterSelfMove] Slot {idx} is StateConditionalSkillMulti but defaultSkill is null. " +
-                $"Set defaultSkill to the intended basic attack skill asset.");
-            return null;
-        }
-
-        // 2) »óÅÂ Ä¡È¯(ISkillForStateResolver)Àº ¿É¼Ç¿¡ µû¶ó ¼öÇà
-        if (!ignoreStateResolver && s is ISkillForStateResolver resolver)
-            s = resolver.ResolveForCaster(_owner) ?? s;
-
-        return s;
-    }
-}
+using System.Collections;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(
+    menuName = "Battle/Passives/LuckySix/Passive_3",
+    fileName = "Passive_AttackAfterSelfMove")]
+public class LuckySixReactiveAfterMoveAttackPassive : PassiveAsset
+{
+    [Header("Skill")]
+    [Tooltip("ì´ ìŠ¬ë¡¯ì˜ ìŠ¤í‚¬ì„ ì‚¬ìš© (0 = 1ë²ˆ ìŠ¤í‚¬)")]
+    public int skillSlotIndex = 0;
+
+    [Tooltip("ë¦¬ì•¡ì…˜ ê³µê²© ì‹œ ëŒ€ìƒì—ê²Œ ì í”„(gap close)ë¥¼ ì‚¬ìš©í• ì§€ ì—¬ë¶€")]
+    public bool useGapClose = false;
+
+    [Tooltip("trueë©´ ì´ ìœ ë‹›ì˜ 'ìê¸° í„´ì— í•œ ì´ë™'ë§Œ ë°œë™. falseë©´ ë°€ì¹¨/ìŠ¤í‚¬ ì´ë™ ë“± ëª¨ë“  ì´ë™ í¬í•¨.")]
+    public bool onlyOnOwnTurn = false;
+
+    [Header("Advanced")]
+    [Tooltip("íŒ¨ì‹œë¸Œì—ì„œëŠ” ìƒíƒœ ê¸°ë°˜ ìŠ¤í‚¬ ì¹˜í™˜(ISkillForStateResolver)ì„ ë¬´ì‹œí•©ë‹ˆë‹¤. (ê¶Œì¥: true)")]
+    public bool ignoreStateResolver = true;
+
+    private BattleUnit _owner;
+    private BattleManager _battle;
+
+    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
+    {
+        this._owner = _owner;
+        this._battle = _battle;
+
+        if (this._owner != null)
+            this._owner.OnMoved += HandleOwnerMoved;
+    }
+
+    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
+    {
+        if (this._owner != null)
+            this._owner.OnMoved -= HandleOwnerMoved;
+
+        this._owner = null;
+        this._battle = null;
+    }
+
+    private void HandleOwnerMoved(BattleUnit unit, Tilemap fromMap, Vector3Int fromCell, Vector3Int toCell)
+    {
+        if (_owner == null || _battle == null) return;
+        if (unit != _owner) return;
+        if (_owner.IsDead || _owner.IsRetreated) return;
+
+        // ìê¸° í„´ ì´ë™ë§Œ ë°˜ì‘ ì˜µì…˜
+        if (onlyOnOwnTurn && _battle.ActingUnit != _owner)
+            return;
+
+        // ì´ë™ ìˆœê°„ì— ì‚¬ìš©í•  ìŠ¤í‚¬ì„ "í™•ì •(capture)"í•œë‹¤.
+        var capturedSkill = GetReactiveSkill_Captured();
+        if (capturedSkill == null)
+            return;
+
+        _battle.RegisterReactionLock();
+
+        _battle.StartCoroutine(Co_AttackRandomEnemyAfterMove(capturedSkill));
+    }
+
+    private IEnumerator Co_AttackRandomEnemyAfterMove(SkillAsset capturedSkill)
+    {
+        // ì´ë™ ì—°ì¶œ/ìƒíƒœ ì •ë¦¬ í›„ ì²˜ë¦¬ë¥¼ ìœ„í•´ 1í”„ë ˆì„ ëŒ€ê¸°
+        yield return null;
+
+        if (_owner == null || _battle == null || _owner.IsDead || _owner.IsRetreated)
+        {
+            _battle?.UnregisterReactionLock(); // ë½ í•´ì œ
+            yield break;
+        }
+
+        var enemies = _battle.GetLivingEnemiesOf(_owner).ToList();
+        if (enemies.Count == 0)
+        {
+            _battle.UnregisterReactionLock(); // ë½ í•´ì œ
+            yield break;
+        }
+
+        var target = enemies[Random.Range(0, enemies.Count)];
+        if (target == null || target.IsDead || target.IsRetreated)
+        {
+            _battle.UnregisterReactionLock(); // ë½ í•´ì œ
+            yield break;
+        }
+
+        var skill = capturedSkill;
+        if (skill == null)
+        {
+            _battle.UnregisterReactionLock(); // ë½ í•´ì œ
+            yield break;
+        }
+
+        // ì¿¨/MP ì²´í¬ (íŒ¨ì‹œë¸Œ ì¡°ê±´ì— ë”°ë¼ ë‹¤ë¦„)
+        if (_owner.IsSkillOnCooldown(skill))
+        {
+            _battle.UnregisterReactionLock(); // ë½ í•´ì œ
+            yield break;
+        }
+
+        int realCost = skill.GetEffectiveCost(_owner);
+        SkillAsset skillToUse = skill;
+
+        // ë¹„ìš©ì´ 0ë³´ë‹¤ í¬ë‹¤ë©´ -> ê°•ì œë¡œ 0ìœ¼ë¡œ ë§Œë“¤ê¸° ìœ„í•´ ë³µì œ(Clone)
+        if (realCost > 0)
+        {
+            skillToUse = Instantiate(skill);
+            skillToUse.cost = 0;
+            skillToUse.mpCost = 0;
+        }
+        else
+        {
+            // ë¹„ìš©ì´ ì´ë¯¸ 0ì´ë¼ë©´ -> ì›ë³¸ì„ ê·¸ëŒ€ë¡œ ì‚¬ìš© (ì„±ëŠ¥ ì´ë“)
+            skillToUse = skill;
+        }
+
+        bool doGapClose = useGapClose && skill.ShouldGapCloseToTarget(_owner, target);
+
+        _owner.AnnouncePassive(displayName);
+
+        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose);
+
+        // ëª¨ë“  ë™ì‘ì´ ëë‚¬ìœ¼ë¯€ë¡œ ë½ í•´ì œ
+        _battle.UnregisterReactionLock();
+    }
+
+    private SkillAsset GetReactiveSkill_Captured()
+    {
+        if (_owner == null || _owner.data == null) return null;
+
+        var skills = _owner.data.skills;
+        if (skills == null || skills.Length == 0) return null;
+
+        int idx = Mathf.Clamp(skillSlotIndex, 0, skills.Length - 1);
+        var s = skills[idx];
+        if (s == null) return null;
+
+        // 1) ìŠ¬ë¡¯ ìŠ¤í‚¬ì´ "ë¼ìš°í„°(StateConditionalSkillMulti)"ë©´
+        //    íŒ¨ì‹œë¸Œì—ì„œëŠ” ë¼ìš°í„°ë¥¼ ì§ì ‘ ì‹œì „í•˜ì§€ ë§ê³ , defaultSkill(=ì˜ë„í•œ ê¸°ë³¸ ê³µê²©)ë§Œ ê³ ì •í•´ì„œ ì‚¬ìš©í•œë‹¤.
+        if (s is StateConditionalSkillMulti multiRouter)
+        {
+            if (multiRouter.defaultSkill != null)
+                return multiRouter.defaultSkill;
+
+            // defaultSkillì´ ë¹„ì–´ìˆìœ¼ë©´: ì—¬ê¸°ì„œ ë¼ìš°í„°ë¥¼ ê·¸ëŒ€ë¡œ ì“°ë©´ ì§€ê¸ˆ ê°™ì€ ë¬¸ì œê°€ ì¬ë°œí•  ìˆ˜ ìˆìŒ.
+            // ì›ì¸ ì¶”ì ì„ ì‰½ê²Œ í•˜ë ¤ë©´ nullë¡œ ë§‰ì•„ë²„ë¦¬ëŠ” ê²Œ ì•ˆì „í•˜ë‹¤.
+            Debug.LogWarning(
+                $"[Passive_AttackAfterSelfMove] Slot {idx} is StateConditionalSkillMulti but defaultSkill is null. " +
+                $"Set defaultSkill to the intended basic attack skill asset.");
+            return null;
+        }
+
+        // 2) ìƒíƒœ ì¹˜í™˜(ISkillForStateResolver)ì€ ì˜µì…˜ì— ë”°ë¼ ìˆ˜í–‰
+        if (!ignoreStateResolver && s is ISkillForStateResolver resolver)
+            s = resolver.ResolveForCaster(_owner) ?? s;
+
+        return s;
+    }
+}

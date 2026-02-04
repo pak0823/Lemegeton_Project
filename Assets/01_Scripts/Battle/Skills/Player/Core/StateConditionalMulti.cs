@@ -1,131 +1,131 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-/// <summary>
-/// Ä³½ºÅÍ »óÅÂ¿¡ µû¶ó ½ºÅ³À» Ä¡È¯ÇÏ´Â ¸ÖÆ¼ ±ÔÄ¢ ¶ó¿ìÅÍ.
-/// - rules ¹è¿­À» À§¿¡¼­ºÎÅÍ Æò°¡ÇØ Ã¹ ¸ÅÄª ±ÔÄ¢ÀÇ skill·Î Ä¡È¯
-/// - chosen skillÀÌ ParametricDamageSkillÀÌ¸é areaPreset µ¤¾î¾²±â ¿É¼Ç Á¦°ø
-/// - ÀÌ ¶ó¿ìÅÍ SO ÀÚÃ¼´Â Á÷Á¢ ½ÃÀüµÇÁö ¾Ê´Â´Ù(Ä¡È¯ Àü¿ë)
-/// </summary>
-[CreateAssetMenu(menuName = "Battle/Skills/Utility/State Conditional Skill (Multi)", fileName = "StateConditionalSkillMulti")]
-public class StateConditionalSkillMulti : SkillAsset, ISkillForStateResolver
-{
-    [Serializable]
-    public class Rule
-    {
-        [Tooltip("ÀÌ ±ÔÄ¢ÀÇ ½Äº°¿ë ÀÌ¸§(¿É¼Ç)")]
-        public string name;
-
-        [Header("Á¶°Ç(AND/OR/NOT)")]
-        public List<UnitStateId> requireAll = new();   // ¸ğµÎ °¡Áö°í ÀÖ¾î¾ß Åë°ú
-        public List<UnitStateId> requireAny = new();   // ÇÏ³ª¶óµµ ÀÖÀ¸¸é Åë°ú
-        public List<UnitStateId> forbidAny = new();   // ÇÏ³ª¶óµµ ÀÖÀ¸¸é Å»¶ô
-
-        [Header("¸ÅÄª ½Ã »ç¿ëÇÒ ½ºÅ³")]
-        public SkillAsset skill;
-
-        [Header("¿É¼Ç: ParametricDamageSkill ¹üÀ§ ÇÁ¸®¼Â µ¤¾î¾²±â")]
-        public bool overrideAreaPreset = false;
-        public AreaPreset areaPresetWhenMatched = AreaPreset.Single;
-
-        [Header("¿É¼Ç: Ç¥½Ã Á¤º¸ µ¤¾î¾²±â")]
-        public bool overrideDisplayName = false;
-        public string displayNameWhenMatched;
-        public bool overrideIcon = false;
-        public Sprite iconWhenMatched;
-    }
-
-    [Header("±ÔÄ¢(À§¿¡¼­ºÎÅÍ ¿ì¼± Àû¿ë)")]
-    public List<Rule> rules = new();
-
-    [Header("±âº» ½ºÅ³(¾î´À ±ÔÄ¢µµ ¸ÅÄªµÇÁö ¾ÊÀ» ¶§)")]
-    public SkillAsset defaultSkill;
-
-    public override IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit, Tilemap _targetMap, Vector3Int _targetCell)
-    {
-        // ÇöÀç »óÅÂ¿¡ ¸Â´Â ½ºÅ³À» Ã£¾Æ³½´Ù
-        SkillAsset realSkill = ResolveForCaster(_caster);
-
-        // ¸¸¾à ¸ÅÄªµÇ´Â °Ô ¾ø°Å³ª, ÀÚ±â°¡ ÀÚ±â ÀÚ½ÅÀ» ¸®ÅÏÇÏ¸é(¹«ÇÑ·çÇÁ ¹æÁö) Á¾·á
-        if (realSkill == null || realSkill == this)
-        {
-            Debug.LogWarning($"[StateConditionalMulti] {name}: ½ÇÇàÇÒ ½ºÅ³À» Ã£Áö ¸øÇÔ.");
-            _battlemanager.CancelCurrentAction();
-            yield break;
-        }
-
-        // Ã£Àº ÁøÂ¥ ½ºÅ³¿¡°Ô ½ÇÇàÀ» À§ÀÓÇÑ´Ù
-        // ¸Å´ÏÀú´Â ÀÌ°Ô ¶ó¿ìÅÍ¿´´ÂÁö ¾Ë ÇÊ¿ä ¾øÀÌ, °á°úÀûÀ¸·Î ÁøÂ¥ ½ºÅ³ÀÌ ³ª°£´Ù.
-        yield return realSkill.Execute(_battlemanager, _caster, _targetUnit, _targetMap, _targetCell);
-    }
-
-    /// <summary>Ä³½ºÅÍ »óÅÂ¸¦ º¸°í ½ÇÁ¦ ½ÃÀüÇÒ SkillAssetÀ» ¹İÈ¯</summary>
-    public SkillAsset ResolveForCaster(BattleUnit caster)
-    {
-        // ÇöÀç »óÅÂ ÁıÇÕÀ» ÇØ½Ã¼ÂÀ¸·Î
-        var usc = caster ? caster.GetComponent<UnitStateController>() : null;
-        var states = usc != null ? usc.GetAll() : Array.Empty<UnitStateId>();
-        var set = new HashSet<UnitStateId>(states);
-
-        // ±ÔÄ¢ ¼ø¼­´ë·Î Æò°¡
-        foreach (var r in rules)
-        {
-            if (r == null) continue;
-
-            // forbidAny: ÇÏ³ª¶óµµ Æ÷ÇÔµÇ¸é Å»¶ô
-            if (r.forbidAny != null && r.forbidAny.Any(set.Contains))
-                continue;
-
-            // requireAll: ¸ğµÎ Æ÷ÇÔÇØ¾ß Åë°ú
-            if (r.requireAll != null && r.requireAll.Any() && !r.requireAll.All(set.Contains))
-                continue;
-
-            // requireAny: ºñ¾îÀÖÁö ¾Ê´Ù¸é ÃÖ¼Ò ÇÏ³ª Æ÷ÇÔÇØ¾ß Åë°ú
-            if (r.requireAny != null && r.requireAny.Any() && !r.requireAny.Any(set.Contains))
-                continue;
-
-            // ---- ±ÔÄ¢ ¸ÅÄªµÊ ----
-            var chosen = r.skill ? r.skill : defaultSkill;
-            if (chosen == null) return this; // ºñ»ó½Ã: ÀÚ±â ÀÚ½Å ¹İÈ¯
-
-            // ÇÊ¿ä ½Ã ·±Å¸ÀÓ Å¬·ĞÀ» ¸¸µé¾î ¾ÈÀüÇÏ°Ô µ¤¾î¾²±â
-            SkillAsset product = chosen;
-
-            // ParametricDamageSkill ¹üÀ§ ÇÁ¸®¼Â µ¤¾î¾²±â
-            if (r.overrideAreaPreset && chosen is ParametricDamageSkill pdm)
-            {
-                var inst = ScriptableObject.Instantiate(pdm); // ·±Å¸ÀÓ Å¬·Ğ
-                inst.hideFlags = HideFlags.HideAndDontSave;
-                inst.areaPreset = r.areaPresetWhenMatched;
-                product = inst;
-            }
-
-            // Ç¥½Ã Á¤º¸(ÀÌ¸§/¾ÆÀÌÄÜ) µ¤¾î¾²±â
-            if (r.overrideDisplayName || r.overrideIcon)
-            {
-                // Ç¥½ÃÁ¤º¸¸¸ ¹Ù²Ù°í ½Í¾îµµ ¿øº» SO¸¦ °Çµå¸®Áö ¾ÊÀ¸·Á°í Å¬·Ğ
-                var inst = ScriptableObject.Instantiate(product);
-                inst.hideFlags = HideFlags.HideAndDontSave;
-                if (r.overrideDisplayName && !string.IsNullOrEmpty(r.displayNameWhenMatched))
-                    inst.displayName = r.displayNameWhenMatched;
-                if (r.overrideIcon && r.iconWhenMatched != null)
-                    inst.descriptionImage = r.iconWhenMatched;
-                product = inst;
-            }
-
-            return product;
-        }
-
-        // ¾î¶² ±ÔÄ¢µµ ¸ÅÄªµÇÁö ¾ÊÀ¸¸é ±âº» ½ºÅ³
-        return defaultSkill != null ? defaultSkill : this;
-    }
-
-    // ¶ó¿ìÅÍ ÀÚÃ¼´Â Á÷Á¢ ½ÃÀüµÇÁö ¾ÊÀ½(Ä¡È¯ Àü¿ë no-op)
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow) { yield break; }
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit caster, BattleUnit target) { yield break; }
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap map, Vector3Int originCell, BattleUnit caster) { yield break; }
-}
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+/// <summary>
+/// ìºìŠ¤í„° ìƒíƒœì— ë”°ë¼ ìŠ¤í‚¬ì„ ì¹˜í™˜í•˜ëŠ” ë©€í‹° ê·œì¹™ ë¼ìš°í„°.
+/// - rules ë°°ì—´ì„ ìœ„ì—ì„œë¶€í„° í‰ê°€í•´ ì²« ë§¤ì¹­ ê·œì¹™ì˜ skillë¡œ ì¹˜í™˜
+/// - chosen skillì´ ParametricDamageSkillì´ë©´ areaPreset ë®ì–´ì“°ê¸° ì˜µì…˜ ì œê³µ
+/// - ì´ ë¼ìš°í„° SO ìì²´ëŠ” ì§ì ‘ ì‹œì „ë˜ì§€ ì•ŠëŠ”ë‹¤(ì¹˜í™˜ ì „ìš©)
+/// </summary>
+[CreateAssetMenu(menuName = "Battle/Skills/Utility/State Conditional Skill (Multi)", fileName = "StateConditionalSkillMulti")]
+public class StateConditionalSkillMulti : SkillAsset, ISkillForStateResolver
+{
+    [Serializable]
+    public class Rule
+    {
+        [Tooltip("ì´ ê·œì¹™ì˜ ì‹ë³„ìš© ì´ë¦„(ì˜µì…˜)")]
+        public string name;
+
+        [Header("ì¡°ê±´(AND/OR/NOT)")]
+        public List<UnitStateId> requireAll = new();   // ëª¨ë‘ ê°€ì§€ê³  ìˆì–´ì•¼ í†µê³¼
+        public List<UnitStateId> requireAny = new();   // í•˜ë‚˜ë¼ë„ ìˆìœ¼ë©´ í†µê³¼
+        public List<UnitStateId> forbidAny = new();   // í•˜ë‚˜ë¼ë„ ìˆìœ¼ë©´ íƒˆë½
+
+        [Header("ë§¤ì¹­ ì‹œ ì‚¬ìš©í•  ìŠ¤í‚¬")]
+        public SkillAsset skill;
+
+        [Header("ì˜µì…˜: ParametricDamageSkill ë²”ìœ„ í”„ë¦¬ì…‹ ë®ì–´ì“°ê¸°")]
+        public bool overrideAreaPreset = false;
+        public AreaPreset areaPresetWhenMatched = AreaPreset.Single;
+
+        [Header("ì˜µì…˜: í‘œì‹œ ì •ë³´ ë®ì–´ì“°ê¸°")]
+        public bool overrideDisplayName = false;
+        public string displayNameWhenMatched;
+        public bool overrideIcon = false;
+        public Sprite iconWhenMatched;
+    }
+
+    [Header("ê·œì¹™(ìœ„ì—ì„œë¶€í„° ìš°ì„  ì ìš©)")]
+    public List<Rule> rules = new();
+
+    [Header("ê¸°ë³¸ ìŠ¤í‚¬(ì–´ëŠ ê·œì¹™ë„ ë§¤ì¹­ë˜ì§€ ì•Šì„ ë•Œ)")]
+    public SkillAsset defaultSkill;
+
+    public override IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit, Tilemap _targetMap, Vector3Int _targetCell)
+    {
+        // í˜„ì¬ ìƒíƒœì— ë§ëŠ” ìŠ¤í‚¬ì„ ì°¾ì•„ë‚¸ë‹¤
+        SkillAsset realSkill = ResolveForCaster(_caster);
+
+        // ë§Œì•½ ë§¤ì¹­ë˜ëŠ” ê²Œ ì—†ê±°ë‚˜, ìê¸°ê°€ ìê¸° ìì‹ ì„ ë¦¬í„´í•˜ë©´(ë¬´í•œë£¨í”„ ë°©ì§€) ì¢…ë£Œ
+        if (realSkill == null || realSkill == this)
+        {
+            Debug.LogWarning($"[StateConditionalMulti] {name}: ì‹¤í–‰í•  ìŠ¤í‚¬ì„ ì°¾ì§€ ëª»í•¨.");
+            _battlemanager.CancelCurrentAction();
+            yield break;
+        }
+
+        // ì°¾ì€ ì§„ì§œ ìŠ¤í‚¬ì—ê²Œ ì‹¤í–‰ì„ ìœ„ì„í•œë‹¤
+        // ë§¤ë‹ˆì €ëŠ” ì´ê²Œ ë¼ìš°í„°ì˜€ëŠ”ì§€ ì•Œ í•„ìš” ì—†ì´, ê²°ê³¼ì ìœ¼ë¡œ ì§„ì§œ ìŠ¤í‚¬ì´ ë‚˜ê°„ë‹¤.
+        yield return realSkill.Execute(_battlemanager, _caster, _targetUnit, _targetMap, _targetCell);
+    }
+
+    /// <summary>ìºìŠ¤í„° ìƒíƒœë¥¼ ë³´ê³  ì‹¤ì œ ì‹œì „í•  SkillAssetì„ ë°˜í™˜</summary>
+    public SkillAsset ResolveForCaster(BattleUnit caster)
+    {
+        // í˜„ì¬ ìƒíƒœ ì§‘í•©ì„ í•´ì‹œì…‹ìœ¼ë¡œ
+        var usc = caster ? caster.GetComponent<UnitStateController>() : null;
+        var states = usc != null ? usc.GetAll() : Array.Empty<UnitStateId>();
+        var set = new HashSet<UnitStateId>(states);
+
+        // ê·œì¹™ ìˆœì„œëŒ€ë¡œ í‰ê°€
+        foreach (var r in rules)
+        {
+            if (r == null) continue;
+
+            // forbidAny: í•˜ë‚˜ë¼ë„ í¬í•¨ë˜ë©´ íƒˆë½
+            if (r.forbidAny != null && r.forbidAny.Any(set.Contains))
+                continue;
+
+            // requireAll: ëª¨ë‘ í¬í•¨í•´ì•¼ í†µê³¼
+            if (r.requireAll != null && r.requireAll.Any() && !r.requireAll.All(set.Contains))
+                continue;
+
+            // requireAny: ë¹„ì–´ìˆì§€ ì•Šë‹¤ë©´ ìµœì†Œ í•˜ë‚˜ í¬í•¨í•´ì•¼ í†µê³¼
+            if (r.requireAny != null && r.requireAny.Any() && !r.requireAny.Any(set.Contains))
+                continue;
+
+            // ---- ê·œì¹™ ë§¤ì¹­ë¨ ----
+            var chosen = r.skill ? r.skill : defaultSkill;
+            if (chosen == null) return this; // ë¹„ìƒì‹œ: ìê¸° ìì‹  ë°˜í™˜
+
+            // í•„ìš” ì‹œ ëŸ°íƒ€ì„ í´ë¡ ì„ ë§Œë“¤ì–´ ì•ˆì „í•˜ê²Œ ë®ì–´ì“°ê¸°
+            SkillAsset product = chosen;
+
+            // ParametricDamageSkill ë²”ìœ„ í”„ë¦¬ì…‹ ë®ì–´ì“°ê¸°
+            if (r.overrideAreaPreset && chosen is ParametricDamageSkill pdm)
+            {
+                var inst = ScriptableObject.Instantiate(pdm); // ëŸ°íƒ€ì„ í´ë¡ 
+                inst.hideFlags = HideFlags.HideAndDontSave;
+                inst.areaPreset = r.areaPresetWhenMatched;
+                product = inst;
+            }
+
+            // í‘œì‹œ ì •ë³´(ì´ë¦„/ì•„ì´ì½˜) ë®ì–´ì“°ê¸°
+            if (r.overrideDisplayName || r.overrideIcon)
+            {
+                // í‘œì‹œì •ë³´ë§Œ ë°”ê¾¸ê³  ì‹¶ì–´ë„ ì›ë³¸ SOë¥¼ ê±´ë“œë¦¬ì§€ ì•Šìœ¼ë ¤ê³  í´ë¡ 
+                var inst = ScriptableObject.Instantiate(product);
+                inst.hideFlags = HideFlags.HideAndDontSave;
+                if (r.overrideDisplayName && !string.IsNullOrEmpty(r.displayNameWhenMatched))
+                    inst.displayName = r.displayNameWhenMatched;
+                if (r.overrideIcon && r.iconWhenMatched != null)
+                    inst.descriptionImage = r.iconWhenMatched;
+                product = inst;
+            }
+
+            return product;
+        }
+
+        // ì–´ë–¤ ê·œì¹™ë„ ë§¤ì¹­ë˜ì§€ ì•Šìœ¼ë©´ ê¸°ë³¸ ìŠ¤í‚¬
+        return defaultSkill != null ? defaultSkill : this;
+    }
+
+    // ë¼ìš°í„° ìì²´ëŠ” ì§ì ‘ ì‹œì „ë˜ì§€ ì•ŠìŒ(ì¹˜í™˜ ì „ìš© no-op)
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow) { yield break; }
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit caster, BattleUnit target) { yield break; }
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap map, Vector3Int originCell, BattleUnit caster) { yield break; }
+}

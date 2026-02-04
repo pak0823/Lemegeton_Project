@@ -1,32 +1,32 @@
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class TileCounter : MonoBehaviour
-{
-    public Tilemap tilemap;         // °Ë»çÇÒ Å¸ÀÏ¸Ê
-    public string partialName = "Floor";  // °Ë»öÇÒ Å¸ÀÏÀÇ ÀÌ¸§¿¡ Æ÷ÇÔµÉ ÀÌ¸§
-
-    void Start()
-    {
-        int count = CountTilesByPartialName(tilemap, partialName);
-        Debug.Log($"ÀÌ¸§¿¡ '{partialName}'ÀÌ(°¡) Æ÷ÇÔµÈ Å¸ÀÏ °³¼ö: {count}");
-    }
-
-    int CountTilesByPartialName(Tilemap map, string namePart)
-    {
-        int count = 0;
-        map.CompressBounds();  // Å¸ÀÏÀÌ Á¸ÀçÇÏ´Â ¼¿ ¿µ¿ª¸¸ ½ºÄµ
-
-        foreach (Vector3Int pos in map.cellBounds.allPositionsWithin)
-        {
-            TileBase tile = map.GetTile(pos);
-            if (tile != null && tile.name != null &&
-                tile.name.ToLower().Contains(namePart.ToLower()))
-            {
-                count++;
-            }
-        }
-
-        return count;
-    }
-}
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class TileCounter : MonoBehaviour
+{
+    public Tilemap tilemap;         // ê²€ì‚¬í•  íƒ€ì¼ë§µ
+    public string partialName = "Floor";  // ê²€ìƒ‰í•  íƒ€ì¼ì˜ ì´ë¦„ì— í¬í•¨ë  ì´ë¦„
+
+    void Start()
+    {
+        int count = CountTilesByPartialName(tilemap, partialName);
+        Debug.Log($"ì´ë¦„ì— '{partialName}'ì´(ê°€) í¬í•¨ëœ íƒ€ì¼ ê°œìˆ˜: {count}");
+    }
+
+    int CountTilesByPartialName(Tilemap map, string namePart)
+    {
+        int count = 0;
+        map.CompressBounds();  // íƒ€ì¼ì´ ì¡´ì¬í•˜ëŠ” ì…€ ì˜ì—­ë§Œ ìŠ¤ìº”
+
+        foreach (Vector3Int pos in map.cellBounds.allPositionsWithin)
+        {
+            TileBase tile = map.GetTile(pos);
+            if (tile != null && tile.name != null &&
+                tile.name.ToLower().Contains(namePart.ToLower()))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+}

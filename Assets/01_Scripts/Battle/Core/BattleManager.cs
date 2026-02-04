@@ -9,93 +9,93 @@ public class BattleManager : MonoBehaviour
     #region Variables
     public static BattleManager Instance { get; private set; }
 
-    // Core Modules (ÇÏÀ§ ½Ã½ºÅÛ ¿¬°á)
+    // Core Modules (í•˜ìœ„ ì‹œìŠ¤í…œ ì—°ê²°)
     [Header("Core Modules")]
-    [SerializeField] private BattleGridManager gridManager;         // ±×¸®µå Á¶È¸ ¹× À¯´Ö À§Ä¡ °ü¸®
-    [SerializeField] private BattleFieldManager fieldManager;       // ÀåÆÇ ¹× È¯°æ È¿°ú ´ã´ç
+    [SerializeField] private BattleGridManager gridManager;         // ê·¸ë¦¬ë“œ ì¡°íšŒ ë° ìœ ë‹› ìœ„ì¹˜ ê´€ë¦¬
+    [SerializeField] private BattleFieldManager fieldManager;       // ì¥íŒ ë° í™˜ê²½ íš¨ê³¼ ë‹´ë‹¹
     [SerializeField] private BattleTurnManager turnManager;
-    [SerializeField] private BattleInputHandler inputHandler;       // ÀÔ·Â ¹× ½Ã°¢Àû ÇÇµå¹é ´ã´ç
+    [SerializeField] private BattleInputHandler inputHandler;       // ì…ë ¥ ë° ì‹œê°ì  í”¼ë“œë°± ë‹´ë‹¹
     [SerializeField] private BattleMapManager mapManager;
-    [SerializeField] private BattleSkillProcessor skillProcessor;   // ½ºÅ³ È¿°ú ¹× µ¥¹ÌÁö °è»ê ´ã´ç
-    [SerializeField] private BattleWaveManager waveManager;        // ¿şÀÌºê ½ºÆù ¹× ½ºÅ×ÀÌÁö °ü¸®
+    [SerializeField] private BattleSkillProcessor skillProcessor;   // ìŠ¤í‚¬ íš¨ê³¼ ë° ë°ë¯¸ì§€ ê³„ì‚° ë‹´ë‹¹
+    [SerializeField] private BattleWaveManager waveManager;        // ì›¨ì´ë¸Œ ìŠ¤í° ë° ìŠ¤í…Œì´ì§€ ê´€ë¦¬
 
     public IGridProvider Grid => gridManager;
     public IFieldController Field => fieldManager;
 
     [Header("Controllers")]
-    public ATBTurnController turnController;                       // ÅÏ ¼ø¼­(ATB) °ü¸®ÀÚ
+    public ATBTurnController turnController;                       // í„´ ìˆœì„œ(ATB) ê´€ë¦¬ì
     public BattleInput battleInput;
 
-    // Battle State (ÀüÅõ ÇÙ½É »óÅÂ)
-    public BattleState state { get; private set; } = BattleState.Idle; // ÇöÀç ÀüÅõ »óÅÂ (FSM)
-    private bool initialized = false;                                  // ÃÊ±âÈ­ ¿©ºÎ ÇÃ·¡±×
-    private bool _battleEndedOnce = false;                             // ÀüÅõ Á¾·á Ã³¸® Áßº¹ ¹æÁö
+    // Battle State (ì „íˆ¬ í•µì‹¬ ìƒíƒœ)
+    public BattleState state { get; private set; } = BattleState.Idle; // í˜„ì¬ ì „íˆ¬ ìƒíƒœ (FSM)
+    private bool initialized = false;                                  // ì´ˆê¸°í™” ì—¬ë¶€ í”Œë˜ê·¸
+    private bool _battleEndedOnce = false;                             // ì „íˆ¬ ì¢…ë£Œ ì²˜ë¦¬ ì¤‘ë³µ ë°©ì§€
 
-    // Action & Turn Rules (Çàµ¿·Â ¹× ÅÏ ±ÔÄ¢)
+    // Action & Turn Rules (í–‰ë™ë ¥ ë° í„´ ê·œì¹™)
     private BattleUnit acting;
     public BattleUnit ActingUnit => acting;
     //public BattleUnit ActingUnit => turnManager.ActingUnit;
     public bool IsPlayerTurn => turnManager.IsPlayerTurn;
 
-    // Skill & Input Context (½ºÅ³ ½ÃÀü ¹× ÀÔ·Â °ü·Ã »óÅÂ)
-    // ½ºÅ³ ¼±ÅÃ »óÅÂ
-    public bool isSelectingSkill = false;                // ½ºÅ³ ÆĞ³ÎÀÌ ¿­·ÁÀÖ´ÂÁö ¿©ºÎ
-    public SkillDefinition currentSkill;                 // (Legacy) ¼±ÅÃµÈ ½ºÅ³ ±¸Á¶Ã¼
-    public SkillAsset currentSkillSO;                    // ÇöÀç ¼±ÅÃµÈ ½ºÅ³ ¿¡¼Â (¸ŞÀÎ)
+    // Skill & Input Context (ìŠ¤í‚¬ ì‹œì „ ë° ì…ë ¥ ê´€ë ¨ ìƒíƒœ)
+    // ìŠ¤í‚¬ ì„ íƒ ìƒíƒœ
+    public bool isSelectingSkill = false;                // ìŠ¤í‚¬ íŒ¨ë„ì´ ì—´ë ¤ìˆëŠ”ì§€ ì—¬ë¶€
+    public SkillDefinition currentSkill;                 // (Legacy) ì„ íƒëœ ìŠ¤í‚¬ êµ¬ì¡°ì²´
+    public SkillAsset currentSkillSO;                    // í˜„ì¬ ì„ íƒëœ ìŠ¤í‚¬ ì—ì…‹ (ë©”ì¸)
 
-    // ½ÇÇà Á¦¾î ÇÃ·¡±×
-    bool _skillConfirmLocked = false;                    // ½ºÅ³ È®Á¤ ´ë±â ¶ô
-    bool _isPostSkillMoveInProgress = false;             // ½ºÅ³ ÈÄ ÀÌµ¿(Hit & Run) ÁøÇà Áß ¿©ºÎ
-    private int _reactionLocks = 0;                      // ¸®¾×¼Ç(¹İ°İ µî)À¸·Î ÀÎÇÑ ÅÏ ÁøÇà ÀÏ½Ã Á¤Áö Ä«¿îÆ®
+    // ì‹¤í–‰ ì œì–´ í”Œë˜ê·¸
+    bool _skillConfirmLocked = false;                    // ìŠ¤í‚¬ í™•ì • ëŒ€ê¸° ë½
+    bool _isPostSkillMoveInProgress = false;             // ìŠ¤í‚¬ í›„ ì´ë™(Hit & Run) ì§„í–‰ ì¤‘ ì—¬ë¶€
+    private int _reactionLocks = 0;                      // ë¦¬ì•¡ì…˜(ë°˜ê²© ë“±)ìœ¼ë¡œ ì¸í•œ í„´ ì§„í–‰ ì¼ì‹œ ì •ì§€ ì¹´ìš´íŠ¸
 
-    // ÀÌµ¿/Å¸°ÙÆÃ µ¥ÀÌÅÍ
-    private List<Vector3Int> moveOptions = new();        // ÇöÀç ÀÌµ¿ °¡´ÉÇÑ Å¸ÀÏ ¸ñ·Ï Ä³½Ì
+    // ì´ë™/íƒ€ê²ŸíŒ… ë°ì´í„°
+    private List<Vector3Int> moveOptions = new();        // í˜„ì¬ ì´ë™ ê°€ëŠ¥í•œ íƒ€ì¼ ëª©ë¡ ìºì‹±
 
-    // Databases (µ¥ÀÌÅÍ ÂüÁ¶)
+    // Databases (ë°ì´í„° ì°¸ì¡°)
     [Header("Databases")]
-    [SerializeField] private StateStatModifierDB stateStatDb; // »óÅÂÀÌ»ó ½ºÅÈ º¸Á¤ DB
-    public TrainingDB trainingDB;                             // ÈÆ·Ã/Æ¯¼º DB
+    [SerializeField] private StateStatModifierDB stateStatDb; // ìƒíƒœì´ìƒ ìŠ¤íƒ¯ ë³´ì • DB
+    public TrainingDB trainingDB;                             // í›ˆë ¨/íŠ¹ì„± DB
 
-    // Internal References (³»ºÎ ÂüÁ¶ ¹× À¯Æ¿)
-    private IBattleMapProvider provider;                 // ¸Ê Á¤º¸ Á¦°øÀÚ (GridManager·Î ´ëÃ¼ ÁßÀÌ³ª ÃÊ±âÈ­ ÀÇÁ¸¼ºÀ¸·Î À¯Áö)
-    private UnitStatusPanelUI _statusPanel;              // UI ÆĞ³Î ÂüÁ¶ (Lazy Load)
+    // Internal References (ë‚´ë¶€ ì°¸ì¡° ë° ìœ í‹¸)
+    private IBattleMapProvider provider;                 // ë§µ ì •ë³´ ì œê³µì (GridManagerë¡œ ëŒ€ì²´ ì¤‘ì´ë‚˜ ì´ˆê¸°í™” ì˜ì¡´ì„±ìœ¼ë¡œ ìœ ì§€)
+    private UnitStatusPanelUI _statusPanel;              // UI íŒ¨ë„ ì°¸ì¡° (Lazy Load)
 
-    // Events (¿ÜºÎ ¾Ë¸²)
+    // Events (ì™¸ë¶€ ì•Œë¦¼)
     // Wave Events
-    public event System.Action<int, int, string> OnWaveChanged;  // ¿şÀÌºê Á¤º¸ °»½Å (ÇöÀç, ÃÑ, ¶óº§)
-    public event System.Action OnWaveStarted;                    // ¿şÀÌºê ½ÃÀÛ ½ÃÁ¡
-    public event System.Action<int, int> OnWaveTransition;       // ¿şÀÌºê ÀüÈ¯ ¿¬Ãâ ½ÃÀÛ
+    public event System.Action<int, int, string> OnWaveChanged;  // ì›¨ì´ë¸Œ ì •ë³´ ê°±ì‹  (í˜„ì¬, ì´, ë¼ë²¨)
+    public event System.Action OnWaveStarted;                    // ì›¨ì´ë¸Œ ì‹œì‘ ì‹œì 
+    public event System.Action<int, int> OnWaveTransition;       // ì›¨ì´ë¸Œ ì „í™˜ ì—°ì¶œ ì‹œì‘
 
     // Unit/Turn Events
-    public static event System.Action<BattleUnit> OnAnyUnitTurnStarted; // (Static) À¯´Ö ÅÏ ½ÃÀÛ Àü¿ª ¾Ë¸²
-    public event System.Action<BattleUnit> OnUnitEndTurn;               // À¯´Ö ÅÏ Á¾·á
-    public event System.Action<BattleUnit> OnOverworkTriggered;         // °ú·Î(Overwork) ¹ßµ¿ ¾Ë¸²
+    public static event System.Action<BattleUnit> OnAnyUnitTurnStarted; // (Static) ìœ ë‹› í„´ ì‹œì‘ ì „ì—­ ì•Œë¦¼
+    public event System.Action<BattleUnit> OnUnitEndTurn;               // ìœ ë‹› í„´ ì¢…ë£Œ
+    public event System.Action<BattleUnit> OnOverworkTriggered;         // ê³¼ë¡œ(Overwork) ë°œë™ ì•Œë¦¼
 
     // UI Label Events
-    public event System.Action<string> OnHint;                          // »ó´Ü ÈùÆ® ÅØ½ºÆ® °»½Å
-    public event System.Action<BattleUnit> OnUnitTurnLabel;             // ÅÏ ½ÃÀÛ ¶óº§ Ç¥½Ã
-    public event System.Action<BattleUnit, string> OnUnitActionLabel;   // ¾×¼Ç(½ºÅ³¸í) ¶óº§ Ç¥½Ã
-    public event System.Action<BattleUnit, string> OnUnitPassiveLabel;  // ÆĞ½Ãºê ¹ßµ¿ ¶óº§ Ç¥½Ã
+    public event System.Action<string> OnHint;                          // ìƒë‹¨ íŒíŠ¸ í…ìŠ¤íŠ¸ ê°±ì‹ 
+    public event System.Action<BattleUnit> OnUnitTurnLabel;             // í„´ ì‹œì‘ ë¼ë²¨ í‘œì‹œ
+    public event System.Action<BattleUnit, string> OnUnitActionLabel;   // ì•¡ì…˜(ìŠ¤í‚¬ëª…) ë¼ë²¨ í‘œì‹œ
+    public event System.Action<BattleUnit, string> OnUnitPassiveLabel;  // íŒ¨ì‹œë¸Œ ë°œë™ ë¼ë²¨ í‘œì‹œ
 
     // Skill Panel Events
-    public event System.Action<bool> OnSkillPanelToggled;               // ½ºÅ³ ÆĞ³Î ¿­¸²/´İÈû
-    public event System.Action<SkillAsset[]> OnSkillPanelPopulateSO;    // ½ºÅ³ ÆĞ³Î ³»¿ë °»½Å ¿äÃ»
+    public event System.Action<bool> OnSkillPanelToggled;               // ìŠ¤í‚¬ íŒ¨ë„ ì—´ë¦¼/ë‹«í˜
+    public event System.Action<SkillAsset[]> OnSkillPanelPopulateSO;    // ìŠ¤í‚¬ íŒ¨ë„ ë‚´ìš© ê°±ì‹  ìš”ì²­
 
     // ATB Events
     public delegate void OnATBChangedDelegate(BattleUnit unit, float currentATB, float maxATB);
-    public event OnATBChangedDelegate OnATBChanged;      // ATB °ÔÀÌÁö º¯°æ ¾Ë¸²
-    public event System.Action OnATBReset;               // ATB ÃÊ±âÈ­ ¾Ë¸²
+    public event OnATBChangedDelegate OnATBChanged;      // ATB ê²Œì´ì§€ ë³€ê²½ ì•Œë¦¼
+    public event System.Action OnATBReset;               // ATB ì´ˆê¸°í™” ì•Œë¦¼
 
-    // Public Properties (¿ÜºÎ Á¢±ÙÀÚ)
-    // »óÅÂ È®ÀÎ
+    // Public Properties (ì™¸ë¶€ ì ‘ê·¼ì)
+    // ìƒíƒœ í™•ì¸
     public bool IsTargeting => state == BattleState.Targeting;
     public bool IsKnockbackTargeting => state == BattleState.TargetingKnockback;
 
-    // µ¥ÀÌÅÍ Á¢±Ù
-    public SkillAsset CurrentSkillSO => currentSkillSO; // ÇÊµå¿Í ÇÁ·ÎÆÛÆ¼ ¿¬°á
+    // ë°ì´í„° ì ‘ê·¼
+    public SkillAsset CurrentSkillSO => currentSkillSO; // í•„ë“œì™€ í”„ë¡œí¼í‹° ì—°ê²°
     public TrainingDB Training => trainingDB;
 
-    // ¿şÀÌºê Á¤º¸ ¿¬°á
+    // ì›¨ì´ë¸Œ ì •ë³´ ì—°ê²°
     public int CurrentWave => waveManager.CurrentWave;
     public int TotalWaves => waveManager.TotalWaves;
 
@@ -151,13 +151,13 @@ public class BattleManager : MonoBehaviour
         waveManager.Initialize(this, gridManager, mapManager);
         skillProcessor.Initialize(this, gridManager);
 
-        // MapReady ÀÌº¥Æ®
+        // MapReady ì´ë²¤íŠ¸
         if (mapManager != null) mapManager.OnMapsReady += Init;
 
-        // TurnController ÀÌº¥Æ®
+        // TurnController ì´ë²¤íŠ¸
         if (turnController != null) turnController.OnTurnReady += HandleTurnReady;
 
-        // WaveManager ÀÌº¥Æ®
+        // WaveManager ì´ë²¤íŠ¸
         if (waveManager != null)
         {
             waveManager.OnWaveLoaded += HandleWaveLoaded;
@@ -199,22 +199,22 @@ public class BattleManager : MonoBehaviour
         ClearStatic();
     }
 
-    // Æ¯Á¤ ½ºÅ³(skill)À» ±âÁØÀ¸·Î Å¸°Ù(target)ÀÌ À¯È¿ÇÑÁö °Ë»çÇÏ´Â ÇïÆÛ ÇÔ¼ö
+    // íŠ¹ì • ìŠ¤í‚¬(skill)ì„ ê¸°ì¤€ìœ¼ë¡œ íƒ€ê²Ÿ(target)ì´ ìœ íš¨í•œì§€ ê²€ì‚¬í•˜ëŠ” í—¬í¼ í•¨ìˆ˜
     private bool IsTargetValidForSkill(BattleUnit target, SkillAsset skill, BattleUnit caster)
     {
         if (target == null || caster == null || skill == null) return false;
 
-        // 1. ºÎÈ° ½ºÅ³ÀÌ ¾Æ´Ï¸é Á×Àº ÀÚ´Â Á¦¿Ü
+        // 1. ë¶€í™œ ìŠ¤í‚¬ì´ ì•„ë‹ˆë©´ ì£½ì€ ìëŠ” ì œì™¸
         bool isReviveSkill = false;
         if (skill is ParametricSupportSkill supportSkill && supportSkill.mode == SupportSkillMode.Revive)
             isReviveSkill = true;
 
         if (!isReviveSkill && target.IsDead) return false;
 
-        // 2. Å¸°ÙÆÃ ºÒ°¡ »óÅÂ(Àáº¹/¿¬¸·) Ã¼Å© (Àû±ºÀÌ ÇÃ·¹ÀÌ¾î¸¦ ³ë¸± ¶§¸¸ Àû¿ëµÇÁö¸¸, ¾ÈÀü»ó Ã¼Å©)
+        // 2. íƒ€ê²ŸíŒ… ë¶ˆê°€ ìƒíƒœ(ì ë³µ/ì—°ë§‰) ì²´í¬ (ì êµ°ì´ í”Œë ˆì´ì–´ë¥¼ ë…¸ë¦´ ë•Œë§Œ ì ìš©ë˜ì§€ë§Œ, ì•ˆì „ìƒ ì²´í¬)
         if (caster.data.team != target.data.team && SkillAsset.IsUntargetableByEnemy(target)) return false;
 
-        // 3. Å¸°Ù ¼ºÇâ(Alignment) Ã¼Å©
+        // 3. íƒ€ê²Ÿ ì„±í–¥(Alignment) ì²´í¬
         switch (skill.targetAlignment)
         {
             case SkillTargetAlignment.Enemy:
@@ -232,7 +232,7 @@ public class BattleManager : MonoBehaviour
 
     public bool IsValidSkillTarget(BattleUnit target)
     {
-        // ÇöÀç ¼±ÅÃµÈ ½ºÅ³(currentSkillSO)À» ±âÁØÀ¸·Î °Ë»ç
+        // í˜„ì¬ ì„ íƒëœ ìŠ¤í‚¬(currentSkillSO)ì„ ê¸°ì¤€ìœ¼ë¡œ ê²€ì‚¬
         return IsTargetValidForSkill(target, currentSkillSO, ActingUnit);
     }
 
@@ -243,8 +243,8 @@ public class BattleManager : MonoBehaviour
 
         foreach (var u in allUnits)
         {
-            // 1. ±âº» À¯È¿¼º (ÀÚ½Å, »ç¸Á ¿©ºÎ µî) Ã¼Å©
-            // (IsValidSkillTargetÀº currentSkillSO¸¦ ¾²¹Ç·Î, ¿©±â¼± ÀÎÀÚ·Î ¹ŞÀº skillÀ» ±âÁØÀ¸·Î °Ë»çÇØ¾ß ÇÔ)
+            // 1. ê¸°ë³¸ ìœ íš¨ì„± (ìì‹ , ì‚¬ë§ ì—¬ë¶€ ë“±) ì²´í¬
+            // (IsValidSkillTargetì€ currentSkillSOë¥¼ ì“°ë¯€ë¡œ, ì—¬ê¸°ì„  ì¸ìë¡œ ë°›ì€ skillì„ ê¸°ì¤€ìœ¼ë¡œ ê²€ì‚¬í•´ì•¼ í•¨)
             if (!IsTargetValidForSkill(u, skill, caster)) continue;
 
             list.Add(u);
@@ -287,7 +287,7 @@ public class BattleManager : MonoBehaviour
     {
         if (PlayerDataManager.Instance == null)
         {
-            Debug.LogWarning("PlayerDataManager°¡ ¾ø½À´Ï´Ù!");
+            Debug.LogWarning("PlayerDataManagerê°€ ì—†ìŠµë‹ˆë‹¤!");
             return;
         }
 
@@ -411,7 +411,7 @@ public class BattleManager : MonoBehaviour
     public void OnUnitTurnStartedByManager(BattleUnit unit)
     {
         this.acting = unit;
-        Debug.Log($"[BattleManager] ÇöÀç Çàµ¿ ÁÖÃ¼ µ¿±âÈ­ ¿Ï·á: {unit.name}");
+        Debug.Log($"[BattleManager] í˜„ì¬ í–‰ë™ ì£¼ì²´ ë™ê¸°í™” ì™„ë£Œ: {unit.name}");
     }
     public void OnClickRest() => turnManager?.Rest();
     public void OnClickCalm() => turnManager?.Calm();
@@ -425,14 +425,14 @@ public class BattleManager : MonoBehaviour
 
         if (acting == null)
         {
-            Debug.LogWarning("ÇöÀç Çàµ¿ ÁßÀÎ À¯´ÖÀÌ ¾ø´Âµ¥ ÀÌµ¿ ¹öÆ°ÀÌ ´­¸².");
+            Debug.LogWarning("í˜„ì¬ í–‰ë™ ì¤‘ì¸ ìœ ë‹›ì´ ì—†ëŠ”ë° ì´ë™ ë²„íŠ¼ì´ ëˆŒë¦¼.");
             return;
         }
 
-        // 2. ÇÚµé·¯°¡ ÀÖ´ÂÁö È®ÀÎ
+        // 2. í•¸ë“¤ëŸ¬ê°€ ìˆëŠ”ì§€ í™•ì¸
         if (inputHandler == null)
         {
-            Debug.LogError("InputHandler ÂüÁ¶°¡ ºñ¾îÀÖÀ½!");
+            Debug.LogError("InputHandler ì°¸ì¡°ê°€ ë¹„ì–´ìˆìŒ!");
             return;
         }
 
@@ -466,7 +466,7 @@ public class BattleManager : MonoBehaviour
 
         while (_reactionLocks > 0) yield return null;
 
-        // TurnManager¿¡°Ô ¼Òºñ ¿äÃ»
+        // TurnManagerì—ê²Œ ì†Œë¹„ ìš”ì²­
         turnManager.OnActionConsumed(act);
     }
     #endregion
@@ -540,20 +540,20 @@ public class BattleManager : MonoBehaviour
 
     #region Targeting
 
-    // [¼öÁ¤] ÇÚµé·¯ È£Ãâ·Î º¯°æ
+    // [ìˆ˜ì •] í•¸ë“¤ëŸ¬ í˜¸ì¶œë¡œ ë³€ê²½
     public bool SelectTargetByUnit(BattleUnit unit)
     {
         return inputHandler.TrySelectTarget(unit);
     }
 
-    // [¼öÁ¤] ÇÚµé·¯ È£Ãâ·Î º¯°æ
+    // [ìˆ˜ì •] í•¸ë“¤ëŸ¬ í˜¸ì¶œë¡œ ë³€ê²½
     public void CycleTarget(int dir)
     {
         if (!IsPlayerTurn || !IsTargeting) return;
         inputHandler.CycleTarget(dir);
     }
 
-    // [¼öÁ¤] ÇÚµé·¯·ÎºÎÅÍ Å¸°Ù ¹Ş¾Æ¿Àµµ·Ï º¯°æ
+    // [ìˆ˜ì •] í•¸ë“¤ëŸ¬ë¡œë¶€í„° íƒ€ê²Ÿ ë°›ì•„ì˜¤ë„ë¡ ë³€ê²½
     public void ConfirmTarget()
     {
         if (!IsPlayerTurn || !IsTargeting) return;
@@ -622,7 +622,7 @@ public class BattleManager : MonoBehaviour
     #region Battle End
     void HandleVictory()
     {
-        Debug.Log("[Battle] ½Â¸®!");
+        Debug.Log("[Battle] ìŠ¹ë¦¬!");
         SceneTransitionManager.Instance.ReturnToSavedPoint();
     }
     void CheckBattleEnd()
@@ -641,40 +641,40 @@ public class BattleManager : MonoBehaviour
         {
             if (_battleEndedOnce) return;
             _battleEndedOnce = true;
-            Debug.Log("[Battle] ÆĞ¹è...");
+            Debug.Log("[Battle] íŒ¨ë°°...");
             SceneTransitionManager.Instance.ReturnToSavedPoint();
         }
     }
     #endregion
 
     #region UI Helpers
-    // ½ºÅ³ Á¶ÁØ ½Ã ¹üÀ§ ³» À¯´Öµé UI ÇÏÀÌ¶óÀÌÆ® (InputHandler°¡ È£ÃâÇÔ)
+    // ìŠ¤í‚¬ ì¡°ì¤€ ì‹œ ë²”ìœ„ ë‚´ ìœ ë‹›ë“¤ UI í•˜ì´ë¼ì´íŠ¸ (InputHandlerê°€ í˜¸ì¶œí•¨)
     public void HighlightUnitsInArea(Tilemap map, List<Vector3Int> cells)
     {
-        // ¹üÀ§ ³»¿¡ ÀÖ´Â À¯´ÖµéÀ» ºÒ·¯¿È
+        // ë²”ìœ„ ë‚´ì— ìˆëŠ” ìœ ë‹›ë“¤ì„ ë¶ˆëŸ¬ì˜´
         var victims = gridManager.GetUnitsInArea(map, cells);
 
-        // ÆĞ³Î¿¡°Ô ¸í´Ü ³Ñ°Ü¼­ ÇÏÀÌ¶óÀÌÆ® ÀÛµ¿
+        // íŒ¨ë„ì—ê²Œ ëª…ë‹¨ ë„˜ê²¨ì„œ í•˜ì´ë¼ì´íŠ¸ ì‘ë™
         StatusPanel?.HighlightUnits(victims);
     }
     public void ClearStatusPanelHighlights()
     {
         StatusPanel?.ClearHighlights();
     }
-    // Handler°¡ À¯´Ö Á¤º¸ º¸±â À§ÇØ È£ÃâÇÔ
+    // Handlerê°€ ìœ ë‹› ì •ë³´ ë³´ê¸° ìœ„í•´ í˜¸ì¶œí•¨
     public void ShowUnitInfo(BattleUnit unit)
     {
         if (unit == null) return;
 
         Debug.Log($"[BattleManager] Unit Info Clicked: {unit.name}");
 
-        // [¼öÁ¤] UnitStatusPanelUI¿¡´Â SetUnit(»ó¼¼º¸±â) ±â´ÉÀÌ ¾øÀ½.
-        // ´ë½Å ÇØ´ç À¯´ÖÀ» ¸®½ºÆ®¿¡¼­ °­Á¶(Highlight)ÇÏ´Â °ÍÀ¸·Î ´ëÃ¼ÇÏ°Å³ª ÁÖ¼® Ã³¸®.
+        // [ìˆ˜ì •] UnitStatusPanelUIì—ëŠ” SetUnit(ìƒì„¸ë³´ê¸°) ê¸°ëŠ¥ì´ ì—†ìŒ.
+        // ëŒ€ì‹  í•´ë‹¹ ìœ ë‹›ì„ ë¦¬ìŠ¤íŠ¸ì—ì„œ ê°•ì¡°(Highlight)í•˜ëŠ” ê²ƒìœ¼ë¡œ ëŒ€ì²´í•˜ê±°ë‚˜ ì£¼ì„ ì²˜ë¦¬.
 
-        // StatusPanel?.SetUnit(unit); // <-- »èÁ¦ ´ë»ó (¾ø´Â ¸Ş¼­µå)
-        //StatusPanel?.HighlightUnits(new List<BattleUnit> { unit }); // ´ë¾È: ¸®½ºÆ®¿¡¼­ ¾ê¸¸ ºÒ ÄÑ±â
+        // StatusPanel?.SetUnit(unit); // <-- ì‚­ì œ ëŒ€ìƒ (ì—†ëŠ” ë©”ì„œë“œ)
+        //StatusPanel?.HighlightUnits(new List<BattleUnit> { unit }); // ëŒ€ì•ˆ: ë¦¬ìŠ¤íŠ¸ì—ì„œ ì–˜ë§Œ ë¶ˆ ì¼œê¸°
 
-        // Å¸°Ù ¸¶Ä¿ Ç¥½Ã
+        // íƒ€ê²Ÿ ë§ˆì»¤ í‘œì‹œ
         inputHandler.targetMarker?.Attach(unit);
     }
 
@@ -698,7 +698,7 @@ public class BattleManager : MonoBehaviour
 
     public void TryApplyAmbushTurnStartHeal(BattleUnit unit)
     {
-        // ³»ºÎ ÇïÆÛ¸¦ ÀÌ¿ëÇØ ½ºÅ³À» Ã£À½
+        // ë‚´ë¶€ í—¬í¼ë¥¼ ì´ìš©í•´ ìŠ¤í‚¬ì„ ì°¾ìŒ
         var skill = GetAmbushSkillFor(unit);
 
         if (unit == null || skill == null) return;
@@ -806,7 +806,7 @@ public class BattleManager : MonoBehaviour
 
         string unitName = GetUnitLabel(ActingUnit);
         string safeName = unitName.Replace("<", "&lt;").Replace(">", "&gt;");
-        string msg = $"<color=#C60004>{safeName}</color> À¯´ÖÀ» ÀüÅõ¿¡¼­ Á¦¿ÜÇÕ´Ï´Ù. ÁøÇàÇÒ±î¿ä?\n(Å»Ãâ ¼º°ø È®·ü: {percent}%)";
+        string msg = $"<color=#C60004>{safeName}</color> ìœ ë‹›ì„ ì „íˆ¬ì—ì„œ ì œì™¸í•©ë‹ˆë‹¤. ì§„í–‰í• ê¹Œìš”?\n(íƒˆì¶œ ì„±ê³µ í™•ë¥ : {percent}%)";
 
         bool ok = await PopupManager.Instance.ConfirmRetreatAsync(msg, successChance01);
         if (!ok) return;
@@ -814,12 +814,12 @@ public class BattleManager : MonoBehaviour
 
         if (success)
         {
-            await PopupManager.Instance.ConfirmAsync("Å»Ãâ¿¡ ¼º°øÇß½À´Ï´Ù.", "È®ÀÎ", "");
+            await PopupManager.Instance.ConfirmAsync("íƒˆì¶œì— ì„±ê³µí–ˆìŠµë‹ˆë‹¤.", "í™•ì¸", "");
             RetreatCurrentUnit(ActingUnit);
         }
         else
         {
-            await PopupManager.Instance.ConfirmAsync("Å»Ãâ¿¡ ½ÇÆĞÇß½À´Ï´Ù.", "È®ÀÎ", "");
+            await PopupManager.Instance.ConfirmAsync("íƒˆì¶œì— ì‹¤íŒ¨í–ˆìŠµë‹ˆë‹¤.", "í™•ì¸", "");
             turnManager.EndPlayerTurn();
         }
 
@@ -894,8 +894,10 @@ public class BattleManager : MonoBehaviour
         if (skill == null) return;
 
         int effectiveCost = skill.GetEffectiveCost(ActingUnit);
-        if (!ActingUnit.HasMP(effectiveCost)) { Debug.Log($"[Skill] MP ºÎÁ·"); return; }
-        if (ActingUnit.IsSkillOnCooldown(skill)) { Debug.Log($"[Skill] Äğ´Ù¿î"); return; }
+        SkillCostResource res = skill.GetCostResource(ActingUnit);
+
+        if (!ActingUnit.HasResource(res, effectiveCost)) { Debug.Log($"[Skill] Resource({res}) insufficient"); return; }
+        if (ActingUnit.IsSkillOnCooldown(skill)) { Debug.Log($"[Skill] Cooltime"); return; }
 
         if (skill is ISelfCastSkill self && self.SelfCastOnSelect)
         {
@@ -922,8 +924,8 @@ public class BattleManager : MonoBehaviour
     {
         if (state == BattleState.Targeting && currentSkillSO != null)
         {
-            if (currentSkillSO.targetMode == SkillTargetMode.Tile) OnHint?.Invoke("À§Ä¡¸¦ ¼±ÅÃÇÏ¼¼¿ä");
-            else OnHint?.Invoke("´ë»óÀ» ¼±ÅÃÇÏ¼¼¿ä");
+            if (currentSkillSO.targetMode == SkillTargetMode.Tile) OnHint?.Invoke("ìœ„ì¹˜ë¥¼ ì„ íƒí•˜ì„¸ìš”");
+            else OnHint?.Invoke("ëŒ€ìƒì„ ì„ íƒí•˜ì„¸ìš”");
         }
         else OnHint?.Invoke(string.Empty);
     }
@@ -964,7 +966,7 @@ public class BattleManager : MonoBehaviour
     public IEnumerator WaitForCellSelection(Tilemap map, List<Vector3Int> candidates, System.Action<Vector3Int?> onResult)
     {
         state = BattleState.TargetingKnockback;
-        OnHint?.Invoke("¹Ğ¾î³¾ À§Ä¡¸¦ ¼±ÅÃÇÏ¼¼¿ä");
+        OnHint?.Invoke("ë°€ì–´ë‚¼ ìœ„ì¹˜ë¥¼ ì„ íƒí•˜ì„¸ìš”");
 
         bool done = false;
         Vector3Int? result = null;
@@ -1119,7 +1121,7 @@ public class BattleManager : MonoBehaviour
     public void FinishActionAfterSkill()
     {
         var skill = currentSkillSO;
-        var unit = ActingUnit; // ÇÁ·ÎÆÛÆ¼ »ç¿ë
+        var unit = ActingUnit; // í”„ë¡œí¼í‹° ì‚¬ìš©
 
         ClearSkillPreview();
         CloseSkillPanel();
@@ -1142,13 +1144,13 @@ public class BattleManager : MonoBehaviour
         UpdateTargetingHint();
     }
 
-    // ÇÚµé·¯ À§ÀÓ (ClearTransient°¡ ¾Æ´Ï¶ó ClearMovePreview È£Ãâ)
+    // í•¸ë“¤ëŸ¬ ìœ„ì„ (ClearTransientê°€ ì•„ë‹ˆë¼ ClearMovePreview í˜¸ì¶œ)
     public void ShowMovePreview(Tilemap baseMap, IEnumerable<Vector3Int> cells) => inputHandler?.ShowMoveOptions(baseMap, cells);
     public void ShowSkillPreview(Tilemap baseMap, IEnumerable<Vector3Int> cells) => inputHandler?.ShowSkillPreview(baseMap, cells);
 
     public void ClearMovePreview() => inputHandler?.ClearMovePreview();
 
-    // [¼öÁ¤] ÇÚµé·¯ À§ÀÓ (¸Ş¼­µå »õ·Î ¸¸µê)
+    // [ìˆ˜ì •] í•¸ë“¤ëŸ¬ ìœ„ì„ (ë©”ì„œë“œ ìƒˆë¡œ ë§Œë“¦)
     public void HoldSkillPreview() => inputHandler?.HoldSkillPreview();
     public void ReleaseSkillPreview() => inputHandler?.ReleaseSkillPreview();
 
@@ -1161,7 +1163,7 @@ public class BattleManager : MonoBehaviour
         StatusPanel?.ClearHighlights();
     }
 
-    // ÇÚµé·¯ ÇÏÀÌ¶óÀÌÅÍ »ç¿ë
+    // í•¸ë“¤ëŸ¬ í•˜ì´ë¼ì´í„° ì‚¬ìš©
     public int CreateSkillPreviewToken() => inputHandler.skillHighlighter != null ? inputHandler.skillHighlighter.CreateGroup() : 0;
     public void SetSkillPreviewForToken(int token, Tilemap map, IEnumerable<Vector3Int> cells) => inputHandler.skillHighlighter?.SetGroupCells(token, map, cells);
     public void ClearSkillPreviewToken(int token) => inputHandler.skillHighlighter?.ClearGroup(token);

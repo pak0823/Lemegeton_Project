@@ -1,235 +1,235 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public class BattleFieldManager : MonoBehaviour, IFieldController
-{
-    private IGridProvider gridProvider;
-    private BattleManager battleManager;
-    private BattleInputHandler inputHandler;
-
-    [System.Serializable]
-    public class BeastDomainZone
-    {
-        public BattleUnit owner;
-        public Tilemap map;
-        public Vector3Int center;
-        public int radius;
-        public int remainingTurns;
-        public int highlightToken;
-    }
-
-    [System.Serializable]
-    public class StatusTileZone
-    {
-        public BattleUnit owner;
-        public Tilemap map;
-        public Vector3Int cell;
-        public int remainingTurns;
-        public TileBase originalTile;
-        public StatusId effectStatusId;
-        public int effectStack;
-        public int effectDuration;
-    }
-
-    List<StatusTileZone> _statusTileZones = new List<StatusTileZone>();
-    List<BeastDomainZone> _beastZones = new List<BeastDomainZone>();
-
-    public void Initialize(BattleManager _battleManager, IGridProvider _gridProvider, BattleInputHandler _inputHandler)
-    {
-        this.battleManager = _battleManager;
-        this.gridProvider = _gridProvider;
-    }
-
-    // === ≈œ Ω√¿€ Ω√ æ˜µ•¿Ã∆Æ (BM¿Ã »£√‚) ===
-    public void OnTurnStart(BattleUnit unit)
-    {
-        TickBeastDomainOnTurnStart(unit);
-        TickStatusTileZonesOnTurnStart(unit);
-    }
-
-    // === ≈œ ¡æ∑· Ω√ √º≈© (BM¿Ã »£√‚) ===
-    public void OnTurnEnd(BattleUnit unit)
-    {
-        CheckStatusTileZoneEffect(unit);
-    }
-
-    #region Beast Domain Logic
-    public void SpawnBeastDomainZone(Tilemap map, BattleUnit owner, Vector3Int centerCell, int radius, int durationTurns)
-    {
-        if (!owner || !map) return;
-
-        // ±‚¡∏ øµø™ ¡¶∞≈ («— ¿Ø¥÷¥Á «œ≥™∏∏ ¿Ø¡ˆ«—¥Ÿ∞Ì ∞°¡§)
-        for (int i = _beastZones.Count - 1; i >= 0; i--)
-        {
-            var old = _beastZones[i];
-            if (old.owner != owner) continue;
-            // ±‚¡∏ «œ¿Ã∂Û¿Ã∆Æ ¡¶∞≈
-            if (old.highlightToken != 0 && inputHandler.beastDomainHighlighter != null)
-                inputHandler.beastDomainHighlighter.ClearGroup(old.highlightToken);
-            _beastZones.RemoveAt(i);
-        }
-
-        // π¸¿ß ∞ËªÍ
-        var cells = new List<Vector3Int>();
-        foreach (var c in AreaShapes.BeastDomainArea(centerCell, radius)) cells.Add(c);
-
-        // «œ¿Ã∂Û¿Ã∆Æ ª˝º∫ (InputHandler ªÁøÎ)
-        int token = 0;
-        if (inputHandler.beastDomainHighlighter != null)
-        {
-            token = inputHandler.beastDomainHighlighter.CreateGroup();
-            inputHandler.beastDomainHighlighter.SetGroupCells(token, map, cells);
-        }
-
-        var zone = new BeastDomainZone
-        {
-            owner = owner,
-            map = map,
-            center = centerCell,
-            radius = radius,
-            remainingTurns = durationTurns,
-            highlightToken = token,
-        };
-        _beastZones.Add(zone);
-
-        Debug.Log($"[BattleField] {owner.name} æﬂºˆ¿« øµø™ ª˝º∫ - token:{token}");
-    }
-
-    private void TickBeastDomainOnTurnStart(BattleUnit unitWhoseTurnStarted)
-    {
-        if (unitWhoseTurnStarted == null) return;
-
-        for (int i = _beastZones.Count - 1; i >= 0; i--)
-        {
-            var z = _beastZones[i];
-            if (z.owner != unitWhoseTurnStarted) continue;
-
-            TryApplyBeastDomainRageTraining(z.owner);
-            z.remainingTurns--;
-
-            if (z.remainingTurns <= 0)
-            {
-                if (z.highlightToken != 0 && inputHandler.beastDomainHighlighter != null)
-                    inputHandler.beastDomainHighlighter.ClearGroup(z.highlightToken);
-
-                _beastZones.RemoveAt(i);
-            }
-        }
-    }
-
-    private void TryApplyBeastDomainRageTraining(BattleUnit owner)
-    {
-        if (owner == null || owner.data == null || owner.data.skills == null) return;
-
-        // Ω∫≈≥º¬ø°º≠ ∆–Ω√∫Í ¡§∫∏ √£±‚
-        SelfBeastDomainSkill domainSkill = null;
-        foreach (var s in owner.data.skills)
-        {
-            domainSkill = s as SelfBeastDomainSkill;
-            if (domainSkill != null) break;
-        }
-        if (domainSkill == null) return;
-
-        int route = owner.GetTrainingRouteIndex(domainSkill);
-        if (!domainSkill.trainingReduceRageOnTurnStart || domainSkill.routeForRageReduceOnTurnStart < 0 || route != domainSkill.routeForRageReduceOnTurnStart) return;
-
-        float amount = owner.CLV * domainSkill.rageReducePerClv;
-        if (amount <= 0f) return;
-
-        owner.AddRage(-amount);
-    }
-
-    public bool IsBeastDomainFreeMove(BattleUnit unit, Tilemap map, Vector3Int fromCell, Vector3Int toCell)
-    {
-        if (unit == null || map == null) return false;
-        foreach (var z in _beastZones)
-        {
-            if (z.owner != unit) continue;
-            if (z.map != map) continue; // ∏  ¥Ÿ∏£∏È π´»ø
-
-            // HexDistance ∞ËªÍ
-            bool fromIn = HexUtil.GetDistance(z.center, fromCell) <= z.radius;
-            bool toIn = HexUtil.GetDistance(z.center, toCell) <= z.radius;
-            if (fromIn && toIn) return true;
-        }
-        return false;
-    }
-    #endregion
-
-    #region Status Tile Logic
-    public void CreateStatusTileZone(BattleUnit owner, Tilemap map, Vector3Int cell, int zoneDuration, TileBase newTileBase, StatusId statusId, int stack = 1, int statusDuration = 3)
-    {
-        if (!map.HasTile(cell)) return;
-
-        var existing = _statusTileZones.FirstOrDefault(z => z.map == map && z.cell == cell);
-        if (existing != null)
-        {
-            existing.owner = owner;
-            existing.remainingTurns = zoneDuration;
-            existing.effectStatusId = statusId;
-            existing.effectStack = stack;
-            existing.effectDuration = statusDuration;
-            if (newTileBase != null) map.SetTile(cell, newTileBase);
-            return;
-        }
-
-        TileBase oldTile = map.GetTile(cell);
-        if (newTileBase != null) map.SetTile(cell, newTileBase);
-
-        var newZone = new StatusTileZone
-        {
-            owner = owner,
-            map = map,
-            cell = cell,
-            remainingTurns = zoneDuration,
-            originalTile = oldTile,
-            effectStatusId = statusId,
-            effectStack = stack,
-            effectDuration = statusDuration
-        };
-        _statusTileZones.Add(newZone);
-    }
-
-    private void TickStatusTileZonesOnTurnStart(BattleUnit unit)
-    {
-        if (unit == null) return;
-
-        for (int i = _statusTileZones.Count - 1; i >= 0; i--)
-        {
-            var z = _statusTileZones[i];
-            if (z.owner == unit)
-            {
-                z.remainingTurns--;
-                if (z.remainingTurns <= 0)
-                {
-                    if (z.map != null) z.map.SetTile(z.cell, z.originalTile);
-                    _statusTileZones.RemoveAt(i);
-                }
-            }
-        }
-    }
-
-    private void CheckStatusTileZoneEffect(BattleUnit unit)
-    {
-        if (unit == null || unit.IsDead) return;
-
-        foreach (var zone in _statusTileZones)
-        {
-            if (zone.map == unit.CurrentMap && zone.cell == unit.Cell)
-            {
-                var sc = unit.GetComponent<StatusController>();
-                if (sc != null)
-                {
-                    sc.ApplyWithTurnContext(zone.effectStatusId, zone.effectStack, zone.effectDuration);
-                }
-                break;
-            }
-        }
-    }
-    #endregion
-
-
-}
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public class BattleFieldManager : MonoBehaviour, IFieldController
+{
+    private IGridProvider gridProvider;
+    private BattleManager battleManager;
+    private BattleInputHandler inputHandler;
+
+    [System.Serializable]
+    public class BeastDomainZone
+    {
+        public BattleUnit owner;
+        public Tilemap map;
+        public Vector3Int center;
+        public int radius;
+        public int remainingTurns;
+        public int highlightToken;
+    }
+
+    [System.Serializable]
+    public class StatusTileZone
+    {
+        public BattleUnit owner;
+        public Tilemap map;
+        public Vector3Int cell;
+        public int remainingTurns;
+        public TileBase originalTile;
+        public StatusId effectStatusId;
+        public int effectStack;
+        public int effectDuration;
+    }
+
+    List<StatusTileZone> _statusTileZones = new List<StatusTileZone>();
+    List<BeastDomainZone> _beastZones = new List<BeastDomainZone>();
+
+    public void Initialize(BattleManager _battleManager, IGridProvider _gridProvider, BattleInputHandler _inputHandler)
+    {
+        this.battleManager = _battleManager;
+        this.gridProvider = _gridProvider;
+    }
+
+    // === ÌÑ¥ ÏãúÏûë Ïãú ÏóÖÎç∞Ïù¥Ìä∏ (BMÏù¥ Ìò∏Ï∂ú) ===
+    public void OnTurnStart(BattleUnit unit)
+    {
+        TickBeastDomainOnTurnStart(unit);
+        TickStatusTileZonesOnTurnStart(unit);
+    }
+
+    // === ÌÑ¥ Ï¢ÖÎ£å Ïãú Ï≤¥ÌÅ¨ (BMÏù¥ Ìò∏Ï∂ú) ===
+    public void OnTurnEnd(BattleUnit unit)
+    {
+        CheckStatusTileZoneEffect(unit);
+    }
+
+    #region Beast Domain Logic
+    public void SpawnBeastDomainZone(Tilemap map, BattleUnit owner, Vector3Int centerCell, int radius, int durationTurns)
+    {
+        if (!owner || !map) return;
+
+        // Í∏∞Ï°¥ ÏòÅÏó≠ Ï†úÍ±∞ (Ìïú Ïú†ÎãõÎãπ ÌïòÎÇòÎßå Ïú†ÏßÄÌïúÎã§Í≥† Í∞ÄÏ†ï)
+        for (int i = _beastZones.Count - 1; i >= 0; i--)
+        {
+            var old = _beastZones[i];
+            if (old.owner != owner) continue;
+            // Í∏∞Ï°¥ ÌïòÏù¥ÎùºÏù¥Ìä∏ Ï†úÍ±∞
+            if (old.highlightToken != 0 && inputHandler.beastDomainHighlighter != null)
+                inputHandler.beastDomainHighlighter.ClearGroup(old.highlightToken);
+            _beastZones.RemoveAt(i);
+        }
+
+        // Î≤îÏúÑ Í≥ÑÏÇ∞
+        var cells = new List<Vector3Int>();
+        foreach (var c in AreaShapes.BeastDomainArea(centerCell, radius)) cells.Add(c);
+
+        // ÌïòÏù¥ÎùºÏù¥Ìä∏ ÏÉùÏÑ± (InputHandler ÏÇ¨Ïö©)
+        int token = 0;
+        if (inputHandler.beastDomainHighlighter != null)
+        {
+            token = inputHandler.beastDomainHighlighter.CreateGroup();
+            inputHandler.beastDomainHighlighter.SetGroupCells(token, map, cells);
+        }
+
+        var zone = new BeastDomainZone
+        {
+            owner = owner,
+            map = map,
+            center = centerCell,
+            radius = radius,
+            remainingTurns = durationTurns,
+            highlightToken = token,
+        };
+        _beastZones.Add(zone);
+
+        Debug.Log($"[BattleField] {owner.name} ÏïºÏàòÏùò ÏòÅÏó≠ ÏÉùÏÑ± - token:{token}");
+    }
+
+    private void TickBeastDomainOnTurnStart(BattleUnit unitWhoseTurnStarted)
+    {
+        if (unitWhoseTurnStarted == null) return;
+
+        for (int i = _beastZones.Count - 1; i >= 0; i--)
+        {
+            var z = _beastZones[i];
+            if (z.owner != unitWhoseTurnStarted) continue;
+
+            TryApplyBeastDomainRageTraining(z.owner);
+            z.remainingTurns--;
+
+            if (z.remainingTurns <= 0)
+            {
+                if (z.highlightToken != 0 && inputHandler.beastDomainHighlighter != null)
+                    inputHandler.beastDomainHighlighter.ClearGroup(z.highlightToken);
+
+                _beastZones.RemoveAt(i);
+            }
+        }
+    }
+
+    private void TryApplyBeastDomainRageTraining(BattleUnit owner)
+    {
+        if (owner == null || owner.data == null || owner.data.skills == null) return;
+
+        // Ïä§ÌÇ¨ÏÖãÏóêÏÑú Ìå®ÏãúÎ∏å Ï†ïÎ≥¥ Ï∞æÍ∏∞
+        SelfBeastDomainSkill domainSkill = null;
+        foreach (var s in owner.data.skills)
+        {
+            domainSkill = s as SelfBeastDomainSkill;
+            if (domainSkill != null) break;
+        }
+        if (domainSkill == null) return;
+
+        int route = owner.GetTrainingRouteIndex(domainSkill);
+        if (!domainSkill.trainingReduceRageOnTurnStart || domainSkill.routeForRageReduceOnTurnStart < 0 || route != domainSkill.routeForRageReduceOnTurnStart) return;
+
+        float amount = owner.CLV * domainSkill.rageReducePerClv;
+        if (amount <= 0f) return;
+
+        owner.AddRage(-amount);
+    }
+
+    public bool IsBeastDomainFreeMove(BattleUnit unit, Tilemap map, Vector3Int fromCell, Vector3Int toCell)
+    {
+        if (unit == null || map == null) return false;
+        foreach (var z in _beastZones)
+        {
+            if (z.owner != unit) continue;
+            if (z.map != map) continue; // Îßµ Îã§Î•¥Î©¥ Î¨¥Ìö®
+
+            // HexDistance Í≥ÑÏÇ∞
+            bool fromIn = HexUtil.GetDistance(z.center, fromCell) <= z.radius;
+            bool toIn = HexUtil.GetDistance(z.center, toCell) <= z.radius;
+            if (fromIn && toIn) return true;
+        }
+        return false;
+    }
+    #endregion
+
+    #region Status Tile Logic
+    public void CreateStatusTileZone(BattleUnit owner, Tilemap map, Vector3Int cell, int zoneDuration, TileBase newTileBase, StatusId statusId, int stack = 1, int statusDuration = 3)
+    {
+        if (!map.HasTile(cell)) return;
+
+        var existing = _statusTileZones.FirstOrDefault(z => z.map == map && z.cell == cell);
+        if (existing != null)
+        {
+            existing.owner = owner;
+            existing.remainingTurns = zoneDuration;
+            existing.effectStatusId = statusId;
+            existing.effectStack = stack;
+            existing.effectDuration = statusDuration;
+            if (newTileBase != null) map.SetTile(cell, newTileBase);
+            return;
+        }
+
+        TileBase oldTile = map.GetTile(cell);
+        if (newTileBase != null) map.SetTile(cell, newTileBase);
+
+        var newZone = new StatusTileZone
+        {
+            owner = owner,
+            map = map,
+            cell = cell,
+            remainingTurns = zoneDuration,
+            originalTile = oldTile,
+            effectStatusId = statusId,
+            effectStack = stack,
+            effectDuration = statusDuration
+        };
+        _statusTileZones.Add(newZone);
+    }
+
+    private void TickStatusTileZonesOnTurnStart(BattleUnit unit)
+    {
+        if (unit == null) return;
+
+        for (int i = _statusTileZones.Count - 1; i >= 0; i--)
+        {
+            var z = _statusTileZones[i];
+            if (z.owner == unit)
+            {
+                z.remainingTurns--;
+                if (z.remainingTurns <= 0)
+                {
+                    if (z.map != null) z.map.SetTile(z.cell, z.originalTile);
+                    _statusTileZones.RemoveAt(i);
+                }
+            }
+        }
+    }
+
+    private void CheckStatusTileZoneEffect(BattleUnit unit)
+    {
+        if (unit == null || unit.IsDead) return;
+
+        foreach (var zone in _statusTileZones)
+        {
+            if (zone.map == unit.CurrentMap && zone.cell == unit.Cell)
+            {
+                var sc = unit.GetComponent<StatusController>();
+                if (sc != null)
+                {
+                    sc.ApplyWithTurnContext(zone.effectStatusId, zone.effectStack, zone.effectDuration);
+                }
+                break;
+            }
+        }
+    }
+    #endregion
+
+
+}

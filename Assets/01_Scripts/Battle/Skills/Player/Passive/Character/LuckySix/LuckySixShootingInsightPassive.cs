@@ -1,71 +1,71 @@
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Passives/LuckySix/Passive_1", fileName = "Passive_ShootingInsight")]
-public class LuckySixShootingInsightPassive : PassiveAsset
-{
-    [Header("Stack Config")]
-    public int triggerStacks = 5;     // ÀÌ ½ºÅÃ¿¡ µµ´ŞÇÏ¸é ÅëÂû °­È­ Æ®¸®°Å
-    public int resetStacks = 6;       // ÀÌ ½ºÅÃ¿¡ µµ´ŞÇÏ¸é ½ºÅÃ ¸®¼Â
-    public bool onlyOnDamagePositive = true; // ½ÇÁ¦ ÇÇÇØ°¡ 1 ÀÌ»óÀÏ ¶§¸¸ Ä«¿îÆ®
-
-    // ³ªÁß¿¡ ÅëÂû(Å©¸®Æ¼ÄÃ °ü·Ã) ½ºÅÈÀ¸·Î ¾µ ÀÚ¸®
-    [Header("Insight Placeholder")]
-    public float insightValue = 6.0f; // TODO: ÃßÈÄ Å©¸® È®·ü/¹èÀ²°ú ¿¬°á
-
-    // Runtime: À¯´Öº° ½ºÅÃ °ü¸® (SO´Â °øÀ¯µÇ¹Ç·Î µñ¼Å³Ê¸® ÇÊ¿ä)
-    private readonly Dictionary<BattleUnit, int> _stacks = new();
-
-    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
-    {
-        if (_owner == null) return;
-        _owner.OnDealtDamage += HandleDealtDamage;
-        _stacks[_owner] = 0;
-    }
-
-    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
-    {
-        if (_owner == null) return;
-        _owner.OnDealtDamage -= HandleDealtDamage;
-        _stacks.Remove(_owner);
-        // ÃßÈÄ ÅëÂû ¹öÇÁ/»óÅÂ¸¦ ¾´´Ù¸é ¿©±â¼­ Á¦°Å
-    }
-
-    private void HandleDealtDamage(BattleUnit _dealer, BattleUnit _victim, int _damage, SkillAsset _source)
-    {
-        if (_dealer == null) return;
-        if (onlyOnDamagePositive && _damage <= 0) return;
-
-        if (!_stacks.TryGetValue(_dealer, out var cur))
-            cur = 0;
-
-        cur++;
-        Debug.Log($"[Passive:ShootingInsight] {_dealer.name} stack -> {cur}");
-
-        StatusController statusController = _dealer.GetComponent<StatusController>();
-        if (statusController != null)
-            statusController.SetStacks(StatusId.Shooting, cur, 0); // showTurns=false ÀÌ¶ó durationÀº ÀÇ¹Ì ¾øÀ½
-
-        // 5½ºÅÃ µµ´Ş: ÅëÂû °­È­ Æ®¸®°Å (ÇöÀç´Â ·Î±×/ÇÃ·¹ÀÌ½ºÈ¦´õ¸¸)
-        if (cur == triggerStacks)
-        {
-            Debug.Log($"[Passive:ShootingInsight] {_dealer.name} ÅëÂû °­È­ ¹ßµ¿ (x{insightValue}) [TODO: ½ÇÁ¦ ½ºÅÈ ¿¬µ¿]");
-
-            _dealer.AnnouncePassive(displayName);    // ÆĞ½Ãºê ¹ßµ¿ ¶óº§ È£Ãâ
-            // TODO: UnitStateBuffId.Insight °°Àº ¹öÇÁ¸¦ Àû¿ëÇØ¼­
-            //       StateStatModifierDB¿¡¼­ Ä¡¸í °ü·Ã ¼öÄ¡¸¦ ¿Ã¸®µµ·Ï ¿¬µ¿ °¡´É.
-        }
-
-        // 6½ºÅÃ µµ´Ş: ¸®¼Â
-        if (cur >= resetStacks)
-        {
-            Debug.Log($"[Passive:ShootingInsight] {_dealer.name} ½ºÅÃ ¸®¼Â");
-            cur = 0;
-            if (statusController != null)
-                statusController.SetStacks(StatusId.Shooting, 0); // ¾ÆÀÌÄÜ Á¦°Å
-            // TODO: ¿©±â¼­ »ç°İ ÁßÃ¸/ÅëÂû ¹öÇÁ »óÅÂ Á¦°Å
-        }
-
-        _stacks[_dealer] = cur;
-    }
-}
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Passives/LuckySix/Passive_1", fileName = "Passive_ShootingInsight")]
+public class LuckySixShootingInsightPassive : PassiveAsset
+{
+    [Header("Stack Config")]
+    public int triggerStacks = 5;     // ì´ ìŠ¤íƒì— ë„ë‹¬í•˜ë©´ í†µì°° ê°•í™” íŠ¸ë¦¬ê±°
+    public int resetStacks = 6;       // ì´ ìŠ¤íƒì— ë„ë‹¬í•˜ë©´ ìŠ¤íƒ ë¦¬ì…‹
+    public bool onlyOnDamagePositive = true; // ì‹¤ì œ í”¼í•´ê°€ 1 ì´ìƒì¼ ë•Œë§Œ ì¹´ìš´íŠ¸
+
+    // ë‚˜ì¤‘ì— í†µì°°(í¬ë¦¬í‹°ì»¬ ê´€ë ¨) ìŠ¤íƒ¯ìœ¼ë¡œ ì“¸ ìë¦¬
+    [Header("Insight Placeholder")]
+    public float insightValue = 6.0f; // TODO: ì¶”í›„ í¬ë¦¬ í™•ë¥ /ë°°ìœ¨ê³¼ ì—°ê²°
+
+    // Runtime: ìœ ë‹›ë³„ ìŠ¤íƒ ê´€ë¦¬ (SOëŠ” ê³µìœ ë˜ë¯€ë¡œ ë”•ì…”ë„ˆë¦¬ í•„ìš”)
+    private readonly Dictionary<BattleUnit, int> _stacks = new();
+
+    public override void OnAttach(BattleUnit _owner, BattleManager _battle)
+    {
+        if (_owner == null) return;
+        _owner.OnDealtDamage += HandleDealtDamage;
+        _stacks[_owner] = 0;
+    }
+
+    public override void OnDetach(BattleUnit _owner, BattleManager _battle)
+    {
+        if (_owner == null) return;
+        _owner.OnDealtDamage -= HandleDealtDamage;
+        _stacks.Remove(_owner);
+        // ì¶”í›„ í†µì°° ë²„í”„/ìƒíƒœë¥¼ ì“´ë‹¤ë©´ ì—¬ê¸°ì„œ ì œê±°
+    }
+
+    private void HandleDealtDamage(BattleUnit _dealer, BattleUnit _victim, int _damage, SkillAsset _source)
+    {
+        if (_dealer == null) return;
+        if (onlyOnDamagePositive && _damage <= 0) return;
+
+        if (!_stacks.TryGetValue(_dealer, out var cur))
+            cur = 0;
+
+        cur++;
+        Debug.Log($"[Passive:ShootingInsight] {_dealer.name} stack -> {cur}");
+
+        StatusController statusController = _dealer.GetComponent<StatusController>();
+        if (statusController != null)
+            statusController.SetStacks(StatusId.Shooting, cur, 0); // showTurns=false ì´ë¼ durationì€ ì˜ë¯¸ ì—†ìŒ
+
+        // 5ìŠ¤íƒ ë„ë‹¬: í†µì°° ê°•í™” íŠ¸ë¦¬ê±° (í˜„ì¬ëŠ” ë¡œê·¸/í”Œë ˆì´ìŠ¤í™€ë”ë§Œ)
+        if (cur == triggerStacks)
+        {
+            Debug.Log($"[Passive:ShootingInsight] {_dealer.name} í†µì°° ê°•í™” ë°œë™ (x{insightValue}) [TODO: ì‹¤ì œ ìŠ¤íƒ¯ ì—°ë™]");
+
+            _dealer.AnnouncePassive(displayName);    // íŒ¨ì‹œë¸Œ ë°œë™ ë¼ë²¨ í˜¸ì¶œ
+            // TODO: UnitStateBuffId.Insight ê°™ì€ ë²„í”„ë¥¼ ì ìš©í•´ì„œ
+            //       StateStatModifierDBì—ì„œ ì¹˜ëª… ê´€ë ¨ ìˆ˜ì¹˜ë¥¼ ì˜¬ë¦¬ë„ë¡ ì—°ë™ ê°€ëŠ¥.
+        }
+
+        // 6ìŠ¤íƒ ë„ë‹¬: ë¦¬ì…‹
+        if (cur >= resetStacks)
+        {
+            Debug.Log($"[Passive:ShootingInsight] {_dealer.name} ìŠ¤íƒ ë¦¬ì…‹");
+            cur = 0;
+            if (statusController != null)
+                statusController.SetStacks(StatusId.Shooting, 0); // ì•„ì´ì½˜ ì œê±°
+            // TODO: ì—¬ê¸°ì„œ ì‚¬ê²© ì¤‘ì²©/í†µì°° ë²„í”„ ìƒíƒœ ì œê±°
+        }
+
+        _stacks[_dealer] = cur;
+    }
+}

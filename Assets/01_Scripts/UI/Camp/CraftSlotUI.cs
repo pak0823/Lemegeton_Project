@@ -1,47 +1,47 @@
-using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.Events;
-using UnityEngine.ResourceManagement.AsyncOperations;
-using UnityEngine.UI;
-
-public class CraftSlotUI : MonoBehaviour
-{
-    [Header("UI Components")]
-    [SerializeField] private Image iconImage;
-    [SerializeField] private Text nameText;
-    [SerializeField] private Button button;
-    [SerializeField] private GameObject highlightObj; // ¼±ÅÃµÆÀ» ¶§ ÄÑÁú Å×µÎ¸® °°Àº °Å (¿É¼Ç)
-
-    private AsyncOperationHandle<Sprite> _handle;
-
-    // µ¥ÀÌÅÍ ¼¼ÆÃ ÇÔ¼ö
-    public void Setup(CraftRecipe recipe, UnityAction onClickAction)
-    {
-        if (recipe.resultItem != null)
-        {
-            nameText.text = recipe.resultItem.itemName;
-
-            // ºñµ¿±â ·Îµå
-            if (_handle.IsValid()) Addressables.Release(_handle);
-            _handle = Addressables.LoadAssetAsync<Sprite>(recipe.resultItem.GetAtlasKey());
-            _handle.Completed += h => { if (h.Status == AsyncOperationStatus.Succeeded) iconImage.sprite = h.Result; };
-        }
-
-        // Å¬¸¯ ÀÌº¥Æ® ¿¬°á
-        // ±âÁ¸ ¸®½º³Ê Á¦°Å (Àç»ç¿ë ½Ã Áßº¹ ¹æÁö)
-        button.onClick.RemoveAllListeners();
-        button.onClick.AddListener(onClickAction);
-
-        // Å¬¸¯ ½Ã ÇÏÀÌ¶óÀÌÆ® °»½Å ·ÎÁ÷ µîÀº ¿©±â¼­ Ãß°¡ °¡´É
-    }
-    private void OnDestroy()
-    {
-        if (_handle.IsValid()) Addressables.Release(_handle);
-    }
-
-    // ¼±ÅÃ Ç¥½Ã ÄÑ°í ²ô±â (ÇÊ¿äÇÏ¸é È£Ãâ)
-    public void SetSelected(bool isSelected)
-    {
-        if (highlightObj) highlightObj.SetActive(isSelected);
-    }
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.Events;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
+
+public class CraftSlotUI : MonoBehaviour
+{
+    [Header("UI Components")]
+    [SerializeField] private Image iconImage;
+    [SerializeField] private Text nameText;
+    [SerializeField] private Button button;
+    [SerializeField] private GameObject highlightObj; // ì„ íƒëì„ ë•Œ ì¼œì§ˆ í…Œë‘ë¦¬ ê°™ì€ ê±° (ì˜µì…˜)
+
+    private AsyncOperationHandle<Sprite> _handle;
+
+    // ë°ì´í„° ì„¸íŒ… í•¨ìˆ˜
+    public void Setup(CraftRecipe recipe, UnityAction onClickAction)
+    {
+        if (recipe.resultItem != null)
+        {
+            nameText.text = recipe.resultItem.itemName;
+
+            // ë¹„ë™ê¸° ë¡œë“œ
+            if (_handle.IsValid()) Addressables.Release(_handle);
+            _handle = Addressables.LoadAssetAsync<Sprite>(recipe.resultItem.GetAtlasKey());
+            _handle.Completed += h => { if (h.Status == AsyncOperationStatus.Succeeded) iconImage.sprite = h.Result; };
+        }
+
+        // í´ë¦­ ì´ë²¤íŠ¸ ì—°ê²°
+        // ê¸°ì¡´ ë¦¬ìŠ¤ë„ˆ ì œê±° (ì¬ì‚¬ìš© ì‹œ ì¤‘ë³µ ë°©ì§€)
+        button.onClick.RemoveAllListeners();
+        button.onClick.AddListener(onClickAction);
+
+        // í´ë¦­ ì‹œ í•˜ì´ë¼ì´íŠ¸ ê°±ì‹  ë¡œì§ ë“±ì€ ì—¬ê¸°ì„œ ì¶”ê°€ ê°€ëŠ¥
+    }
+    private void OnDestroy()
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
+    }
+
+    // ì„ íƒ í‘œì‹œ ì¼œê³  ë„ê¸° (í•„ìš”í•˜ë©´ í˜¸ì¶œ)
+    public void SetSelected(bool isSelected)
+    {
+        if (highlightObj) highlightObj.SetActive(isSelected);
+    }
 }

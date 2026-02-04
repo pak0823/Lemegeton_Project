@@ -1,76 +1,76 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public interface IBattleMapProvider
-{
-    UnityEngine.Tilemaps.Tilemap PlayerFloor { get; }
-    UnityEngine.Tilemaps.Tilemap EnemyFloor { get; }
-    UnityEngine.Tilemaps.Tilemap AllyOverlay { get; }  // ¼±ÅÃ
-    UnityEngine.Tilemaps.Tilemap EnemyOverlay { get; }  // ¼±ÅÃ
-    event System.Action OnMapsReady;
-}
-
-// ÀÚ±â ÀÚ½Å¿¡°Ô Áï½Ã ½ÃÀüµÇ´Â ½ºÅ³ ½Äº°¿ë
-public interface ISelfCastSkill
-{
-    // true¸é Å¸°ÙÆÃ UI ¾øÀÌ ¼±ÅÃ Áï½Ã ResolveOnUnit(caster, caster)
-    bool SelfCastOnSelect { get; }
-}
-
-public interface ISkillForStateResolver
-{
-    // Ä³½ºÅÍ »óÅÂ¸¦ º¸°í ½ÇÁ¦ »ç¿ëÇÒ SO¸¦ µ¹·ÁÁØ´Ù(Ä¡È¯).
-    SkillAsset ResolveForCaster(BattleUnit caster);
-}
-public interface IProjectileTileSkill
-{
-    //Åõ»çÃ¼ ÇÁ¸®ÆÕ. ½ºÅ³ÀÌ Á÷Á¢ ¼ÒÀ¯(±ÇÀå)
-    ProjectileController GetProjectilePrefab(BattleUnit caster);
-
-    //Åõ»çÃ¼ ¼Óµµ(À¯´Ö/ÃÊ). ÇÊ¿ä¾øÀ¸¸é 0 ¶Ç´Â À½¼ö ¹İÈ¯ ¡æ ±âº»°ª »ç¿ë
-    float GetProjectileSpeed(BattleUnit caster);
-}
-
-public interface ITargetMapProvider
-{
-    // Å¸ÀÏ Áö¸ñÇü ¹Ì¸®º¸±â/½ÃÀüÀ» À§ÇÑ ±âº» Å¸ÀÏ¸ÊÀ» ÁöÁ¤ÇÑ´Ù.
-    Tilemap GetTargetMap(BattleManager bm, BattleUnit caster);
-}
-public interface ISkillCustomPreview
-{
-    /// <summary>½ºÅ³ Å¸°ÙÆÃ ÁøÀÔ ½Ã, Ç¥½ÃÇÒ ÇÁ¸®ºä ¼¿ ÁıÇÕÀ» µ¹·ÁÁØ´Ù.</summary>
-    IEnumerable<Vector3Int> GetPreviewCells(BattleManager bm, BattleUnit caster);
-
-    /// <summary>ÇÁ¸®ºä/Å¬¸¯À» ¹ŞÀ» Å¸ÀÏ¸Ê(¾øÀ¸¸é null)</summary>
-    Tilemap GetTargetMap(BattleManager bm, BattleUnit caster);
-}
-public interface IInstantTileSkill { } // Å¸ÀÏ Å¬¸¯ ½Ã °ø°İ/Åõ»çÃ¼ ¿¬Ãâ ¾øÀÌ Áï½Ã Resolve
-
-public interface ITrainingRouteInfoProvider //ÀÎµ¦½º¿¡ ÇØ´çÇÏ´Â Title/¼³¸í °¡Á®¿À±â
-{
-    string GetTrainingRouteTitle(int routeIndex);
-    string GetTrainingRouteDescription(int routeIndex);
-}
-public interface IGridProvider
-{
-    Tilemap GetMap(Team team);
-    void SetOccupied(Team team, Vector3Int cell, bool occupied);
-    bool IsOccupied(Team team, Vector3Int cell);
-    bool IsWalkable(Tilemap map, Vector3Int cell);
-    BattleUnit GetUnitAt(Vector3Int cell);
-    int CrossMapDistance(Tilemap reference, Tilemap fromMap, Vector3Int fromCell, Tilemap toMap, Vector3Int toCell);
-    IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells);
-}
-public interface IFieldController
-{
-    // ¾ß¼öÀÇ ¿µ¿ª »ı¼º (SelfBeastDomainSkill µî¿¡¼­ »ç¿ë)
-    void SpawnBeastDomainZone(Tilemap map, BattleUnit owner, Vector3Int center, int radius, int duration);
-
-    // »óÅÂ ÀÌ»ó Å¸ÀÏ »ı¼º (LastVorgToxicPassive, ParametricDamageSkill µî¿¡¼­ »ç¿ë)
-    void CreateStatusTileZone(BattleUnit owner, Tilemap map, Vector3Int cell, int zoneDuration, TileBase newTileBase, StatusId statusId, int stack = 1, int statusDuration = 3);
-
-    // ÅÏ ½ÃÀÛ/Á¾·á ½Ã È£ÃâµÇ´Â ·ÎÁ÷ (ÇÊ¿ä½Ã Ãß°¡)
-    void OnTurnStart(BattleUnit unit);
-    void OnTurnEnd(BattleUnit unit);
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public interface IBattleMapProvider
+{
+    UnityEngine.Tilemaps.Tilemap PlayerFloor { get; }
+    UnityEngine.Tilemaps.Tilemap EnemyFloor { get; }
+    UnityEngine.Tilemaps.Tilemap AllyOverlay { get; }  // ì„ íƒ
+    UnityEngine.Tilemaps.Tilemap EnemyOverlay { get; }  // ì„ íƒ
+    event System.Action OnMapsReady;
+}
+
+// ìê¸° ìì‹ ì—ê²Œ ì¦‰ì‹œ ì‹œì „ë˜ëŠ” ìŠ¤í‚¬ ì‹ë³„ìš©
+public interface ISelfCastSkill
+{
+    // trueë©´ íƒ€ê²ŸíŒ… UI ì—†ì´ ì„ íƒ ì¦‰ì‹œ ResolveOnUnit(caster, caster)
+    bool SelfCastOnSelect { get; }
+}
+
+public interface ISkillForStateResolver
+{
+    // ìºìŠ¤í„° ìƒíƒœë¥¼ ë³´ê³  ì‹¤ì œ ì‚¬ìš©í•  SOë¥¼ ëŒë ¤ì¤€ë‹¤(ì¹˜í™˜).
+    SkillAsset ResolveForCaster(BattleUnit caster);
+}
+public interface IProjectileTileSkill
+{
+    //íˆ¬ì‚¬ì²´ í”„ë¦¬íŒ¹. ìŠ¤í‚¬ì´ ì§ì ‘ ì†Œìœ (ê¶Œì¥)
+    ProjectileController GetProjectilePrefab(BattleUnit caster);
+
+    //íˆ¬ì‚¬ì²´ ì†ë„(ìœ ë‹›/ì´ˆ). í•„ìš”ì—†ìœ¼ë©´ 0 ë˜ëŠ” ìŒìˆ˜ ë°˜í™˜ â†’ ê¸°ë³¸ê°’ ì‚¬ìš©
+    float GetProjectileSpeed(BattleUnit caster);
+}
+
+public interface ITargetMapProvider
+{
+    // íƒ€ì¼ ì§€ëª©í˜• ë¯¸ë¦¬ë³´ê¸°/ì‹œì „ì„ ìœ„í•œ ê¸°ë³¸ íƒ€ì¼ë§µì„ ì§€ì •í•œë‹¤.
+    Tilemap GetTargetMap(BattleManager bm, BattleUnit caster);
+}
+public interface ISkillCustomPreview
+{
+    /// <summary>ìŠ¤í‚¬ íƒ€ê²ŸíŒ… ì§„ì… ì‹œ, í‘œì‹œí•  í”„ë¦¬ë·° ì…€ ì§‘í•©ì„ ëŒë ¤ì¤€ë‹¤.</summary>
+    IEnumerable<Vector3Int> GetPreviewCells(BattleManager bm, BattleUnit caster);
+
+    /// <summary>í”„ë¦¬ë·°/í´ë¦­ì„ ë°›ì„ íƒ€ì¼ë§µ(ì—†ìœ¼ë©´ null)</summary>
+    Tilemap GetTargetMap(BattleManager bm, BattleUnit caster);
+}
+public interface IInstantTileSkill { } // íƒ€ì¼ í´ë¦­ ì‹œ ê³µê²©/íˆ¬ì‚¬ì²´ ì—°ì¶œ ì—†ì´ ì¦‰ì‹œ Resolve
+
+public interface ITrainingRouteInfoProvider //ì¸ë±ìŠ¤ì— í•´ë‹¹í•˜ëŠ” Title/ì„¤ëª… ê°€ì ¸ì˜¤ê¸°
+{
+    string GetTrainingRouteTitle(int routeIndex);
+    string GetTrainingRouteDescription(int routeIndex);
+}
+public interface IGridProvider
+{
+    Tilemap GetMap(Team team);
+    void SetOccupied(Team team, Vector3Int cell, bool occupied);
+    bool IsOccupied(Team team, Vector3Int cell);
+    bool IsWalkable(Tilemap map, Vector3Int cell);
+    BattleUnit GetUnitAt(Vector3Int cell);
+    int CrossMapDistance(Tilemap reference, Tilemap fromMap, Vector3Int fromCell, Tilemap toMap, Vector3Int toCell);
+    IEnumerable<BattleUnit> GetUnitsInArea(Tilemap map, IEnumerable<Vector3Int> cells);
+}
+public interface IFieldController
+{
+    // ì•¼ìˆ˜ì˜ ì˜ì—­ ìƒì„± (SelfBeastDomainSkill ë“±ì—ì„œ ì‚¬ìš©)
+    void SpawnBeastDomainZone(Tilemap map, BattleUnit owner, Vector3Int center, int radius, int duration);
+
+    // ìƒíƒœ ì´ìƒ íƒ€ì¼ ìƒì„± (LastVorgToxicPassive, ParametricDamageSkill ë“±ì—ì„œ ì‚¬ìš©)
+    void CreateStatusTileZone(BattleUnit owner, Tilemap map, Vector3Int cell, int zoneDuration, TileBase newTileBase, StatusId statusId, int stack = 1, int statusDuration = 3);
+
+    // í„´ ì‹œì‘/ì¢…ë£Œ ì‹œ í˜¸ì¶œë˜ëŠ” ë¡œì§ (í•„ìš”ì‹œ ì¶”ê°€)
+    void OnTurnStart(BattleUnit unit);
+    void OnTurnEnd(BattleUnit unit);
 }

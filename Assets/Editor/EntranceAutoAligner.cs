@@ -1,47 +1,47 @@
-using UnityEngine;
-using UnityEditor;
-using UnityEngine.Tilemaps;
-
-public class EntranceAutoAlignerEditor : EditorWindow
-{
-    [MenuItem("Tools/Entrance Auto Aligner")]
-    public static void ShowWindow()
-    {
-        GetWindow<EntranceAutoAlignerEditor>("Entrance Auto Aligner");
-    }
-
-    private void OnGUI()
-    {
-        GUILayout.Label("¼¿ Áß¾Ó ÀÚµ¿ Á¤·Ä", EditorStyles.boldLabel);
-
-        if (GUILayout.Button("¼±ÅÃµÈ ¿ÀºêÁ§Æ®µé Á¤·Ä"))
-        {
-            AlignSelectedEntrances();
-        }
-        EditorGUILayout.HelpBox("ÀÔ±¸/Ãâ±¸ ¿ÀºêÁ§Æ®(Transform)¸¦ ÇÏ³ª ÀÌ»ó ¼±ÅÃÇÑ »óÅÂ¿¡¼­ Å¬¸¯ÇÏ¼¼¿ä.\n°¢ ¿ÀºêÁ§Æ®ÀÇ ºÎ¸ğ¿¡ TilemapÀÌ ÀÖ¾î¾ß ÇÕ´Ï´Ù.", MessageType.Info);
-    }
-
-    private void AlignSelectedEntrances()
-    {
-        int cnt = 0;
-        foreach (var obj in Selection.transforms)
-        {
-            // ºÎ¸ğ¿¡ TilemapÀÌ ÀÖ´ÂÁö Ã£±â
-            Tilemap tilemap = obj.GetComponentInParent<Tilemap>();
-            if (tilemap == null)
-            {
-                Debug.LogWarning($"{obj.name}: ºÎ¸ğ¿¡ TilemapÀÌ ¾ø½À´Ï´Ù.");
-                continue;
-            }
-
-            // Çö À§Ä¡¿¡¼­ ¼¿ ÁÂÇ¥ °è»ê ÈÄ ¼¿ Áß½ÉÀ¸·Î Á¤·Ä
-            Vector3Int cell = tilemap.WorldToCell(obj.position);
-            Vector3 center = tilemap.GetCellCenterWorld(cell);
-            Undo.RecordObject(obj, "Entrance Auto Align");
-            obj.position = center;
-            cnt++;
-            Debug.Log($"{obj.name}: ¼¿({cell})ÀÇ Áß½É({center})¿¡ Á¤·Ä ¿Ï·á");
-        }
-        Debug.Log($"ÃÑ {cnt}°³ ¿ÀºêÁ§Æ® ÀÚµ¿ Á¤·Ä ¿Ï·á");
-    }
-}
+using UnityEngine;
+using UnityEditor;
+using UnityEngine.Tilemaps;
+
+public class EntranceAutoAlignerEditor : EditorWindow
+{
+    [MenuItem("Tools/Entrance Auto Aligner")]
+    public static void ShowWindow()
+    {
+        GetWindow<EntranceAutoAlignerEditor>("Entrance Auto Aligner");
+    }
+
+    private void OnGUI()
+    {
+        GUILayout.Label("ì…€ ì¤‘ì•™ ìë™ ì •ë ¬", EditorStyles.boldLabel);
+
+        if (GUILayout.Button("ì„ íƒëœ ì˜¤ë¸Œì íŠ¸ë“¤ ì •ë ¬"))
+        {
+            AlignSelectedEntrances();
+        }
+        EditorGUILayout.HelpBox("ì…êµ¬/ì¶œêµ¬ ì˜¤ë¸Œì íŠ¸(Transform)ë¥¼ í•˜ë‚˜ ì´ìƒ ì„ íƒí•œ ìƒíƒœì—ì„œ í´ë¦­í•˜ì„¸ìš”.\nê° ì˜¤ë¸Œì íŠ¸ì˜ ë¶€ëª¨ì— Tilemapì´ ìˆì–´ì•¼ í•©ë‹ˆë‹¤.", MessageType.Info);
+    }
+
+    private void AlignSelectedEntrances()
+    {
+        int cnt = 0;
+        foreach (var obj in Selection.transforms)
+        {
+            // ë¶€ëª¨ì— Tilemapì´ ìˆëŠ”ì§€ ì°¾ê¸°
+            Tilemap tilemap = obj.GetComponentInParent<Tilemap>();
+            if (tilemap == null)
+            {
+                Debug.LogWarning($"{obj.name}: ë¶€ëª¨ì— Tilemapì´ ì—†ìŠµë‹ˆë‹¤.");
+                continue;
+            }
+
+            // í˜„ ìœ„ì¹˜ì—ì„œ ì…€ ì¢Œí‘œ ê³„ì‚° í›„ ì…€ ì¤‘ì‹¬ìœ¼ë¡œ ì •ë ¬
+            Vector3Int cell = tilemap.WorldToCell(obj.position);
+            Vector3 center = tilemap.GetCellCenterWorld(cell);
+            Undo.RecordObject(obj, "Entrance Auto Align");
+            obj.position = center;
+            cnt++;
+            Debug.Log($"{obj.name}: ì…€({cell})ì˜ ì¤‘ì‹¬({center})ì— ì •ë ¬ ì™„ë£Œ");
+        }
+        Debug.Log($"ì´ {cnt}ê°œ ì˜¤ë¸Œì íŠ¸ ìë™ ì •ë ¬ ì™„ë£Œ");
+    }
+}

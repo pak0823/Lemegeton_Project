@@ -1,346 +1,346 @@
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-public enum SupportSkillMode
-{
-    Buff,       // ¹öÇÁ ºÎ¿© (°¡¼Ó ¹°¾à)
-    Cleanse,    // Á¤È­ (Á¤È­ ¹°¾à)
-    Revive      // ¼Ò»ı (¼Ò»ı ¹°¾à)
-}
-
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Support", fileName = "ParametricSupportSkill")]
-public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTileSkill
-{
-    // ±âº» ¹üÀ§ ¼³Á¤ (±âº»°ª Single)
-    public AreaPreset areaPreset = AreaPreset.Single;
-    public bool diagUseNEAxis = true;
-
-    [Header("Support Mode")]
-    public SupportSkillMode mode = SupportSkillMode.Buff;
-
-    [Header("Buff Settings")]
-    [Tooltip("ºÎ¿©ÇÒ »óÅÂ (UnitStateId)")]
-    public UnitStateId buffState = UnitStateId.None;
-    [Tooltip("ºÎ¿©ÇÒ ¹öÇÁ (UnitStateBuffId)")]
-    public UnitStateBuffId buffId = UnitStateBuffId.None;
-    [Tooltip("ºÎ¿©ÇÒ »óÅÂ ÁßÃ¸")]
-    public StatusId buffStatus = StatusId.None;
-    [Tooltip("ºÎ¿©ÇÒ ÅÏ ¼ö")]
-    public int buffDuration = 3;
-    [Tooltip("ºÎ¿©ÇÒ ½ºÅÃ ¼ö")]
-    public int buffStatusStack = 1;
-
-    [Header("Cleanse Settings")]
-    [Tooltip("¸ğµç ÇØ·Î¿î »óÅÂ¸¦ Á¦°ÅÇÒÁö ¿©ºÎ")]
-    public bool cleanseAllNegative = true;
-    [Tooltip("Æ¯Á¤ »óÅÂ¸¸ Á¦°ÅÇÏ·Á¸é ¿©±â¿¡ Ãß°¡")]
-    public List<UnitStateId> specificCleanseList = new List<UnitStateId>();
-
-    [Header("Revive / Heal Settings")]
-    [Tooltip("È¸º¹ ¹èÀ² (CLV ºñ·Ê)")]
-    public float healPower = 1.0f;
-    [Tooltip("ºó»ç »óÅÂ(Moribundity) ID")]
-    public UnitStateId moribundityStateId = UnitStateId.Moribundity;
-
-    [Header("Effect")]
-    public GameObject visualEffectPrefab; // ÆÄÆ¼Å¬ µî
-
-    // Åõ»çÃ¼ ¼³Á¤
-    [Header("Projectile Settings(Åõ»çÃ¼ ¼³Á¤)")]
-    public ProjectileController projectilePrefab;
-    public float projectileSpeed = 4f;
-
-    // ½ÃÀü ÈÄ »óÅÂ Á¦°Å ¿É¼Ç
-    [Header("State Consumption(»óÅÂ Á¦°Å)")]
-    public bool consumeStateOnCast = false;
-    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
-
-    [Header("Training")]
-    [Header("¹üÀ§ È®´ë ÈÆ·Ã")]
-    public bool trainingUseAreaOverride = false;
-    [Range(-1, 2)] public int routeForAreaOverride = -1;
-    public AreaPreset trainingAreaPreset = AreaPreset.Single;
-    public bool trainingDiagUseNEAxis = true;
-
-    [Header("ÀûÀÇ °¨¼Ò ÈÆ·Ã")]
-    [Tooltip("ÈÆ·Ã ½Ã ÀûÀÇ »ı¼º·®À» °¨¼Ò½ÃÅ³Áö ¿©ºÎ")]
-    public bool trainingReduceHostility = false;
-    [Tooltip("ÀûÀÇ °¨¼Ò¸¦ È°¼ºÈ­½ÃÅ°´Â ÈÆ·Ã ·çÆ® ÀÎµ¦½º (-1ÀÌ¸é ºñÈ°¼º)")]
-    [Range(-1, 2)] public int routeForReduceHostility = -1;
-    [Tooltip("Àû¿ëµÉ ÀûÀÇ »ı¼º ¹èÀ² (¿¹: 0.5 = 50%¸¸ »ı¼º)")]
-    public float trainingHostilityMultiplier = 0.5f;
-
-    [Header("ÀÚ¿ø Àı¾à ÈÆ·Ã")]
-    [Tooltip("¼Ò¸ğ ºñ¿ë µ¤¾î¾²±â È°¼ºÈ­")]
-    public bool trainingUseCostOverride = false;
-    [Range(-1, 2)] public int routeForCostOverride = -1; // À¯¿¬ÇÑ ·çÆ® ÁöÁ¤
-    public int trainingCostOverride = -1;
-
-    [Header("ÃÑ¸í °­È­ ÈÆ·Ã")]
-    [Tooltip("ÃÑ¸í(Magic Damage) °­È­ ¹öÇÁ ºÎ¿© È°¼ºÈ­")]
-    public bool trainingApplyClarityBuff = false;
-    [Range(-1, 2)] public int routeForClarityBuff = -1;
-    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
-    [Min(1)] public int trainingClarityDuration = 1;
-
-    [Header("¼ö¸é ¸éÁ¦ ÈÆ·Ã")]
-    [Tooltip("°ú·Î »óÅÂ Á¾·á ½Ã ¼ö¸é »óÅÂ ºÎ¿©¸¦ ¸éÁ¦ÇÒÁö ¿©ºÎ")]
-    public bool trainingNoSleepOnOverworkEnd = false;
-    [Range(-1, 2)] public int routeForNoSleepOnOverworkEnd = -1;
-
-    [Header("½ºÅÃ Áõ°¡ ÈÆ·Ã")]
-    [Tooltip("°ú·Î ½ºÅÃ ºÎ¿©·®À» º¯°æÇÒÁö ¿©ºÎ")]
-    public bool trainingBonusOverworkStack = false;
-    [Range(-1, 2)] public int routeForBonusOverworkStack = -1;
-    [Tooltip("ÈÆ·Ã Àû¿ë ½Ã ºÎ¿©ÇÒ ½ºÅÃ ¼ö (±âº» 3)")]
-    public int trainingOverworkStackValue = 3;
-
-    public bool SelfCastOnSelect => targetAlignment == SkillTargetAlignment.Self;
-
-    public ProjectileController GetProjectilePrefab(BattleUnit caster)
-    {
-        return projectilePrefab;
-    }
-
-    public float GetProjectileSpeed(BattleUnit caster)
-    {
-        return projectileSpeed;
-    }
-
-    int GetRoute(BattleUnit _caster)
-    {
-        if (_caster == null) return -1;
-        return _caster.GetTrainingRouteIndex(this);
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
-    {
-        if (target == null) yield break;
-
-        // ÀÚ¿ø ¼Ò¸ğ Ã¼Å© ¹× Â÷°¨
-        var res = GetCostResource(caster);
-        int cost = GetEffectiveCost(caster);
-        // ºñ¿ëÀÌ ÀÖ´Âµ¥ ÁöºÒ ¸øÇÏ¸é ½ºÅ³ Ãë¼Ò
-        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
-
-
-        ApplySupportArea(bm, caster, target.CurrentMap, target.Cell);
-
-        // ½ÃÀü ÈÄ »óÅÂ Á¦°Å
-        ConsumeStates(caster);
-
-        yield break;
-    }
-
-    // Å¸ÀÏ ¼±ÅÃ ½Ã ·ÎÁ÷ (È¤½Ã Å¸ÀÏ·Î Èú/¹öÇÁ¸¦ ÁÙ °æ¿ì)
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int cell, BattleUnit caster)
-    {
-        // ÀÚ¿ø ¼Ò¸ğ Ã¼Å© ¹× Â÷°¨
-        var res = GetCostResource(caster);
-        int cost = GetEffectiveCost(caster);
-        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
-
-        // ¹üÀ§ Ã³¸®¸¦ À§ÇØ ApplySupportArea È£Ãâ (Áß½ÉÁ¡: Å¸ÀÏ)
-        ApplySupportArea(bm, caster, map, cell);
-
-        // ½ÃÀü ÈÄ »óÅÂ Á¦°Å
-        ConsumeStates(caster);
-
-        yield break;
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
-    {
-        // ÇöÀç ½ÃÀüÀÚ Á¤º¸ °¡Á®¿À±â (ÈÆ·Ã Àû¿ëÀ» À§ÇØ)
-        var bm = BattleManager.Instance;
-        BattleUnit caster = bm != null ? bm.ActingUnit : null;
-
-        int route = GetRoute(caster);
-        bool useOverride = trainingUseAreaOverride
-                   && routeForAreaOverride >= 0
-                   && route == routeForAreaOverride;
-
-        // ±âº»/ÈÆ·Ã ÇÁ¸®¼Â ¼±ÅÃ
-        var preset = useOverride ? trainingAreaPreset : areaPreset;
-        bool useDiag = useOverride ? trainingDiagUseNEAxis : diagUseNEAxis;
-
-        // AreaShapes À¯Æ¿À» ÀÌ¿ëÇØ ½ÇÁ¦ ¼¿ ÁÂÇ¥ ¹İÈ¯
-        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
-            yield return c;
-    }
-
-    void ConsumeStates(BattleUnit caster)
-    {
-        if (!consumeStateOnCast || statesToConsume == null) return;
-        var usc = caster.GetComponent<UnitStateController>();
-        if (usc == null) return;
-
-        foreach (var s in statesToConsume)
-        {
-            if (s != UnitStateId.None)
-                usc.Remove(s);
-        }
-    }
-
-    // ´ÜÀÏ ´ë»ó¿¡°Ô È¿°ú Àû¿ë (±âÁ¸ ·ÎÁ÷ ºĞ¸®)
-    void ApplyEffectToTarget(BattleManager bm, BattleUnit caster, BattleUnit target)
-    {
-        // ½Ã°¢ È¿°ú
-        if (visualEffectPrefab != null)
-        {
-            Instantiate(visualEffectPrefab, target.transform.position, Quaternion.identity);
-        }
-
-        var usc = target.GetComponent<UnitStateController>();
-        var status = target.GetComponent<StatusController>();
-
-        switch (mode)
-        {
-            case SupportSkillMode.Buff:
-                if (buffState != UnitStateId.None && usc != null)
-                    usc.ApplyForTurns(buffState, buffDuration);
-                if (buffId != UnitStateBuffId.None && usc != null)
-                    usc.ApplyBuffForTurns(buffId, buffDuration);
-
-                int finalStack = buffStatusStack;
-                int route = GetRoute(caster);
-
-                // ÀÌ ½ºÅ³ÀÌ °ú·Î(Overwork)¸¦ ºÎ¿©ÇÏ°í, ½ºÅÃ Áõ°¡ ÈÆ·ÃÀÌ È°¼ºÈ­µÈ °æ¿ì
-                if (buffStatus == StatusId.Overwork && trainingBonusOverworkStack &&
-                    routeForBonusOverworkStack >= 0 && route == routeForBonusOverworkStack)
-                {
-                    finalStack = trainingOverworkStackValue;
-                    Debug.Log($"[Training] Overwork Stack Bonus: {buffStatusStack} -> {finalStack}");
-                }
-
-                if (buffStatus != StatusId.None && buffStatusStack > 0 && status != null)
-                    status.SetStacks(buffStatus, finalStack, buffDuration);
-                break;
-
-            case SupportSkillMode.Cleanse:
-                if (usc != null)
-                {
-                    if (cleanseAllNegative)
-                    {
-                        usc.Remove(UnitStateId.Confusion);
-                        usc.Remove(UnitStateId.Fear);
-                        usc.Remove(UnitStateId.Moribundity);
-                        if (status != null)
-                        {
-                            //µµÆ® ÁßÃ¸ È¿°ú¸¸ »ç¶óÁö°Ô Àû¿ë
-                            status.Clear(StatusId.Bleeding);
-                            status.Clear(StatusId.Poisoning);
-                            status.Clear(StatusId.Ignition);
-                        }
-                    }
-                    else
-                    {
-                        foreach (var id in specificCleanseList)
-                            usc.Remove(id);
-                    }
-                }
-                break;
-
-            case SupportSkillMode.Revive:
-                if (usc != null) usc.Remove(moribundityStateId);
-                int healAmount = Mathf.RoundToInt(caster.CLV * healPower);
-                target.Heal(healAmount);
-                bm.EmitActionLabel(target, "Revived");
-                break;
-        }
-    }
-
-    // ¹üÀ§ ³» ´ë»óµé¿¡°Ô È¿°ú Àû¿ë ¹× ÀûÀÇ Ã³¸®
-    void ApplySupportArea(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int centerCell)
-    {
-        var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
-        // ¹üÀ§ ³» ¸ğµç À¯´Ö °¡Á®¿À±â (BattleManager´Â ±âº»ÀûÀ¸·Î ¸ğµç À¯´ÖÀ» ¹İÈ¯)
-        var allUnitsInArea = bm.Grid.GetUnitsInArea(map, area).ToList();
-
-        // ¾Æ±º¸¸ ÇÊÅÍ¸µ
-        var targets = allUnitsInArea.Where(u => u != null && u.data.team == caster.data.team);
-
-        // ¸ğµå¿¡ µû¸¥ »ı»ç ÇÊÅÍ¸µ
-        if (mode == SupportSkillMode.Revive)
-            targets = targets.Where(u => u.IsDead); // ºÎÈ°Àº Á×Àº ¾Æ±º¸¸
-        else
-            targets = targets.Where(u => !u.IsDead); // ¹öÇÁ/Á¤È­´Â »ê ¾Æ±º¸¸
-
-        int route = GetRoute(caster);
-
-        foreach (var target in targets)
-        {
-            // ½ÇÁ¦ È¿°ú Àû¿ë
-            ApplyEffectToTarget(bm, caster, target);
-
-            // --- ÀûÀÇ(Hostility) »ı¼º ·ÎÁ÷ ---
-            float hostilityGained = 0f;
-
-            // ºÎÈ°(Revive)ÀÎ °æ¿ì È¸º¹·® ±â¹İ ÀûÀÇ »ı¼º
-            if (mode == SupportSkillMode.Revive)
-            {
-                int healAmount = Mathf.RoundToInt(caster.CLV * healPower);
-                hostilityGained = HostilityRules.FromHeal(healAmount, caster);
-            }
-            // (Buff³ª Cleanse´Â ±âº»ÀûÀ¸·Î ÀûÀÇ¸¦ »ı¼ºÇÏÁö ¾ÊÁö¸¸, ÇÊ¿äÇÏ¸é ¿©±â¼­ Ãß°¡)
-
-            // ÀûÀÇ °¨¼Ò Àû¿ë
-            if (hostilityGained > 0f && trainingReduceHostility && routeForReduceHostility >= 0 && route == routeForReduceHostility)
-            {
-                hostilityGained *= trainingHostilityMultiplier;
-                Debug.Log($"[Training] Support Hostility Reduced: {hostilityGained} (x{trainingHostilityMultiplier})");
-            }
-
-            if (hostilityGained > 0f)
-                caster.AddHostility(hostilityGained);
-        }
-
-        // ÃÑ¸í(Clarity) °­È­ ¹öÇÁ Àû¿ë
-        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
-        {
-            var usc = caster.GetComponent<UnitStateController>();
-            if (usc != null)
-            {
-                // ÇöÀç ÅÏ ¼Ò¸ğ º¸Á¤À» À§ÇØ +1
-                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1);
-                Debug.Log($"[ParametricSupport] Clarity Enhanced: {caster.name}, Duration={trainingClarityDuration}");
-            }
-        }
-    }
-
-    public override int GetEffectiveCost(BattleUnit caster)
-    {
-        int finalCost = base.GetEffectiveCost(caster);
-
-        if (caster == null) return finalCost;
-
-        int route = caster.GetTrainingRouteIndex(this);
-
-        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
-        {
-            finalCost -= trainingCostOverride;
-            finalCost = Mathf.Max(0, finalCost);
-        }
-
-        return finalCost;
-    }
-
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+public enum SupportSkillMode
+{
+    Buff,       // ë²„í”„ ë¶€ì—¬ (ê°€ì† ë¬¼ì•½)
+    Cleanse,    // ì •í™” (ì •í™” ë¬¼ì•½)
+    Revive      // ì†Œìƒ (ì†Œìƒ ë¬¼ì•½)
+}
+
+[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Support", fileName = "ParametricSupportSkill")]
+public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTileSkill
+{
+    // ê¸°ë³¸ ë²”ìœ„ ì„¤ì • (ê¸°ë³¸ê°’ Single)
+    public AreaPreset areaPreset = AreaPreset.Single;
+    public bool diagUseNEAxis = true;
+
+    [Header("Support Mode")]
+    public SupportSkillMode mode = SupportSkillMode.Buff;
+
+    [Header("Buff Settings")]
+    [Tooltip("ë¶€ì—¬í•  ìƒíƒœ (UnitStateId)")]
+    public UnitStateId buffState = UnitStateId.None;
+    [Tooltip("ë¶€ì—¬í•  ë²„í”„ (UnitStateBuffId)")]
+    public UnitStateBuffId buffId = UnitStateBuffId.None;
+    [Tooltip("ë¶€ì—¬í•  ìƒíƒœ ì¤‘ì²©")]
+    public StatusId buffStatus = StatusId.None;
+    [Tooltip("ë¶€ì—¬í•  í„´ ìˆ˜")]
+    public int buffDuration = 3;
+    [Tooltip("ë¶€ì—¬í•  ìŠ¤íƒ ìˆ˜")]
+    public int buffStatusStack = 1;
+
+    [Header("Cleanse Settings")]
+    [Tooltip("ëª¨ë“  í•´ë¡œìš´ ìƒíƒœë¥¼ ì œê±°í• ì§€ ì—¬ë¶€")]
+    public bool cleanseAllNegative = true;
+    [Tooltip("íŠ¹ì • ìƒíƒœë§Œ ì œê±°í•˜ë ¤ë©´ ì—¬ê¸°ì— ì¶”ê°€")]
+    public List<UnitStateId> specificCleanseList = new List<UnitStateId>();
+
+    [Header("Revive / Heal Settings")]
+    [Tooltip("íšŒë³µ ë°°ìœ¨ (CLV ë¹„ë¡€)")]
+    public float healPower = 1.0f;
+    [Tooltip("ë¹ˆì‚¬ ìƒíƒœ(Moribundity) ID")]
+    public UnitStateId moribundityStateId = UnitStateId.Moribundity;
+
+    [Header("Effect")]
+    public GameObject visualEffectPrefab; // íŒŒí‹°í´ ë“±
+
+    // íˆ¬ì‚¬ì²´ ì„¤ì •
+    [Header("Projectile Settings(íˆ¬ì‚¬ì²´ ì„¤ì •)")]
+    public ProjectileController projectilePrefab;
+    public float projectileSpeed = 4f;
+
+    // ì‹œì „ í›„ ìƒíƒœ ì œê±° ì˜µì…˜
+    [Header("State Consumption(ìƒíƒœ ì œê±°)")]
+    public bool consumeStateOnCast = false;
+    public List<UnitStateId> statesToConsume = new List<UnitStateId>();
+
+    [Header("Training")]
+    [Header("ë²”ìœ„ í™•ëŒ€ í›ˆë ¨")]
+    public bool trainingUseAreaOverride = false;
+    [Range(-1, 2)] public int routeForAreaOverride = -1;
+    public AreaPreset trainingAreaPreset = AreaPreset.Single;
+    public bool trainingDiagUseNEAxis = true;
+
+    [Header("ì ì˜ ê°ì†Œ í›ˆë ¨")]
+    [Tooltip("í›ˆë ¨ ì‹œ ì ì˜ ìƒì„±ëŸ‰ì„ ê°ì†Œì‹œí‚¬ì§€ ì—¬ë¶€")]
+    public bool trainingReduceHostility = false;
+    [Tooltip("ì ì˜ ê°ì†Œë¥¼ í™œì„±í™”ì‹œí‚¤ëŠ” í›ˆë ¨ ë£¨íŠ¸ ì¸ë±ìŠ¤ (-1ì´ë©´ ë¹„í™œì„±)")]
+    [Range(-1, 2)] public int routeForReduceHostility = -1;
+    [Tooltip("ì ìš©ë  ì ì˜ ìƒì„± ë°°ìœ¨ (ì˜ˆ: 0.5 = 50%ë§Œ ìƒì„±)")]
+    public float trainingHostilityMultiplier = 0.5f;
+
+    [Header("ìì› ì ˆì•½ í›ˆë ¨")]
+    [Tooltip("ì†Œëª¨ ë¹„ìš© ë®ì–´ì“°ê¸° í™œì„±í™”")]
+    public bool trainingUseCostOverride = false;
+    [Range(-1, 2)] public int routeForCostOverride = -1; // ìœ ì—°í•œ ë£¨íŠ¸ ì§€ì •
+    public int trainingCostOverride = -1;
+
+    [Header("ì´ëª… ê°•í™” í›ˆë ¨")]
+    [Tooltip("ì´ëª…(Magic Damage) ê°•í™” ë²„í”„ ë¶€ì—¬ í™œì„±í™”")]
+    public bool trainingApplyClarityBuff = false;
+    [Range(-1, 2)] public int routeForClarityBuff = -1;
+    public UnitStateBuffId trainingClarityBuffId = UnitStateBuffId.ClarityUp;
+    [Min(1)] public int trainingClarityDuration = 1;
+
+    [Header("ìˆ˜ë©´ ë©´ì œ í›ˆë ¨")]
+    [Tooltip("ê³¼ë¡œ ìƒíƒœ ì¢…ë£Œ ì‹œ ìˆ˜ë©´ ìƒíƒœ ë¶€ì—¬ë¥¼ ë©´ì œí• ì§€ ì—¬ë¶€")]
+    public bool trainingNoSleepOnOverworkEnd = false;
+    [Range(-1, 2)] public int routeForNoSleepOnOverworkEnd = -1;
+
+    [Header("ìŠ¤íƒ ì¦ê°€ í›ˆë ¨")]
+    [Tooltip("ê³¼ë¡œ ìŠ¤íƒ ë¶€ì—¬ëŸ‰ì„ ë³€ê²½í• ì§€ ì—¬ë¶€")]
+    public bool trainingBonusOverworkStack = false;
+    [Range(-1, 2)] public int routeForBonusOverworkStack = -1;
+    [Tooltip("í›ˆë ¨ ì ìš© ì‹œ ë¶€ì—¬í•  ìŠ¤íƒ ìˆ˜ (ê¸°ë³¸ 3)")]
+    public int trainingOverworkStackValue = 3;
+
+    public bool SelfCastOnSelect => targetAlignment == SkillTargetAlignment.Self;
+
+    public ProjectileController GetProjectilePrefab(BattleUnit caster)
+    {
+        return projectilePrefab;
+    }
+
+    public float GetProjectileSpeed(BattleUnit caster)
+    {
+        return projectileSpeed;
+    }
+
+    int GetRoute(BattleUnit _caster)
+    {
+        if (_caster == null) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        if (target == null) yield break;
+
+        // ìì› ì†Œëª¨ ì²´í¬ ë° ì°¨ê°
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        // ë¹„ìš©ì´ ìˆëŠ”ë° ì§€ë¶ˆ ëª»í•˜ë©´ ìŠ¤í‚¬ ì·¨ì†Œ
+        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
+
+
+        ApplySupportArea(bm, caster, target.CurrentMap, target.Cell);
+
+        // ì‹œì „ í›„ ìƒíƒœ ì œê±°
+        ConsumeStates(caster);
+
+        yield break;
+    }
+
+    // íƒ€ì¼ ì„ íƒ ì‹œ ë¡œì§ (í˜¹ì‹œ íƒ€ì¼ë¡œ í/ë²„í”„ë¥¼ ì¤„ ê²½ìš°)
+    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int cell, BattleUnit caster)
+    {
+        // ìì› ì†Œëª¨ ì²´í¬ ë° ì°¨ê°
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost)) yield break;
+
+        // ë²”ìœ„ ì²˜ë¦¬ë¥¼ ìœ„í•´ ApplySupportArea í˜¸ì¶œ (ì¤‘ì‹¬ì : íƒ€ì¼)
+        ApplySupportArea(bm, caster, map, cell);
+
+        // ì‹œì „ í›„ ìƒíƒœ ì œê±°
+        ConsumeStates(caster);
+
+        yield break;
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddColumn)
+    {
+        // í˜„ì¬ ì‹œì „ì ì •ë³´ ê°€ì ¸ì˜¤ê¸° (í›ˆë ¨ ì ìš©ì„ ìœ„í•´)
+        var bm = BattleManager.Instance;
+        BattleUnit caster = bm != null ? bm.ActingUnit : null;
+
+        int route = GetRoute(caster);
+        bool useOverride = trainingUseAreaOverride
+                   && routeForAreaOverride >= 0
+                   && route == routeForAreaOverride;
+
+        // ê¸°ë³¸/í›ˆë ¨ í”„ë¦¬ì…‹ ì„ íƒ
+        var preset = useOverride ? trainingAreaPreset : areaPreset;
+        bool useDiag = useOverride ? trainingDiagUseNEAxis : diagUseNEAxis;
+
+        // AreaShapes ìœ í‹¸ì„ ì´ìš©í•´ ì‹¤ì œ ì…€ ì¢Œí‘œ ë°˜í™˜
+        foreach (var c in AreaShapes.GetCells(_originCell, preset, useDiag))
+            yield return c;
+    }
+
+    void ConsumeStates(BattleUnit caster)
+    {
+        if (!consumeStateOnCast || statesToConsume == null) return;
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null) return;
+
+        foreach (var s in statesToConsume)
+        {
+            if (s != UnitStateId.None)
+                usc.Remove(s);
+        }
+    }
+
+    // ë‹¨ì¼ ëŒ€ìƒì—ê²Œ íš¨ê³¼ ì ìš© (ê¸°ì¡´ ë¡œì§ ë¶„ë¦¬)
+    void ApplyEffectToTarget(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        // ì‹œê° íš¨ê³¼
+        if (visualEffectPrefab != null)
+        {
+            Instantiate(visualEffectPrefab, target.transform.position, Quaternion.identity);
+        }
+
+        var usc = target.GetComponent<UnitStateController>();
+        var status = target.GetComponent<StatusController>();
+
+        switch (mode)
+        {
+            case SupportSkillMode.Buff:
+                if (buffState != UnitStateId.None && usc != null)
+                    usc.ApplyForTurns(buffState, buffDuration);
+                if (buffId != UnitStateBuffId.None && usc != null)
+                    usc.ApplyBuffForTurns(buffId, buffDuration);
+
+                int finalStack = buffStatusStack;
+                int route = GetRoute(caster);
+
+                // ì´ ìŠ¤í‚¬ì´ ê³¼ë¡œ(Overwork)ë¥¼ ë¶€ì—¬í•˜ê³ , ìŠ¤íƒ ì¦ê°€ í›ˆë ¨ì´ í™œì„±í™”ëœ ê²½ìš°
+                if (buffStatus == StatusId.Overwork && trainingBonusOverworkStack &&
+                    routeForBonusOverworkStack >= 0 && route == routeForBonusOverworkStack)
+                {
+                    finalStack = trainingOverworkStackValue;
+                    Debug.Log($"[Training] Overwork Stack Bonus: {buffStatusStack} -> {finalStack}");
+                }
+
+                if (buffStatus != StatusId.None && buffStatusStack > 0 && status != null)
+                    status.SetStacks(buffStatus, finalStack, buffDuration);
+                break;
+
+            case SupportSkillMode.Cleanse:
+                if (usc != null)
+                {
+                    if (cleanseAllNegative)
+                    {
+                        usc.Remove(UnitStateId.Confusion);
+                        usc.Remove(UnitStateId.Fear);
+                        usc.Remove(UnitStateId.Moribundity);
+                        if (status != null)
+                        {
+                            //ë„íŠ¸ ì¤‘ì²© íš¨ê³¼ë§Œ ì‚¬ë¼ì§€ê²Œ ì ìš©
+                            status.Clear(StatusId.Bleeding);
+                            status.Clear(StatusId.Poisoning);
+                            status.Clear(StatusId.Ignition);
+                        }
+                    }
+                    else
+                    {
+                        foreach (var id in specificCleanseList)
+                            usc.Remove(id);
+                    }
+                }
+                break;
+
+            case SupportSkillMode.Revive:
+                if (usc != null) usc.Remove(moribundityStateId);
+                int healAmount = Mathf.RoundToInt(caster.CLV * healPower);
+                target.Heal(healAmount);
+                bm.EmitActionLabel(target, "Revived");
+                break;
+        }
+    }
+
+    // ë²”ìœ„ ë‚´ ëŒ€ìƒë“¤ì—ê²Œ íš¨ê³¼ ì ìš© ë° ì ì˜ ì²˜ë¦¬
+    void ApplySupportArea(BattleManager bm, BattleUnit caster, Tilemap map, Vector3Int centerCell)
+    {
+        var area = GetAreaCells(centerCell, SkillLibrary.IsOddColumn(centerCell));
+        // ë²”ìœ„ ë‚´ ëª¨ë“  ìœ ë‹› ê°€ì ¸ì˜¤ê¸° (BattleManagerëŠ” ê¸°ë³¸ì ìœ¼ë¡œ ëª¨ë“  ìœ ë‹›ì„ ë°˜í™˜)
+        var allUnitsInArea = bm.Grid.GetUnitsInArea(map, area).ToList();
+
+        // ì•„êµ°ë§Œ í•„í„°ë§
+        var targets = allUnitsInArea.Where(u => u != null && u.data.team == caster.data.team);
+
+        // ëª¨ë“œì— ë”°ë¥¸ ìƒì‚¬ í•„í„°ë§
+        if (mode == SupportSkillMode.Revive)
+            targets = targets.Where(u => u.IsDead); // ë¶€í™œì€ ì£½ì€ ì•„êµ°ë§Œ
+        else
+            targets = targets.Where(u => !u.IsDead); // ë²„í”„/ì •í™”ëŠ” ì‚° ì•„êµ°ë§Œ
+
+        int route = GetRoute(caster);
+
+        foreach (var target in targets)
+        {
+            // ì‹¤ì œ íš¨ê³¼ ì ìš©
+            ApplyEffectToTarget(bm, caster, target);
+
+            // --- ì ì˜(Hostility) ìƒì„± ë¡œì§ ---
+            float hostilityGained = 0f;
+
+            // ë¶€í™œ(Revive)ì¸ ê²½ìš° íšŒë³µëŸ‰ ê¸°ë°˜ ì ì˜ ìƒì„±
+            if (mode == SupportSkillMode.Revive)
+            {
+                int healAmount = Mathf.RoundToInt(caster.CLV * healPower);
+                hostilityGained = HostilityRules.FromHeal(healAmount, caster);
+            }
+            // (Buffë‚˜ CleanseëŠ” ê¸°ë³¸ì ìœ¼ë¡œ ì ì˜ë¥¼ ìƒì„±í•˜ì§€ ì•Šì§€ë§Œ, í•„ìš”í•˜ë©´ ì—¬ê¸°ì„œ ì¶”ê°€)
+
+            // ì ì˜ ê°ì†Œ ì ìš©
+            if (hostilityGained > 0f && trainingReduceHostility && routeForReduceHostility >= 0 && route == routeForReduceHostility)
+            {
+                hostilityGained *= trainingHostilityMultiplier;
+                Debug.Log($"[Training] Support Hostility Reduced: {hostilityGained} (x{trainingHostilityMultiplier})");
+            }
+
+            if (hostilityGained > 0f)
+                caster.AddHostility(hostilityGained);
+        }
+
+        // ì´ëª…(Clarity) ê°•í™” ë²„í”„ ì ìš©
+        if (trainingApplyClarityBuff && routeForClarityBuff >= 0 && route == routeForClarityBuff && trainingClarityBuffId != UnitStateBuffId.None)
+        {
+            var usc = caster.GetComponent<UnitStateController>();
+            if (usc != null)
+            {
+                // í˜„ì¬ í„´ ì†Œëª¨ ë³´ì •ì„ ìœ„í•´ +1
+                usc.ApplyBuffForTurns(trainingClarityBuffId, trainingClarityDuration + 1);
+                Debug.Log($"[ParametricSupport] Clarity Enhanced: {caster.name}, Duration={trainingClarityDuration}");
+            }
+        }
+    }
+
+    public override int GetEffectiveCost(BattleUnit caster)
+    {
+        int finalCost = base.GetEffectiveCost(caster);
+
+        if (caster == null) return finalCost;
+
+        int route = caster.GetTrainingRouteIndex(this);
+
+        if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+        {
+            finalCost -= trainingCostOverride;
+            finalCost = Mathf.Max(0, finalCost);
+        }
+
+        return finalCost;
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
 }

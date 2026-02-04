@@ -1,55 +1,55 @@
-using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
-using UnityEngine.UI;
-
-public class MaterialSlotUI : MonoBehaviour
-{
-    [SerializeField] private Image iconImage;
-    [SerializeField] private Text amountText;
-    [SerializeField] private Color normalColor = Color.white;
-    [SerializeField] private Color lackColor = Color.red; // ºÎÁ·ÇÒ ¶§ »ö»ó
-
-    // ·ÎµåµÈ ¿¡¼ÂÀ» ÃßÀûÇÏ±â À§ÇÑ ÇÚµé (³ªÁß¿¡ ¸Ş¸ğ¸® ÇØÁ¦¿ë)
-    private AsyncOperationHandle<Sprite> _loadHandle;
-
-    public void Setup(ItemData material, int currentCount, int requiredCount)
-    {
-        // ±âÁ¸¿¡ ·Îµå ÁßÀÌ°Å³ª ·ÎµåµÈ ¾ÆÀÌÄÜÀÌ ÀÖ´Ù¸é ÇØÁ¦ (¸Ş¸ğ¸® °ü¸®)
-        if (_loadHandle.IsValid())
-        {
-            Addressables.Release(_loadHandle);
-        }
-
-        // ºñµ¿±â ¾ÆÀÌÄÜ ·Îµå ½ÃÀÛ
-        string fullKey = material.GetAtlasKey(); // "Atlas[Sprite]" ÇüÅÂÀÇ Å° °¡Á®¿À±â
-        _loadHandle = Addressables.LoadAssetAsync<Sprite>(fullKey);
-
-        _loadHandle.Completed += (handle) =>
-        {
-            if (handle.Status == AsyncOperationStatus.Succeeded)
-            {
-                iconImage.sprite = handle.Result;
-            }
-            else
-            {
-                Debug.LogError($"¾ÆÀÌÄÜ ·Îµå ½ÇÆĞ: {fullKey}");
-                iconImage.sprite = null; // ½ÇÆĞ ½Ã ºóÄ­ Ã³¸®
-            }
-        };
-
-        // ÅØ½ºÆ® ¹× »ö»ó ¼³Á¤
-        amountText.text = $"{currentCount} / {requiredCount}";
-        bool isEnough = currentCount >= requiredCount;
-        amountText.color = isEnough ? normalColor : lackColor;
-    }
-
-    private void OnDestroy()
-    {
-        // ¿ÀºêÁ§Æ®°¡ ÆÄ±«µÉ ¶§ ¸Ş¸ğ¸® ÇØÁ¦
-        if (_loadHandle.IsValid())
-        {
-            Addressables.Release(_loadHandle);
-        }
-    }
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
+
+public class MaterialSlotUI : MonoBehaviour
+{
+    [SerializeField] private Image iconImage;
+    [SerializeField] private Text amountText;
+    [SerializeField] private Color normalColor = Color.white;
+    [SerializeField] private Color lackColor = Color.red; // ë¶€ì¡±í•  ë•Œ ìƒ‰ìƒ
+
+    // ë¡œë“œëœ ì—ì…‹ì„ ì¶”ì í•˜ê¸° ìœ„í•œ í•¸ë“¤ (ë‚˜ì¤‘ì— ë©”ëª¨ë¦¬ í•´ì œìš©)
+    private AsyncOperationHandle<Sprite> _loadHandle;
+
+    public void Setup(ItemData material, int currentCount, int requiredCount)
+    {
+        // ê¸°ì¡´ì— ë¡œë“œ ì¤‘ì´ê±°ë‚˜ ë¡œë“œëœ ì•„ì´ì½˜ì´ ìˆë‹¤ë©´ í•´ì œ (ë©”ëª¨ë¦¬ ê´€ë¦¬)
+        if (_loadHandle.IsValid())
+        {
+            Addressables.Release(_loadHandle);
+        }
+
+        // ë¹„ë™ê¸° ì•„ì´ì½˜ ë¡œë“œ ì‹œì‘
+        string fullKey = material.GetAtlasKey(); // "Atlas[Sprite]" í˜•íƒœì˜ í‚¤ ê°€ì ¸ì˜¤ê¸°
+        _loadHandle = Addressables.LoadAssetAsync<Sprite>(fullKey);
+
+        _loadHandle.Completed += (handle) =>
+        {
+            if (handle.Status == AsyncOperationStatus.Succeeded)
+            {
+                iconImage.sprite = handle.Result;
+            }
+            else
+            {
+                Debug.LogError($"ì•„ì´ì½˜ ë¡œë“œ ì‹¤íŒ¨: {fullKey}");
+                iconImage.sprite = null; // ì‹¤íŒ¨ ì‹œ ë¹ˆì¹¸ ì²˜ë¦¬
+            }
+        };
+
+        // í…ìŠ¤íŠ¸ ë° ìƒ‰ìƒ ì„¤ì •
+        amountText.text = $"{currentCount} / {requiredCount}";
+        bool isEnough = currentCount >= requiredCount;
+        amountText.color = isEnough ? normalColor : lackColor;
+    }
+
+    private void OnDestroy()
+    {
+        // ì˜¤ë¸Œì íŠ¸ê°€ íŒŒê´´ë  ë•Œ ë©”ëª¨ë¦¬ í•´ì œ
+        if (_loadHandle.IsValid())
+        {
+            Addressables.Release(_loadHandle);
+        }
+    }
 }

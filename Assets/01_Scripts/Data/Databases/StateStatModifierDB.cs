@@ -1,136 +1,136 @@
-using System;
-using System.Collections.Generic;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/States/State Stat Modifiers DB", fileName = "StateStatModifierDB")]
-public class StateStatModifierDB : ScriptableObject
-{
-    [Serializable]
-    public class Entry
-    {
-        public UnitStateId state;
-        [Header("Multipliers (x1 = no change)")]
-        public float atkMultiplier = 1f;   // PhysicalDamage
-        public float magMultiplier = 1f;   // MagicDamage
-        public float agiMultiplier = 1f;   // AGI
-        public float insMultiplier = 1f;   // INS
-
-        [Header("Additive")]
-        public int hpFlatAdd = 0;          // ÃÖ´ë HP °¡»êÀÌ ÇÊ¿äÇÏ¸é
-        public int mpFlatAdd = 0;
-
-        [Header("Hostility")]
-        public float hostilityStatMultiplier = 1f; // x1 = º¯È­ ¾øÀ½
-        public int hostilityStatFlatAdd = 0;
-
-        [Header("Skill damage taken multipliers")]
-        public float physicalTakenMultiplier = 1f;   // 0ÀÌ¸é ¹°¸® ¸é¿ª
-        public float magicalTakenMultiplier = 1f;   // 0ÀÌ¸é ¸¶¹ý ¸é¿ª
-        public float allSkillTakenMultiplier = 1f;   // 0ÀÌ¸é ¸ðµç ½ºÅ³ ÇÇÇØ ¸é¿ª
-    }
-
-    [Serializable]
-    public class BuffEntry
-    {
-        public UnitStateBuffId buff;
-
-        [Header("Multipliers (x1 = no change)")]
-        public float atkMultiplier = 1f;
-        public float magMultiplier = 1f;
-        public float agiMultiplier = 1f;   // ¿¬¸· AGI ¹öÇÁ´Â ¿©±â 1.7 ¼³Á¤
-        public float insMultiplier = 1f;
-
-        [Header("Additive")]
-        public int hpFlatAdd = 0;
-        public int mpFlatAdd = 0;
-
-        [Header("Hostility")]
-        public float hostilityStatMultiplier = 1f;
-        public int hostilityStatFlatAdd = 0;
-    }
-
-    public List<Entry> entries = new();
-    public List<BuffEntry> buffEntries = new();
-
-    public Entry Get(UnitStateId id)
-    {
-        for (int i = 0; i < entries.Count; i++)
-            if (entries[i] != null && entries[i].state == id) return entries[i];
-        return null;
-    }
-
-    // ¹öÇÁ Á¶È¸
-    public BuffEntry GetBuff(UnitStateBuffId id)
-    {
-        for (int i = 0; i < buffEntries.Count; i++)
-            if (buffEntries[i] != null && buffEntries[i].buff == id) return buffEntries[i];
-        return null;
-    }
-    public (float atk, float mag, float def, float agi, float hostilityMul, int hostilityAdd) ComputeMultipliers(UnitStateController usc)
-    {
-        float atk = 1f, mag = 1f, def = 1f, agi = 1f, hostMul = 1f;
-        int hostAdd = 0;
-
-        if (usc != null)
-        {
-            // »óÅÂ ´©Àû
-            foreach (var s in usc.GetAll())
-            {
-                var e = Get(s);
-                if (e == null) continue;
-                atk *= e.atkMultiplier;
-                mag *= e.magMultiplier;
-                agi *= e.agiMultiplier;
-                hostMul *= e.hostilityStatMultiplier;
-                hostAdd += e.hostilityStatFlatAdd;
-            }
-
-            // ¹öÇÁ ´©Àû
-            foreach (var b in usc.GetAllBuffs())
-            {
-                var be = GetBuff(b);
-                if (be == null) continue;
-                atk *= be.atkMultiplier;
-                mag *= be.magMultiplier;
-                agi *= be.agiMultiplier;              // ¿¬¸· AgiUp(1.7) ¿©±â¼­ ¹Ý¿µ
-                hostMul *= be.hostilityStatMultiplier;
-                hostAdd += be.hostilityStatFlatAdd;
-            }
-        }
-
-        return (atk, mag, def, agi, hostMul, hostAdd);
-    }
-
-    public float GetDamageTakenMultiplier(UnitStateController usc, DamageSchool school)
-    {
-        if (usc == null) return 1f;
-
-        float mul = 1f;
-
-        // 1) »óÅÂ(UnitStateId) ±âÁØ ´©Àû
-        foreach (var s in usc.GetAll())
-        {
-            var e = Get(s);
-            if (e == null) continue;
-
-            // ¸ðµç ½ºÅ³ ÇÇÇØ °øÅë ¹èÀ²
-            mul *= e.allSkillTakenMultiplier;
-
-            // ½ºÄðº° ¹èÀ²
-            switch (school)
-            {
-                case DamageSchool.Physical:
-                    mul *= e.physicalTakenMultiplier;
-                    break;
-                case DamageSchool.Magical:
-                    mul *= e.magicalTakenMultiplier;
-                    break;
-            }
-        }
-
-        // 2) ¹öÇÁ(UnitStateBuffId)µµ ³ªÁß¿¡ ÇÊ¿äÇÏ¸é ºñ½ÁÇÏ°Ô È®Àå °¡´É
-        // (Áö±ÝÀº ¹öÇÁ¿¡´Â ½ºÅ³ ÇÇÇØ ¹èÀ² ÇÊµå°¡ ¾øÀ¸´Ï »ý·«)
-
-        return mul;
-    }
-}
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/States/State Stat Modifiers DB", fileName = "StateStatModifierDB")]
+public class StateStatModifierDB : ScriptableObject
+{
+    [Serializable]
+    public class Entry
+    {
+        public UnitStateId state;
+        [Header("Multipliers (x1 = no change)")]
+        public float atkMultiplier = 1f;   // PhysicalDamage
+        public float magMultiplier = 1f;   // MagicDamage
+        public float agiMultiplier = 1f;   // AGI
+        public float insMultiplier = 1f;   // INS
+
+        [Header("Additive")]
+        public int hpFlatAdd = 0;          // ìµœëŒ€ HP ê°€ì‚°ì´ í•„ìš”í•˜ë©´
+        public int mpFlatAdd = 0;
+
+        [Header("Hostility")]
+        public float hostilityStatMultiplier = 1f; // x1 = ë³€í™” ì—†ìŒ
+        public int hostilityStatFlatAdd = 0;
+
+        [Header("Skill damage taken multipliers")]
+        public float physicalTakenMultiplier = 1f;   // 0ì´ë©´ ë¬¼ë¦¬ ë©´ì—­
+        public float magicalTakenMultiplier = 1f;   // 0ì´ë©´ ë§ˆë²• ë©´ì—­
+        public float allSkillTakenMultiplier = 1f;   // 0ì´ë©´ ëª¨ë“  ìŠ¤í‚¬ í”¼í•´ ë©´ì—­
+    }
+
+    [Serializable]
+    public class BuffEntry
+    {
+        public UnitStateBuffId buff;
+
+        [Header("Multipliers (x1 = no change)")]
+        public float atkMultiplier = 1f;
+        public float magMultiplier = 1f;
+        public float agiMultiplier = 1f;   // ì—°ë§‰ AGI ë²„í”„ëŠ” ì—¬ê¸° 1.7 ì„¤ì •
+        public float insMultiplier = 1f;
+
+        [Header("Additive")]
+        public int hpFlatAdd = 0;
+        public int mpFlatAdd = 0;
+
+        [Header("Hostility")]
+        public float hostilityStatMultiplier = 1f;
+        public int hostilityStatFlatAdd = 0;
+    }
+
+    public List<Entry> entries = new();
+    public List<BuffEntry> buffEntries = new();
+
+    public Entry Get(UnitStateId id)
+    {
+        for (int i = 0; i < entries.Count; i++)
+            if (entries[i] != null && entries[i].state == id) return entries[i];
+        return null;
+    }
+
+    // ë²„í”„ ì¡°íšŒ
+    public BuffEntry GetBuff(UnitStateBuffId id)
+    {
+        for (int i = 0; i < buffEntries.Count; i++)
+            if (buffEntries[i] != null && buffEntries[i].buff == id) return buffEntries[i];
+        return null;
+    }
+    public (float atk, float mag, float def, float agi, float hostilityMul, int hostilityAdd) ComputeMultipliers(UnitStateController usc)
+    {
+        float atk = 1f, mag = 1f, def = 1f, agi = 1f, hostMul = 1f;
+        int hostAdd = 0;
+
+        if (usc != null)
+        {
+            // ìƒíƒœ ëˆ„ì 
+            foreach (var s in usc.GetAll())
+            {
+                var e = Get(s);
+                if (e == null) continue;
+                atk *= e.atkMultiplier;
+                mag *= e.magMultiplier;
+                agi *= e.agiMultiplier;
+                hostMul *= e.hostilityStatMultiplier;
+                hostAdd += e.hostilityStatFlatAdd;
+            }
+
+            // ë²„í”„ ëˆ„ì 
+            foreach (var b in usc.GetAllBuffs())
+            {
+                var be = GetBuff(b);
+                if (be == null) continue;
+                atk *= be.atkMultiplier;
+                mag *= be.magMultiplier;
+                agi *= be.agiMultiplier;              // ì—°ë§‰ AgiUp(1.7) ì—¬ê¸°ì„œ ë°˜ì˜
+                hostMul *= be.hostilityStatMultiplier;
+                hostAdd += be.hostilityStatFlatAdd;
+            }
+        }
+
+        return (atk, mag, def, agi, hostMul, hostAdd);
+    }
+
+    public float GetDamageTakenMultiplier(UnitStateController usc, DamageSchool school)
+    {
+        if (usc == null) return 1f;
+
+        float mul = 1f;
+
+        // 1) ìƒíƒœ(UnitStateId) ê¸°ì¤€ ëˆ„ì 
+        foreach (var s in usc.GetAll())
+        {
+            var e = Get(s);
+            if (e == null) continue;
+
+            // ëª¨ë“  ìŠ¤í‚¬ í”¼í•´ ê³µí†µ ë°°ìœ¨
+            mul *= e.allSkillTakenMultiplier;
+
+            // ìŠ¤ì¿¨ë³„ ë°°ìœ¨
+            switch (school)
+            {
+                case DamageSchool.Physical:
+                    mul *= e.physicalTakenMultiplier;
+                    break;
+                case DamageSchool.Magical:
+                    mul *= e.magicalTakenMultiplier;
+                    break;
+            }
+        }
+
+        // 2) ë²„í”„(UnitStateBuffId)ë„ ë‚˜ì¤‘ì— í•„ìš”í•˜ë©´ ë¹„ìŠ·í•˜ê²Œ í™•ìž¥ ê°€ëŠ¥
+        // (ì§€ê¸ˆì€ ë²„í”„ì—ëŠ” ìŠ¤í‚¬ í”¼í•´ ë°°ìœ¨ í•„ë“œê°€ ì—†ìœ¼ë‹ˆ ìƒëžµ)
+
+        return mul;
+    }
+}

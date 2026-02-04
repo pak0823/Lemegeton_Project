@@ -1,166 +1,166 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-/// <summary>
-/// ÀÚ½ÅÀ» Áß½ÉÀ¸·Î ÁÖº¯ 2Ä­¿¡ '¾ß¼öÀÇ ¿µ¿ª'À» 2ÅÏ µ¿¾È »ı¼º.
-/// - ¿µ¿ªÀº ½ºÅ³À» »ç¿ëÇÑ ±× À§Ä¡¿¡ °íÁ¤
-/// - ÀÌ ½ºÅ³À» »ç¿ëÇÑ À¯´ÖÀº ¿µ¿ª ¾È¿¡¼­ ÀÌµ¿ÇÒ ¶§ Çàµ¿À» ¼ÒºñÇÏÁö ¾ÊÀ½(ÅÏÀÌ ³¡³ªÁö ¾ÊÀ½)
-/// </summary>
-[CreateAssetMenu(
-    menuName = "Battle/Skills/Zone/Self Beast Domain",
-    fileName = "SelfBeastDomainSkill")]
-public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
-{
-    [Header("Áö¼Ó ÅÏ(½ÃÀüÀÚ ±âÁØ ÅÏ ¼ö)")]
-    public int durationTurns = 2;
-
-    [Header("¿µ¿ª ¹İ°æ (Å¸ÀÏ °Å¸®)")]
-    public int radius = 2;
-
-    public bool SelfCastOnSelect => true;
-
-    [Header("Training")]
-    [Header("¿µ¿ª ³» ¾Æ±º ÀúÇ× ÁßÃ¸ ºÎ¿©")]
-    [Tooltip("¿µ¿ª ³» ÀúÇ× ÁßÃ¸À» 1 ºÎ¿©ÇÒÁö ¿©ºÎ")]
-    public bool trainingGiveResistanceOnCast = false;
-    [Tooltip("ÀúÇ× ÁßÃ¸ ºÎ¿©¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForResistanceOnCast = -1;
-    [Tooltip("ºÎ¿©ÇÒ ÀúÇ× ÁßÃ¸ ¼ö (±âº» 1)")]
-    [Min(0)] public int resistanceStacksOnCast = 1;
-    [Tooltip("ÀúÇ× »óÅÂ Áö¼Ó ÅÏ ¼ö(¿¹: ¿µ¿ª Áö¼Ó°ú µ¿ÀÏÇÏ°Ô ÇÏ°í ½ÍÀ¸¸é durationTurns¿¡ ¸ÂÃç ¼öµ¿ ¼³Á¤)")]
-    [Min(1)] public int resistanceDurationTurns = 1;
-
-    [Header("¿µ¿ª ³» ÅÏ ½ÃÀÛ ºĞ³ë °¨¼Ò")]
-    [Tooltip("¿µ¿ª ¾È¿¡¼­ Â÷·Ê°¡ ¿Ã ¶§ ºĞ³ë¸¦ °¨¼Ò½ÃÅ³Áö ¿©ºÎ")]
-    public bool trainingReduceRageOnTurnStart = false;
-    [Tooltip("ºĞ³ë °¨¼Ò È¿°ú¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForRageReduceOnTurnStart = -1;
-    [Tooltip("CLV ¡¿ rageReducePerClv¸¸Å­ Rage °¨¼Ò (CLV °è»êÀº BattleManager ÂÊ¿¡¼­ ±¸Çö)")]
-    public float rageReducePerClv = 0.40f;
-
-    [Header("¹«·á Çàµ¿")]
-    [Tooltip("ÀÌ ½ºÅ³ »ç¿ë ½Ã ÅÏÀ» ¸¶Ä¡Áö ¾Ê´Â ¹«·á Çàµ¿À¸·Î ¸¸µéÁö ¿©ºÎ")]
-    public bool trainingUseFreeAction = false;
-    [Tooltip("¹«·á Çàµ¿À¸·Î Ã³¸®ÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForFreeAction = -1;
-
-#if UNITY_EDITOR
-    void OnValidate()
-    {
-        targetMode = SkillTargetMode.Unit;
-    }
-#endif
-
-    void OnEnable()
-    {
-        // ÀÚ±â ÀÚ½Å ´ë»ó, µ¥¹ÌÁö´Â ¾øÁö¸¸ ±âº» ¹°¸® ½ºÄğ·Î ¸ÂÃçµÒ
-        targetMode = SkillTargetMode.Unit;
-        school = DamageSchool.Physical;
-        costResource = SkillCostResource.MP;
-    }
-
-    int GetRoute(BattleUnit _caster)
-    {
-        if (!_caster) return -1;
-        return _caster.GetTrainingRouteIndex(this);
-    }
-
-    /// <summary>
-    /// ¹üÀ§ ÇÁ¸®ºä: Ä³½ºÅÍ À§Ä¡ ±âÁØ ¹İ°æ 2 ¿øÇü.
-    /// ½ÇÁ¦·Î´Â ResolveOnUnit¿¡¼­ BattleManager ÂÊ¿¡ ¿µ¿ªÀ» µî·ÏÇÑ´Ù.
-    /// </summary>
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _ /*unused*/)
-    {
-        foreach (var c in AreaShapes.BeastDomainArea(_originCell, radius))
-            yield return c;
-    }
-
-    public override int GetEffectiveCost(BattleUnit _caster)
-    {
-        return base.GetEffectiveCost(_caster);
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-    {
-        // Å¸°ÙÆÃ °úÁ¤ ¾øÀÌ, Áï½Ã ÀÚ±â ÀÚ½Å(caster)À» ´ë»óÀ¸·Î ½ÇÇà Èå¸§ ÁøÀÔ
-        // PerformStandardUnitSkillFlow°¡ ¾Ö´Ï¸ŞÀÌ¼Ç -> ResolveOnUnit È£ÃâÀ» ´Ù ÇØÁÜ
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
-    {
-        if (!_battlemanager) yield break;
-        if (!_caster) yield break;
-
-        _target = _caster;
-
-        // MP ¼Ò¸ğ
-        var res = GetCostResource(_caster);
-        int cost = GetEffectiveCost(_caster);
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-        // Ä³½ºÅÍ°¡ ¹ÙÀÎµåµÈ Å¸ÀÏ¸Ê°ú ¼¿À» ±×´ë·Î »ç¿ë
-        Tilemap map = _caster.CurrentMap;
-        if (!map)
-        {
-            Debug.LogWarning("[BeastDomain] Ä³½ºÅÍÀÇ CurrentMapÀÌ ¾ø½À´Ï´Ù.");
-            yield break;
-        }
-
-        Vector3Int originCell = _caster.Cell;
-        if (!map.HasTile(originCell))
-        {
-            Debug.LogWarning($"[BeastDomain] Áß½É ¼¿¿¡ Å¸ÀÏÀÌ ¾ø½À´Ï´Ù: {originCell}");
-            yield break;
-        }
-
-        // BattleManager¿¡ ¿µ¿ª »ı¼º ¿äÃ»
-        _battlemanager.Field.SpawnBeastDomainZone(map, _caster, originCell, radius, durationTurns);
-
-        // ÈÆ·Ã: ½ºÅ³ »ç¿ë ½Ã ÀÚ½Å¿¡°Ô ÀúÇ× ºÎ¿©
-        int route = GetRoute(_caster);
-        if (trainingGiveResistanceOnCast &&
-            routeForResistanceOnCast >= 0 &&
-            route == routeForResistanceOnCast &&
-            resistanceStacksOnCast > 0)
-        {
-            var sc = _caster.GetComponent<StatusController>();
-            if (sc != null)
-            {
-                sc.ApplyWithTurnContext(
-                    StatusId.Resistance,
-                    Mathf.Max(1, resistanceStacksOnCast),
-                    Mathf.Max(1, resistanceDurationTurns)
-                );
-                Debug.Log($"[BeastDomain] ÀúÇ× ÈÆ·Ã: {_caster.name} ÀÚ½Å¿¡°Ô Resistance {resistanceStacksOnCast}½ºÅÃ, {resistanceDurationTurns}ÅÏ ºÎ¿©");
-            }
-        }
-
-        Debug.Log($"[BeastDomain] {_caster.name}°¡ ¾ß¼öÀÇ ¿µ¿ªÀ» »ı¼ºÇÔ (Áß½É:{originCell}, ¹İ°æ:{radius}, Áö¼Ó:{durationTurns}ÅÏ)");
-
-        yield break;
-    }
-
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-    {
-        // ÀÌ ½ºÅ³Àº Å¸ÀÏ ÁöÁ¤ÀÌ ¾Æ´Ï¶ó ÀÚ±â ÀÚ½Å ´ë»óÀÌ¶ó ¿©±â¼­´Â ¾Æ¹«°Íµµ ¾È ÇÔ
-        yield break;
-    }
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+/// <summary>
+/// ìì‹ ì„ ì¤‘ì‹¬ìœ¼ë¡œ ì£¼ë³€ 2ì¹¸ì— 'ì•¼ìˆ˜ì˜ ì˜ì—­'ì„ 2í„´ ë™ì•ˆ ìƒì„±.
+/// - ì˜ì—­ì€ ìŠ¤í‚¬ì„ ì‚¬ìš©í•œ ê·¸ ìœ„ì¹˜ì— ê³ ì •
+/// - ì´ ìŠ¤í‚¬ì„ ì‚¬ìš©í•œ ìœ ë‹›ì€ ì˜ì—­ ì•ˆì—ì„œ ì´ë™í•  ë•Œ í–‰ë™ì„ ì†Œë¹„í•˜ì§€ ì•ŠìŒ(í„´ì´ ëë‚˜ì§€ ì•ŠìŒ)
+/// </summary>
+[CreateAssetMenu(
+    menuName = "Battle/Skills/Zone/Self Beast Domain",
+    fileName = "SelfBeastDomainSkill")]
+public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
+{
+    [Header("ì§€ì† í„´(ì‹œì „ì ê¸°ì¤€ í„´ ìˆ˜)")]
+    public int durationTurns = 2;
+
+    [Header("ì˜ì—­ ë°˜ê²½ (íƒ€ì¼ ê±°ë¦¬)")]
+    public int radius = 2;
+
+    public bool SelfCastOnSelect => true;
+
+    [Header("Training")]
+    [Header("ì˜ì—­ ë‚´ ì•„êµ° ì €í•­ ì¤‘ì²© ë¶€ì—¬")]
+    [Tooltip("ì˜ì—­ ë‚´ ì €í•­ ì¤‘ì²©ì„ 1 ë¶€ì—¬í• ì§€ ì—¬ë¶€")]
+    public bool trainingGiveResistanceOnCast = false;
+    [Tooltip("ì €í•­ ì¤‘ì²© ë¶€ì—¬ë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForResistanceOnCast = -1;
+    [Tooltip("ë¶€ì—¬í•  ì €í•­ ì¤‘ì²© ìˆ˜ (ê¸°ë³¸ 1)")]
+    [Min(0)] public int resistanceStacksOnCast = 1;
+    [Tooltip("ì €í•­ ìƒíƒœ ì§€ì† í„´ ìˆ˜(ì˜ˆ: ì˜ì—­ ì§€ì†ê³¼ ë™ì¼í•˜ê²Œ í•˜ê³  ì‹¶ìœ¼ë©´ durationTurnsì— ë§ì¶° ìˆ˜ë™ ì„¤ì •)")]
+    [Min(1)] public int resistanceDurationTurns = 1;
+
+    [Header("ì˜ì—­ ë‚´ í„´ ì‹œì‘ ë¶„ë…¸ ê°ì†Œ")]
+    [Tooltip("ì˜ì—­ ì•ˆì—ì„œ ì°¨ë¡€ê°€ ì˜¬ ë•Œ ë¶„ë…¸ë¥¼ ê°ì†Œì‹œí‚¬ì§€ ì—¬ë¶€")]
+    public bool trainingReduceRageOnTurnStart = false;
+    [Tooltip("ë¶„ë…¸ ê°ì†Œ íš¨ê³¼ë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForRageReduceOnTurnStart = -1;
+    [Tooltip("CLV Ã— rageReducePerClvë§Œí¼ Rage ê°ì†Œ (CLV ê³„ì‚°ì€ BattleManager ìª½ì—ì„œ êµ¬í˜„)")]
+    public float rageReducePerClv = 0.40f;
+
+    [Header("ë¬´ë£Œ í–‰ë™")]
+    [Tooltip("ì´ ìŠ¤í‚¬ ì‚¬ìš© ì‹œ í„´ì„ ë§ˆì¹˜ì§€ ì•ŠëŠ” ë¬´ë£Œ í–‰ë™ìœ¼ë¡œ ë§Œë“¤ì§€ ì—¬ë¶€")]
+    public bool trainingUseFreeAction = false;
+    [Tooltip("ë¬´ë£Œ í–‰ë™ìœ¼ë¡œ ì²˜ë¦¬í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForFreeAction = -1;
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        targetMode = SkillTargetMode.Unit;
+    }
+#endif
+
+    void OnEnable()
+    {
+        // ìê¸° ìì‹  ëŒ€ìƒ, ë°ë¯¸ì§€ëŠ” ì—†ì§€ë§Œ ê¸°ë³¸ ë¬¼ë¦¬ ìŠ¤ì¿¨ë¡œ ë§ì¶°ë‘ 
+        targetMode = SkillTargetMode.Unit;
+        school = DamageSchool.Physical;
+        costResource = SkillCostResource.MP;
+    }
+
+    int GetRoute(BattleUnit _caster)
+    {
+        if (!_caster) return -1;
+        return _caster.GetTrainingRouteIndex(this);
+    }
+
+    /// <summary>
+    /// ë²”ìœ„ í”„ë¦¬ë·°: ìºìŠ¤í„° ìœ„ì¹˜ ê¸°ì¤€ ë°˜ê²½ 2 ì›í˜•.
+    /// ì‹¤ì œë¡œëŠ” ResolveOnUnitì—ì„œ BattleManager ìª½ì— ì˜ì—­ì„ ë“±ë¡í•œë‹¤.
+    /// </summary>
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _ /*unused*/)
+    {
+        foreach (var c in AreaShapes.BeastDomainArea(_originCell, radius))
+            yield return c;
+    }
+
+    public override int GetEffectiveCost(BattleUnit _caster)
+    {
+        return base.GetEffectiveCost(_caster);
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
+    {
+        // íƒ€ê²ŸíŒ… ê³¼ì • ì—†ì´, ì¦‰ì‹œ ìê¸° ìì‹ (caster)ì„ ëŒ€ìƒìœ¼ë¡œ ì‹¤í–‰ íë¦„ ì§„ì…
+        // PerformStandardUnitSkillFlowê°€ ì• ë‹ˆë©”ì´ì…˜ -> ResolveOnUnit í˜¸ì¶œì„ ë‹¤ í•´ì¤Œ
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target)
+    {
+        if (!_battlemanager) yield break;
+        if (!_caster) yield break;
+
+        _target = _caster;
+
+        // MP ì†Œëª¨
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
+
+        // ìºìŠ¤í„°ê°€ ë°”ì¸ë“œëœ íƒ€ì¼ë§µê³¼ ì…€ì„ ê·¸ëŒ€ë¡œ ì‚¬ìš©
+        Tilemap map = _caster.CurrentMap;
+        if (!map)
+        {
+            Debug.LogWarning("[BeastDomain] ìºìŠ¤í„°ì˜ CurrentMapì´ ì—†ìŠµë‹ˆë‹¤.");
+            yield break;
+        }
+
+        Vector3Int originCell = _caster.Cell;
+        if (!map.HasTile(originCell))
+        {
+            Debug.LogWarning($"[BeastDomain] ì¤‘ì‹¬ ì…€ì— íƒ€ì¼ì´ ì—†ìŠµë‹ˆë‹¤: {originCell}");
+            yield break;
+        }
+
+        // BattleManagerì— ì˜ì—­ ìƒì„± ìš”ì²­
+        _battlemanager.Field.SpawnBeastDomainZone(map, _caster, originCell, radius, durationTurns);
+
+        // í›ˆë ¨: ìŠ¤í‚¬ ì‚¬ìš© ì‹œ ìì‹ ì—ê²Œ ì €í•­ ë¶€ì—¬
+        int route = GetRoute(_caster);
+        if (trainingGiveResistanceOnCast &&
+            routeForResistanceOnCast >= 0 &&
+            route == routeForResistanceOnCast &&
+            resistanceStacksOnCast > 0)
+        {
+            var sc = _caster.GetComponent<StatusController>();
+            if (sc != null)
+            {
+                sc.ApplyWithTurnContext(
+                    StatusId.Resistance,
+                    Mathf.Max(1, resistanceStacksOnCast),
+                    Mathf.Max(1, resistanceDurationTurns)
+                );
+                Debug.Log($"[BeastDomain] ì €í•­ í›ˆë ¨: {_caster.name} ìì‹ ì—ê²Œ Resistance {resistanceStacksOnCast}ìŠ¤íƒ, {resistanceDurationTurns}í„´ ë¶€ì—¬");
+            }
+        }
+
+        Debug.Log($"[BeastDomain] {_caster.name}ê°€ ì•¼ìˆ˜ì˜ ì˜ì—­ì„ ìƒì„±í•¨ (ì¤‘ì‹¬:{originCell}, ë°˜ê²½:{radius}, ì§€ì†:{durationTurns}í„´)");
+
+        yield break;
+    }
+
+    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
+    {
+        // ì´ ìŠ¤í‚¬ì€ íƒ€ì¼ ì§€ì •ì´ ì•„ë‹ˆë¼ ìê¸° ìì‹  ëŒ€ìƒì´ë¼ ì—¬ê¸°ì„œëŠ” ì•„ë¬´ê²ƒë„ ì•ˆ í•¨
+        yield break;
+    }
+    public override string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(_caster);
+
+        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

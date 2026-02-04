@@ -1,140 +1,140 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.Tilemaps;
-
-[CreateAssetMenu(menuName = "Battle/Skills/State/Self Vigilance", fileName = "SelfVigilanceSkill")]
-public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
-{
-    public int durationTurns = 1;
-    public bool SelfCastOnSelect => true;
-
-    [Header("Training")]
-    [Header("ÀÚ¿ø ¼Ò¸ğ °¨¼Ò")]
-    [Tooltip("ÈÆ·Ã¿¡¼­ Rage ºñ¿ëÀ» µ¤¾î¾µÁö ¿©ºÎ")]
-    public bool trainingUseRageOverride = false;
-    [Tooltip("Rage ºñ¿ë µ¤¾î¾²±â¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForRageOverride = -1;
-    [Tooltip("ÇØ´ç ·çÆ®¿¡¼­ »ç¿ëÇÒ Rage ºñ¿ë")]
-    [Min(0)] public int trainingRageCostOverride = 0;
-
-    [Header("ÅëÂû ¾àÈ­ ºÎ¿©")]
-    [Tooltip("Æ¯Á¤ ·çÆ®¿¡¼­ 'ÀÚ½ÅÀ» °ø°İÇÑ Àû'¿¡°Ô ÅëÂû ¾àÈ­¸¦ ÁÙÁö ¿©ºÎ")]
-    public bool trainingUseInsightDebuff = false;
-    [Tooltip("ÅëÂû ¾àÈ­ È¿°ú¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForInsightDebuff = -1;
-
-    [Header("ÀûÀÇ Áõ°¡")]
-    [Tooltip("Æ¯Á¤ ·çÆ®¿¡¼­ ÀûÀÇ¸¦ Å©°Ô ¿Ã¸±Áö ¿©ºÎ")]
-    public bool trainingUseHostilitySpike = false;
-    [Tooltip("ÀûÀÇ Áõ°¡ È¿°ú¸¦ Àû¿ëÇÒ ÈÆ·Ã ·çÆ®(-1ÀÌ¸é ºñÈ°¼º, 0~2)")]
-    [Range(-1, 2)] public int routeForHostilitySpike = -1;
-    [Tooltip("ÂüÁ¶ ¹è¼ö (¿¹: 5.0 = ÃÖ´ë ÀûÀÇ * 5¸¸Å­ Áõ°¡)")]
-    public float hostilityReferenceMultiplier = 5.0f;
-
-#if UNITY_EDITOR
-    void OnValidate() { targetMode = SkillTargetMode.Unit; }
-#endif
-    void OnEnable() 
-    { 
-        targetMode = SkillTargetMode.Unit;
-        school = DamageSchool.Physical;
-        costResource = SkillCostResource.Rage;
-    }
-
-    int GetRoute(BattleUnit caster)
-    {
-        if (!caster) return -1;
-        return caster.GetTrainingRouteIndex(this);
-    }
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
-    {
-        yield break;
-    }
-    public override int GetEffectiveCost(BattleUnit caster)
-    {
-        int baseCost = base.GetEffectiveCost(caster);
-        if (!trainingUseRageOverride || !caster) return baseCost;
-
-        int route = GetRoute(caster);
-        if (routeForRageOverride >= 0 && route == routeForRageOverride)
-            return Mathf.Max(0, trainingRageCostOverride);
-
-        return baseCost;
-    }
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, UnityEngine.Tilemaps.Tilemap targetMap, Vector3Int targetCell)
-    {
-        // Å¸°ÙÆÃ °úÁ¤ ¾øÀÌ, Áï½Ã ÀÚ±â ÀÚ½Å(caster)À» ´ë»óÀ¸·Î ½ÇÇà Èå¸§ ÁøÀÔ
-        // PerformStandardUnitSkillFlow°¡ ¾Ö´Ï¸ŞÀÌ¼Ç -> ResolveOnUnit È£ÃâÀ» ´Ù ÇØÁÜ
-        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
-    }
-
-    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
-    {
-        if (!bm || !caster) yield break;
-
-        // Ç×»ó ÀÚ±â ÀÚ½Å¿¡°Ô
-        target = caster;
-
-        // ÀÚ¿ø ¼Òºñ (ÈÆ·Ã ¹İ¿µ)
-        var res = GetCostResource(caster);
-        int cost = GetEffectiveCost(caster);
-        if (cost > 0 && !caster.TryConsumeResource(res, cost))
-            yield break;
-
-        var usc = caster.GetComponent<UnitStateController>();
-        if (usc == null)
-        {
-            Debug.LogError("[Vigilance] UnitStateController ¾ø´Â À¯´Ö¿¡ °æ°è¸¦ Àû¿ëÇÏ·Á Çß½À´Ï´Ù. ÇÁ¸®ÆÕ¿¡ UnitStateController¸¦ ºÙÀÌ¼¼¿ä.");
-            yield break;
-        }
-
-        // 1ÅÏ Áö¼Ó °æ°è »óÅÂ ºÎ¿©
-        usc.ApplyForTurns(UnitStateId.Guard, durationTurns);
-
-        int route = GetRoute(caster);
-
-        // ÀûÀÇ Áõ°¡ (ÃÖ°í Hostility ¡¿ ¹è¼ö)
-        if (trainingUseHostilitySpike &&
-            routeForHostilitySpike >= 0 &&
-            route == routeForHostilitySpike)
-        {
-            float maxHost = 0f;
-            foreach (var u in Object.FindObjectsOfType<BattleUnit>())
-            {
-                if (u == null || u.IsDead) continue;
-                if (u.data.team != caster.data.team) continue; // °°Àº Æí ±âÁØ(¼³Á¤¿¡ µû¶ó ¹Ù²Ü ¼ö ÀÖÀ½)
-
-                maxHost = Mathf.Max(maxHost, Mathf.Max(0f, u.Hostility));
-            }
-
-            float delta = maxHost * Mathf.Max(0f, hostilityReferenceMultiplier);
-            if (delta > 0f)
-                caster.AddHostility(delta);
-        }
-
-        yield break;
-    }
-    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
-    {
-        yield break;
-    }
-
-    public override string GetFullDescriptionRich(BattleUnit caster)
-    {
-        string baseDesc = base.GetFullDescriptionRich(caster);
-
-        int route = caster != null ? caster.GetTrainingRouteIndex(this) : -1;
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-            return baseDesc;
-
-        var info = trainingRoutes[route];
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-            baseDesc,
-            info.title,
-            info.description
-        );
-    }
-}
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+[CreateAssetMenu(menuName = "Battle/Skills/State/Self Vigilance", fileName = "SelfVigilanceSkill")]
+public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
+{
+    public int durationTurns = 1;
+    public bool SelfCastOnSelect => true;
+
+    [Header("Training")]
+    [Header("ìì› ì†Œëª¨ ê°ì†Œ")]
+    [Tooltip("í›ˆë ¨ì—ì„œ Rage ë¹„ìš©ì„ ë®ì–´ì“¸ì§€ ì—¬ë¶€")]
+    public bool trainingUseRageOverride = false;
+    [Tooltip("Rage ë¹„ìš© ë®ì–´ì“°ê¸°ë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForRageOverride = -1;
+    [Tooltip("í•´ë‹¹ ë£¨íŠ¸ì—ì„œ ì‚¬ìš©í•  Rage ë¹„ìš©")]
+    [Min(0)] public int trainingRageCostOverride = 0;
+
+    [Header("í†µì°° ì•½í™” ë¶€ì—¬")]
+    [Tooltip("íŠ¹ì • ë£¨íŠ¸ì—ì„œ 'ìì‹ ì„ ê³µê²©í•œ ì 'ì—ê²Œ í†µì°° ì•½í™”ë¥¼ ì¤„ì§€ ì—¬ë¶€")]
+    public bool trainingUseInsightDebuff = false;
+    [Tooltip("í†µì°° ì•½í™” íš¨ê³¼ë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForInsightDebuff = -1;
+
+    [Header("ì ì˜ ì¦ê°€")]
+    [Tooltip("íŠ¹ì • ë£¨íŠ¸ì—ì„œ ì ì˜ë¥¼ í¬ê²Œ ì˜¬ë¦´ì§€ ì—¬ë¶€")]
+    public bool trainingUseHostilitySpike = false;
+    [Tooltip("ì ì˜ ì¦ê°€ íš¨ê³¼ë¥¼ ì ìš©í•  í›ˆë ¨ ë£¨íŠ¸(-1ì´ë©´ ë¹„í™œì„±, 0~2)")]
+    [Range(-1, 2)] public int routeForHostilitySpike = -1;
+    [Tooltip("ì°¸ì¡° ë°°ìˆ˜ (ì˜ˆ: 5.0 = ìµœëŒ€ ì ì˜ * 5ë§Œí¼ ì¦ê°€)")]
+    public float hostilityReferenceMultiplier = 5.0f;
+
+#if UNITY_EDITOR
+    void OnValidate() { targetMode = SkillTargetMode.Unit; }
+#endif
+    void OnEnable() 
+    { 
+        targetMode = SkillTargetMode.Unit;
+        school = DamageSchool.Physical;
+        costResource = SkillCostResource.Rage;
+    }
+
+    int GetRoute(BattleUnit caster)
+    {
+        if (!caster) return -1;
+        return caster.GetTrainingRouteIndex(this);
+    }
+
+    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int originCell, bool isOddRow)
+    {
+        yield break;
+    }
+    public override int GetEffectiveCost(BattleUnit caster)
+    {
+        int baseCost = base.GetEffectiveCost(caster);
+        if (!trainingUseRageOverride || !caster) return baseCost;
+
+        int route = GetRoute(caster);
+        if (routeForRageOverride >= 0 && route == routeForRageOverride)
+            return Mathf.Max(0, trainingRageCostOverride);
+
+        return baseCost;
+    }
+
+    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, UnityEngine.Tilemaps.Tilemap targetMap, Vector3Int targetCell)
+    {
+        // íƒ€ê²ŸíŒ… ê³¼ì • ì—†ì´, ì¦‰ì‹œ ìê¸° ìì‹ (caster)ì„ ëŒ€ìƒìœ¼ë¡œ ì‹¤í–‰ íë¦„ ì§„ì…
+        // PerformStandardUnitSkillFlowê°€ ì• ë‹ˆë©”ì´ì…˜ -> ResolveOnUnit í˜¸ì¶œì„ ë‹¤ í•´ì¤Œ
+        yield return bm.PerformStandardUnitSkillFlow(this, caster, caster);
+    }
+
+    public override IEnumerator ResolveOnUnit(BattleManager bm, BattleUnit caster, BattleUnit target)
+    {
+        if (!bm || !caster) yield break;
+
+        // í•­ìƒ ìê¸° ìì‹ ì—ê²Œ
+        target = caster;
+
+        // ìì› ì†Œë¹„ (í›ˆë ¨ ë°˜ì˜)
+        var res = GetCostResource(caster);
+        int cost = GetEffectiveCost(caster);
+        if (cost > 0 && !caster.TryConsumeResource(res, cost))
+            yield break;
+
+        var usc = caster.GetComponent<UnitStateController>();
+        if (usc == null)
+        {
+            Debug.LogError("[Vigilance] UnitStateController ì—†ëŠ” ìœ ë‹›ì— ê²½ê³„ë¥¼ ì ìš©í•˜ë ¤ í–ˆìŠµë‹ˆë‹¤. í”„ë¦¬íŒ¹ì— UnitStateControllerë¥¼ ë¶™ì´ì„¸ìš”.");
+            yield break;
+        }
+
+        // 1í„´ ì§€ì† ê²½ê³„ ìƒíƒœ ë¶€ì—¬
+        usc.ApplyForTurns(UnitStateId.Guard, durationTurns);
+
+        int route = GetRoute(caster);
+
+        // ì ì˜ ì¦ê°€ (ìµœê³  Hostility Ã— ë°°ìˆ˜)
+        if (trainingUseHostilitySpike &&
+            routeForHostilitySpike >= 0 &&
+            route == routeForHostilitySpike)
+        {
+            float maxHost = 0f;
+            foreach (var u in Object.FindObjectsOfType<BattleUnit>())
+            {
+                if (u == null || u.IsDead) continue;
+                if (u.data.team != caster.data.team) continue; // ê°™ì€ í¸ ê¸°ì¤€(ì„¤ì •ì— ë”°ë¼ ë°”ê¿€ ìˆ˜ ìˆìŒ)
+
+                maxHost = Mathf.Max(maxHost, Mathf.Max(0f, u.Hostility));
+            }
+
+            float delta = maxHost * Mathf.Max(0f, hostilityReferenceMultiplier);
+            if (delta > 0f)
+                caster.AddHostility(delta);
+        }
+
+        yield break;
+    }
+    public override IEnumerator ResolveOnTile(BattleManager bm, Tilemap map, Vector3Int originCell, BattleUnit caster)
+    {
+        yield break;
+    }
+
+    public override string GetFullDescriptionRich(BattleUnit caster)
+    {
+        string baseDesc = base.GetFullDescriptionRich(caster);
+
+        int route = caster != null ? caster.GetTrainingRouteIndex(this) : -1;
+        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
+            return baseDesc;
+
+        var info = trainingRoutes[route];
+        return SkillTooltipUtil.AppendTrainingRouteDescription(
+            baseDesc,
+            info.title,
+            info.description
+        );
+    }
+}

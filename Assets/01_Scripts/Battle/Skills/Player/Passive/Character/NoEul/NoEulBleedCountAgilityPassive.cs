@@ -1,82 +1,82 @@
-using UnityEngine;
-
-[CreateAssetMenu(
-    menuName = "Battle/Passives/No Eul/Passive_2",
-    fileName = "Passive_BleedCountAgility")]
-public class NoEulBleedCountAgilityPassive : PassiveAsset
-{
-    private BattleUnit owner;
-    private BattleManager battle;
-
-    public override void OnAttach(BattleUnit _owner, BattleManager _battlemanager)
-    {
-        owner = _owner;
-        battle = _battlemanager;
-
-        RecalculateMultiplier();
-
-        BattleManager.OnAnyUnitTurnStarted += HandleTurnStarted;
-        _battlemanager.OnUnitEndTurn += HandleTurnEnded;
-    }
-
-    public override void OnDetach(BattleUnit _owner, BattleManager _battlemanager)
-    {
-        if (battle != null)
-        {
-            BattleManager.OnAnyUnitTurnStarted -= HandleTurnStarted;
-            _battlemanager.OnUnitEndTurn -= HandleTurnEnded;
-        }
-
-        if (owner != null)
-            owner.SetPassiveAgilityMultiplier(1f); // ¿ø»ó º¹±¸
-
-        owner = null;
-        battle = null;
-    }
-
-    private void HandleTurnStarted(BattleUnit unit)
-    {
-        if (unit == owner)
-            RecalculateMultiplier();
-    }
-
-    private void HandleTurnEnded(BattleUnit unit)
-    {
-        if (unit == owner)
-            RecalculateMultiplier();
-    }
-
-    private void RecalculateMultiplier()
-    {
-        if (owner == null || battle == null)
-            return;
-
-        int bleedCount = 0;
-
-        // ÃâÇ÷ ÁßÃ¸ÀÌ ÀÖ´Â Àû À¯´Ö ¼ö °è»ê
-        foreach (var enemy in battle.GetLivingEnemiesOf(owner))
-        {
-            if (enemy == null) continue;
-            var sc = enemy.GetComponent<StatusController>();
-            if (sc == null) continue;
-
-            if (sc.Has(StatusId.Bleeding))
-                bleedCount++;
-        }
-
-        // ±âº» ¹ÎÃ¸ ¹è¼ö = (1.40 ^ ÃâÇ÷ Àû ¼ö)
-        float multiplier = Mathf.Pow(1.40f, bleedCount);
-
-        float beforeAGI = owner.EffectiveAGI; // º¯°æ Àü °ª °è»ê
-
-        owner.SetPassiveAgilityMultiplier(multiplier);
-
-        float afterAGI = owner.EffectiveAGI;  // º¯°æ ÈÄ °ª Àç°è»ê
-
-        // ·Î±× Ãâ·Â (°ªÀÌ º¯Çß´Ù¸é Ãâ·Â)
-        if (!Mathf.Approximately(beforeAGI, afterAGI))
-        {
-            Debug.Log($"[Passive] {owner.name} (Bleed targets: {bleedCount}) AGI Updated: {beforeAGI:F1} -> {afterAGI:F1}");
-        }
-    }
-}
+using UnityEngine;
+
+[CreateAssetMenu(
+    menuName = "Battle/Passives/No Eul/Passive_2",
+    fileName = "Passive_BleedCountAgility")]
+public class NoEulBleedCountAgilityPassive : PassiveAsset
+{
+    private BattleUnit owner;
+    private BattleManager battle;
+
+    public override void OnAttach(BattleUnit _owner, BattleManager _battlemanager)
+    {
+        owner = _owner;
+        battle = _battlemanager;
+
+        RecalculateMultiplier();
+
+        BattleManager.OnAnyUnitTurnStarted += HandleTurnStarted;
+        _battlemanager.OnUnitEndTurn += HandleTurnEnded;
+    }
+
+    public override void OnDetach(BattleUnit _owner, BattleManager _battlemanager)
+    {
+        if (battle != null)
+        {
+            BattleManager.OnAnyUnitTurnStarted -= HandleTurnStarted;
+            _battlemanager.OnUnitEndTurn -= HandleTurnEnded;
+        }
+
+        if (owner != null)
+            owner.SetPassiveAgilityMultiplier(1f); // ì›ìƒ ë³µêµ¬
+
+        owner = null;
+        battle = null;
+    }
+
+    private void HandleTurnStarted(BattleUnit unit)
+    {
+        if (unit == owner)
+            RecalculateMultiplier();
+    }
+
+    private void HandleTurnEnded(BattleUnit unit)
+    {
+        if (unit == owner)
+            RecalculateMultiplier();
+    }
+
+    private void RecalculateMultiplier()
+    {
+        if (owner == null || battle == null)
+            return;
+
+        int bleedCount = 0;
+
+        // ì¶œí˜ˆ ì¤‘ì²©ì´ ìˆëŠ” ì  ìœ ë‹› ìˆ˜ ê³„ì‚°
+        foreach (var enemy in battle.GetLivingEnemiesOf(owner))
+        {
+            if (enemy == null) continue;
+            var sc = enemy.GetComponent<StatusController>();
+            if (sc == null) continue;
+
+            if (sc.Has(StatusId.Bleeding))
+                bleedCount++;
+        }
+
+        // ê¸°ë³¸ ë¯¼ì²© ë°°ìˆ˜ = (1.40 ^ ì¶œí˜ˆ ì  ìˆ˜)
+        float multiplier = Mathf.Pow(1.40f, bleedCount);
+
+        float beforeAGI = owner.EffectiveAGI; // ë³€ê²½ ì „ ê°’ ê³„ì‚°
+
+        owner.SetPassiveAgilityMultiplier(multiplier);
+
+        float afterAGI = owner.EffectiveAGI;  // ë³€ê²½ í›„ ê°’ ì¬ê³„ì‚°
+
+        // ë¡œê·¸ ì¶œë ¥ (ê°’ì´ ë³€í–ˆë‹¤ë©´ ì¶œë ¥)
+        if (!Mathf.Approximately(beforeAGI, afterAGI))
+        {
+            Debug.Log($"[Passive] {owner.name} (Bleed targets: {bleedCount}) AGI Updated: {beforeAGI:F1} -> {afterAGI:F1}");
+        }
+    }
+}

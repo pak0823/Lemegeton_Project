@@ -1,31 +1,31 @@
-using UnityEngine;
-
-public static class HostilityRules
-{
-    /// <summary>ÇÇÇØ ±â¹İ Àû´ë°¨: dmg * (1 + ´ë»óÀÇ Ã¼·Â¼Õ½ÇºñÀ²) * º¸½º¹è¼ö * ½ÃÀüÀÚ»óÅÂ¹è¼ö</summary>
-    public static float FromDamage(int dmg, BattleUnit caster, BattleUnit target)
-    {
-        if (caster == null || target == null) return 0f;
-        float missingHpRatio = 1f - ((float)target.HP / Mathf.Max(1, target.MaxHP));
-        float healthMultiplier = 1f + missingHpRatio;
-        float bossScaling = (target.data.isBoss == ISBOSS.Boss) ? 2.0f : 1.0f;
-        float statusMultiplier = caster.HostilityGenerationMultiplier;
-        return Mathf.Max(0f, dmg) * healthMultiplier * bossScaling * statusMultiplier;
-    }
-
-    /// <summary>È¸º¹ ±â¹İ Àû´ë°¨: heal * (1 + ½ÃÀüÀÚ Ã¼·Â¼Õ½ÇºñÀ²) * ½ÃÀüÀÚ»óÅÂ¹è¼ö</summary>
-    public static float FromHeal(int healAmount, BattleUnit caster)
-    {
-        if (caster == null) return 0f;
-        float missingHpRatio = 1f - ((float)caster.HP / Mathf.Max(1, caster.MaxHP));
-        float healthMultiplier = 1f + missingHpRatio;
-        float statusMultiplier = caster.HostilityGenerationMultiplier;
-        return Mathf.Max(0f, healAmount) * healthMultiplier * statusMultiplier;
-    }
-
-    public static float GetVisibleHostility(BattleUnit _unit)
-    {
-        float baseHostility = _unit.Hostility; // ¿øº»(º¯ÇÏÁö ¾ÊÀ½)
-        return baseHostility;
-    }
-}
+using UnityEngine;
+
+public static class HostilityRules
+{
+    /// <summary>í”¼í•´ ê¸°ë°˜ ì ëŒ€ê°: dmg * (1 + ëŒ€ìƒì˜ ì²´ë ¥ì†ì‹¤ë¹„ìœ¨) * ë³´ìŠ¤ë°°ìˆ˜ * ì‹œì „ììƒíƒœë°°ìˆ˜</summary>
+    public static float FromDamage(int dmg, BattleUnit caster, BattleUnit target)
+    {
+        if (caster == null || target == null) return 0f;
+        float missingHpRatio = 1f - ((float)target.HP / Mathf.Max(1, target.MaxHP));
+        float healthMultiplier = 1f + missingHpRatio;
+        float bossScaling = (target.data.isBoss == ISBOSS.Boss) ? 2.0f : 1.0f;
+        float statusMultiplier = caster.HostilityGenerationMultiplier;
+        return Mathf.Max(0f, dmg) * healthMultiplier * bossScaling * statusMultiplier;
+    }
+
+    /// <summary>íšŒë³µ ê¸°ë°˜ ì ëŒ€ê°: heal * (1 + ì‹œì „ì ì²´ë ¥ì†ì‹¤ë¹„ìœ¨) * ì‹œì „ììƒíƒœë°°ìˆ˜</summary>
+    public static float FromHeal(int healAmount, BattleUnit caster)
+    {
+        if (caster == null) return 0f;
+        float missingHpRatio = 1f - ((float)caster.HP / Mathf.Max(1, caster.MaxHP));
+        float healthMultiplier = 1f + missingHpRatio;
+        float statusMultiplier = caster.HostilityGenerationMultiplier;
+        return Mathf.Max(0f, healAmount) * healthMultiplier * statusMultiplier;
+    }
+
+    public static float GetVisibleHostility(BattleUnit _unit)
+    {
+        float baseHostility = _unit.Hostility; // ì›ë³¸(ë³€í•˜ì§€ ì•ŠìŒ)
+        return baseHostility;
+    }
+}

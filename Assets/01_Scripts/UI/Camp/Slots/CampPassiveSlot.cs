@@ -1,111 +1,111 @@
-using UnityEngine;
-using UnityEngine.UI;
-using System;
-
-public class CampPassiveSlot : MonoBehaviour
-{
-    [Header("UI Components")]
-    [SerializeField] private Text passiveNameText;   // ÀÏ¹İ/ÁøÇàÁß ÅØ½ºÆ®
-    [SerializeField] private Button awakenButton;    // ÇØ±İ ¹öÆ° (³ë¶õ»ö Awakened!!)
-    [SerializeField] private Text awakenBtnText;     // ¹öÆ° ³»ºÎ ÅØ½ºÆ®
-    [SerializeField] private Button selfButton;      // ÀÌ ½½·Ô ÀÚÃ¼¿¡ ´Ş¸° ¹öÆ° (Å¬¸¯ °¨Áö¿ë)
-    [SerializeField] private UI_ButtonFeedback visualFeedback;
-
-    private PassiveAsset _passive;
-
-    // µ¥ÀÌÅÍ ¼¼ÆÃ ¹× UI °»½Å
-    public void Setup(PassiveAsset passive, Action<string, string,Transform> onSelected)
-    {
-        _passive = passive;
-
-        // ¹öÆ° ÄÄÆ÷³ÍÆ® ÀÚµ¿ Ã£±â
-        if (selfButton == null) selfButton = GetComponent<Button>();
-        // ÇÇµå¹é ÄÄÆ÷³ÍÆ® ÀÚµ¿ Ã£±â
-        if (visualFeedback == null) visualFeedback = GetComponent<UI_ButtonFeedback>();
-
-        // ¹öÆ° ÀÌº¥Æ® ¿¬°á
-        selfButton.onClick.RemoveAllListeners();
-        selfButton.onClick.AddListener(() =>
-        {
-            if (_passive != null && _passive.IsUnlocked())
-            {
-                Transform target = (passiveNameText != null) ? passiveNameText.transform : this.transform;
-                onSelected?.Invoke(_passive.displayName, _passive.description, target);
-            }
-        });
-
-        RefreshState();
-    }
-
-    private void RefreshState()
-    {
-        if (_passive == null) return;
-
-        bool isUnlocked = _passive.IsUnlocked();
-        float progress = _passive.GetProgress(); // 0.0 ~ 1.0
-
-        if (isUnlocked)
-        {
-            // ÀÌ¹Ì ÇØ±İµÊ -> ÆĞ½Ãºê ÀÌ¸§ Ç¥½Ã
-            passiveNameText.gameObject.SetActive(true);
-            awakenButton.gameObject.SetActive(false);
-
-            passiveNameText.text = _passive.displayName;
-
-            if (visualFeedback != null)
-            {
-                visualFeedback.enabled = true; // ½ºÅ©¸³Æ® È°¼ºÈ­
-                visualFeedback.SetNormalColor(Color.white); // ±âÁØ »ö»ó Èò»ö
-            }
-            else
-            {
-                passiveNameText.color = Color.white;
-            }
-        }
-        else
-        {
-            // ÇØ±İ ¾È µÊ. ÁøÇàµµ Ã¼Å©
-            if (progress >= 1.0f)
-            {
-                // 100% ´Ş¼º -> Awakened ¹öÆ° È°¼ºÈ­
-                passiveNameText.gameObject.SetActive(false);
-                awakenButton.gameObject.SetActive(true);
-
-                awakenBtnText.text = "Awakened!!";
-
-                // ¹öÆ° Å¬¸¯ ÀÌº¥Æ® ¿¬°á (Áßº¹ ¹æÁö À§ÇØ ¸®½º³Ê ÃÊ±âÈ­)
-                awakenButton.onClick.RemoveAllListeners();
-                awakenButton.onClick.AddListener(OnClickAwaken);
-            }
-            else
-            {
-                // ÁøÇà Áß -> "Awakening... (88%)"
-                passiveNameText.gameObject.SetActive(true);
-                awakenButton.gameObject.SetActive(false);
-
-                int percent = Mathf.FloorToInt(progress * 100f);
-                passiveNameText.text = $"Awakening... ({percent}%)";
-
-                if (visualFeedback != null)
-                {
-                    visualFeedback.enabled = false;
-                }
-
-                // °­Á¦·Î È¸»ö Àû¿ë
-                passiveNameText.color = Color.gray;
-            }
-        }
-    }
-
-    // ¹öÆ° Å¬¸¯ ½Ã ½ÇÇà
-    private void OnClickAwaken()
-    {
-        if (_passive != null)
-        {
-            _passive.Unlock(); // µ¥ÀÌÅÍ ÇØ±İ Ã³¸®
-            RefreshState();    // UI Áï½Ã °»½Å (¹öÆ° -> ÀÌ¸§ ÅØ½ºÆ®·Î º¯°æµÊ)
-
-            // ÇÊ¿äÇÏ´Ù¸é »óÀ§ ÆäÀÌÁö¿¡ ¾Ë¸²À» º¸³»¼­ ÀüÃ¼ °»½ÅÀ» ÇÒ ¼öµµ ÀÖÀ½
-        }
-    }
+using UnityEngine;
+using UnityEngine.UI;
+using System;
+
+public class CampPassiveSlot : MonoBehaviour
+{
+    [Header("UI Components")]
+    [SerializeField] private Text passiveNameText;   // ì¼ë°˜/ì§„í–‰ì¤‘ í…ìŠ¤íŠ¸
+    [SerializeField] private Button awakenButton;    // í•´ê¸ˆ ë²„íŠ¼ (ë…¸ë€ìƒ‰ Awakened!!)
+    [SerializeField] private Text awakenBtnText;     // ë²„íŠ¼ ë‚´ë¶€ í…ìŠ¤íŠ¸
+    [SerializeField] private Button selfButton;      // ì´ ìŠ¬ë¡¯ ìì²´ì— ë‹¬ë¦° ë²„íŠ¼ (í´ë¦­ ê°ì§€ìš©)
+    [SerializeField] private UI_ButtonFeedback visualFeedback;
+
+    private PassiveAsset _passive;
+
+    // ë°ì´í„° ì„¸íŒ… ë° UI ê°±ì‹ 
+    public void Setup(PassiveAsset passive, Action<string, string,Transform> onSelected)
+    {
+        _passive = passive;
+
+        // ë²„íŠ¼ ì»´í¬ë„ŒíŠ¸ ìë™ ì°¾ê¸°
+        if (selfButton == null) selfButton = GetComponent<Button>();
+        // í”¼ë“œë°± ì»´í¬ë„ŒíŠ¸ ìë™ ì°¾ê¸°
+        if (visualFeedback == null) visualFeedback = GetComponent<UI_ButtonFeedback>();
+
+        // ë²„íŠ¼ ì´ë²¤íŠ¸ ì—°ê²°
+        selfButton.onClick.RemoveAllListeners();
+        selfButton.onClick.AddListener(() =>
+        {
+            if (_passive != null && _passive.IsUnlocked())
+            {
+                Transform target = (passiveNameText != null) ? passiveNameText.transform : this.transform;
+                onSelected?.Invoke(_passive.displayName, _passive.description, target);
+            }
+        });
+
+        RefreshState();
+    }
+
+    private void RefreshState()
+    {
+        if (_passive == null) return;
+
+        bool isUnlocked = _passive.IsUnlocked();
+        float progress = _passive.GetProgress(); // 0.0 ~ 1.0
+
+        if (isUnlocked)
+        {
+            // ì´ë¯¸ í•´ê¸ˆë¨ -> íŒ¨ì‹œë¸Œ ì´ë¦„ í‘œì‹œ
+            passiveNameText.gameObject.SetActive(true);
+            awakenButton.gameObject.SetActive(false);
+
+            passiveNameText.text = _passive.displayName;
+
+            if (visualFeedback != null)
+            {
+                visualFeedback.enabled = true; // ìŠ¤í¬ë¦½íŠ¸ í™œì„±í™”
+                visualFeedback.SetNormalColor(Color.white); // ê¸°ì¤€ ìƒ‰ìƒ í°ìƒ‰
+            }
+            else
+            {
+                passiveNameText.color = Color.white;
+            }
+        }
+        else
+        {
+            // í•´ê¸ˆ ì•ˆ ë¨. ì§„í–‰ë„ ì²´í¬
+            if (progress >= 1.0f)
+            {
+                // 100% ë‹¬ì„± -> Awakened ë²„íŠ¼ í™œì„±í™”
+                passiveNameText.gameObject.SetActive(false);
+                awakenButton.gameObject.SetActive(true);
+
+                awakenBtnText.text = "Awakened!!";
+
+                // ë²„íŠ¼ í´ë¦­ ì´ë²¤íŠ¸ ì—°ê²° (ì¤‘ë³µ ë°©ì§€ ìœ„í•´ ë¦¬ìŠ¤ë„ˆ ì´ˆê¸°í™”)
+                awakenButton.onClick.RemoveAllListeners();
+                awakenButton.onClick.AddListener(OnClickAwaken);
+            }
+            else
+            {
+                // ì§„í–‰ ì¤‘ -> "Awakening... (88%)"
+                passiveNameText.gameObject.SetActive(true);
+                awakenButton.gameObject.SetActive(false);
+
+                int percent = Mathf.FloorToInt(progress * 100f);
+                passiveNameText.text = $"Awakening... ({percent}%)";
+
+                if (visualFeedback != null)
+                {
+                    visualFeedback.enabled = false;
+                }
+
+                // ê°•ì œë¡œ íšŒìƒ‰ ì ìš©
+                passiveNameText.color = Color.gray;
+            }
+        }
+    }
+
+    // ë²„íŠ¼ í´ë¦­ ì‹œ ì‹¤í–‰
+    private void OnClickAwaken()
+    {
+        if (_passive != null)
+        {
+            _passive.Unlock(); // ë°ì´í„° í•´ê¸ˆ ì²˜ë¦¬
+            RefreshState();    // UI ì¦‰ì‹œ ê°±ì‹  (ë²„íŠ¼ -> ì´ë¦„ í…ìŠ¤íŠ¸ë¡œ ë³€ê²½ë¨)
+
+            // í•„ìš”í•˜ë‹¤ë©´ ìƒìœ„ í˜ì´ì§€ì— ì•Œë¦¼ì„ ë³´ë‚´ì„œ ì „ì²´ ê°±ì‹ ì„ í•  ìˆ˜ë„ ìˆìŒ
+        }
+    }
 }

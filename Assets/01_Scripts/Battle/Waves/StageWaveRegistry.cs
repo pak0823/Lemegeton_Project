@@ -1,27 +1,27 @@
-// StageWaveRegistry.cs
-using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
-
-[CreateAssetMenu(menuName = "Battle/Waves/Stage Wave Registry")]
-public class StageWaveRegistry : ScriptableObject
-{
-    //entries ¸®½ºÆ®¿¡ stageId(Å°)¿Í WaveSet(°ª) ½ÖÀ» µî·ÏÇÏ¿© BattleManager¿¡¼­ Ã£¾Æ ÀÚµ¿À¸·Î ÇÒ´çµÊ
-    [System.Serializable]
-    public class Entry
-    {
-        public string stageId;   // ¿¹: "Stage_1_1" È¤Àº ¾À ÀÌ¸§
-        public WaveSet waveSet;
-    }
-
-    public List<Entry> entries = new();
-
-    public WaveSet Find(string id)
-    {
-        if (string.IsNullOrEmpty(id)) return null;
-        // ¿ÏÀü ÀÏÄ¡ ¿ì¼± ¡æ (¿É¼Ç) ´ë¼Ò¹®ÀÚ ¹«½Ã
-        var e = entries.FirstOrDefault(x => x != null && x.stageId == id)
-             ?? entries.FirstOrDefault(x => x != null && x.stageId.Equals(id, System.StringComparison.OrdinalIgnoreCase));
-        return e != null ? e.waveSet : null;
-    }
-}
+// StageWaveRegistry.cs
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+[CreateAssetMenu(menuName = "Battle/Waves/Stage Wave Registry")]
+public class StageWaveRegistry : ScriptableObject
+{
+    //entries ë¦¬ìŠ¤íŠ¸ì— stageId(í‚¤)ì™€ WaveSet(ê°’) ìŒì„ ë“±ë¡í•˜ì—¬ BattleManagerì—ì„œ ì°¾ì•„ ìë™ìœ¼ë¡œ í• ë‹¹ë¨
+    [System.Serializable]
+    public class Entry
+    {
+        public string stageId;   // ì˜ˆ: "Stage_1_1" í˜¹ì€ ì”¬ ì´ë¦„
+        public WaveSet waveSet;
+    }
+
+    public List<Entry> entries = new();
+
+    public WaveSet Find(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        // ì™„ì „ ì¼ì¹˜ ìš°ì„  â†’ (ì˜µì…˜) ëŒ€ì†Œë¬¸ì ë¬´ì‹œ
+        var e = entries.FirstOrDefault(x => x != null && x.stageId == id)
+             ?? entries.FirstOrDefault(x => x != null && x.stageId.Equals(id, System.StringComparison.OrdinalIgnoreCase));
+        return e != null ? e.waveSet : null;
+    }
+}

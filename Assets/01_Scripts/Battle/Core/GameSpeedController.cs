@@ -1,194 +1,194 @@
-using UnityEngine;
-using UnityEngine.UI;
-
-public static class GamePause
-{
-    public static bool IsPaused = false;
-}
-
-public class GameSpeedController : MonoBehaviour
-{
-    public static GameSpeedController Instance { get; private set; }
-
-    [Header("Speed cycle")]
-    float[] speeds = { 1f, 2f, 3f, 0f };
-
-    [Header("UI")]
-    public Image buttonImage;          // ¹è¼Ó ¹öÆ°ÀÇ Image
-    public Sprite[] speedIcons;        // °¢ ¹è¼Ó¿¡ ´ëÀÀÇÏ´Â ¾ÆÀÌÄÜ(¹è¿­ ±æÀÌ = speeds ±æÀÌ)
-    public Text label;             // ¡°x1 / x2 / x3¡± Ç¥±â¿ë
-
-    int index = 0;
-    int lastNonZeroIndex = 0;     // ÃÖ±Ù¿¡ »ç¿ëÇÑ 0ÀÌ ¾Æ´Ñ ¼ÓµµÀÇ ÀÎµ¦½º
-    int prevIndexForHudPause = -1;// HUD·Î ÀÎÇÑ ÀÏ½ÃÁ¤Áö Á÷Àü ÀÎµ¦½º(º¹±Í¿ë)
-    float baseFixedDeltaTime;
-
-    private int pauseRequestCount = 0; // ÀÏ½ÃÁ¤Áö ¿äÃ» Ä«¿îÅÍ
-
-    [SerializeField] private CanvasGroup uiGroup;   // ÀüÃ¼ UI CanvasGroup ÂüÁ¶
-    [SerializeField] private Button speedButton;    // ¹è¼Ó ¹öÆ°
-    [SerializeField] private Button optionButton;   // ¿É¼Ç ¹öÆ°
-    [SerializeField] private Button escapeButton;   // Å»Ãâ ¹öÆ°
-
-    void Awake()
-    {
-        baseFixedDeltaTime = Time.fixedDeltaTime;
-        if(Instance == null) Instance = this;
-        else Destroy(gameObject);
-
-        Apply(); // ½ÃÀÛÀº 1x
-    }
-
-    void OnDisable()
-    {
-        // ¾À ÀüÈ¯/ºñÈ°¼º ½Ã ±âº»¼Óµµ·Î º¹¿ø
-        index = 0; 
-        Apply();
-        pauseRequestCount = 0; // ¾À ÀüÈ¯ ½Ã Ä«¿îÅÍ ÃÊ±âÈ­
-    }
-
-    public void RequestPause()  //ÀÏ½ÃÁ¤Áö ¿äÃ»
-    {
-        // Ã¹ ¹øÂ° ÀÏ½ÃÁ¤Áö ¿äÃ»ÀÏ ¶§¸¸ ÇöÀç ¼Óµµ¸¦ ±â¾ïÇÏ°í Á¤Áö
-        if (pauseRequestCount == 0)
-        {
-            PauseRemember();
-        }
-        pauseRequestCount++;
-    }
-
-    public void ReleasePause()  //ÀÏ½ÃÁ¤Áö ÇØÁ¦ ¿äÃ»
-    {
-        pauseRequestCount--;
-        if (pauseRequestCount < 0)
-        {
-            pauseRequestCount = 0; // À½¼ö°¡ µÇÁö ¾Êµµ·Ï ¹æ¾î
-        }
-
-        // ¸ğµç ÀÏ½ÃÁ¤Áö ¿äÃ»ÀÌ ÇØÁ¦µÇ¾úÀ» ¶§¸¸ ¿ø·¡ ¼Óµµ·Î º¹±Í
-        if (pauseRequestCount == 0)
-        {
-            ResumeRemembered();
-        }
-    }
-
-    // HUD°¡ ²¨Áú ¶§ È£Ãâ - ¡°²ô±â Á÷Àü ÀÎµ¦½º¡± ±â¾ï ÈÄ Á¤Áö·Î ÀüÈ¯
-    private void PauseRemember()
-    {
-        if (speeds[index] == 0f) // ÀÌ¹Ì Á¤Áö »óÅÂ¶ó¸é ±×³É ¹«½Ã
-        {
-            return;
-        }
-
-        // ÇöÀç ¼Óµµ¸¦ º¹±Í¿ëÀ¸·Î ÀúÀå
-        prevIndexForHudPause = index;
-
-        // Á¤Áö ÀÎµ¦½º¸¦ Ã£¾Æ¼­ ÀüÈ¯
-        int pauseIdx = IndexOfSpeed(0f);
-        if (pauseIdx < 0) pauseIdx = 0; // ¹æ¾î
-        SetSpeedIndex(pauseIdx);
-    }
-
-    // HUD°¡ ÄÑÁú ¶§ È£Ãâ - ¡°²ô±â Á÷Àü ÀÎµ¦½º(¶Ç´Â ¸¶Áö¸· À¯È¿ ¹è¼Ó)¡±·Î º¹±Í
-    private void ResumeRemembered()
-    {
-        // ¸¸¾à Á÷Àü¿¡ ÀÌ¹Ì Á¤Áö »óÅÂ¿´°í, ±â¾ïµÈ ¹è¼Óµµ ¾ø´Ù¸é -> Á¤Áö À¯Áö
-        if (prevIndexForHudPause < 0 && speeds[index] == 0f)
-        {
-            SetSpeedIndex(IndexOfSpeed(0f)); // ±×³É Á¤Áö À¯Áö
-            return;
-        }
-
-        int target = (prevIndexForHudPause >= 0) ? prevIndexForHudPause : lastNonZeroIndex;
-
-        // ¾ÈÀü¸Á: ¸¸¾à targetÀÌ 0(Á¤Áö)ÀÌ¸é lastNonZeroIndex·Î ½Ãµµ
-        if (speeds[target] == 0f) target = lastNonZeroIndex;
-
-        // µÑ ´Ù 0ÀÌ¾ú´Ù¸é ±âº» 1x(ÀÎµ¦½º 0)·Î
-        if (speeds[target] == 0f) target = 0;
-
-        SetSpeedIndex(target);
-        prevIndexForHudPause = -1; // ÇÑ ¹ø ¾²°í ºñ¿ò
-    }
-
-    public void OnBtnCycleSpeed(int step = 1) { index = (index + step + speeds.Length) % speeds.Length; Apply(); }
-
-    public void SetSpeedIndex(int i)
-    {
-        index = (i % speeds.Length + speeds.Length) % speeds.Length;
-        Apply();
-    }
-
-    void Apply()
-    {
-        float s = speeds[index];
-        Time.timeScale = s;
-        Time.fixedDeltaTime = baseFixedDeltaTime * (s > 0 ? s: 1f); // ¹°¸® º¸Æø µ¿±âÈ­
-
-        GamePause.IsPaused = (s == 0f);
-
-        // ¹öÆ° ´ÜÀ§·Î interactable ¼³Á¤
-        if(uiGroup)
-        {
-            // ÇÊ¿ä½Ã ºñÈ°¼º Æ÷ÇÔÇÏ°í ½ÍÀ¸¸é (true) »ç¿ë
-            var buttons = uiGroup.GetComponentsInChildren<Button>(true);
-            foreach (var btn in buttons)
-            {
-                if (!btn) continue; // È¤½Ã¶óµµ ÆÄ±« ÁßÀÌ¸é °Ç³Ê¶Ü
-
-                // ¹öÆ°ÀÌ IgnorePauseUI ÄÄÆ÷³ÍÆ®¸¦ °¡Áö°í ÀÖ´ÂÁö È®ÀÎ
-                if (btn.GetComponent<IgnorePauseUI>() != null)
-                {
-                    // °¡Áö°í ÀÖ´Ù¸é Ç×»ó È°¼ºÈ­
-                    btn.interactable = true;
-                }
-                else
-                {
-                    // °¡Áö°í ÀÖÁö ¾Ê´Ù¸é ÀÏ½ÃÁ¤Áö »óÅÂ¿¡ µû¶ó È°¼ºÈ­/ºñÈ°¼ºÈ­
-                    btn.interactable = !GamePause.IsPaused;
-                }
-            }
-        }
-        
-        // 0ÀÌ ¾Æ´Ñ ¹è¼ÓÀ¸·Î ÀüÈ¯µÉ ¶§¸¶´Ù ±â·Ï
-        if (s > 0f) lastNonZeroIndex = index;
-
-        // ¾ÆÀÌÄÜ/¶óº§ ¾÷µ¥ÀÌÆ®
-        UpdateVisuals();
-    }
-    // Æ¯Á¤ ¼Óµµ°ªÀÇ ÀÎµ¦½º¸¦ Ã£±â
-    int IndexOfSpeed(float value)
-    {
-        for (int i = 0; i < speeds.Length; i++)
-            if (Mathf.Approximately(speeds[i], value)) return i;
-        return -1;
-    }
-
-    void UpdateVisuals()
-    {
-        if (buttonImage != null && speedIcons != null && index < speedIcons.Length)
-        {
-            buttonImage.sprite = speedIcons[index];
-            // ¹öÆ° ÀÌ¹ÌÁö ºñÀ²ÀÌ ±úÁö¸é ÁÖ¼® ÇØÁ¦:
-            // buttonImage.SetNativeSize();
-            // buttonImage.preserveAspect = true;
-        }
-
-        // ¼ıÀÚ ¶óº§ Ç¥±â
-        if (label != null)
-        {
-            if (speeds[index] == 0f)
-                label.text = "||"; // Á¤Áö ¾ÆÀÌÄÜ ÅØ½ºÆ®
-            else
-            {
-                label.text = $"x{speeds[index]:0}";   // 1, 2, 3Ã³·³ Á¤¼ö·Î º¸ÀÌ°Ô ÇÏ°í ½ÍÀ¸¸é 0.# ´ë½Å 0 »ç¿ë
-            }
-
-            label.raycastTarget = false;    // ¶óº§ÀÌ ÀÔ·ÂÀ» °¡·ÎÃ¤Áö ¾Êµµ·Ï
-        }
-    }
-
-    public float CurrentSpeed => speeds[index];
-    
-    //public int CurrentIndex => index;   // (¿øÇÏ¸é ¿ÜºÎ¿¡¼­ ÇöÀç ÀÎµ¦½ºµµ È®ÀÎ °¡´ÉÇÏ°Ô)
-}
+using UnityEngine;
+using UnityEngine.UI;
+
+public static class GamePause
+{
+    public static bool IsPaused = false;
+}
+
+public class GameSpeedController : MonoBehaviour
+{
+    public static GameSpeedController Instance { get; private set; }
+
+    [Header("Speed cycle")]
+    float[] speeds = { 1f, 2f, 3f, 0f };
+
+    [Header("UI")]
+    public Image buttonImage;          // ë°°ì† ë²„íŠ¼ì˜ Image
+    public Sprite[] speedIcons;        // ê° ë°°ì†ì— ëŒ€ì‘í•˜ëŠ” ì•„ì´ì½˜(ë°°ì—´ ê¸¸ì´ = speeds ê¸¸ì´)
+    public Text label;             // â€œx1 / x2 / x3â€ í‘œê¸°ìš©
+
+    int index = 0;
+    int lastNonZeroIndex = 0;     // ìµœê·¼ì— ì‚¬ìš©í•œ 0ì´ ì•„ë‹Œ ì†ë„ì˜ ì¸ë±ìŠ¤
+    int prevIndexForHudPause = -1;// HUDë¡œ ì¸í•œ ì¼ì‹œì •ì§€ ì§ì „ ì¸ë±ìŠ¤(ë³µê·€ìš©)
+    float baseFixedDeltaTime;
+
+    private int pauseRequestCount = 0; // ì¼ì‹œì •ì§€ ìš”ì²­ ì¹´ìš´í„°
+
+    [SerializeField] private CanvasGroup uiGroup;   // ì „ì²´ UI CanvasGroup ì°¸ì¡°
+    [SerializeField] private Button speedButton;    // ë°°ì† ë²„íŠ¼
+    [SerializeField] private Button optionButton;   // ì˜µì…˜ ë²„íŠ¼
+    [SerializeField] private Button escapeButton;   // íƒˆì¶œ ë²„íŠ¼
+
+    void Awake()
+    {
+        baseFixedDeltaTime = Time.fixedDeltaTime;
+        if(Instance == null) Instance = this;
+        else Destroy(gameObject);
+
+        Apply(); // ì‹œì‘ì€ 1x
+    }
+
+    void OnDisable()
+    {
+        // ì”¬ ì „í™˜/ë¹„í™œì„± ì‹œ ê¸°ë³¸ì†ë„ë¡œ ë³µì›
+        index = 0; 
+        Apply();
+        pauseRequestCount = 0; // ì”¬ ì „í™˜ ì‹œ ì¹´ìš´í„° ì´ˆê¸°í™”
+    }
+
+    public void RequestPause()  //ì¼ì‹œì •ì§€ ìš”ì²­
+    {
+        // ì²« ë²ˆì§¸ ì¼ì‹œì •ì§€ ìš”ì²­ì¼ ë•Œë§Œ í˜„ì¬ ì†ë„ë¥¼ ê¸°ì–µí•˜ê³  ì •ì§€
+        if (pauseRequestCount == 0)
+        {
+            PauseRemember();
+        }
+        pauseRequestCount++;
+    }
+
+    public void ReleasePause()  //ì¼ì‹œì •ì§€ í•´ì œ ìš”ì²­
+    {
+        pauseRequestCount--;
+        if (pauseRequestCount < 0)
+        {
+            pauseRequestCount = 0; // ìŒìˆ˜ê°€ ë˜ì§€ ì•Šë„ë¡ ë°©ì–´
+        }
+
+        // ëª¨ë“  ì¼ì‹œì •ì§€ ìš”ì²­ì´ í•´ì œë˜ì—ˆì„ ë•Œë§Œ ì›ë˜ ì†ë„ë¡œ ë³µê·€
+        if (pauseRequestCount == 0)
+        {
+            ResumeRemembered();
+        }
+    }
+
+    // HUDê°€ êº¼ì§ˆ ë•Œ í˜¸ì¶œ - â€œë„ê¸° ì§ì „ ì¸ë±ìŠ¤â€ ê¸°ì–µ í›„ ì •ì§€ë¡œ ì „í™˜
+    private void PauseRemember()
+    {
+        if (speeds[index] == 0f) // ì´ë¯¸ ì •ì§€ ìƒíƒœë¼ë©´ ê·¸ëƒ¥ ë¬´ì‹œ
+        {
+            return;
+        }
+
+        // í˜„ì¬ ì†ë„ë¥¼ ë³µê·€ìš©ìœ¼ë¡œ ì €ì¥
+        prevIndexForHudPause = index;
+
+        // ì •ì§€ ì¸ë±ìŠ¤ë¥¼ ì°¾ì•„ì„œ ì „í™˜
+        int pauseIdx = IndexOfSpeed(0f);
+        if (pauseIdx < 0) pauseIdx = 0; // ë°©ì–´
+        SetSpeedIndex(pauseIdx);
+    }
+
+    // HUDê°€ ì¼œì§ˆ ë•Œ í˜¸ì¶œ - â€œë„ê¸° ì§ì „ ì¸ë±ìŠ¤(ë˜ëŠ” ë§ˆì§€ë§‰ ìœ íš¨ ë°°ì†)â€ë¡œ ë³µê·€
+    private void ResumeRemembered()
+    {
+        // ë§Œì•½ ì§ì „ì— ì´ë¯¸ ì •ì§€ ìƒíƒœì˜€ê³ , ê¸°ì–µëœ ë°°ì†ë„ ì—†ë‹¤ë©´ -> ì •ì§€ ìœ ì§€
+        if (prevIndexForHudPause < 0 && speeds[index] == 0f)
+        {
+            SetSpeedIndex(IndexOfSpeed(0f)); // ê·¸ëƒ¥ ì •ì§€ ìœ ì§€
+            return;
+        }
+
+        int target = (prevIndexForHudPause >= 0) ? prevIndexForHudPause : lastNonZeroIndex;
+
+        // ì•ˆì „ë§: ë§Œì•½ targetì´ 0(ì •ì§€)ì´ë©´ lastNonZeroIndexë¡œ ì‹œë„
+        if (speeds[target] == 0f) target = lastNonZeroIndex;
+
+        // ë‘˜ ë‹¤ 0ì´ì—ˆë‹¤ë©´ ê¸°ë³¸ 1x(ì¸ë±ìŠ¤ 0)ë¡œ
+        if (speeds[target] == 0f) target = 0;
+
+        SetSpeedIndex(target);
+        prevIndexForHudPause = -1; // í•œ ë²ˆ ì“°ê³  ë¹„ì›€
+    }
+
+    public void OnBtnCycleSpeed(int step = 1) { index = (index + step + speeds.Length) % speeds.Length; Apply(); }
+
+    public void SetSpeedIndex(int i)
+    {
+        index = (i % speeds.Length + speeds.Length) % speeds.Length;
+        Apply();
+    }
+
+    void Apply()
+    {
+        float s = speeds[index];
+        Time.timeScale = s;
+        Time.fixedDeltaTime = baseFixedDeltaTime * (s > 0 ? s: 1f); // ë¬¼ë¦¬ ë³´í­ ë™ê¸°í™”
+
+        GamePause.IsPaused = (s == 0f);
+
+        // ë²„íŠ¼ ë‹¨ìœ„ë¡œ interactable ì„¤ì •
+        if(uiGroup)
+        {
+            // í•„ìš”ì‹œ ë¹„í™œì„± í¬í•¨í•˜ê³  ì‹¶ìœ¼ë©´ (true) ì‚¬ìš©
+            var buttons = uiGroup.GetComponentsInChildren<Button>(true);
+            foreach (var btn in buttons)
+            {
+                if (!btn) continue; // í˜¹ì‹œë¼ë„ íŒŒê´´ ì¤‘ì´ë©´ ê±´ë„ˆëœ€
+
+                // ë²„íŠ¼ì´ IgnorePauseUI ì»´í¬ë„ŒíŠ¸ë¥¼ ê°€ì§€ê³  ìˆëŠ”ì§€ í™•ì¸
+                if (btn.GetComponent<IgnorePauseUI>() != null)
+                {
+                    // ê°€ì§€ê³  ìˆë‹¤ë©´ í•­ìƒ í™œì„±í™”
+                    btn.interactable = true;
+                }
+                else
+                {
+                    // ê°€ì§€ê³  ìˆì§€ ì•Šë‹¤ë©´ ì¼ì‹œì •ì§€ ìƒíƒœì— ë”°ë¼ í™œì„±í™”/ë¹„í™œì„±í™”
+                    btn.interactable = !GamePause.IsPaused;
+                }
+            }
+        }
+        
+        // 0ì´ ì•„ë‹Œ ë°°ì†ìœ¼ë¡œ ì „í™˜ë  ë•Œë§ˆë‹¤ ê¸°ë¡
+        if (s > 0f) lastNonZeroIndex = index;
+
+        // ì•„ì´ì½˜/ë¼ë²¨ ì—…ë°ì´íŠ¸
+        UpdateVisuals();
+    }
+    // íŠ¹ì • ì†ë„ê°’ì˜ ì¸ë±ìŠ¤ë¥¼ ì°¾ê¸°
+    int IndexOfSpeed(float value)
+    {
+        for (int i = 0; i < speeds.Length; i++)
+            if (Mathf.Approximately(speeds[i], value)) return i;
+        return -1;
+    }
+
+    void UpdateVisuals()
+    {
+        if (buttonImage != null && speedIcons != null && index < speedIcons.Length)
+        {
+            buttonImage.sprite = speedIcons[index];
+            // ë²„íŠ¼ ì´ë¯¸ì§€ ë¹„ìœ¨ì´ ê¹¨ì§€ë©´ ì£¼ì„ í•´ì œ:
+            // buttonImage.SetNativeSize();
+            // buttonImage.preserveAspect = true;
+        }
+
+        // ìˆ«ì ë¼ë²¨ í‘œê¸°
+        if (label != null)
+        {
+            if (speeds[index] == 0f)
+                label.text = "||"; // ì •ì§€ ì•„ì´ì½˜ í…ìŠ¤íŠ¸
+            else
+            {
+                label.text = $"x{speeds[index]:0}";   // 1, 2, 3ì²˜ëŸ¼ ì •ìˆ˜ë¡œ ë³´ì´ê²Œ í•˜ê³  ì‹¶ìœ¼ë©´ 0.# ëŒ€ì‹  0 ì‚¬ìš©
+            }
+
+            label.raycastTarget = false;    // ë¼ë²¨ì´ ì…ë ¥ì„ ê°€ë¡œì±„ì§€ ì•Šë„ë¡
+        }
+    }
+
+    public float CurrentSpeed => speeds[index];
+    
+    //public int CurrentIndex => index;   // (ì›í•˜ë©´ ì™¸ë¶€ì—ì„œ í˜„ì¬ ì¸ë±ìŠ¤ë„ í™•ì¸ ê°€ëŠ¥í•˜ê²Œ)
+}

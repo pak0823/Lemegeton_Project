@@ -1,48 +1,48 @@
-using UnityEngine;
-
-namespace Project
-{
-    public static class GameResetter
-    {
-        /// <summary>
-        /// deleteSaves=true¸é ÀúÀå µ¥ÀÌÅÍ±îÁö ÀüºÎ »èÁ¦(°øÀåÃÊ±âÈ­).
-        /// false¸é ·±Å¸ÀÓ »óÅÂ¸¸ ÃÊ±âÈ­(»õ °ÔÀÓ ½ÃÀÛ¿ë).
-        /// </summary>
-        public static void ResetAll(bool deleteSaves = false)
-        {
-            // Å¸ÀÓ/ÀÏ½ÃÁ¤Áö
-            GamePause.IsPaused = false; // Àü¿ª ÀÏ½ÃÁ¤Áö ÇØÁ¦
-            Time.timeScale = 1f;        // È¤½Ã ¸ğ¸¦ ¹è¼Ó ÀÜ»ó Á¦°Å
-
-            var speed = Object.FindObjectOfType<GameSpeedController>();
-            if (speed) speed.SetSpeedIndex(0); // ¹è¼Ó/°íÁ¤µ¨Å¸ ¿øº¹
-
-            // Á¤Àû ÀÌº¥Æ®/Ä³½Ã ºñ¿ì±â (¾À °£ ÀÜ»ó ¹æÁö)
-            BattleManager.ClearStatic();
-
-            if (SceneTransitionManager.Instance != null)
-            {
-                // ¸Ê ÇÁ¸®ÆÕ ¿À¹ö¶óÀÌµå Á¦°Å ¡æ »õ °ÔÀÓÀº Ç×»ó »õ ¸Ê °áÁ¤À» ÇÏµµ·Ï
-                SceneTransitionManager.Instance.explorationMapPrefabOverride = null;
-                // ½º³À¼¦/±ÍÈ¯ÁöÁ¡ Á¦°Å ¡æ »óÅÂ/°ÔÀÌÁö/¿ÀºêÁ§Æ® º¹¿ø ±İÁö
-                SceneTransitionManager.Instance.ClearExplorationSnapshot();
-            }
-
-            // ³²¾ÆÀÖÀ» ¼ö ÀÖ´Â ·±Å¸ÀÓ ½Ì±ÛÅæ Á¦°Å(ÀÖÀ» ¶§¸¸)
-            if (StageRuntimeContext.Instance != null)
-                Object.Destroy(StageRuntimeContext.Instance.gameObject);
-
-            if (PuzzleManager.Instance != null)
-            {
-                PuzzleManager.Instance.ClearMaps(); // Å¸ÀÏ¸Ê/¸ñÇ¥/Ä³½Ã ºñ¿ì±â
-            }
-
-            // ÀúÀå µ¥ÀÌÅÍ »èÁ¦(¼±ÅÃ)
-            if (deleteSaves)
-            {
-                PlayerPrefs.DeleteAll();
-                PlayerPrefs.Save(); // µ¿±â ÇÃ·¯½Ã
-            }
-        }
-    }
-}
+using UnityEngine;
+
+namespace Project
+{
+    public static class GameResetter
+    {
+        /// <summary>
+        /// deleteSaves=trueë©´ ì €ì¥ ë°ì´í„°ê¹Œì§€ ì „ë¶€ ì‚­ì œ(ê³µì¥ì´ˆê¸°í™”).
+        /// falseë©´ ëŸ°íƒ€ì„ ìƒíƒœë§Œ ì´ˆê¸°í™”(ìƒˆ ê²Œì„ ì‹œì‘ìš©).
+        /// </summary>
+        public static void ResetAll(bool deleteSaves = false)
+        {
+            // íƒ€ì„/ì¼ì‹œì •ì§€
+            GamePause.IsPaused = false; // ì „ì—­ ì¼ì‹œì •ì§€ í•´ì œ
+            Time.timeScale = 1f;        // í˜¹ì‹œ ëª¨ë¥¼ ë°°ì† ì”ìƒ ì œê±°
+
+            var speed = Object.FindObjectOfType<GameSpeedController>();
+            if (speed) speed.SetSpeedIndex(0); // ë°°ì†/ê³ ì •ë¸íƒ€ ì›ë³µ
+
+            // ì •ì  ì´ë²¤íŠ¸/ìºì‹œ ë¹„ìš°ê¸° (ì”¬ ê°„ ì”ìƒ ë°©ì§€)
+            BattleManager.ClearStatic();
+
+            if (SceneTransitionManager.Instance != null)
+            {
+                // ë§µ í”„ë¦¬íŒ¹ ì˜¤ë²„ë¼ì´ë“œ ì œê±° â†’ ìƒˆ ê²Œì„ì€ í•­ìƒ ìƒˆ ë§µ ê²°ì •ì„ í•˜ë„ë¡
+                SceneTransitionManager.Instance.explorationMapPrefabOverride = null;
+                // ìŠ¤ëƒ…ìƒ·/ê·€í™˜ì§€ì  ì œê±° â†’ ìƒíƒœ/ê²Œì´ì§€/ì˜¤ë¸Œì íŠ¸ ë³µì› ê¸ˆì§€
+                SceneTransitionManager.Instance.ClearExplorationSnapshot();
+            }
+
+            // ë‚¨ì•„ìˆì„ ìˆ˜ ìˆëŠ” ëŸ°íƒ€ì„ ì‹±ê¸€í†¤ ì œê±°(ìˆì„ ë•Œë§Œ)
+            if (StageRuntimeContext.Instance != null)
+                Object.Destroy(StageRuntimeContext.Instance.gameObject);
+
+            if (PuzzleManager.Instance != null)
+            {
+                PuzzleManager.Instance.ClearMaps(); // íƒ€ì¼ë§µ/ëª©í‘œ/ìºì‹œ ë¹„ìš°ê¸°
+            }
+
+            // ì €ì¥ ë°ì´í„° ì‚­ì œ(ì„ íƒ)
+            if (deleteSaves)
+            {
+                PlayerPrefs.DeleteAll();
+                PlayerPrefs.Save(); // ë™ê¸° í”ŒëŸ¬ì‹œ
+            }
+        }
+    }
+}

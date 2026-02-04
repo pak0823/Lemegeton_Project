@@ -1,201 +1,201 @@
-using System.Collections.Generic;
-using System.Linq; // ¸®½ºÆ® ÇÊÅÍ¸µ¿ë
-using TMPro;
-using Unity.VisualScripting;
-using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
-using UnityEngine.UI;
-
-public class CampCraftPage : MonoBehaviour
-{
-    [Header("Data Source")]
-    public List<CraftRecipe> allDatabaseRecipes; // °ÔÀÓÀÇ ¸ğµç ·¹½ÃÇÇ¸¦ ¿©±â¿¡ µî·Ï (Project ÅÇ¿¡¼­ µå·¡±×)
-
-    [Header("Left Detail")]
-    public Transform listContent;
-    public GameObject recipeSlotPrefab; // ¸®½ºÆ®¿¡ ¶ã ½½·Ô ÇÁ¸®ÆÕ
-
-    [Header("Right List")]
-    public Transform materialGrid;
-    public GameObject materialIconPrefab; // Àç·á ¾ÆÀÌÄÜ ÇÁ¸®ÆÕ
-    public Button craftButton;
-    public Text warningText;
-
-    [Header("UI - Panels")]
-    public GameObject panelPreCraft;  // ÁØºñ ÆĞ³Î
-    public GameObject panelPostCraft; // °á°ú ÆĞ³Î
-
-    [Header("UI - Post Craft (Result)")]
-    public Image resultDetailIcon;    // °á°úÃ¢ÀÇ Å« ¾ÆÀÌÄÜ
-    public Button btnCollect;         // ¸ğµÎ È¹µæ ¹öÆ°
-    public Button btnDiscard;         // Æ÷±â ¹öÆ°
-    public Text txtInvenFull; // ÀÎº¥Åä¸® ºÎÁ· °æ°í
-
-    [Header("Description")] // ¼³¸íÃ¢ °ü·Ã º¯¼ö
-    public Text txtSelectedName; // ÇÏ´Ü ¾ÆÀÌÅÛ ÀÌ¸§
-    public Text txtSelectedDesc; // ÇÏ´Ü ¾ÆÀÌÅÛ ¼³¸í
-
-
-    // »óÅÂ °ü¸®¿ë º¯¼ö
-    private bool isResultState = false;
-
-    private AsyncOperationHandle<Sprite> _handle;
-    private CraftRecipe currentSelectedRecipe;
-
-    private void Start()
-    {
-        if (craftButton != null) craftButton.onClick.AddListener(TryCraft);
-
-        if (btnCollect != null) btnCollect.onClick.AddListener(OnClickCollect);
-        if (btnDiscard != null) btnDiscard.onClick.AddListener(OnClickDiscard);
-
-        SwitchState(false);
-    }
-    private void OnDestroy() 
-    {
-        if (_handle.IsValid()) Addressables.Release(_handle);
-    }
-
-    private void SwitchState(bool isResult)
-    {
-        isResultState = isResult;
-        panelPreCraft.SetActive(!isResult);
-        panelPostCraft.SetActive(isResult);
-
-        // °á°úÃ¢ÀÌ ¶¹À» ¶§´Â »óÀ§ ¸Å´ÏÀú¿¡°Ô "´İÁö ¸¶!" ½ÅÈ£ º¸³»±â (¿É¼Ç)
-        // CampUIManager.Instance.SetCloseLock(isResult); 
-    }
-
-    // Çì´õ¿¡¼­ È£ÃâÇÏ´Â ÇÔ¼ö (ÇÊÅÍ¸µ)
-    public void FilterRecipesByMaterial(ItemData material)
-    {
-        // ±âÁ¸ ¸®½ºÆ® Å¬¸®¾î
-        foreach (Transform child in listContent) Destroy(child.gameObject);
-
-        // ÇØ´ç Àç·á¸¦ ÇÏ³ª¶óµµ Æ÷ÇÔÇÏ´Â ·¹½ÃÇÇ¸¸ Ã£±â (LINQ »ç¿ë)
-        var filteredRecipes = allDatabaseRecipes.Where(r =>
-            r.ingredients.Any(i => i.material == material)
-        ).ToList();
-
-        // Ã£Àº ·¹½ÃÇÇµéÀ» ¸®½ºÆ®¿¡ »ı¼º
-        foreach (var recipe in filteredRecipes)
-        {
-            GameObject slotObj = Instantiate(recipeSlotPrefab, listContent);
-
-            CraftSlotUI slotUI = slotObj.GetComponent<CraftSlotUI>();
-
-            if (slotUI != null)
-            {
-                // Setup ÇÔ¼ö¿¡ ·¹½ÃÇÇ¶û, Å¬¸¯ÇßÀ» ¶§ ÇÒ Çàµ¿(ShowDetail)À» ³Ñ°ÜÁÜ
-                slotUI.Setup(recipe, () => ShowDetail(recipe));
-            }
-        }
-
-        // ¸ñ·ÏÀÌ ÀÖÀ¸¸é Ã¹ ¹øÂ° ³ğ ÀÚµ¿ ¼±ÅÃ
-        if (filteredRecipes.Count > 0) ShowDetail(filteredRecipes[0]);
-        else ClearDetail();
-    }
-
-    // »ó¼¼ Á¤º¸ Ç¥½Ã
-    private void ShowDetail(CraftRecipe recipe)
-    {
-        // °á°ú Ã¢ÀÌ ¶°ÀÖ´Â »óÅÂ¶ó¸é ´Ù¸¥ ·¹½ÃÇÇ Å¬¸¯À» ¸·°Å³ª ¹«½ÃÇØ¾ß ÇÔ
-        if (isResultState) return;
-
-        currentSelectedRecipe = recipe;
-        SwitchState(false); // ÁØºñ È­¸éÀ¸·Î ÀüÈ¯
-
-        // Àç·á ±×¸®µå °»½Å
-        foreach (Transform child in materialGrid) Destroy(child.gameObject);
-
-        // ÇÏ´Ü ÅØ½ºÆ® °»½Å ·ÎÁ÷ -----------------------
-        if (txtSelectedName != null)
-            txtSelectedName.text = recipe.resultItem.itemName;
-
-        if (txtSelectedDesc != null)
-            txtSelectedDesc.text = recipe.resultItem.itemDescription;
-
-        bool isCraftable = true;
-
-        foreach (var ing in recipe.ingredients)
-        {
-            GameObject matObj = Instantiate(materialIconPrefab, materialGrid);
-
-            MaterialSlotUI matUI = matObj.GetComponent<MaterialSlotUI>();
-
-            // ÀÓ½Ã º¸À¯·® (³ªÁß¿¡ ÀÎº¥Åä¸® ¿¬°á)
-            int myCount = InventoryManager.Instance.GetItemCount(ing.material.itemID); // ½Ç½Ã°£ µ¥ÀÌÅÍ ¿¬µ¿
-
-            if (matUI != null)
-            {
-                matUI.Setup(ing.material, myCount, ing.requiredCount);
-            }
-
-            if (myCount < ing.requiredCount) isCraftable = false;
-        }
-
-        craftButton.interactable = isCraftable;
-        warningText.text = isCraftable ? "" : "Àç·á°¡ ºÎÁ·ÇÕ´Ï´Ù";
-    }
-
-    // Á¦ÀÛ ½ÇÇà ÇÔ¼ö
-    private void TryCraft()
-    {
-        if (currentSelectedRecipe == null) return;
-
-        // Àç·á ¼Ò¸ğ
-        foreach (var ing in currentSelectedRecipe.ingredients)
-        {
-            InventoryManager.Instance.ConsumeItem(ing.material.itemID, ing.requiredCount);
-        }
-
-        // °á°ú È­¸é ¼¼ÆÃ
-        _handle = Addressables.LoadAssetAsync<Sprite>(currentSelectedRecipe.resultItem.GetAtlasKey());
-        _handle.Completed += h => {
-            if (h.Status == AsyncOperationStatus.Succeeded) resultDetailIcon.sprite = h.Result;
-        };
-        txtInvenFull.gameObject.SetActive(false); // °æ°í ²ô±â
-
-        Debug.Log($"Á¦ÀÛ ¼º°ø: {currentSelectedRecipe.resultItem.itemName}");
-
-        // È­¸é ÀüÈ¯ (ÁØºñ -> °á°ú)
-        SwitchState(true);
-    }
-
-    private void OnClickCollect()
-    {
-        // ÀÎº¥Åä¸® °ø°£ Ã¼Å© (°¡Á¤)
-        // if (!InventoryManager.Instance.HasSpace()) 
-        // {
-        //     txtInvenFull.gameObject.SetActive(true);
-        //     return; 
-        // }
-
-        // ¾ÆÀÌÅÛ Áö±Ş
-        InventoryManager.Instance.AddItem(currentSelectedRecipe.resultItem.itemID, 1);
-
-        // ´Ù½Ã ÁØºñ È­¸éÀ¸·Î º¹±Í
-        SwitchState(false);
-
-        // Àç·á°¡ ¼Ò¸ğµÆÀ¸´Ï UI °»½Å (´Ù½Ã ±×¸®±â)
-        ShowDetail(currentSelectedRecipe);
-    }
-    // [Æ÷±â] ¹öÆ° ·ÎÁ÷
-    private void OnClickDiscard()
-    {
-        // ±×³É È¹µæ ¾È ÇÏ°í µ¹¾Æ°¨
-        SwitchState(false);
-        ShowDetail(currentSelectedRecipe);
-    }
-
-    private void ClearDetail()
-    {
-        foreach (Transform child in materialGrid) Destroy(child.gameObject);
-        craftButton.interactable = false;
-        warningText.text = "·¹½ÃÇÇ¸¦ ¼±ÅÃÇØÁÖ¼¼¿ä.";
-
-        if (txtSelectedName != null) txtSelectedName.text = "";
-        if (txtSelectedDesc != null) txtSelectedDesc.text = "";
-    }
+using System.Collections.Generic;
+using System.Linq; // ë¦¬ìŠ¤íŠ¸ í•„í„°ë§ìš©
+using TMPro;
+using Unity.VisualScripting;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
+
+public class CampCraftPage : MonoBehaviour
+{
+    [Header("Data Source")]
+    public List<CraftRecipe> allDatabaseRecipes; // ê²Œì„ì˜ ëª¨ë“  ë ˆì‹œí”¼ë¥¼ ì—¬ê¸°ì— ë“±ë¡ (Project íƒ­ì—ì„œ ë“œë˜ê·¸)
+
+    [Header("Left Detail")]
+    public Transform listContent;
+    public GameObject recipeSlotPrefab; // ë¦¬ìŠ¤íŠ¸ì— ëœ° ìŠ¬ë¡¯ í”„ë¦¬íŒ¹
+
+    [Header("Right List")]
+    public Transform materialGrid;
+    public GameObject materialIconPrefab; // ì¬ë£Œ ì•„ì´ì½˜ í”„ë¦¬íŒ¹
+    public Button craftButton;
+    public Text warningText;
+
+    [Header("UI - Panels")]
+    public GameObject panelPreCraft;  // ì¤€ë¹„ íŒ¨ë„
+    public GameObject panelPostCraft; // ê²°ê³¼ íŒ¨ë„
+
+    [Header("UI - Post Craft (Result)")]
+    public Image resultDetailIcon;    // ê²°ê³¼ì°½ì˜ í° ì•„ì´ì½˜
+    public Button btnCollect;         // ëª¨ë‘ íšë“ ë²„íŠ¼
+    public Button btnDiscard;         // í¬ê¸° ë²„íŠ¼
+    public Text txtInvenFull; // ì¸ë²¤í† ë¦¬ ë¶€ì¡± ê²½ê³ 
+
+    [Header("Description")] // ì„¤ëª…ì°½ ê´€ë ¨ ë³€ìˆ˜
+    public Text txtSelectedName; // í•˜ë‹¨ ì•„ì´í…œ ì´ë¦„
+    public Text txtSelectedDesc; // í•˜ë‹¨ ì•„ì´í…œ ì„¤ëª…
+
+
+    // ìƒíƒœ ê´€ë¦¬ìš© ë³€ìˆ˜
+    private bool isResultState = false;
+
+    private AsyncOperationHandle<Sprite> _handle;
+    private CraftRecipe currentSelectedRecipe;
+
+    private void Start()
+    {
+        if (craftButton != null) craftButton.onClick.AddListener(TryCraft);
+
+        if (btnCollect != null) btnCollect.onClick.AddListener(OnClickCollect);
+        if (btnDiscard != null) btnDiscard.onClick.AddListener(OnClickDiscard);
+
+        SwitchState(false);
+    }
+    private void OnDestroy() 
+    {
+        if (_handle.IsValid()) Addressables.Release(_handle);
+    }
+
+    private void SwitchState(bool isResult)
+    {
+        isResultState = isResult;
+        panelPreCraft.SetActive(!isResult);
+        panelPostCraft.SetActive(isResult);
+
+        // ê²°ê³¼ì°½ì´ ë–´ì„ ë•ŒëŠ” ìƒìœ„ ë§¤ë‹ˆì €ì—ê²Œ "ë‹«ì§€ ë§ˆ!" ì‹ í˜¸ ë³´ë‚´ê¸° (ì˜µì…˜)
+        // CampUIManager.Instance.SetCloseLock(isResult); 
+    }
+
+    // í—¤ë”ì—ì„œ í˜¸ì¶œí•˜ëŠ” í•¨ìˆ˜ (í•„í„°ë§)
+    public void FilterRecipesByMaterial(ItemData material)
+    {
+        // ê¸°ì¡´ ë¦¬ìŠ¤íŠ¸ í´ë¦¬ì–´
+        foreach (Transform child in listContent) Destroy(child.gameObject);
+
+        // í•´ë‹¹ ì¬ë£Œë¥¼ í•˜ë‚˜ë¼ë„ í¬í•¨í•˜ëŠ” ë ˆì‹œí”¼ë§Œ ì°¾ê¸° (LINQ ì‚¬ìš©)
+        var filteredRecipes = allDatabaseRecipes.Where(r =>
+            r.ingredients.Any(i => i.material == material)
+        ).ToList();
+
+        // ì°¾ì€ ë ˆì‹œí”¼ë“¤ì„ ë¦¬ìŠ¤íŠ¸ì— ìƒì„±
+        foreach (var recipe in filteredRecipes)
+        {
+            GameObject slotObj = Instantiate(recipeSlotPrefab, listContent);
+
+            CraftSlotUI slotUI = slotObj.GetComponent<CraftSlotUI>();
+
+            if (slotUI != null)
+            {
+                // Setup í•¨ìˆ˜ì— ë ˆì‹œí”¼ë‘, í´ë¦­í–ˆì„ ë•Œ í•  í–‰ë™(ShowDetail)ì„ ë„˜ê²¨ì¤Œ
+                slotUI.Setup(recipe, () => ShowDetail(recipe));
+            }
+        }
+
+        // ëª©ë¡ì´ ìˆìœ¼ë©´ ì²« ë²ˆì§¸ ë†ˆ ìë™ ì„ íƒ
+        if (filteredRecipes.Count > 0) ShowDetail(filteredRecipes[0]);
+        else ClearDetail();
+    }
+
+    // ìƒì„¸ ì •ë³´ í‘œì‹œ
+    private void ShowDetail(CraftRecipe recipe)
+    {
+        // ê²°ê³¼ ì°½ì´ ë– ìˆëŠ” ìƒíƒœë¼ë©´ ë‹¤ë¥¸ ë ˆì‹œí”¼ í´ë¦­ì„ ë§‰ê±°ë‚˜ ë¬´ì‹œí•´ì•¼ í•¨
+        if (isResultState) return;
+
+        currentSelectedRecipe = recipe;
+        SwitchState(false); // ì¤€ë¹„ í™”ë©´ìœ¼ë¡œ ì „í™˜
+
+        // ì¬ë£Œ ê·¸ë¦¬ë“œ ê°±ì‹ 
+        foreach (Transform child in materialGrid) Destroy(child.gameObject);
+
+        // í•˜ë‹¨ í…ìŠ¤íŠ¸ ê°±ì‹  ë¡œì§ -----------------------
+        if (txtSelectedName != null)
+            txtSelectedName.text = recipe.resultItem.itemName;
+
+        if (txtSelectedDesc != null)
+            txtSelectedDesc.text = recipe.resultItem.itemDescription;
+
+        bool isCraftable = true;
+
+        foreach (var ing in recipe.ingredients)
+        {
+            GameObject matObj = Instantiate(materialIconPrefab, materialGrid);
+
+            MaterialSlotUI matUI = matObj.GetComponent<MaterialSlotUI>();
+
+            // ì„ì‹œ ë³´ìœ ëŸ‰ (ë‚˜ì¤‘ì— ì¸ë²¤í† ë¦¬ ì—°ê²°)
+            int myCount = InventoryManager.Instance.GetItemCount(ing.material.itemID); // ì‹¤ì‹œê°„ ë°ì´í„° ì—°ë™
+
+            if (matUI != null)
+            {
+                matUI.Setup(ing.material, myCount, ing.requiredCount);
+            }
+
+            if (myCount < ing.requiredCount) isCraftable = false;
+        }
+
+        craftButton.interactable = isCraftable;
+        warningText.text = isCraftable ? "" : "ì¬ë£Œê°€ ë¶€ì¡±í•©ë‹ˆë‹¤";
+    }
+
+    // ì œì‘ ì‹¤í–‰ í•¨ìˆ˜
+    private void TryCraft()
+    {
+        if (currentSelectedRecipe == null) return;
+
+        // ì¬ë£Œ ì†Œëª¨
+        foreach (var ing in currentSelectedRecipe.ingredients)
+        {
+            InventoryManager.Instance.ConsumeItem(ing.material.itemID, ing.requiredCount);
+        }
+
+        // ê²°ê³¼ í™”ë©´ ì„¸íŒ…
+        _handle = Addressables.LoadAssetAsync<Sprite>(currentSelectedRecipe.resultItem.GetAtlasKey());
+        _handle.Completed += h => {
+            if (h.Status == AsyncOperationStatus.Succeeded) resultDetailIcon.sprite = h.Result;
+        };
+        txtInvenFull.gameObject.SetActive(false); // ê²½ê³  ë„ê¸°
+
+        Debug.Log($"ì œì‘ ì„±ê³µ: {currentSelectedRecipe.resultItem.itemName}");
+
+        // í™”ë©´ ì „í™˜ (ì¤€ë¹„ -> ê²°ê³¼)
+        SwitchState(true);
+    }
+
+    private void OnClickCollect()
+    {
+        // ì¸ë²¤í† ë¦¬ ê³µê°„ ì²´í¬ (ê°€ì •)
+        // if (!InventoryManager.Instance.HasSpace()) 
+        // {
+        //     txtInvenFull.gameObject.SetActive(true);
+        //     return; 
+        // }
+
+        // ì•„ì´í…œ ì§€ê¸‰
+        InventoryManager.Instance.AddItem(currentSelectedRecipe.resultItem.itemID, 1);
+
+        // ë‹¤ì‹œ ì¤€ë¹„ í™”ë©´ìœ¼ë¡œ ë³µê·€
+        SwitchState(false);
+
+        // ì¬ë£Œê°€ ì†Œëª¨ëìœ¼ë‹ˆ UI ê°±ì‹  (ë‹¤ì‹œ ê·¸ë¦¬ê¸°)
+        ShowDetail(currentSelectedRecipe);
+    }
+    // [í¬ê¸°] ë²„íŠ¼ ë¡œì§
+    private void OnClickDiscard()
+    {
+        // ê·¸ëƒ¥ íšë“ ì•ˆ í•˜ê³  ëŒì•„ê°
+        SwitchState(false);
+        ShowDetail(currentSelectedRecipe);
+    }
+
+    private void ClearDetail()
+    {
+        foreach (Transform child in materialGrid) Destroy(child.gameObject);
+        craftButton.interactable = false;
+        warningText.text = "ë ˆì‹œí”¼ë¥¼ ì„ íƒí•´ì£¼ì„¸ìš”.";
+
+        if (txtSelectedName != null) txtSelectedName.text = "";
+        if (txtSelectedDesc != null) txtSelectedDesc.text = "";
+    }
 }

@@ -1,322 +1,322 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class ExplorationLogUI : MonoBehaviour
-{
-    public static ExplorationLogUI Instance {  get; private set; }
-
-    private bool pauseGameOnPush = false;          // ·Î±×°¡ ¶ã ¶§ °ÔÀÓµµ ¸ØÃâÁö
-
-    [Header("Layout")]
-    [SerializeField] Transform contentRoot;     // VerticalLayoutGroup ºÙ¾îÀÖ´Â ÄÁÅ×ÀÌ³Ê
-    [SerializeField] Text logItemPrefab;        // ÇÑ ÁÙ¿ë Text ÇÁ¸®ÆÕ
-
-    [Header("Config")]
-    int maxEntries = 10;        // Ç¥½Ã ÃÖ´ë °³¼ö
-    float defaultLifetime = 10f;    // ±âº» À¯Áö ½Ã°£(ÃÊ)
-
-    [Header("Style")]
-    [SerializeField] Color newestColor = Color.white; // °¡Àå ÃÖ±Ù ·Î±× »ö
-    [SerializeField] Color olderColor = new Color(147f / 255f, 147f / 255f, 147f / 255f, 1f); // ÀÌÀü ·Î±× »ö
-
-    [Header("Typing")]
-    [SerializeField] bool enableTypewriter = true;  // Å¸ÀÚ±â È¿°ú
-    [SerializeField] float charsPerSecond = 40f;   // ÃÊ´ç ±ÛÀÚ ¼ö
-    [SerializeField] bool preserveRichText = true;  // <b> µî ÅÂ±×´Â ÇÑ ¹ø¿¡
-    [SerializeField] int baseFontSize = 20; // ±âº»(ÀÌÀü ·Î±×) ±Û¾¾ Å©±â
-    [SerializeField] int newestFontSize = 24; // ÃÖ½Å ·Î±× ±Û¾¾ Å©±â
-
-    [Header("Effects")]
-    [SerializeField] bool fadeOnAdd = true;   // µîÀå ÆäÀÌµå »ç¿ë
-    [SerializeField] float fadeInSeconds = 0.15f;
-    [SerializeField] bool fadeOnRemove = true;       // Á¦°Å ½Ã ÆäÀÌµå ¿©ºÎ
-    [SerializeField] float fadeOutSeconds = 0.25f;
-
-    [Header("Behavior")]
-    [SerializeField] bool pauseOnPush = true;  // ·Î±× ¶ç¿ï ¶§ Àá±ñ Á¤Áö(ÇÃ·¹ÀÌ¾î+Å½Çè Å¸ÀÌ¸Ó)
-    [SerializeField] float pushPauseSeconds = 1.0f;
-
-    private Coroutine _pauseCo;
-
-    class Entry
-    {
-        public GameObject go;
-        public Text txt;
-        public CanvasGroup cg;  // ÀÖÀ¸¸é ÀüÃ¼ Ç×¸ñ ÆäÀÌµå
-        public float remaining; // ¼ö¸í(ÃÊ) - GamePause.IsPaused¸é °¨¼Ò ¸ØÃã
-        public bool expiring;   // Áßº¹ ÆäÀÌµå ¹æÁö
-        public Coroutine fadeInCo;
-        public Coroutine fadeOutCo;
-        // Å¸ÀÚ±â
-        public string fullText;
-        public Coroutine typeCo;
-    }
-    readonly List<Entry> _entries = new();
-
-    void Awake()
-    {
-        // Shared¿¡ ¿¬°á(´Ù¸¥ ½ºÅ©¸³Æ®¿¡¼­ Á¢±Ù)
-        if(Instance == null) Instance = this;
-        else Destroy(gameObject);
-    }
-
-    // °ÔÀÓ ÀÏ½ÃÁ¤Áö ¿¹¾à
-    private void PauseGameForSeconds(float seconds)
-    {
-        var speed = GameSpeedController.Instance;
-        if (speed == null) return;
-
-        // ÀÌ¹Ì ¿¹¾àµÇ¾î ÀÖÀ¸¸é ²÷°í »õ·Î ¿¹¾à(°¡Àå ÃÖ±Ù ·Î±× ±âÁØÀ¸·Î Å¸ÀÌ¹Ö °»½Å)
-        if (_pauseCo != null) StopCoroutine(_pauseCo);
-
-        speed.RequestPause();
-        _pauseCo = StartCoroutine(Co_ReleasePauseAfter(seconds));
-    }
-
-    private IEnumerator Co_ReleasePauseAfter(float seconds)
-    {
-        float end = Time.unscaledTime + Mathf.Max(0f, seconds);
-        while (Time.unscaledTime < end)
-            yield return null;
-
-        var speed = GameSpeedController.Instance;
-        if (speed != null) speed.ReleasePause();
-        _pauseCo = null;
-    }
-
-    public void Push(string message, float? lifetime = null, bool? pause = null, float? pauseSeconds = null)
-    {
-        if (string.IsNullOrWhiteSpace(message) || !contentRoot || !logItemPrefab) return;
-
-        // ÃÊ°úµÇ¸é °¡Àå ¿À·¡µÈ °ÍºÎÅÍ ÆäÀÌµå ¾Æ¿ô ¿¹¾à
-        while (_entries.Count >= maxEntries) RemoveAt(0);
-
-        // ±âÁ¸ Ç×¸ñ »ö»óÀ» "ÀÌÀü »ö(°ËÁ¤)"À¸·Î °­µî
-        for (int i = 0; i < _entries.Count; i++)
-        {
-            SetTextColorRGB(_entries[i], olderColor);
-            SetFontSize(_entries[i], baseFontSize);
-        }
-            
-
-        var item = Instantiate(logItemPrefab, contentRoot);
-        //item.text = message;
-
-        // CanvasGroup ÀÖÀ¸¸é ÀüÃ¼ ÆäÀÌµå, ¾øÀ¸¸é ÅØ½ºÆ®¸¸ ÆäÀÌµå
-        var e = new Entry
-        {
-            go = item.gameObject,
-            txt = item,
-            cg = item.GetComponent<CanvasGroup>(),
-            remaining = Mathf.Max(0.01f, lifetime ?? defaultLifetime),
-            fullText = message
-        };
-        _entries.Add(e);
-
-        // ½Å±Ô Ç×¸ñ »ö»ó = Èò»ö(¾ËÆÄ´Â À¯Áö)
-        SetTextColorRGB(e, newestColor);
-        SetFontSize(e, newestFontSize);
-
-        // µîÀå ÆäÀÌµå
-        if (fadeOnAdd)
-        {
-            if (e.cg == null) e.cg = item.GetComponent<CanvasGroup>();
-            if (e.cg != null)
-            {
-                if (e.fadeInCo != null) StopCoroutine(e.fadeInCo);
-                e.fadeInCo = StartCoroutine(Co_FadeInCanvasGroup(e));
-            }
-            else if (e.txt != null)
-            {
-                e.txt.canvasRenderer.SetAlpha(0f);
-                e.txt.CrossFadeAlpha(1f, Mathf.Max(0.01f, fadeInSeconds), true);
-            }
-        }
-
-        // Å¸ÀÚ±â È¿°ú
-        if (enableTypewriter && e.txt != null)
-        {
-            e.txt.text = string.Empty;
-            if (e.typeCo != null) StopCoroutine(e.typeCo);
-            e.typeCo = StartCoroutine(Co_Typewriter(e, e.fullText));
-        }
-        else
-        {
-            if (e.txt != null) e.txt.text = e.fullText;
-        }
-
-        // Àá±ñ ÀÌµ¿¶ô + Å¸ÀÌ¸Ó ÀÏ½ÃÁ¤Áö
-        bool doPause = (pause ?? pauseOnPush);
-        if (doPause)
-        {
-            float sec = Mathf.Max(0.01f, (float)(pauseSeconds ?? pushPauseSeconds));
-            PlayerMovement.Instance?.LockMovementFor(sec);    // ÀÌµ¿¸¸ Àá±İ
-
-            if (pauseGameOnPush)
-                PauseGameForSeconds(sec);
-        }
-    }
-
-    void Update()
-    {
-        // ¼ö¸í °¨¼Ò: "¿É¼Ç µîÀ¸·Î °ÔÀÓÀÌ ÀÏ½ÃÁ¤Áö¸é" °¨¼Ò Áß´Ü (= ·Î±×µµ ¸ØÃã)
-        if (!GamePause.IsPaused)
-        {
-            float dt = Time.unscaledDeltaTime; // °ÔÀÓ ÁøÇà Áß¿£ ½Ç½Ã°£ ±âÁØÀ¸·Î °¨¼Ò
-            for (int i = 0; i < _entries.Count; i++)
-            {
-                var e = _entries[i];
-                if (!e.expiring)
-                {
-                    e.remaining -= dt;
-                    if (e.remaining <= 0f)
-                        BeginExpire(e);
-                }
-            }
-        }
-    }
-
-    void RemoveAt(int index)
-    {
-        if (index < 0 || index >= _entries.Count) return;
-        BeginExpire(_entries[index]);
-    }
-    void BeginExpire(Entry e)
-    {
-        if (e == null || e.expiring) return;
-        e.expiring = true;
-
-        // Å¸ÀÚ±â/µîÀå ÆäÀÌµå ÁßÀÌ¸é Áß´Ü
-        if (e.typeCo != null) { StopCoroutine(e.typeCo); e.typeCo = null; }
-        if (e.fadeInCo != null) { StopCoroutine(e.fadeInCo); e.fadeInCo = null; }
-
-        if (!fadeOnRemove || fadeOutSeconds <= 0f)
-        {
-            RemoveEntryImmediate(e);
-            return;
-        }
-
-        if (e.fadeOutCo != null) StopCoroutine(e.fadeOutCo);
-        e.fadeOutCo = StartCoroutine(Co_FadeOutThenRemove(e));
-    }
-    void RemoveEntryImmediate(Entry e)
-    {
-        int idx = _entries.IndexOf(e);
-        if (idx >= 0) _entries.RemoveAt(idx);
-        if (e.go) Destroy(e.go);
-    }
-    System.Collections.IEnumerator Co_FadeInCanvasGroup(Entry e)
-    {
-        if (e.cg == null) yield break;
-        e.cg.alpha = 0f;
-        float dur = Mathf.Max(0.01f, fadeInSeconds);
-        float elapsed = 0f;
-        while (elapsed < dur)
-        {
-            if (!GamePause.IsPaused)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                e.cg.alpha = Mathf.Clamp01(elapsed / dur);
-            }
-            yield return null;
-        }
-        e.cg.alpha = 1f;
-        e.fadeInCo = null;
-    }
-
-    System.Collections.IEnumerator Co_FadeOutThenRemove(Entry e)
-    {
-        float dur = Mathf.Max(0.01f, fadeOutSeconds);
-        if (e.cg != null)
-        {
-            float startAlpha = Mathf.Min(1f, e.cg.alpha);
-            float elapsed = 0f;
-            while (elapsed < dur)
-            {
-                if (!GamePause.IsPaused)
-                {
-                    elapsed += Time.unscaledDeltaTime;
-                    float t = Mathf.Clamp01(elapsed / dur);
-                    e.cg.alpha = Mathf.Lerp(startAlpha, 0f, t);
-                }
-                yield return null;
-            }
-        }
-        else if (e.txt != null)
-        {
-            // Text¸¸ ÀÖÀ» ¶§µµ ÀÏ½ÃÁ¤Áö µ¿¾È ¸ØÃß°Ô ¼öµ¿ ±¸Çö
-            float elapsed = 0f;
-            while (elapsed < dur)
-            {
-                if (!GamePause.IsPaused) elapsed += Time.unscaledDeltaTime;
-                // ¾ËÆÄ º¸Á¤ (CanvasRenderer¸¦ Á÷Á¢ °Çµå¸®±âº¸´Ü Color ¾ËÆÄ Á¶Á¤ ±ÇÀå)
-                var c = e.txt.color; c.a = 1f - Mathf.Clamp01(elapsed / dur); e.txt.color = c;
-                yield return null;
-            }
-        }
-        RemoveEntryImmediate(e);
-    }
-    System.Collections.IEnumerator Co_Typewriter(Entry e, string full)
-    {
-        if (e.txt == null || string.IsNullOrEmpty(full)) yield break;
-
-        e.txt.text = string.Empty;
-        float secPerChar = (charsPerSecond > 0f) ? (1f / charsPerSecond) : 0f;
-        float accum = 0f;
-        int i = 0;
-
-        while (i < full.Length)
-        {
-            if (!GamePause.IsPaused)
-            {
-                accum += Time.unscaledDeltaTime;
-
-                while (accum >= secPerChar && i < full.Length)
-                {
-                    if (preserveRichText && full[i] == '<')
-                    {
-                        // ÅÂ±×´Â ÇÑ ¹ø¿¡ ÅëÂ°·Î ºÙÀÌ±â
-                        int close = full.IndexOf('>', i);
-                        if (close >= 0)
-                        {
-                            e.txt.text += full.Substring(i, close - i + 1);
-                            i = close + 1;
-                            continue;
-                        }
-                    }
-
-                    e.txt.text += full[i];
-                    i++;
-                    accum -= secPerChar;
-                }
-            }
-            yield return null;
-        }
-        e.typeCo = null;
-    }
-    // ¾ËÆÄ´Â º¸Á¸, RGB¸¸ º¯°æ
-    void SetTextColorRGB(Entry e, Color rgb)
-    {
-        if (e?.txt == null) return;
-        var c = e.txt.color;
-        e.txt.color = new Color(rgb.r, rgb.g, rgb.b, c.a);
-    }
-
-    // ¿É¼Ç¿¡¼­ ·±Å¸ÀÓ Á¶Àı¿ë
-    public void SetMaxEntries(int n)
-    {
-        maxEntries = Mathf.Max(1, n);
-        // ÃÊ°úºĞÀº ÆäÀÌµå·Î Á¦°Å
-        while (_entries.Count > maxEntries) RemoveAt(0);
-    }
-
-    //ÆùÆ® »çÀÌÁî Á¶Á¤
-    void SetFontSize(Entry e, int size)
-    {
-        if (e?.txt) e.txt.fontSize = size;
-    }
-    public void SetDefaultLifetime(float seconds) => defaultLifetime = Mathf.Max(0.01f, seconds);
-}
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class ExplorationLogUI : MonoBehaviour
+{
+    public static ExplorationLogUI Instance {  get; private set; }
+
+    private bool pauseGameOnPush = false;          // ë¡œê·¸ê°€ ëœ° ë•Œ ê²Œì„ë„ ë©ˆì¶œì§€
+
+    [Header("Layout")]
+    [SerializeField] Transform contentRoot;     // VerticalLayoutGroup ë¶™ì–´ìˆëŠ” ì»¨í…Œì´ë„ˆ
+    [SerializeField] Text logItemPrefab;        // í•œ ì¤„ìš© Text í”„ë¦¬íŒ¹
+
+    [Header("Config")]
+    int maxEntries = 10;        // í‘œì‹œ ìµœëŒ€ ê°œìˆ˜
+    float defaultLifetime = 10f;    // ê¸°ë³¸ ìœ ì§€ ì‹œê°„(ì´ˆ)
+
+    [Header("Style")]
+    [SerializeField] Color newestColor = Color.white; // ê°€ì¥ ìµœê·¼ ë¡œê·¸ ìƒ‰
+    [SerializeField] Color olderColor = new Color(147f / 255f, 147f / 255f, 147f / 255f, 1f); // ì´ì „ ë¡œê·¸ ìƒ‰
+
+    [Header("Typing")]
+    [SerializeField] bool enableTypewriter = true;  // íƒ€ìê¸° íš¨ê³¼
+    [SerializeField] float charsPerSecond = 40f;   // ì´ˆë‹¹ ê¸€ì ìˆ˜
+    [SerializeField] bool preserveRichText = true;  // <b> ë“± íƒœê·¸ëŠ” í•œ ë²ˆì—
+    [SerializeField] int baseFontSize = 20; // ê¸°ë³¸(ì´ì „ ë¡œê·¸) ê¸€ì”¨ í¬ê¸°
+    [SerializeField] int newestFontSize = 24; // ìµœì‹  ë¡œê·¸ ê¸€ì”¨ í¬ê¸°
+
+    [Header("Effects")]
+    [SerializeField] bool fadeOnAdd = true;   // ë“±ì¥ í˜ì´ë“œ ì‚¬ìš©
+    [SerializeField] float fadeInSeconds = 0.15f;
+    [SerializeField] bool fadeOnRemove = true;       // ì œê±° ì‹œ í˜ì´ë“œ ì—¬ë¶€
+    [SerializeField] float fadeOutSeconds = 0.25f;
+
+    [Header("Behavior")]
+    [SerializeField] bool pauseOnPush = true;  // ë¡œê·¸ ë„ìš¸ ë•Œ ì ê¹ ì •ì§€(í”Œë ˆì´ì–´+íƒí—˜ íƒ€ì´ë¨¸)
+    [SerializeField] float pushPauseSeconds = 1.0f;
+
+    private Coroutine _pauseCo;
+
+    class Entry
+    {
+        public GameObject go;
+        public Text txt;
+        public CanvasGroup cg;  // ìˆìœ¼ë©´ ì „ì²´ í•­ëª© í˜ì´ë“œ
+        public float remaining; // ìˆ˜ëª…(ì´ˆ) - GamePause.IsPausedë©´ ê°ì†Œ ë©ˆì¶¤
+        public bool expiring;   // ì¤‘ë³µ í˜ì´ë“œ ë°©ì§€
+        public Coroutine fadeInCo;
+        public Coroutine fadeOutCo;
+        // íƒ€ìê¸°
+        public string fullText;
+        public Coroutine typeCo;
+    }
+    readonly List<Entry> _entries = new();
+
+    void Awake()
+    {
+        // Sharedì— ì—°ê²°(ë‹¤ë¥¸ ìŠ¤í¬ë¦½íŠ¸ì—ì„œ ì ‘ê·¼)
+        if(Instance == null) Instance = this;
+        else Destroy(gameObject);
+    }
+
+    // ê²Œì„ ì¼ì‹œì •ì§€ ì˜ˆì•½
+    private void PauseGameForSeconds(float seconds)
+    {
+        var speed = GameSpeedController.Instance;
+        if (speed == null) return;
+
+        // ì´ë¯¸ ì˜ˆì•½ë˜ì–´ ìˆìœ¼ë©´ ëŠê³  ìƒˆë¡œ ì˜ˆì•½(ê°€ì¥ ìµœê·¼ ë¡œê·¸ ê¸°ì¤€ìœ¼ë¡œ íƒ€ì´ë° ê°±ì‹ )
+        if (_pauseCo != null) StopCoroutine(_pauseCo);
+
+        speed.RequestPause();
+        _pauseCo = StartCoroutine(Co_ReleasePauseAfter(seconds));
+    }
+
+    private IEnumerator Co_ReleasePauseAfter(float seconds)
+    {
+        float end = Time.unscaledTime + Mathf.Max(0f, seconds);
+        while (Time.unscaledTime < end)
+            yield return null;
+
+        var speed = GameSpeedController.Instance;
+        if (speed != null) speed.ReleasePause();
+        _pauseCo = null;
+    }
+
+    public void Push(string message, float? lifetime = null, bool? pause = null, float? pauseSeconds = null)
+    {
+        if (string.IsNullOrWhiteSpace(message) || !contentRoot || !logItemPrefab) return;
+
+        // ì´ˆê³¼ë˜ë©´ ê°€ì¥ ì˜¤ë˜ëœ ê²ƒë¶€í„° í˜ì´ë“œ ì•„ì›ƒ ì˜ˆì•½
+        while (_entries.Count >= maxEntries) RemoveAt(0);
+
+        // ê¸°ì¡´ í•­ëª© ìƒ‰ìƒì„ "ì´ì „ ìƒ‰(ê²€ì •)"ìœ¼ë¡œ ê°•ë“±
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            SetTextColorRGB(_entries[i], olderColor);
+            SetFontSize(_entries[i], baseFontSize);
+        }
+            
+
+        var item = Instantiate(logItemPrefab, contentRoot);
+        //item.text = message;
+
+        // CanvasGroup ìˆìœ¼ë©´ ì „ì²´ í˜ì´ë“œ, ì—†ìœ¼ë©´ í…ìŠ¤íŠ¸ë§Œ í˜ì´ë“œ
+        var e = new Entry
+        {
+            go = item.gameObject,
+            txt = item,
+            cg = item.GetComponent<CanvasGroup>(),
+            remaining = Mathf.Max(0.01f, lifetime ?? defaultLifetime),
+            fullText = message
+        };
+        _entries.Add(e);
+
+        // ì‹ ê·œ í•­ëª© ìƒ‰ìƒ = í°ìƒ‰(ì•ŒíŒŒëŠ” ìœ ì§€)
+        SetTextColorRGB(e, newestColor);
+        SetFontSize(e, newestFontSize);
+
+        // ë“±ì¥ í˜ì´ë“œ
+        if (fadeOnAdd)
+        {
+            if (e.cg == null) e.cg = item.GetComponent<CanvasGroup>();
+            if (e.cg != null)
+            {
+                if (e.fadeInCo != null) StopCoroutine(e.fadeInCo);
+                e.fadeInCo = StartCoroutine(Co_FadeInCanvasGroup(e));
+            }
+            else if (e.txt != null)
+            {
+                e.txt.canvasRenderer.SetAlpha(0f);
+                e.txt.CrossFadeAlpha(1f, Mathf.Max(0.01f, fadeInSeconds), true);
+            }
+        }
+
+        // íƒ€ìê¸° íš¨ê³¼
+        if (enableTypewriter && e.txt != null)
+        {
+            e.txt.text = string.Empty;
+            if (e.typeCo != null) StopCoroutine(e.typeCo);
+            e.typeCo = StartCoroutine(Co_Typewriter(e, e.fullText));
+        }
+        else
+        {
+            if (e.txt != null) e.txt.text = e.fullText;
+        }
+
+        // ì ê¹ ì´ë™ë½ + íƒ€ì´ë¨¸ ì¼ì‹œì •ì§€
+        bool doPause = (pause ?? pauseOnPush);
+        if (doPause)
+        {
+            float sec = Mathf.Max(0.01f, (float)(pauseSeconds ?? pushPauseSeconds));
+            PlayerMovement.Instance?.LockMovementFor(sec);    // ì´ë™ë§Œ ì ê¸ˆ
+
+            if (pauseGameOnPush)
+                PauseGameForSeconds(sec);
+        }
+    }
+
+    void Update()
+    {
+        // ìˆ˜ëª… ê°ì†Œ: "ì˜µì…˜ ë“±ìœ¼ë¡œ ê²Œì„ì´ ì¼ì‹œì •ì§€ë©´" ê°ì†Œ ì¤‘ë‹¨ (= ë¡œê·¸ë„ ë©ˆì¶¤)
+        if (!GamePause.IsPaused)
+        {
+            float dt = Time.unscaledDeltaTime; // ê²Œì„ ì§„í–‰ ì¤‘ì—” ì‹¤ì‹œê°„ ê¸°ì¤€ìœ¼ë¡œ ê°ì†Œ
+            for (int i = 0; i < _entries.Count; i++)
+            {
+                var e = _entries[i];
+                if (!e.expiring)
+                {
+                    e.remaining -= dt;
+                    if (e.remaining <= 0f)
+                        BeginExpire(e);
+                }
+            }
+        }
+    }
+
+    void RemoveAt(int index)
+    {
+        if (index < 0 || index >= _entries.Count) return;
+        BeginExpire(_entries[index]);
+    }
+    void BeginExpire(Entry e)
+    {
+        if (e == null || e.expiring) return;
+        e.expiring = true;
+
+        // íƒ€ìê¸°/ë“±ì¥ í˜ì´ë“œ ì¤‘ì´ë©´ ì¤‘ë‹¨
+        if (e.typeCo != null) { StopCoroutine(e.typeCo); e.typeCo = null; }
+        if (e.fadeInCo != null) { StopCoroutine(e.fadeInCo); e.fadeInCo = null; }
+
+        if (!fadeOnRemove || fadeOutSeconds <= 0f)
+        {
+            RemoveEntryImmediate(e);
+            return;
+        }
+
+        if (e.fadeOutCo != null) StopCoroutine(e.fadeOutCo);
+        e.fadeOutCo = StartCoroutine(Co_FadeOutThenRemove(e));
+    }
+    void RemoveEntryImmediate(Entry e)
+    {
+        int idx = _entries.IndexOf(e);
+        if (idx >= 0) _entries.RemoveAt(idx);
+        if (e.go) Destroy(e.go);
+    }
+    System.Collections.IEnumerator Co_FadeInCanvasGroup(Entry e)
+    {
+        if (e.cg == null) yield break;
+        e.cg.alpha = 0f;
+        float dur = Mathf.Max(0.01f, fadeInSeconds);
+        float elapsed = 0f;
+        while (elapsed < dur)
+        {
+            if (!GamePause.IsPaused)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                e.cg.alpha = Mathf.Clamp01(elapsed / dur);
+            }
+            yield return null;
+        }
+        e.cg.alpha = 1f;
+        e.fadeInCo = null;
+    }
+
+    System.Collections.IEnumerator Co_FadeOutThenRemove(Entry e)
+    {
+        float dur = Mathf.Max(0.01f, fadeOutSeconds);
+        if (e.cg != null)
+        {
+            float startAlpha = Mathf.Min(1f, e.cg.alpha);
+            float elapsed = 0f;
+            while (elapsed < dur)
+            {
+                if (!GamePause.IsPaused)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    float t = Mathf.Clamp01(elapsed / dur);
+                    e.cg.alpha = Mathf.Lerp(startAlpha, 0f, t);
+                }
+                yield return null;
+            }
+        }
+        else if (e.txt != null)
+        {
+            // Textë§Œ ìˆì„ ë•Œë„ ì¼ì‹œì •ì§€ ë™ì•ˆ ë©ˆì¶”ê²Œ ìˆ˜ë™ êµ¬í˜„
+            float elapsed = 0f;
+            while (elapsed < dur)
+            {
+                if (!GamePause.IsPaused) elapsed += Time.unscaledDeltaTime;
+                // ì•ŒíŒŒ ë³´ì • (CanvasRendererë¥¼ ì§ì ‘ ê±´ë“œë¦¬ê¸°ë³´ë‹¨ Color ì•ŒíŒŒ ì¡°ì • ê¶Œì¥)
+                var c = e.txt.color; c.a = 1f - Mathf.Clamp01(elapsed / dur); e.txt.color = c;
+                yield return null;
+            }
+        }
+        RemoveEntryImmediate(e);
+    }
+    System.Collections.IEnumerator Co_Typewriter(Entry e, string full)
+    {
+        if (e.txt == null || string.IsNullOrEmpty(full)) yield break;
+
+        e.txt.text = string.Empty;
+        float secPerChar = (charsPerSecond > 0f) ? (1f / charsPerSecond) : 0f;
+        float accum = 0f;
+        int i = 0;
+
+        while (i < full.Length)
+        {
+            if (!GamePause.IsPaused)
+            {
+                accum += Time.unscaledDeltaTime;
+
+                while (accum >= secPerChar && i < full.Length)
+                {
+                    if (preserveRichText && full[i] == '<')
+                    {
+                        // íƒœê·¸ëŠ” í•œ ë²ˆì— í†µì§¸ë¡œ ë¶™ì´ê¸°
+                        int close = full.IndexOf('>', i);
+                        if (close >= 0)
+                        {
+                            e.txt.text += full.Substring(i, close - i + 1);
+                            i = close + 1;
+                            continue;
+                        }
+                    }
+
+                    e.txt.text += full[i];
+                    i++;
+                    accum -= secPerChar;
+                }
+            }
+            yield return null;
+        }
+        e.typeCo = null;
+    }
+    // ì•ŒíŒŒëŠ” ë³´ì¡´, RGBë§Œ ë³€ê²½
+    void SetTextColorRGB(Entry e, Color rgb)
+    {
+        if (e?.txt == null) return;
+        var c = e.txt.color;
+        e.txt.color = new Color(rgb.r, rgb.g, rgb.b, c.a);
+    }
+
+    // ì˜µì…˜ì—ì„œ ëŸ°íƒ€ì„ ì¡°ì ˆìš©
+    public void SetMaxEntries(int n)
+    {
+        maxEntries = Mathf.Max(1, n);
+        // ì´ˆê³¼ë¶„ì€ í˜ì´ë“œë¡œ ì œê±°
+        while (_entries.Count > maxEntries) RemoveAt(0);
+    }
+
+    //í°íŠ¸ ì‚¬ì´ì¦ˆ ì¡°ì •
+    void SetFontSize(Entry e, int size)
+    {
+        if (e?.txt) e.txt.fontSize = size;
+    }
+    public void SetDefaultLifetime(float seconds) => defaultLifetime = Mathf.Max(0.01f, seconds);
+}

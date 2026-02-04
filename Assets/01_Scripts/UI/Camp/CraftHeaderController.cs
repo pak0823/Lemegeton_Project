@@ -1,90 +1,90 @@
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.UI;
-using UnityEngine.ResourceManagement.AsyncOperations;
-
-public class CraftHeaderController : MonoBehaviour
-{
-    [System.Serializable]
-    public struct HeaderSlot
-    {
-        public Toggle toggle;
-        public ItemData linkedMaterial; // ÀÌ ¹öÆ°ÀÌ ´ã´çÇÏ´Â Àç·á(ÆÇÀÚ µî)
-        public Image iconImage;
-    }
-
-    [Header("UI Settings")]
-    public ToggleGroup toggleGroup; // 6°³ Åä±ÛÀ» ¹­À» ±×·ì
-    public List<HeaderSlot> headerSlots;
-    public CampCraftPage craftPage;
-
-    [Header("Navigation Buttons")]
-    [SerializeField] private Button arrowLeftButton;
-    [SerializeField] private Button arrowRightButton;
-
-    private int currentSelectedIndex = 0;
-    private List<AsyncOperationHandle<Sprite>> loadedHandles = new List<AsyncOperationHandle<Sprite>>();
-
-    private void Start()
-    {
-        for (int i = 0; i < headerSlots.Count; i++)
-        {
-            int index = i; // ¶÷´Ù½Ä Ä¸Ã³¸¦ À§ÇØ Áö¿ª º¯¼ö¿¡ ÀúÀå
-            var slot = headerSlots[i];
-
-            if (slot.linkedMaterial != null)
-            {
-                // ¾ÆÀÌÄÜ ºñµ¿±â ·Îµå
-                var handle = Addressables.LoadAssetAsync<Sprite>(slot.linkedMaterial.GetAtlasKey());
-                handle.Completed += h =>
-                {
-                    // ±¸Á¶Ã¼ ¸®½ºÆ®ÀÌ¹Ç·Î ÀÎµ¦½º·Î Á¢±ÙÇØ¼­ ¼öÁ¤ ±ÇÀå
-                    if (h.Status == AsyncOperationStatus.Succeeded)
-                        headerSlots[index].iconImage.sprite = h.Result;
-                };
-                loadedHandles.Add(handle);
-
-                // [¼öÁ¤ 2] Åä±Û ÀÌº¥Æ® ¿¬°á
-                slot.toggle.onValueChanged.AddListener((isOn) =>
-                {
-                    if (isOn)
-                    {
-                        currentSelectedIndex = index;
-
-                        craftPage.FilterRecipesByMaterial(slot.linkedMaterial);
-                        Debug.Log($"[CraftUI] {slot.linkedMaterial.itemName} ÇÊÅÍ Àû¿ë");
-                    }
-                });
-            }
-        }
-
-        if (arrowLeftButton) arrowLeftButton.onClick.AddListener(() => SelectNextSlot(-1));
-        if (arrowRightButton) arrowRightButton.onClick.AddListener(() => SelectNextSlot(1));
-
-        // Ã¹ ¹øÂ° Àç·á ¼±ÅÃÀº ¸ğµç ¸®½º³Ê µî·Ï ÈÄ ¸¶Áö¸·¿¡ ÇÑ ¹ø¸¸
-        if (headerSlots.Count > 0 && headerSlots[0].toggle != null)
-            headerSlots[0].toggle.isOn = true;
-    }
-
-    public void SelectNextSlot(int direction)
-    {
-        if (headerSlots.Count == 0) return;
-
-        int nextIndex = Mathf.Clamp(currentSelectedIndex + direction, 0, headerSlots.Count - 1);
-        // ÀÎµ¦½º°¡ ½ÇÁ¦·Î º¯ÇßÀ» ¶§¸¸ Åä±Û º¯°æ (ºÒÇÊ¿äÇÑ È£Ãâ ¹æÁö)
-        if (nextIndex != currentSelectedIndex)
-        {
-            headerSlots[nextIndex].toggle.isOn = true;
-            // Åä±ÛÀÌ ÄÑÁö¸é À§¿¡¼­ µî·ÏÇÑ onValueChanged°¡ ½ÇÇàµÇ¸é¼­ currentSelectedIndexµµ ÀÚµ¿À¸·Î ¹Ù²ñ
-        }
-    }
-
-    private void OnDestroy()
-    {
-        foreach (var handle in loadedHandles)
-        {
-            if (handle.IsValid()) Addressables.Release(handle);
-        }
-    }
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.UI;
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+public class CraftHeaderController : MonoBehaviour
+{
+    [System.Serializable]
+    public struct HeaderSlot
+    {
+        public Toggle toggle;
+        public ItemData linkedMaterial; // ì´ ë²„íŠ¼ì´ ë‹´ë‹¹í•˜ëŠ” ì¬ë£Œ(íŒì ë“±)
+        public Image iconImage;
+    }
+
+    [Header("UI Settings")]
+    public ToggleGroup toggleGroup; // 6ê°œ í† ê¸€ì„ ë¬¶ì„ ê·¸ë£¹
+    public List<HeaderSlot> headerSlots;
+    public CampCraftPage craftPage;
+
+    [Header("Navigation Buttons")]
+    [SerializeField] private Button arrowLeftButton;
+    [SerializeField] private Button arrowRightButton;
+
+    private int currentSelectedIndex = 0;
+    private List<AsyncOperationHandle<Sprite>> loadedHandles = new List<AsyncOperationHandle<Sprite>>();
+
+    private void Start()
+    {
+        for (int i = 0; i < headerSlots.Count; i++)
+        {
+            int index = i; // ëŒë‹¤ì‹ ìº¡ì²˜ë¥¼ ìœ„í•´ ì§€ì—­ ë³€ìˆ˜ì— ì €ì¥
+            var slot = headerSlots[i];
+
+            if (slot.linkedMaterial != null)
+            {
+                // ì•„ì´ì½˜ ë¹„ë™ê¸° ë¡œë“œ
+                var handle = Addressables.LoadAssetAsync<Sprite>(slot.linkedMaterial.GetAtlasKey());
+                handle.Completed += h =>
+                {
+                    // êµ¬ì¡°ì²´ ë¦¬ìŠ¤íŠ¸ì´ë¯€ë¡œ ì¸ë±ìŠ¤ë¡œ ì ‘ê·¼í•´ì„œ ìˆ˜ì • ê¶Œì¥
+                    if (h.Status == AsyncOperationStatus.Succeeded)
+                        headerSlots[index].iconImage.sprite = h.Result;
+                };
+                loadedHandles.Add(handle);
+
+                // [ìˆ˜ì • 2] í† ê¸€ ì´ë²¤íŠ¸ ì—°ê²°
+                slot.toggle.onValueChanged.AddListener((isOn) =>
+                {
+                    if (isOn)
+                    {
+                        currentSelectedIndex = index;
+
+                        craftPage.FilterRecipesByMaterial(slot.linkedMaterial);
+                        Debug.Log($"[CraftUI] {slot.linkedMaterial.itemName} í•„í„° ì ìš©");
+                    }
+                });
+            }
+        }
+
+        if (arrowLeftButton) arrowLeftButton.onClick.AddListener(() => SelectNextSlot(-1));
+        if (arrowRightButton) arrowRightButton.onClick.AddListener(() => SelectNextSlot(1));
+
+        // ì²« ë²ˆì§¸ ì¬ë£Œ ì„ íƒì€ ëª¨ë“  ë¦¬ìŠ¤ë„ˆ ë“±ë¡ í›„ ë§ˆì§€ë§‰ì— í•œ ë²ˆë§Œ
+        if (headerSlots.Count > 0 && headerSlots[0].toggle != null)
+            headerSlots[0].toggle.isOn = true;
+    }
+
+    public void SelectNextSlot(int direction)
+    {
+        if (headerSlots.Count == 0) return;
+
+        int nextIndex = Mathf.Clamp(currentSelectedIndex + direction, 0, headerSlots.Count - 1);
+        // ì¸ë±ìŠ¤ê°€ ì‹¤ì œë¡œ ë³€í–ˆì„ ë•Œë§Œ í† ê¸€ ë³€ê²½ (ë¶ˆí•„ìš”í•œ í˜¸ì¶œ ë°©ì§€)
+        if (nextIndex != currentSelectedIndex)
+        {
+            headerSlots[nextIndex].toggle.isOn = true;
+            // í† ê¸€ì´ ì¼œì§€ë©´ ìœ„ì—ì„œ ë“±ë¡í•œ onValueChangedê°€ ì‹¤í–‰ë˜ë©´ì„œ currentSelectedIndexë„ ìë™ìœ¼ë¡œ ë°”ë€œ
+        }
+    }
+
+    private void OnDestroy()
+    {
+        foreach (var handle in loadedHandles)
+        {
+            if (handle.IsValid()) Addressables.Release(handle);
+        }
+    }
 }
