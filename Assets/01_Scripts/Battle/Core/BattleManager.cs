@@ -27,7 +27,27 @@ public class BattleManager : MonoBehaviour
     public BattleInput battleInput;
 
     // Battle State (전투 핵심 상태)
-    public BattleState state { get; private set; } = BattleState.Idle; // 현재 전투 상태 (FSM)
+    public event System.Action<BattleState, BattleState> OnStateChanged; // 이전 상태, 현재 상태
+
+    [Header("FSM")]
+    public BattleStateMachine fsm; // FSM 참조
+
+    // Battle State (전투 핵심 상태)
+    // Legacy support: We still keep this for external readers, but FSM drives logic
+    private BattleState _state = BattleState.Idle;
+    public BattleState state
+    {
+        get => _state;
+        set // Changed to public set for FSM to write to it, context dependent
+        {
+            if (_state != value)
+            {
+                var oldState = _state;
+                _state = value;
+                OnStateChanged?.Invoke(oldState, _state);
+            }
+        }
+    }
     private bool initialized = false;                                  // 초기화 여부 플래그
     private bool _battleEndedOnce = false;                             // 전투 종료 처리 중복 방지
 
@@ -143,6 +163,9 @@ public class BattleManager : MonoBehaviour
         if (!skillProcessor) skillProcessor = GetComponentInChildren<BattleSkillProcessor>();
         if (!inputHandler) inputHandler = GetComponentInChildren<BattleInputHandler>();
         if (!turnManager) turnManager = GetComponentInChildren<BattleTurnManager>();
+
+        if (fsm == null) fsm = GetComponent<BattleStateMachine>() ?? gameObject.AddComponent<BattleStateMachine>();
+        fsm.Initialize(this);
 
         gridManager.Initialize(mapManager);
         fieldManager.Initialize(this, gridManager, inputHandler);

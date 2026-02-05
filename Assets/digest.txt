@@ -79,6 +79,7 @@ Directory structure:
     │   │   │   └── UnitStateController.cs
     │   │   ├── Utils/
     │   │   │   ├── AreaShapes.cs
+    │   │   │   ├── BattleStateLogger.cs
     │   │   │   ├── HexUtil.cs
     │   │   │   └── SkillLibrary.cs
     │   │   ├── Visuals/
@@ -316,7 +317,8 @@ Directory structure:
     │   ├── ItemDataImporter.cs
     │   ├── ParametricDamageSkillEditor.cs
     │   ├── SaveTool.cs
-    │   └── TileCellDebugger.cs
+    │   ├── TileCellDebugger.cs
+    │   └── UniversalDataImporter.cs
     └── TextMesh Pro/
         ├── Fonts/
         │   ├── LiberationSans - OFL.txt
@@ -1826,7 +1828,23 @@ public class BattleManager : MonoBehaviour
     public BattleInput battleInput;
 
     // Battle State (전투 핵심 상태)
-    public BattleState state { get; private set; } = BattleState.Idle; // 현재 전투 상태 (FSM)
+    public event System.Action<BattleState, BattleState> OnStateChanged; // 이전 상태, 현재 상태
+
+    // Battle State (전투 핵심 상태)
+    private BattleState _state = BattleState.Idle;
+    public BattleState state
+    {
+        get => _state;
+        private set
+        {
+            if (_state != value)
+            {
+                var oldState = _state;
+                _state = value;
+                OnStateChanged?.Invoke(oldState, _state);
+            }
+        }
+    }
     private bool initialized = false;                                  // 초기화 여부 플래그
     private bool _battleEndedOnce = false;                             // 전투 종료 처리 중복 방지
 
@@ -6601,7 +6619,284 @@ public class EnemySkill : SkillAsset
 ================================================
 FILE: 01_Scripts/Battle/Skills/Core/SkillAsset.cs
 ================================================
-[Binary file]
+// SkillAsset.cs
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using static ParametricDamageSkill;
+
+public struct SkillRuntime
+{
+    public Tilemap map;
+    public Vector3Int originCell;   // 시전자 조준/타겟 기준 셀
+    public Vector3Int casterCell;   // 시전자 현재 셀
+    public Vector3Int targetCell;   // 피격자 셀
+}
+
+[System.Serializable]
+public struct TrainingRouteInfo
+{
+    public string title;    // 훈련 이름
+    [TextArea] public string description;   // 훈련 효과 설명
+
+    [Header("Override Info")]
+    [TextArea] public string overrideSkillDescription; // 이 훈련 적용 시 보여줄 스킬 설명
+
+    public int trainingCost;  //해금 비용
+}
+
+public abstract class SkillAsset : ScriptableObject
+{
+    [Header("Identity")]
+    public string id;
+
+    [Header("Display")]
+    public string displayName;
+    public Sprite descriptionImage; //스킬 범위 설명 이미지(패널에 표시)
+    [TextArea] public string description;   // 스킬 설명(패널에 표시)
+
+    [Header("Damage Type")]
+    public DamageSchool school = DamageSchool.Physical;
+    public AttackAttr attribute = AttackAttr.None;
+    public float power = 1f; // 기본 배수(예: 1.0 = 원 공격력)
+
+    [Header("Cost")]
+    public SkillCostResource costResource = SkillCostResource.MP;
+    [Tooltip("실제 사용되는 기본 비용 (MP/Rage 공통)")]
+    [Min(0)] public int cost = 0;
+
+    [HideInInspector]
+    public int mpCost = 0;
+
+    [Header("Targeting")]
+    public SkillTargetMode targetMode; // 기존 enum 재사용 (Unit/Tile) 
+
+    [Header("Targeting Rules")]
+    [Tooltip("이 스킬을 누구에게 사용할 수 있는가?")]
+    public SkillTargetAlignment targetAlignment = SkillTargetAlignment.Enemy; // 기본값은 적
+
+    [Header("Cooldown")]
+    [Tooltip("해당 스킬 사용 후 다시 사용할 때까지 필요한 '자신의 턴 수'. 0이면 쿨다운 없음.")]
+    public int cooldownTurns = 0;
+
+    [Header("Animation")]
+    [Tooltip("이 스킬의 애니메이션 타입. 근접, 원거리, 자기 강화 등.")]
+    public SkillAnimKind animKind = SkillAnimKind.Melee;
+
+    [Tooltip("이 스킬의 기본 애니메이션 트리거 이름. 비워두면 타입별 기본값(Attack/Ranged/Casting 등)을 사용.")]
+    public string animTriggerOverride;
+
+    [Header("Melee / Gap Close")]
+    [Tooltip("Unit 타겟 스킬일 때, 대상에게 뛰어가서 공격할지 여부. false면 제자리에서 시전.")]
+    public bool useGapCloseJump = true;
+
+    [Header("Compat")]
+    public SkillId legacyId = SkillId.Skill1; // 기존 분기 로직 호환용
+
+    [Header("Training")]
+    [Tooltip("훈련 UI에 표시할 3개 루트의 제목/설명. 비어 있으면 기본 텍스트로 대체.")]
+    public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
+
+    // BattleManager는 이 함수만 호출하고, 구체적인 절차(선택, 애니, 효과)는 스킬이 알아서 함.
+    public virtual IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit = null, Tilemap _targetMap = null, Vector3Int _targetCell = default)
+    {
+        // 기본 동작: 타겟 모드에 따라 단순 Resolve 호출
+        // 특수 로직이 필요한 자식 클래스(넉백, 후퇴 등)는 이 함수를 override해서 쓴다.
+
+        if (targetMode == SkillTargetMode.Unit)
+        {
+            if (_targetUnit != null)
+            {
+                // 공통 갭클로즈(접근) & 공격 연출 코루틴 호출
+                yield return _battlemanager.PerformStandardUnitSkillFlow(this, _caster, _targetUnit);
+            }
+        }
+        else // Tile Mode
+        {
+            if (_targetMap != null)
+            {
+                yield return _battlemanager.PerformStandardTileSkillFlow(this, _targetMap, _targetCell, _caster);
+            }
+        }
+    }
+
+    public static bool IsUntargetableByEnemy(BattleUnit _target)
+    {
+        if (_target == null || _target.IsDead) return true;
+
+        var usc = _target.GetComponent<UnitStateController>();
+        if (usc == null) return false;
+
+        // 잠복(기존) + 연막 은신(신규 버프) 모두 동일하게 "타겟 지정 불가"
+        return usc.Has(UnitStateId.Ambush) || usc.HasBuff(UnitStateBuffId.SmokeHidden);
+    }
+
+    // 기본값 0 = 제압 감소 없음
+    public virtual int GetSuppressionOnHit(BattleUnit _caster) => 0;
+
+    /// <summary>미리보기/피격판정을 위한 범위 셀 반환. origin = 대상 유닛 셀(유닛형) 또는 조준 셀(타일형)</summary>
+    public abstract IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow);
+
+    /// <summary>유닛 지목형 해결</summary>
+    public abstract IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _target);
+
+    /// <summary>타일 지목형 해결</summary>
+    public abstract IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster);
+
+    //스킬별 대미지 계산. 필요시 하위 클래스에서 override
+    public virtual float ComputeDamage(BattleUnit _caster, BattleUnit _target, in SkillRuntime _skillruntime)
+    {
+        if (_caster == null)
+            return 0f;
+
+        // 기본 공격 스탯 선택
+        float stat = 0f;
+        switch (school)
+        {
+            case DamageSchool.Physical:
+                stat = _caster.STR;
+                break;
+
+            case DamageSchool.Magical:
+                stat = _caster.CLV;
+                break;
+
+            case DamageSchool.Composite:
+                // 고정 대미지 STR + MAG
+                stat = _caster.STR + _caster.CLV;
+                break;
+
+            default:
+                stat = _caster.STR; // 혹은 0f
+                break;
+        }
+
+        // 기술 위력 적용
+        float dmg = stat * power;
+
+        return dmg;
+    }
+    public virtual int GetBaseCost()
+    {
+        // 신규 cost를 우선, 0이면 기존 mpCost로 fallback
+        if (cost > 0) return cost;
+        return mpCost;
+    }
+
+    public static BattleUnit PickTargetByWeightedHostility(List<BattleUnit> _potentialTargets)
+    {
+        if (_potentialTargets == null || _potentialTargets.Count == 0) return null;
+        if (_potentialTargets.Count == 1) return _potentialTargets[0];
+
+        // 모든 대상의 Hostility 합계 계산
+        float totalHostility = 0f;
+        foreach (var unit in _potentialTargets)
+        {
+            totalHostility += Mathf.Max(0f, unit.Hostility);
+        }
+
+        // 합계가 0 이하면 (모두 적대감이 0), 랜덤으로 한 명 선택
+        if (totalHostility <= 0)
+        {
+            return _potentialTargets[Random.Range(0, _potentialTargets.Count)];
+        }
+
+        // 0 ~ totalHostility 사이의 랜덤 값 선택
+        float randomPoint = Random.Range(0, totalHostility);
+
+        // 랜덤 값에서 각 유닛의 Hostility를 빼나가다가 0 이하가 되면 해당 유닛 선택
+        foreach (var unit in _potentialTargets)
+        {
+            randomPoint -= Mathf.Max(0f, unit.Hostility);
+            if (randomPoint <= 0)
+            {
+                return unit;
+            }
+        }
+
+        // 만약의 경우(부동소수점 오류 등)를 대비해 마지막 유닛을 반환
+        return _potentialTargets[_potentialTargets.Count - 1];
+    }
+
+    // <summary>컬렉션에서 '적대감(Hostility)'이 가장 높은 플레이어 유닛을 선택. 동률이면 랜덤.</summary>
+    //public static BattleUnit PickHighestHostility(IEnumerable<BattleUnit> candidates)
+    //{
+    //    if (candidates == null) return null;
+    //    // 생존한 플레이어만
+    //    var list = candidates.Where(u => u != null && u.team == Team.Player && !u.IsDead).ToList();
+    //    if (list.Count == 0) return null;
+    //
+    //    float max = list.Max(u => Mathf.Max(0, u.Hostility));
+    //    var top = list.Where(u => Mathf.Max(0, u.Hostility) == max).ToList();
+    //
+    //    return top[Random.Range(0, top.Count)];
+    //}
+    public static BattleUnit PickPreferredStatusThenHighestHostility(IEnumerable<BattleUnit> _candidates, StatusId _preferred)
+    {
+        if (_candidates == null) return null;
+        var list = _candidates
+            .Where(u => u && u.data.team == Team.Player && !u.IsDead)
+            .Where(u => !IsUntargetableByEnemy(u))   // 연막 은신/잠복 타겟 제외
+            .ToList();
+        if (list.Count == 0) return null;
+
+        var slowed = list.Where(u =>
+        {
+            var sc = u.GetComponent<StatusController>();
+            return sc != null && sc.Has(_preferred);
+        }).ToList();
+
+        var pool = (slowed.Count > 0) ? slowed : list;
+
+        // 가시 감쇠 고려한 가중치 랜덤
+        float total = 0f;
+        foreach (var u in pool)
+            total += Mathf.Max(0f, u.Hostility);
+
+        if (total <= 0f) return pool[Random.Range(0, pool.Count)];
+
+        float r = Random.Range(0, total);
+        foreach (var u in pool)
+        {
+            r -= Mathf.Max(0f, u.Hostility);
+            if (r <= 0f) return u;
+        }
+        return pool[pool.Count - 1];
+        //if (slowed.Count > 0) return PickTargetByWeightedHostility(slowed);
+        //return PickTargetByWeightedHostility(list);
+    }
+    public virtual string GetFullDescriptionRich(BattleUnit _caster)
+    {
+        var res = GetCostResource(_caster);
+        int cost = GetEffectiveCost(_caster);
+
+        if (cost <= 0) return description;
+
+        string label = (res == SkillCostResource.MP) ? "MP" : "Rage";
+        string color = (res == SkillCostResource.MP) ? "#00A2FF" : "#FF4B4B"; // 예시
+        return $"{description}<size=20%><color=#808080>({label}:<color={color}>{cost}</color>)</color></size>";
+    }
+
+    public virtual SkillCostResource GetCostResource(BattleUnit caster) => costResource;
+
+    public virtual bool ShouldGapCloseToTarget(BattleUnit _caster, BattleUnit _target)    /// Unit 타겟 사용 시 점프 연출(gap close)을 사용할지 여부
+    {
+        return useGapCloseJump;
+    }
+    public virtual int GetEffectiveCost(BattleUnit _caster)
+    {
+        // 기본값: base cost (MP/Rage 공통)
+        return Mathf.Max(0, GetBaseCost());
+    }
+    public virtual int GetEffectiveCooldownTurns(BattleUnit _caster)
+    {
+        // 기본은 그냥 설정값 그대로
+        return cooldownTurns;
+    }
+
+}
 
 
 ================================================
@@ -14687,849 +14982,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
 ================================================
 FILE: 01_Scripts/Battle/Skills/Player/Templates/ParametricDirectionSkill.cs
 ================================================
-using System.Collections;
-
-using System.Collections.Generic;
-
-using System.Linq;
-
-using Unity.VisualScripting;
-
-using UnityEngine;
-
-using UnityEngine.Tilemaps;
-
-
-
-[CreateAssetMenu(menuName = "Battle/Skills/Common/ParametricDirectionSkill", fileName = "ParametricDirectionSkill")]
-
-public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITargetMapProvider, IInstantTileSkill
-
-{
-
-    public enum BackMode
-
-    {
-
-        W_Only,          // 플레이어 기준 W로만
-
-        SW_Only,         // 플레이어 기준 SW로만
-
-        W_or_SW,         // 플레이어 기준 W 또는 SW (적은 E 또는 NE)
-
-    }
-
-    enum DirLabel { W, E, SW, NE }
-
-    // 선택 즉시 자기 자신에게 발동(타겟팅 불필요)
-
-    public enum DirectionMode
-
-    {
-
-        // 팀 기준: Player는 X-가 뒤/ X+가 앞, Enemy는 반대
-
-        TeamBasedBack,   // 뒤로 이동(후퇴)
-
-        TeamBasedFront,  // 앞으로 이동(전진)
-
-
-
-        // 맵 절대축 기준
-
-        AbsoluteNegativeX, // 왼쪽으로
-
-        AbsolutePositiveX, // 오른쪽으로
-
-    }
-
-
-
-    [Header("Movement Settings")]
-
-    public BackMode backMode = BackMode.W_or_SW;
-
-    public DirectionMode direction = DirectionMode.TeamBasedBack;
-
-    [Tooltip("맵 경계까지 최대 스캔 칸 수(0 이하면 무제한)")]
-
-    public int maxScanCells = 0;
-
-    [Tooltip("대시 연출 여부(미체크 시 순간이동)")]
-
-    public bool dashAnimate = false;
-
-    [Tooltip("대시 시간(초)")]
-
-    public float dashDuration = 0.12f;
-
-    [Tooltip("대시 포물선 높이(0이면 직선)")]
-
-    public float dashArc = 0.0f;
-
-
-
-    [Header("Animation")]
-
-    [Tooltip("앞으로 이동할 때 쓸 대시 트리거 이름")]
-
-    public string forwardDashTrigger = "DashForward";
-
-
-
-    [Tooltip("뒤로 이동(백스텝)할 때 쓸 대시 트리거 이름")]
-
-    public string backwardDashTrigger = "DashBack";
-
-
-
-    [Tooltip("앞/뒤 방향에 따라 다른 트리거를 쓸지 여부")]
-
-    public bool useDirectionalDashTrigger = true;
-
-
-
-    [Header("Training")]
-
-    [Header("소모값 감소 적용")]
-
-    [Tooltip("훈련에서 자원 비용을 덮어쓸지 여부")]
-
-    public bool trainingUseCostOverride = false;
-
-    [Range(-1, 2)]
-
-    [Tooltip("이 스킬에서 자원 감소가 적용될 훈련 루트 인덱스 (-1이면 미사용)")]
-
-    public int routeForCostOverride = 0;
-
-    [Tooltip("훈련 시 실제 소모 자원")]
-
-    public int trainingCostRoute = 5;
-
-
-
-    [Header("적의 감소 적용")]
-
-    [Tooltip("현재 적대감에서 이 값만큼 즉시 감소 (양수 입력)")]
-
-    public float trainingHostilityDeltaRoute = 0.3f;
-
-
-
-    [Header("연속 행동 적용")]
-
-    [Tooltip("이 스킬 사용 후 턴을 마치지 않음")]
-
-    public bool trainingFreeActionOnRoute = false;
-
-
-
-    void OnEnable()
-
-    {
-
-        targetMode = SkillTargetMode.Tile; // 실수 방지 기본값
-
-        power = 0f;                    // 피해 없음
-
-        school = DamageSchool.Physical;
-
-        costResource = SkillCostResource.Rage;
-
-    }
-
-    // 커스텀 프리뷰 & 타겟 맵 제공
-
-    public IEnumerable<Vector3Int> GetPreviewCells(BattleManager _battlemanager, BattleUnit _caster)
-
-        => (_battlemanager && _caster && _caster.CurrentMap) ? ComputeLandingCandidates(_battlemanager, _caster) : System.Array.Empty<Vector3Int>();
-
-    public override IEnumerable<Vector3Int> GetAreaCells(Vector3Int _originCell, bool _isOddRow)
-
-    {
-
-        yield break;
-
-    }
-
-    public Tilemap GetTargetMap(BattleManager _battlemanager, BattleUnit _caster)
-
-       => _caster ? _caster.CurrentMap : null;
-
-
-
-    public override IEnumerator Execute(BattleManager bm, BattleUnit caster, BattleUnit targetUnit, Tilemap targetMap, Vector3Int targetCell)
-
-    {
-
-        // 타겟 맵이 없으면 실행 불가
-
-        if (targetMap == null) yield break;
-
-
-
-        // 자원 소비 (Execute에서 한 번만 수행)
-
-        var res = GetCostResource(caster);
-
-        int cost = GetEffectiveCost(caster);
-
-
-
-        if (cost > 0)
-
-        {
-
-            // 자원 부족 시 실행 취소 및 락 해제
-
-            if (!caster.TryConsumeResource(res, cost))
-
-            {
-
-                bm.UnlockSkillConfirm();
-
-                yield break;
-
-            }
-
-        }
-
-
-
-        // 2. 이동 로직 실행 (ResolveOnTile 내부의 자원 소모는 제거됨)
-
-        yield return ResolveOnTile(bm, targetMap, targetCell, caster);
-
-
-
-        // 3. 쿨다운 적용
-
-        caster.ApplyCooldown(this);
-
-
-
-        // 4. 연속 행동(FreeAction) 훈련 확인
-
-        int route = caster.GetTrainingRouteIndex(this);
-
-        bool isFreeAction = trainingFreeActionOnRoute && route >= 0; // 루트 체크 필요하면 추가
-
-
-
-        if (isFreeAction)
-
-        {
-
-            bm.ResetSkillSelectionState(); // 턴 종료 안 함
-
-        }
-
-        else
-
-        {
-
-            bm.FinishActionAfterSkill(); // 턴 종료
-
-        }
-
-    }
-
-
-
-    public override IEnumerator ResolveOnUnit(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _none)
-
-    {
-
-        if (!_battlemanager || !_caster || !_caster.CurrentMap) yield break;
-
-
-
-        // 비용 체크
-
-        var res = GetCostResource(_caster);
-
-        int cost = GetEffectiveCost(_caster);
-
-        if (cost > 0 && !_caster.TryConsumeResource(res, cost)) yield break;
-
-
-
-        var candidates = ComputeLandingCandidates(_battlemanager, _caster).ToList();
-
-        if (candidates.Count == 0) yield break;
-
-        // 기본은 첫 후보를 사용(원하면 UI에서 먼저 선택하게 해야 함)
-
-        yield return MoveCasterTo(_battlemanager, _caster, _caster.CurrentMap, candidates[0]);
-
-    }
-
-
-
-    // 클릭된 타일이 후보 중 하나일 때만 이동 실행
-
-    public override IEnumerator ResolveOnTile(BattleManager _battlemanager, Tilemap _map, Vector3Int _originCell, BattleUnit _caster)
-
-    {
-
-        if (!_battlemanager || !_caster || !_map) yield break;
-
-
-
-        var valids = new HashSet<Vector3Int>(ComputeLandingCandidates(_battlemanager, _caster));
-
-        if (!valids.Contains(_originCell))
-
-            yield break; // 미리보기 밖 클릭 무시
-
-
-
-        // Hostility 즉시 감소
-
-        int route = _caster.GetTrainingRouteIndex(this);
-
-        if (route == 1 && trainingHostilityDeltaRoute > 0f)
-
-        {
-
-            float factor = Mathf.Clamp01(trainingHostilityDeltaRoute);   // 보통 0.3
-
-            float current = _caster.Hostility;
-
-            float delta = current * factor;                               // 현재 적의의 30%
-
-
-
-            if (delta > 0f)
-
-            {
-
-                _caster.AddHostility(-delta);
-
-                Debug.Log($"[Training-Dir] {_caster.name} Hostility -{delta} (factor={factor}) → {_caster.Hostility}");
-
-            }
-
-        }
-
-
-
-        yield return MoveCasterTo(_battlemanager, _caster, _map, _originCell);
-
-    }
-
-
-
-    // 핵심 로직: 착지 후보 계산
-
-    IEnumerable<Vector3Int> ComputeLandingCandidates(BattleManager _battlemanager, BattleUnit _caster)
-
-    {
-
-        var map = _caster.CurrentMap;
-
-        var start = _caster.Cell;
-
-
-
-        var labels = GetDirectionsFor(_caster.data.team, start, direction, backMode);
-
-        var results = new HashSet<Vector3Int>();
-
-
-
-        foreach (var label in labels)
-
-        {
-
-            // start에서 label 방향으로 쭉 한 줄(ray)을 만든다.
-
-            var ray = CollectRay(map, start, label, maxScanCells);
-
-            if(ray.Count == 0)
-
-                continue;
-
-
-
-            // 가장 먼 칸부터 거꾸로 오면서 착지 가능한 칸을 찾는다.
-
-            Vector3Int landing = start;
-
-            for(int i=ray.Count - 1;i >=0;--i)
-
-            {
-
-                var cell = ray[i];
-
-                if(IsLandingFree(_battlemanager,map,cell))
-
-                {
-
-                    landing = cell;
-
-                    break;
-
-                }
-
-            }
-
-
-
-            // 착지 불가능하거나, 제자리라면 후보에서 제외
-
-            if (landing == start)
-
-                continue;
-
-
-
-            results.Add(landing);
-
-        }
-
-        return results;
-
-    }
-
-
-
-    List<Vector3Int> CollectRay(Tilemap _map, Vector3Int _start, DirLabel _label, int _maxcells)
-
-    {
-
-        //start에서 label 방향으로 최대 maxCells만큼 스캔해서 그 라인에 있는 칸들을 순서대로 반환한다.
-
-        var list = new List<Vector3Int>();
-
-        var cur = _start;
-
-        int guard = 0;
-
-
-
-        while(true)
-
-        {
-
-            if(_maxcells > 0 && guard >= _maxcells)
-
-                break;
-
-            guard++;
-
-
-
-            var step = GetStepAt(cur, _label);
-
-            var next = new Vector3Int(cur.x + step.x, cur.y + step.y, cur.z);
-
-
-
-            if(!IsCellWithin(_map,next))
-
-                break;
-
-            if(!HasTile(_map,next))
-
-                break;
-
-
-
-            list.Add(next);
-
-            cur = next;
-
-        }
-
-
-
-        return list;
-
-    }
-
-
-
-    // ----------------- helpers -----------------
-
-    // 플레이어는 W(-1,0)/SW(-1,1), 적은 E(+1,0)/NE(+1,-1)
-
-    List<DirLabel> GetDirectionsFor(Team _team, Vector3Int _start, DirectionMode _dirmode, BackMode _backmode)
-
-    {
-
-        // 팀 기준 전/후 쌍 (라벨)
-
-        DirLabel backA, backB, frontA, frontB;
-
-        if (_team == Team.Player) { backA = DirLabel.W; backB = DirLabel.SW; frontA = DirLabel.E; frontB = DirLabel.NE; }
-
-        else { backA = DirLabel.E; backB = DirLabel.NE; frontA = DirLabel.W; frontB = DirLabel.SW; }
-
-
-
-        if (_dirmode == DirectionMode.AbsoluteNegativeX) return new() { DirLabel.W };
-
-        if (_dirmode == DirectionMode.AbsolutePositiveX) return new() { DirLabel.E };
-
-
-
-        bool useFront = (_dirmode == DirectionMode.TeamBasedFront);
-
-        var a = useFront ? frontA : backA;
-
-        var b = useFront ? frontB : backB;
-
-
-
-        return _backmode switch
-
-        {
-
-            BackMode.W_Only => new() { a },
-
-            BackMode.SW_Only => new() { b },
-
-            BackMode.W_or_SW => new() { a, b },
-
-            // (혹시 E_or_NE를 쓰신다면 여기에 추가)
-
-            _ => new() { a, b }
-
-        };
-
-    }
-
-    Vector3Int GetStepAt(Vector3Int _cell, DirLabel _label)
-
-    {
-
-        bool odd = SkillLibrary.IsOddColumn(_cell);
-
-        switch (_label)
-
-        {
-
-            case DirLabel.W: return new Vector3Int(-1, 0, 0);
-
-            case DirLabel.E: return new Vector3Int(1, 0, 0);
-
-            case DirLabel.SW: return odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0);
-
-            case DirLabel.NE: return odd ? new Vector3Int(+1, +1, 0) : new Vector3Int(0, +1, 0);
-
-        }
-
-        return Vector3Int.zero;
-
-    }
-
-    DirLabel Opposite(DirLabel _dir)
-
-    {
-
-        switch (_dir)
-
-        {
-
-            case DirLabel.W: return DirLabel.E;
-
-            case DirLabel.E: return DirLabel.W;
-
-            case DirLabel.SW: return DirLabel.NE;
-
-            case DirLabel.NE: return DirLabel.SW;
-
-        }
-
-        return _dir;
-
-    }
-
-
-
-    bool IsLandingFree(BattleManager _battlemanager, Tilemap _map, Vector3Int _cell)
-
-    {
-
-        if (!HasTile(_map, _cell)) return false;
-
-
-
-        // 한 셀만 영역으로 만들어 BattleManager의 유닛 조회 유틸 사용
-
-        var units = _battlemanager.Grid.GetUnitsInArea(_map, new[] { _cell });
-
-        foreach (var u in units)
-
-        {
-
-            if (u != null && !u.IsDead && u.Cell == _cell)
-
-                return false; // 점유 중
-
-        }
-
-        return true;
-
-    }
-
-    bool IsBackMove(Team _team, Vector3Int _start, Vector3Int _dest)
-
-    {
-
-        var backLabels = GetDirectionsFor(_team, _start, DirectionMode.TeamBasedBack, backMode);
-
-
-
-        foreach (var label in backLabels)
-
-        {
-
-            var step = GetStepAt(_start, label);                 // 홀짝 컬럼 반영
-
-            var expected = new Vector3Int(_start.x + step.x, _start.y + step.y, _start.z);
-
-            if (expected == _dest)
-
-                return true;
-
-        }
-
-
-
-        // 1칸이 아닌 이동(여러 칸) 대비 fallback (기존 로직)
-
-        if (_team == Team.Player) return _dest.x < _start.x;
-
-        else return _dest.x > _start.x;
-
-    }
-
-
-
-    bool IsCellWithin(Tilemap _map, Vector3Int _cell) => _map.cellBounds.Contains(_cell);
-
-    bool HasTile(Tilemap _map, Vector3Int _cell) => _map.GetTile(_cell) != null;
-
-
-
-    IEnumerator MoveCasterTo(BattleManager _battlemanager, BattleUnit _caster, Tilemap _map, Vector3Int _landing)
-
-    {
-
-        if (!_caster || !_map)
-
-            yield break;
-
-
-
-        var endW = _map.GetCellCenterWorld(_landing);
-
-        var startCell = _caster.Cell;
-
-
-
-        // 이동 시 현재 칸 점유 해제
-
-        if (_battlemanager != null && _battlemanager.Grid != null)
-
-            _battlemanager.Grid.SetOccupied(_caster.data.team, startCell, false);
-
-
-
-        if (dashAnimate)
-
-        {
-
-            // 애니메이터 탐색 강화 (Root -> Children 순서)
-
-            var anim = _caster.GetComponent<Animator>();
-
-            if (anim == null) anim = _caster.GetComponentInChildren<Animator>();
-
-
-
-            if (anim != null)
-
-            {
-
-                string trigger = null;
-
-
-
-                if (useDirectionalDashTrigger)
-
-                {
-
-                    bool isBack = IsBackMove(_caster.data.team, startCell, _landing);
-
-                    trigger = isBack ? "Skill_3" : forwardDashTrigger;
-
-                }
-
-                else
-
-                {
-
-                    trigger = forwardDashTrigger;
-
-                }
-
-
-
-                if (!string.IsNullOrEmpty(trigger))
-
-                {
-
-                    // 트리거 강제 설정 및 로그 확인
-
-                    anim.SetTrigger(trigger);
-
-                    Debug.Log($"[Dash] {_caster.name} Play Trigger: {trigger}");
-
-                }
-
-            }
-
-            else
-
-            {
-
-                Debug.LogWarning($"[Dash] {_caster.name}에게 Animator 컴포넌트가 없습니다.");
-
-            }
-
-
-
-            // 2) 위치 보간(대시 모션)
-
-            var startW = _caster.transform.position;
-
-            float dur = Mathf.Max(0.0001f, dashDuration);
-
-            float t = 0f;
-
-
-
-            while (t < dur)
-
-            {
-
-                t += Time.deltaTime;
-
-                float u = Mathf.Clamp01(t / dur);
-
-
-
-                // [옵션] 가속/감속을 원하면 Easing 추가 (예: SmoothStep)
-
-                // u = Mathf.SmoothStep(0f, 1f, u); 
-
-
-
-                Vector3 pos = Vector3.Lerp(startW, endW, u);
-
-
-
-                if (dashArc > 0f)
-
-                {
-
-                    float h = Mathf.Sin(u * Mathf.PI) * dashArc;
-
-                    pos += Vector3.up * h;
-
-                }
-
-
-
-                _caster.transform.position = pos;
-
-                yield return null;
-
-            }
-
-        }
-
-
-
-        _caster.MoveTo(_map, _landing); // 최종 스냅(셀 setter 보호)
-
-
-
-        // 이동 끝: 새 칸 점유 설정
-
-        if (_battlemanager != null && _battlemanager.Grid != null)
-
-            _battlemanager.Grid.SetOccupied(_caster.data.team, _caster.Cell, true);
-
-
-
-        yield return null;
-
-    }
-
-
-
-    public override int GetEffectiveCost(BattleUnit _caster)
-
-    {
-
-        int baseCost = base.GetEffectiveCost(_caster);
-
-        if (!_caster) return baseCost;
-
-
-
-        int route = _caster.GetTrainingRouteIndex(this);
-
-        if (trainingUseCostOverride && route == 0)
-
-            return Mathf.Max(0, trainingCostRoute);
-
-
-
-        return baseCost;
-
-    }
-
-    public override string GetFullDescriptionRich(BattleUnit _caster)
-
-    {
-
-        string baseDesc = base.GetFullDescriptionRich(_caster);
-
-
-
-        int route = _caster != null ? _caster.GetTrainingRouteIndex(this) : -1;
-
-        if (route < 0 || trainingRoutes == null || route >= trainingRoutes.Length)
-
-            return baseDesc;
-
-
-
-        var info = trainingRoutes[route];
-
-        return SkillTooltipUtil.AppendTrainingRouteDescription(
-
-            baseDesc,
-
-            info.title,
-
-            info.description
-
-        );
-
-    }
-
-
-
-}
-
-
+[Binary file]
 
 
 ================================================
@@ -19693,24 +19146,17 @@ FILE: 01_Scripts/Battle/Units/TraitAsset.cs
 ================================================
 using UnityEngine;
 
-
-
 [CreateAssetMenu(menuName = "Battle/TraitAsset", fileName = "Trait_New")]
-
 public class TraitAsset : ScriptableObject
-
 {
+    [Header("Identity")]
+    public string id;
 
     [Header("Display")]
-
     public string displayName; // 성격 이름 (예: 다혈질)
-
     [TextArea] public string description; // 성격 설명
 
-
-
     // 추후 성격 효과(스탯 보정 등) 로직이 필요하면 여기에 추가
-
 }
 
 
@@ -20516,6 +19962,12 @@ public static class AreaShapes
 }
 
 
+
+
+================================================
+FILE: 01_Scripts/Battle/Utils/BattleStateLogger.cs
+================================================
+Error reading file with 'cp949': 'cp949' codec can't decode byte 0xed in position 1123: illegal multibyte sequence
 
 
 ================================================
@@ -48838,6 +48290,311 @@ public class TileCellDebugger : Editor
 
 }
 
+
+
+
+================================================
+FILE: Editor/UniversalDataImporter.cs
+================================================
+using UnityEngine;
+using UnityEditor;
+using UnityEngine.Networking;
+using System.Collections;
+using System.Collections.Generic;
+using System;
+using Unity.EditorCoroutines.Editor;
+using System.Reflection;
+using System.Linq;
+
+public class UniversalDataImporter : EditorWindow
+{
+    // -----------------------------------------------------------------------------------
+    // [Configuration] 구글 시트 URL (CSV Export 링크)
+    // -----------------------------------------------------------------------------------
+    // 사용자 입력을 위해 EditorPrefs로 저장하거나 코드 상단에 상수로 배치
+    // 여기서는 편의상 상수로 배치하되, 실제로는 EditorWindow UI에서 입력받는 것이 좋습니다.
+    private const string SKILL_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pubhtml?gid=258366528&single=true";
+    private const string PASSIVE_SHEET_URL = "INSERT_PASSIVE_CSV_URL_HERE";
+    private const string TRAIT_SHEET_URL = "INSERT_TRAIT_CSV_URL_HERE";
+
+    // 저장 경로
+    private const string SKILL_SAVE_PATH = "Assets/03_Data/Skills/Imported";
+    private const string PASSIVE_SAVE_PATH = "Assets/03_Data/Passives/Imported";
+    private const string TRAIT_SAVE_PATH = "Assets/03_Data/Traits/Imported";
+
+    [MenuItem("Tools/Data/Sync Skills")]
+    public static void SyncSkills() => StartDownload(SKILL_SHEET_URL, SKILL_SAVE_PATH, (csv) => ProcessSkills(csv));
+
+    [MenuItem("Tools/Data/Sync Passives")]
+    public static void SyncPassives() => StartDownload(PASSIVE_SHEET_URL, PASSIVE_SAVE_PATH, (csv) => ProcessPassives(csv));
+
+    [MenuItem("Tools/Data/Sync Traits")]
+    public static void SyncTraits() => StartDownload(TRAIT_SHEET_URL, TRAIT_SAVE_PATH, (csv) => ProcessTraits(csv));
+
+    // -----------------------------------------------------------------------------------
+    // [Core] 다운로드 로직
+    // -----------------------------------------------------------------------------------
+    private static void StartDownload(string url, string savePath, Action<string> onComplete)
+    {
+        if (string.IsNullOrEmpty(url) || url.Contains("INSERT"))
+        {
+            Debug.LogError("[Importer] URL이 설정되지 않았습니다. 스크립트 상단의 URL 상수를 수정해주세요.");
+            return;
+        }
+
+        if (!AssetDatabase.IsValidFolder(savePath))
+        {
+            VerifyDirectory(savePath);
+        }
+
+        EditorCoroutineUtility.StartCoroutineOwnerless(DownloadRoutine(url, onComplete));
+    }
+
+    private static IEnumerator DownloadRoutine(string url, Action<string> onComplete)
+    {
+        Debug.Log($"[Importer] Downloading CSV... {url}");
+        using (UnityWebRequest www = UnityWebRequest.Get(url))
+        {
+            yield return www.SendWebRequest();
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                onComplete?.Invoke(www.downloadHandler.text);
+            }
+            else
+            {
+                Debug.LogError($"[Importer] Failed: {www.error}");
+            }
+        }
+    }
+
+    private static void VerifyDirectory(string path)
+    {
+        string[] folders = path.Split('/');
+        string current = folders[0];
+        for (int i = 1; i < folders.Length; i++)
+        {
+            string next = current + "/" + folders[i];
+            if (!AssetDatabase.IsValidFolder(next))
+            {
+                AssetDatabase.CreateFolder(current, folders[i]);
+            }
+            current = next;
+        }
+    }
+
+    // -----------------------------------------------------------------------------------
+    // [Core] 데이터 처리 로직 (제네릭은 아님, 타입별 컬럼 매핑이 다르므로)
+    // -----------------------------------------------------------------------------------
+
+    // 공통: 모든 에셋을 로드해서 ID 사전 구축
+    private static Dictionary<string, T> LoadAssetMap<T>() where T : ScriptableObject
+    {
+        var dict = new Dictionary<string, T>();
+        string[] guids = AssetDatabase.FindAssets($"t:{typeof(T).Name}");
+        
+        foreach (var guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            T asset = AssetDatabase.LoadAssetAtPath<T>(path);
+            if (asset != null)
+            {
+                // Reflection으로 'id' 필드 접근 (공통 인터페이스가 없으므로)
+                FieldInfo idField = typeof(T).GetField("id");
+                if (idField != null)
+                {
+                    string idVal = idField.GetValue(asset) as string;
+                    
+                    // ID가 비어있으면 파일명으로 추론 시도 (Migration)
+                    if (string.IsNullOrEmpty(idVal))
+                    {
+                        // 예: "Skill_1001" -> "1001"
+                        // 간단하게 파일명 전체를 임시 ID로 간주하거나, 별도 로직 적용
+                        // 여기서는 id가 비어있으면 사전에 넣지 않음 (새로 생성되거나, 직접 매칭 로직에서 처리)
+                    }
+                    else
+                    {
+                        if (!dict.ContainsKey(idVal)) dict.Add(idVal, asset);
+                    }
+                }
+            }
+        }
+        return dict;
+    }
+
+    // [Parser Helper] CSV 파싱 (단순 쉼표 분리, 따옴표 처리 없음 주의)
+    private static List<string[]> ParseCSV(string csv)
+    {
+        var list = new List<string[]>();
+        string[] rows = csv.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+        // 0~2행은 헤더 등 잡다한 정보라 가정하고 3행부터 데이터라 가정 (ItemDataImporter 참조)
+        for (int i = 3; i < rows.Length; i++)
+        {
+            list.Add(rows[i].Split(','));
+        }
+        return list;
+    }
+
+    // -----------------------------------------------------------------------------------
+    // [Impl] Skill Processing
+    // -----------------------------------------------------------------------------------
+    private static void ProcessSkills(string csv)
+    {
+        var map = LoadAssetMap<SkillAsset>();
+        var rows = ParseCSV(csv);
+        int updated = 0, created = 0;
+
+        foreach (var cols in rows)
+        {
+            if (cols.Length < 3) continue;
+            string id = cols[0].Trim(); // A열: ID
+            if (string.IsNullOrEmpty(id)) continue;
+
+            SkillAsset asset = null;
+            if (map.ContainsKey(id))
+            {
+                asset = map[id];
+            }
+            else
+            {
+                // 없으면 새로 생성 (기본 타입은 일단 SkillAsset을 상속받은 구체 클래스가 필요함)
+                // [주의] SkillAsset은 abstract일 수 있으므로, 어떤 파생 클래스를 생성할지 결정해야 함.
+                // CSV에 'Type' 컬럼이 있다고 가정하거나, 기본형(예: ParametricDamageSkill)을 사용.
+                // 여기서는 가장 일반적인 'ParametricDamageSkill'을 생성한다고 가정.
+                
+                // 만약 Type 컬럼이 있다면: Type t = Type.GetType(cols[X]); asset = ScriptableObject.CreateInstance(t) as SkillAsset;
+                // 일단은 데모용으로 ScriptableObject 생성이 불가능할 수 있으니(Abstract), 확인 필요.
+                // SkillAsset은 Abstract class이므로 인스턴스화 불가 -> ParametricDamageSkill 사용
+                asset = ScriptableObject.CreateInstance("ParametricDamageSkill") as SkillAsset; 
+                
+                if (asset == null)
+                {
+                    Debug.LogError($"[Importer] Failed to create instance for ID {id}. Check Class Name.");
+                    continue;
+                }
+
+                asset.id = id;
+                string path = $"{SKILL_SAVE_PATH}/Skill_{id}.asset";
+                AssetDatabase.CreateAsset(asset, path);
+                created++;
+            }
+
+            // 매핑 (컬럼 인덱스는 시트 구조에 따라 수정 필요)
+            // A: ID, B: Name, C: Description, D: Cost, E: Cooldown ...
+            if (cols.Length > 1) asset.displayName = cols[1].Trim();
+            if (cols.Length > 2) asset.description = cols[2].Trim();
+            
+            // 추가 필드 매핑
+            // Col 3: Power (float)
+            if (cols.Length > 3 && float.TryParse(cols[3], out float p))
+            {
+                asset.power = p;
+            }
+
+            // Col 4: Cost (int)
+            if (cols.Length > 4 && int.TryParse(cols[4], out int c))
+            {
+                asset.cost = c;
+            }
+            
+            EditorUtility.SetDirty(asset);
+            updated++;
+        }
+        
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[Importer] Skills Sync Complete. Created: {created}, Updated: {updated}");
+    }
+
+    // -----------------------------------------------------------------------------------
+    // [Impl] Passive Processing
+    // -----------------------------------------------------------------------------------
+    private static void ProcessPassives(string csv)
+    {
+        var map = LoadAssetMap<PassiveAsset>();
+        var rows = ParseCSV(csv);
+        int updated = 0, created = 0;
+
+        foreach (var cols in rows)
+        {
+            if (cols.Length < 3) continue;
+            string id = cols[0].Trim();
+            if (string.IsNullOrEmpty(id)) continue;
+
+            PassiveAsset asset = null;
+            if (map.ContainsKey(id))
+            {
+                asset = map[id];
+            }
+            else
+            {
+                // PassiveAsset 역시 Abstract일 가능성이 높음. 구체 클래스 필요.
+                // 임시로 'BasePassive' 같은게 있다면 사용, 없다면 스킵하거나 특정 타입 지정
+                // 여기서는 예시로 'GigantStrengthToBodyPassive' 같은걸 하드코딩 할 수 없으니
+                // Type 컬럼(예: B열)을 읽어서 리플렉션으로 생성하는게 좋음.
+                
+                /*
+                string typeName = cols[1].Trim(); 
+                asset = ScriptableObject.CreateInstance(typeName) as PassiveAsset;
+                */
+                
+                // 일단 생성이 어렵다면 경고 출력
+                // Debug.LogWarning($"[Importer] Passive {id} 신규 생성은 구체 클래스 타입 정보가 필요하여 스킵합니다.");
+                // continue;
+
+                // [가정] 만약 단순히 데이터 컨테이너라면 BasicPassive 같은게 있어야 함.
+                continue; 
+            }
+
+            // 매핑
+            asset.id = id;
+            if (cols.Length > 2) asset.displayName = cols[2].Trim();
+            if (cols.Length > 3) asset.description = cols[3].Trim();
+
+            EditorUtility.SetDirty(asset);
+            updated++;
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[Importer] Passives Sync Complete. Updated: {updated}");
+    }
+
+    // -----------------------------------------------------------------------------------
+    // [Impl] Trait Processing
+    // -----------------------------------------------------------------------------------
+    private static void ProcessTraits(string csv)
+    {
+        var map = LoadAssetMap<TraitAsset>();
+        var rows = ParseCSV(csv);
+        int updated = 0, created = 0;
+
+        foreach (var cols in rows)
+        {
+            if (cols.Length < 3) continue;
+            string id = cols[0].Trim();
+            if (string.IsNullOrEmpty(id)) continue;
+
+            TraitAsset asset = null;
+            if (map.ContainsKey(id))
+            {
+                asset = map[id];
+            }
+            else
+            {
+                asset = ScriptableObject.CreateInstance<TraitAsset>();
+                asset.id = id;
+                AssetDatabase.CreateAsset(asset, $"{TRAIT_SAVE_PATH}/Trait_{id}.asset");
+                created++;
+            }
+
+            // 매핑
+            if (cols.Length > 1) asset.displayName = cols[1].Trim();
+            if (cols.Length > 2) asset.description = cols[2].Trim();
+
+            EditorUtility.SetDirty(asset);
+            updated++;
+        }
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[Importer] Traits Sync Complete. Created: {created}, Updated: {updated}");
+    }
+}
 
 
 

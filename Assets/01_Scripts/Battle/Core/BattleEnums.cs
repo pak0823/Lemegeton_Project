@@ -6,7 +6,8 @@ public enum BattleState
     Targeting,
     Resolving,
     TargetingKnockback,
-    EndTurn
+    EndTurn,
+    EnemyTurn // Added for FSM support
 }
 
 public enum BattleAction
