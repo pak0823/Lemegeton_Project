@@ -26,6 +26,7 @@ public class CampCraftPage : MonoBehaviour
 
 
 
+
     [Header("Left Detail")]
 
     public Transform listContent;
@@ -103,7 +104,6 @@ public class CampCraftPage : MonoBehaviour
 
 
         SwitchState(false);
-
     }
 
     private void OnDestroy() 

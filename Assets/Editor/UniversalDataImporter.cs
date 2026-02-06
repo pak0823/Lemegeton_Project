@@ -213,7 +213,7 @@ public class UniversalDataImporter : EditorWindow
     {
         var map = LoadAssetMap<PassiveAsset>();
         var rows = ParseCSV(csv);
-        int updated = 0, created = 0;
+        int updated = 0;
 
         foreach (var cols in rows)
         {

@@ -341,6 +341,12 @@ public class BattleManager : MonoBehaviour
                         sr.sprite = data.UnitIcon;
                     }
                     unit.ApplyData();
+                    
+                    // [Persistence] 저장된 상태 로드 (ApplyData 이후에 호출해야 함)
+                    if (PlayerDataManager.Instance != null)
+                    {
+                        PlayerDataManager.Instance.SyncToBattle(unit);
+                    }
                 }
             }
         }
@@ -646,6 +652,20 @@ public class BattleManager : MonoBehaviour
     void HandleVictory()
     {
         Debug.Log("[Battle] 승리!");
+
+        // [Persistence] 살아있는 아군 상태 저장
+        if (PlayerDataManager.Instance != null)
+        {
+            var units = FindObjectsOfType<BattleUnit>();
+            foreach (var u in units)
+            {
+                if (u.data.team == Team.Player) // 죽은 애도 저장은 해야 함 (부활 로직 위해)
+                {
+                    PlayerDataManager.Instance.SyncFromBattle(u);
+                }
+            }
+        }
+
         SceneTransitionManager.Instance.ReturnToSavedPoint();
     }
     void CheckBattleEnd()
@@ -665,6 +685,23 @@ public class BattleManager : MonoBehaviour
             if (_battleEndedOnce) return;
             _battleEndedOnce = true;
             Debug.Log("[Battle] 패배...");
+
+            // [Persistence] 패배 시에도 상태 저장이 필요한가? 
+            // 보통 패배하면 게임 오버거나, 상태가 유지된 채로 마을로 돌아감.
+            // 여기서는 일단 저장함.
+            if (PlayerDataManager.Instance != null)
+            {
+                // var units = FindObjectsOfType<BattleUnit>(); // 이미 위에서 정의됨
+                // units 변수 재사용
+                foreach (var u in units)
+                {
+                    if (u.data.team == Team.Player)
+                    {
+                        PlayerDataManager.Instance.SyncFromBattle(u);
+                    }
+                }
+            }
+
             SceneTransitionManager.Instance.ReturnToSavedPoint();
         }
     }
