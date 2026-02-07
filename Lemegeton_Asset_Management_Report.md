@@ -40,6 +40,7 @@
 
 - **Battle**: `BattleManager`와 유닛(`Enemy_spider` 등)이 모여 있으며, `EnemyStat` 같은 기본형 프리팹을 상속받아 파생형을 만드는 구조입니다.
 - **Exploration**: `Box`, `Potal` 등 기믹과 `InteractionHintUI` 등 월드 UI가 포함됩니다.
+  - 특히 `Box` 프리팹은 `Addressables`로 로드되며, 수정 시 반드시 **Addressable Build Update**가 필요합니다 (Title -> Exploration 전환 시 구버전 로드 방지).
 
 ### 3.2 Common (공통 시스템)
 
@@ -68,6 +69,14 @@
 
 - **Data Import**: `UniversalDataImporter.cs`를 통해 구글 시트 데이터를 SO로 자동 변환합니다.
 - **Custom Inspector**: `ParametricDamageSkillEditor.cs` 등으로 복잡한 스킬 데이터를 인스펙터에서 쉽게 편집하도록 지원합니다.
+- **Reward Table**: `RewardTableSO`는 확률 기반 보상과 텍스트를 통합 관리하며, `BoxInteract` 프리팹에서 직접 참조합니다.
+
+### 4.4 Encoding Strategy (인코딩 전략)
+
+**[New]** 모든 스크립트(.cs)는 `UTF-8 with BOM` 형식으로 관리됩니다.
+
+- 한글 주석 및 로그 깨짐 방지
+- 크로스 플랫폼 컴파일 안전성 확보
 
 ---
 

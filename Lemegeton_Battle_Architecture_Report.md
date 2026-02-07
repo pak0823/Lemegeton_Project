@@ -1,8 +1,8 @@
 # Lemegeton: 전투 시스템 아키텍처 분석 및 실무 적용 제안서
 
-**작성일시**: 2026-02-05
+**작성일시**: 2026-02-07
 **참조**: `BattleManager.cs`, `BattleUnit.cs`, `EnemyAI.cs`
-**목적**: 현재 전투 시스템의 코드 구조를 진단하고, 상용급(Production-Ready) 프로젝트로 발전시키기 위한 **실무적인 개선안(Best Practices)**을 제시함.
+**목적**: 현재 전투 시스템의 코드 구조를 진단하고, 상용급(Production-Ready) 프로젝트로 발전시키기 위한 **실무적인 개선안(Best Practices)**을 제시함. (최근 탐험 모듈 안정화 이후 차기 중점 과제)
 
 ---
 
@@ -62,7 +62,7 @@
 
 ### 2.4 UniTask (Async/Await) - 코루틴 대체
 
-복잡한 연출(이동 후 -> 이펙트 -> 데미지 -> UI 갱신) 시퀀스를 `Coroutine`보다 가가독성이 뛰어난 `async/await`로 처리합니다.
+복잡한 연출(이동 후 -> 이펙트 -> 데미지 -> UI 갱신) 시퀀스를 `Coroutine`보다 가독성이 뛰어난 `async/await`로 처리합니다.
 
 ---
 

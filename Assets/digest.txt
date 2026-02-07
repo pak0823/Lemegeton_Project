@@ -3,6 +3,11 @@ Directory structure:
     ├── ingest.sh
     ├── 01_Scripts/
     │   ├── Battle/
+    │   │   ├── Command/
+    │   │   │   ├── CommandQueue.cs
+    │   │   │   ├── ICommand.cs
+    │   │   │   ├── MoveCommand.cs
+    │   │   │   └── SkillCommand.cs
     │   │   ├── Core/
     │   │   │   ├── ATBTurnController.cs
     │   │   │   ├── BattleEnums.cs
@@ -19,6 +24,10 @@ Directory structure:
     │   │   │   ├── GameSpeedController.cs
     │   │   │   ├── HostilityRules.cs
     │   │   │   └── SkillEnums.cs
+    │   │   ├── FSM/
+    │   │   │   ├── BattleBaseState.cs
+    │   │   │   ├── BattleConcreteStates.cs
+    │   │   │   └── BattleStateMachine.cs
     │   │   ├── Projectiles/
     │   │   │   └── ProjectileController.cs
     │   │   ├── Skills/
@@ -76,7 +85,11 @@ Directory structure:
     │   │   │   ├── EnemyCastState.cs
     │   │   │   ├── StatusController.cs
     │   │   │   ├── TraitAsset.cs
-    │   │   │   └── UnitStateController.cs
+    │   │   │   ├── UnitStateController.cs
+    │   │   │   └── Components/
+    │   │   │       ├── UnitMover.cs
+    │   │   │       ├── UnitStats.cs
+    │   │   │       └── UnitVisual.cs
     │   │   ├── Utils/
     │   │   │   ├── AreaShapes.cs
     │   │   │   ├── BattleStateLogger.cs
@@ -96,7 +109,9 @@ Directory structure:
     │   │   └── System/
     │   │       ├── CameraFollow2D.cs
     │   │       ├── CurrencyManager.cs
+    │   │       ├── GameEventBus.cs
     │   │       ├── GameResetter.cs
+    │   │       ├── IInventory.cs
     │   │       ├── InventoryManager.cs
     │   │       ├── PlayerDataManager.cs
     │   │       ├── SceneTransitionManager.cs
@@ -118,20 +133,31 @@ Directory structure:
     │   │   │   ├── DebuffData.cs
     │   │   │   ├── ItemData.cs
     │   │   │   ├── ItemLibray.cs
+    │   │   │   ├── RewardTableSO.cs
     │   │   │   ├── UnitData.cs
     │   │   │   └── WeightedDescriptionsSO.cs
     │   │   └── Stages/
     │   │       ├── StageDataBase.cs
     │   │       ├── StageNormalMapData.cs
     │   │       └── StageQuizMapData.cs
+    │   ├── Editor/
+    │   │   ├── AddressablesBuilder.cs
+    │   │   ├── MapIDBaker.cs
+    │   │   └── MissingScriptFinder.cs
     │   ├── Exploration/
     │   │   ├── ExplorationQTEManager.cs
     │   │   ├── MapManager.cs
     │   │   ├── MapToggleManager.cs
     │   │   ├── PlayerMovement.cs
     │   │   ├── PuzzleManager.cs
-    │   │   └── VigorManager.cs
+    │   │   ├── VigorManager.cs
+    │   │   └── System/
+    │   │       ├── ExplorationEntitySpawner.cs
+    │   │       ├── ExplorationMapLoader.cs
+    │   │       ├── ExplorationPersistenceManager.cs
+    │   │       └── IMapComponent.cs
     │   ├── Interactables/
+    │   │   ├── IInteractable.cs
     │   │   ├── Core/
     │   │   │   ├── ExplorationPersistId.cs
     │   │   │   ├── HintAnchor.cs
@@ -140,7 +166,6 @@ Directory structure:
     │   │   │   ├── EncounterMonster.cs
     │   │   │   └── EncounterPersist.cs
     │   │   ├── Props/
-    │   │   │   ├── BarrierController.cs
     │   │   │   ├── BoxInteract.cs
     │   │   │   └── PortalController.cs
     │   │   ├── Puzzles/
@@ -156,6 +181,7 @@ Directory structure:
     │   ├── UI/
     │   │   ├── Battle/
     │   │   │   ├── ActionPanelUI.cs
+    │   │   │   ├── BattleUnitAdapter.cs
     │   │   │   ├── HudController.cs
     │   │   │   ├── SkillPanelUI.cs
     │   │   │   ├── TurnBarUI.cs
@@ -174,6 +200,7 @@ Directory structure:
     │   │   │   ├── CraftHeaderController.cs
     │   │   │   ├── CraftResultPopup.cs
     │   │   │   ├── CraftSlotUI.cs
+    │   │   │   ├── ExplorationUnitAdapter.cs
     │   │   │   ├── ItemTooltipUI.cs
     │   │   │   ├── MaterialSlotUI.cs
     │   │   │   └── Slots/
@@ -196,6 +223,7 @@ Directory structure:
     │   │   │   └── UIArrowNavigator.cs
     │   │   ├── Core/
     │   │   │   ├── ISceneUiModule.cs
+    │   │   │   ├── IUnitStatus.cs
     │   │   │   ├── ModalWindowBase.cs
     │   │   │   ├── SceneUIOrchestrator.cs
     │   │   │   ├── SceneUIProfile.cs
@@ -206,6 +234,8 @@ Directory structure:
     │   │   │   ├── ExplorationLogUI.cs
     │   │   │   ├── ExplorationModalPresenter.cs
     │   │   │   ├── ExplorationResetUi.cs
+    │   │   │   ├── ExplorationSidebarController.cs
+    │   │   │   ├── ExplorationStatusSlot.cs
     │   │   │   ├── InteractionHintUI.cs
     │   │   │   ├── InventoryDragHandler.cs
     │   │   │   ├── InventorySlotUI.cs
@@ -354,6 +384,129 @@ FILE: ingest.sh
 #!/bin/bash
 # 유니티 프로젝트 전용 추출 스크립트
 gitingest . --exclude-pattern "*.meta,Library/,Temp/,Logs/,UserSettings/,*.unity,*.asset,*.prefab,*.mat,*.anim,*.controller"
+
+
+================================================
+FILE: 01_Scripts/Battle/Command/CommandQueue.cs
+================================================
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+
+public class CommandQueue : MonoBehaviour
+{
+    private readonly Queue<ICommand> _queue = new Queue<ICommand>();
+    private bool _isRunning = false;
+
+    public void Enqueue(ICommand command)
+    {
+        _queue.Enqueue(command);
+        if (!_isRunning)
+        {
+            ProcessQueue().Forget();
+        }
+    }
+
+    private async UniTaskVoid ProcessQueue()
+    {
+        _isRunning = true;
+        while (_queue.Count > 0)
+        {
+            var command = _queue.Dequeue();
+            await command.ExecuteAsync();
+        }
+        _isRunning = false;
+    }
+    
+    public void Clear()
+    {
+        _queue.Clear();
+        _isRunning = false;
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Battle/Command/ICommand.cs
+================================================
+using Cysharp.Threading.Tasks;
+
+public interface ICommand
+{
+    UniTask ExecuteAsync();
+    // UniTask UndoAsync(); // Undo functionality can be added later if needed
+}
+
+
+
+================================================
+FILE: 01_Scripts/Battle/Command/MoveCommand.cs
+================================================
+using UnityEngine;
+using Cysharp.Threading.Tasks;
+
+public class MoveCommand : ICommand
+{
+    private readonly BattleUnit _unit;
+    private readonly Vector3Int _targetCell;
+
+    public MoveCommand(BattleUnit unit, Vector3Int targetCell)
+    {
+        _unit = unit;
+        _targetCell = targetCell;
+    }
+
+    public async UniTask ExecuteAsync()
+    {
+        if (_unit == null || _unit.Mover == null) return;
+        
+        // Use the decomposed Mover component
+        // Note: BattleUnit.Mover is exposed from Phase 2
+        await _unit.Mover.MoveToAsync(_targetCell);
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Battle/Command/SkillCommand.cs
+================================================
+using Cysharp.Threading.Tasks;
+
+public class SkillCommand : ICommand
+{
+    private readonly BattleUnit _user;
+    private readonly BattleUnit _target;
+    private readonly SkillAsset _skill;
+
+    public SkillCommand(BattleUnit user, BattleUnit target, SkillAsset skill)
+    {
+        _user = user;
+        _target = target;
+        _skill = skill;
+    }
+
+    public async UniTask ExecuteAsync()
+    {
+        if (_user == null || _skill == null) return;
+
+        // 1. Trigger Animation
+        string trigger = _user.GetAnimTriggerForSkill(_skill);
+        await _user.Visual.PlayTriggerAsync(trigger);
+
+        // 2. Logic (Damage, etc.)
+        // Ideally, this should wait for an animation event, but for now we simulate execution.
+        // The actual damage application logic might still reside in BattleUnit or BattleManager temporarily.
+        // We will invoke the events that trigger the damage calculation.
+        
+        _user.NotifySkillUsed(_skill);
+        
+        // If the skill has immediate effect logic, it goes here.
+        // For now, we assume the Animation Event triggered by PlayTriggerAsync calls the actual damage methods in BattleUnit.
+    }
+}
+
 
 
 ================================================
@@ -579,7 +732,8 @@ public enum BattleState
     Targeting,
     Resolving,
     TargetingKnockback,
-    EndTurn
+    EndTurn,
+    EnemyTurn // Added for FSM support
 }
 
 public enum BattleAction
@@ -1830,12 +1984,16 @@ public class BattleManager : MonoBehaviour
     // Battle State (전투 핵심 상태)
     public event System.Action<BattleState, BattleState> OnStateChanged; // 이전 상태, 현재 상태
 
+    [Header("FSM")]
+    public BattleStateMachine fsm; // FSM 참조
+
     // Battle State (전투 핵심 상태)
+    // Legacy support: We still keep this for external readers, but FSM drives logic
     private BattleState _state = BattleState.Idle;
     public BattleState state
     {
         get => _state;
-        private set
+        set // Changed to public set for FSM to write to it, context dependent
         {
             if (_state != value)
             {
@@ -1960,6 +2118,9 @@ public class BattleManager : MonoBehaviour
         if (!skillProcessor) skillProcessor = GetComponentInChildren<BattleSkillProcessor>();
         if (!inputHandler) inputHandler = GetComponentInChildren<BattleInputHandler>();
         if (!turnManager) turnManager = GetComponentInChildren<BattleTurnManager>();
+
+        if (fsm == null) fsm = GetComponent<BattleStateMachine>() ?? gameObject.AddComponent<BattleStateMachine>();
+        fsm.Initialize(this);
 
         gridManager.Initialize(mapManager);
         fieldManager.Initialize(this, gridManager, inputHandler);
@@ -2135,6 +2296,12 @@ public class BattleManager : MonoBehaviour
                         sr.sprite = data.UnitIcon;
                     }
                     unit.ApplyData();
+                    
+                    // [Persistence] 저장된 상태 로드 (ApplyData 이후에 호출해야 함)
+                    if (PlayerDataManager.Instance != null)
+                    {
+                        PlayerDataManager.Instance.SyncToBattle(unit);
+                    }
                 }
             }
         }
@@ -2440,6 +2607,20 @@ public class BattleManager : MonoBehaviour
     void HandleVictory()
     {
         Debug.Log("[Battle] 승리!");
+
+        // [Persistence] 살아있는 아군 상태 저장
+        if (PlayerDataManager.Instance != null)
+        {
+            var units = FindObjectsOfType<BattleUnit>();
+            foreach (var u in units)
+            {
+                if (u.data.team == Team.Player) // 죽은 애도 저장은 해야 함 (부활 로직 위해)
+                {
+                    PlayerDataManager.Instance.SyncFromBattle(u);
+                }
+            }
+        }
+
         SceneTransitionManager.Instance.ReturnToSavedPoint();
     }
     void CheckBattleEnd()
@@ -2459,6 +2640,23 @@ public class BattleManager : MonoBehaviour
             if (_battleEndedOnce) return;
             _battleEndedOnce = true;
             Debug.Log("[Battle] 패배...");
+
+            // [Persistence] 패배 시에도 상태 저장이 필요한가? 
+            // 보통 패배하면 게임 오버거나, 상태가 유지된 채로 마을로 돌아감.
+            // 여기서는 일단 저장함.
+            if (PlayerDataManager.Instance != null)
+            {
+                // var units = FindObjectsOfType<BattleUnit>(); // 이미 위에서 정의됨
+                // units 변수 재사용
+                foreach (var u in units)
+                {
+                    if (u.data.team == Team.Player)
+                    {
+                        PlayerDataManager.Instance.SyncFromBattle(u);
+                    }
+                }
+            }
+
             SceneTransitionManager.Instance.ReturnToSavedPoint();
         }
     }
@@ -5306,37 +5504,21 @@ public class BattleWaveManager : MonoBehaviour
 
 
     public void Initialize(BattleManager _battleManager, IGridProvider _grid, IBattleMapProvider _map)
-
     {
-
         battleManager = _battleManager;
-
         grid = _grid;
-
         map = _map;
-
     }
 
-
-
-    // 초기화 혹은 첫 웨이브 시작
-
     public void StartFirstWave()
-
     {
+        if (autoAssignWaveSet) AutoResolveWaveSet();
 
         if (waveSet == null || waveSet.waves == null || waveSet.waves.Count == 0)
-
         {
-
             Debug.LogWarning("[WaveManager] 웨이브 세트가 없습니다. 테스트 모드 혹은 배치된 유닛 사용.");
-
-            // 웨이브가 없어도 로드 완료 신호는 보내야 BM이 유닛을 잡음
-
             OnWaveLoaded?.Invoke(null, null, null);
-
         }
-
         else
 
         {
@@ -5537,7 +5719,7 @@ public class BattleWaveManager : MonoBehaviour
 
                 if (u == null) continue;
 
-                if (!u.IsDead)
+                if (u.Stats != null && !u.IsDead && u.Mover != null)
 
                 {
 
@@ -6146,6 +6328,148 @@ public enum AreaPreset
     LineDiagU7 //(1시 7시 방향 대각선 7칸)
 
 }
+
+
+================================================
+FILE: 01_Scripts/Battle/FSM/BattleBaseState.cs
+================================================
+using Cysharp.Threading.Tasks;
+
+public abstract class BattleBaseState
+{
+    protected BattleStateMachine stateMachine;
+    protected BattleManager manager;
+
+    public void Initialize(BattleStateMachine _sm, BattleManager _mgr)
+    {
+        stateMachine = _sm;
+        manager = _mgr;
+    }
+
+    public virtual async UniTask Enter() { await UniTask.CompletedTask; }
+    public virtual async UniTask Exit() { await UniTask.CompletedTask; }
+    public virtual void Update() { }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Battle/FSM/BattleConcreteStates.cs
+================================================
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+
+// 1. Initialization State
+public class BattleInitState : BattleBaseState
+{
+    public override async UniTask Enter()
+    {
+        // Rebind and Start Wave like in legacy Start/Init
+        // manager.RebindAllUnitsAndInitATB(); // Access helper if public, or move logic here
+        // For now, assume we call manager's public init methods
+        
+        // Wait for maps or fade in
+        await UniTask.Delay(500); 
+        
+        manager.state = BattleState.Idle; // Legacy sync
+        
+        // Transition to next state (e.g. Turn loop or just Idle)
+        // Ideally, BattleManager should drive the state machine based on events
+    }
+}
+
+// 2. Player Turn State
+public class BattlePlayerTurnState : BattleBaseState
+{
+    public override async UniTask Enter()
+    {
+         manager.state = BattleState.ActionSelect; // Legacy sync
+         // Enable UI, Listen for Input
+         manager.SetHint("당신의 턴입니다.");
+         await UniTask.CompletedTask;
+    }
+
+    public override async UniTask Exit()
+    {
+        // Disable UI or cleanup
+        await UniTask.CompletedTask;
+    }
+}
+
+// 3. Enemy Turn State
+public class BattleEnemyTurnState : BattleBaseState
+{
+    public override async UniTask Enter()
+    {
+        manager.state = BattleState.EnemyTurn; // Legacy sync
+        // Trigger AI Logic
+        // In legacy, this was implicit via BattleTurnManager calling methods
+        await UniTask.CompletedTask;
+    }
+}
+
+// 4. Win State
+public class BattleWinState : BattleBaseState
+{
+    public override async UniTask Enter()
+    {
+        Debug.Log("[FSM] Victory!");
+        // manager.HandleVictory();
+        await UniTask.CompletedTask;
+    }
+}
+
+// 5. Lose State
+public class BattleLoseState : BattleBaseState
+{
+    public override async UniTask Enter()
+    {
+        Debug.Log("[FSM] Defeat...");
+        // manager.HandleDefeat();
+        await UniTask.CompletedTask;
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Battle/FSM/BattleStateMachine.cs
+================================================
+using UnityEngine;
+using Cysharp.Threading.Tasks;
+
+public class BattleStateMachine : MonoBehaviour
+{
+    public BattleBaseState CurrentState { get; private set; }
+    private BattleManager manager;
+
+    public void Initialize(BattleManager _mgr)
+    {
+        manager = _mgr;
+    }
+
+    public async void ChangeState(BattleBaseState newState)
+    {
+        if (CurrentState != null)
+        {
+            await CurrentState.Exit();
+        }
+
+        CurrentState = newState;
+        
+        if (CurrentState != null)
+        {
+            CurrentState.Initialize(this, manager);
+            await CurrentState.Enter();
+        }
+    }
+
+    private void Update()
+    {
+        CurrentState?.Update();
+    }
+}
+
 
 
 ================================================
@@ -16169,41 +16493,29 @@ public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTil
 FILE: 01_Scripts/Battle/Units/BattleUnit.cs
 ================================================
 using System;
-
 using System.Collections;
-
 using System.Collections.Generic;
-
 using UnityEngine;
-
 using UnityEngine.Tilemaps;
+using Cysharp.Threading.Tasks;
 
-
-
-
-
+[RequireComponent(typeof(UnitStats), typeof(UnitMover), typeof(UnitVisual))]
 public class BattleUnit : MonoBehaviour
-
 {
-
     #region 1. Core Data & Configuration (데이터 및 설정)
-
     [Header("Data Source")]
-
     public UnitData data;                   // 유닛 데이터 원본 (ScriptableObject)
-
     public StateStatModifierDB stateStatDB; // 상태 이상 스탯 보정 DB
 
-
-
     [Header("Prefab Settings")]
-
     public ProjectileController defaultProjectilePrefab; // 기본 투사체 프리팹
-
-
+    
+    // Components
+    public UnitStats Stats { get; private set; }
+    public UnitMover Mover { get; private set; }
+    public UnitVisual Visual { get; private set; }
 
     [Header("Debug")]
-
     [SerializeField] private bool debugLogStats = false; // 스탯 디버깅용 (빌드 시 제외 가능)
 
     #endregion
@@ -16236,11 +16548,9 @@ public class BattleUnit : MonoBehaviour
 
     //Vital Stats
 
-    public float HP { get; private set; }
-
-    public float MP { get; private set; }
-
-    public float Rage { get; private set; }
+    public float HP => Stats.HP;
+    public float MP => Stats.MP;
+    public float Rage => Stats.Rage;
 
     public bool IsRetreated { get; private set; } = false; // 도주 여부
 
@@ -16278,7 +16588,7 @@ public class BattleUnit : MonoBehaviour
 
 
 
-    [SerializeField] private float speedMultiplier = 1.0f;  // 속도 계수
+    private float speedMultiplier = 5.0f;  // 속도 계수
 
 
 
@@ -16652,11 +16962,9 @@ public class BattleUnit : MonoBehaviour
 
         // 최대치가 줄어들 땐 현재값도 즉시 맞춰줌 (Clamping)
 
-        HP = Mathf.Min(HP, MaxHP);
-
-        MP = Mathf.Min(MP, MaxMP);
-
-        Rage = Mathf.Min(Rage, MaxRage);
+        Stats.SetHP(Mathf.Min(HP, MaxHP));
+        Stats.SetMP(Mathf.Min(MP, MaxMP));
+        Stats.SetRage(Mathf.Min(Rage, MaxRage));
 
 
 
@@ -16866,7 +17174,7 @@ public class BattleUnit : MonoBehaviour
 
         float before = Rage;
 
-        Rage = Mathf.Clamp(before + amount, 0f, MaxRage);
+        Stats.SetRage(Mathf.Clamp(before + amount, 0f, MaxRage));
 
         if (debugLogStats) Debug.Log($"[RAGE] {name}: {before:F1} -> {Rage:F1} ({amount:+#;-#;0})");
 
@@ -16882,7 +17190,7 @@ public class BattleUnit : MonoBehaviour
 
         float amount = Rage * Mathf.Clamp01(ratio);
 
-        Rage = Mathf.Clamp(Rage - amount, 0f, MaxRage);
+        Stats.SetRage(Mathf.Clamp(Rage - amount, 0f, MaxRage));
 
     }
 
@@ -16969,6 +17277,18 @@ public class BattleUnit : MonoBehaviour
         }
 
 
+
+        Stats = GetComponent<UnitStats>();
+        if (Stats == null) Stats = gameObject.AddComponent<UnitStats>();
+
+        Mover = GetComponent<UnitMover>();
+        if (Mover == null) Mover = gameObject.AddComponent<UnitMover>();
+
+        Visual = GetComponent<UnitVisual>();
+        if (Visual == null) Visual = gameObject.AddComponent<UnitVisual>();
+
+        Visual.Initialize();
+        if (Stats != null) Stats.Initialize(data);
 
         ApplyData(); // 데이터 반영(HP/MP 초기화 포함)
 
@@ -17060,11 +17380,9 @@ public class BattleUnit : MonoBehaviour
 
         // 현재값 초기화/보정
 
-        HP = Mathf.Clamp(HP == 0 ? MaxHP : HP, 0, MaxHP);
-
-        MP = Mathf.Clamp(MP == 0 ? MaxMP : MP, 0, MaxMP);
-
-        Rage = Mathf.Clamp(Rage, 0, MaxRage);
+        Stats.SetHP(Mathf.Clamp(HP == 0 ? MaxHP : HP, 0, MaxHP));
+        Stats.SetMP(Mathf.Clamp(MP == 0 ? MaxMP : MP, 0, MaxMP));
+        Stats.SetRage(Mathf.Clamp(Rage, 0, MaxRage));
 
     }
 
@@ -17436,51 +17754,24 @@ public class BattleUnit : MonoBehaviour
 
     {
 
-        Vector3 fromW = transform.position;
-
-        Vector3 toW = map.GetCellCenterWorld(toCell);
-
-
-
-        if (animator) animator.SetBool("Move", true);
+        // Delegate to Mover
+        yield return Mover.MoveToAsync(toCell, moveDuration).ToCoroutine();
 
 
 
-        float t = 0f;
-
-        while (t < 1f)
-
-        {
-
-            t += Time.deltaTime / Mathf.Max(0.01f, moveDuration);
-
-            transform.position = Vector3.Lerp(fromW, toW, t);
-
-            yield return null;
-
-        }
-
-
-
+        Vector3 toW = map.GetCellCenterWorld(toCell); // Re-define toW for the line below
         transform.position = toW; // 셀 스냅/상태 갱신
-
         MoveTo(map, toCell);
 
-
-
         if (animator) animator.SetBool("Move", false);
-
     }
 
     public void PlayTrigger(string triggerName)
 
     {
 
-        if (!animator || string.IsNullOrEmpty(triggerName)) return;
-
-        animator.ResetTrigger(triggerName);
-
-        animator.SetTrigger(triggerName);
+        if (string.IsNullOrEmpty(triggerName)) return;
+        Visual.PlayTriggerAsync(triggerName).Forget();
 
     }
 
@@ -17682,7 +17973,7 @@ public class BattleUnit : MonoBehaviour
 
         if (MP < cost) return false;
 
-        MP = Mathf.Max(0, MP - cost);
+        Stats.SetMP(Mathf.Max(0, MP - cost));
 
         return true;
 
@@ -17706,7 +17997,7 @@ public class BattleUnit : MonoBehaviour
 
 
 
-        MP = Mathf.Min(MaxMP, MP + MPInt);
+        Stats.SetMP(Mathf.Min(MaxMP, MP + MPInt));
 
     }
 
@@ -17722,7 +18013,7 @@ public class BattleUnit : MonoBehaviour
 
         if (Rage < amount) return false;
 
-        Rage = Mathf.Max(0f, Rage - amount);
+        Stats.SetRage(Mathf.Max(0f, Rage - amount));
 
         return true;
 
@@ -17824,7 +18115,7 @@ public class BattleUnit : MonoBehaviour
 
     {
 
-        HP = Mathf.Max(HP - Mathf.Max(0, amount), 0);
+        Stats.SetHP(Mathf.Max(HP - Mathf.Max(0, amount), 0));
 
         OnDamaged?.Invoke(amount);
 
@@ -17832,7 +18123,7 @@ public class BattleUnit : MonoBehaviour
 
         int dmg = Mathf.Max(0, amount);
 
-        HP = Mathf.Max(HP - dmg, 0);
+        Stats.SetHP(Mathf.Max(HP - dmg, 0));
 
         OnDamaged?.Invoke(dmg);
 
@@ -17910,7 +18201,7 @@ public class BattleUnit : MonoBehaviour
 
 
 
-        HP = Mathf.Min((int)MaxHP, HP + healInt);
+        Stats.SetHP(Mathf.Min((int)MaxHP, HP + healInt));
 
 
 
@@ -19687,6 +19978,127 @@ public class UnitStateController : MonoBehaviour
 
 
 ================================================
+FILE: 01_Scripts/Battle/Units/Components/UnitMover.cs
+================================================
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using Cysharp.Threading.Tasks;
+using System;
+
+// SRP: Handles Grid Movement and Position
+public class UnitMover : MonoBehaviour
+{
+    public Tilemap Map { get; private set; }
+    public Vector3Int Cell { get; private set; }
+    
+    public event Action<Vector3Int> OnMoved;
+
+    public void Initialize(Tilemap map, Vector3Int startCell)
+    {
+        Map = map;
+        Cell = startCell;
+        transform.position = map.GetCellCenterWorld(startCell);
+    }
+
+    public async UniTask MoveToAsync(Vector3Int targetCell, float duration = 0.2f)
+    {
+        if (Map == null) return;
+
+        Vector3 startPos = transform.position;
+        Vector3 targetPos = Map.GetCellCenterWorld(targetCell);
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            transform.position = Vector3.Lerp(startPos, targetPos, elapsed / duration);
+            await UniTask.Yield();
+        }
+
+        transform.position = targetPos;
+        Cell = targetCell;
+        OnMoved?.Invoke(Cell);
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Battle/Units/Components/UnitStats.cs
+================================================
+using UnityEngine;
+using System;
+
+// SRP: Handles stats, regeneration, and modification logic.
+public class UnitStats : MonoBehaviour
+{
+    public UnitData Data { get; private set; }
+    
+    // Runtime Stats
+    public float HP { get; private set; }
+    public float MP { get; private set; }
+    public float Rage { get; private set; }
+
+    // Events
+    public event Action OnStatsChanged;
+
+    public void SetHP(float value) { HP = value; OnStatsChanged?.Invoke(); }
+    public void SetMP(float value) { MP = value; OnStatsChanged?.Invoke(); }
+    public void SetRage(float value) { Rage = value; OnStatsChanged?.Invoke(); }
+
+    public void Initialize(UnitData data)
+    {
+        Data = data;
+        // Initialization logic is currently handled by BattleUnit.ApplyData
+        // We just serve as container for now.
+    }
+
+    public float CalculateMaxHP()
+    {
+        // Placeholder for complex calculation
+        return Data.baseBDY * 3 + Data.baseSTR; 
+    }
+
+    public void ModifyHP(int amount)
+    {
+        HP = Mathf.Clamp(HP + amount, 0, CalculateMaxHP());
+        OnStatsChanged?.Invoke();
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Battle/Units/Components/UnitVisual.cs
+================================================
+using UnityEngine;
+using Cysharp.Threading.Tasks;
+
+// SRP: Handles Animations and VFX
+public class UnitVisual : MonoBehaviour
+{
+    [SerializeField] private Animator animator;
+    [SerializeField] private SpriteRenderer spriteRenderer;
+
+    public void Initialize()
+    {
+        if (!animator) animator = GetComponent<Animator>();
+        if (!spriteRenderer) spriteRenderer = GetComponent<SpriteRenderer>();
+    }
+
+    public async UniTask PlayTriggerAsync(string triggerName, float timeout = 1.0f)
+    {
+        if (!animator) return;
+        
+        animator.SetTrigger(triggerName);
+        // Simplification: In real implementation, wait for animation event or state info
+        await UniTask.Delay(System.TimeSpan.FromSeconds(timeout));
+    }
+}
+
+
+
+================================================
 FILE: 01_Scripts/Battle/Utils/AreaShapes.cs
 ================================================
 using System.Collections.Generic;
@@ -21240,6 +21652,68 @@ public class CurrencyManager : MonoBehaviour
 
 
 ================================================
+FILE: 01_Scripts/Core/System/GameEventBus.cs
+================================================
+using System;
+using System.Collections.Generic;
+
+public static class GameEventBus
+{
+    // Dictionary mapping event types to delegate handlers
+    private static readonly Dictionary<Type, List<Delegate>> _handlers = new();
+
+    public static void Subscribe<T>(Action<T> handler)
+    {
+        var type = typeof(T);
+        if (!_handlers.ContainsKey(type))
+        {
+            _handlers[type] = new List<Delegate>();
+        }
+        _handlers[type].Add(handler);
+    }
+
+    public static void Unsubscribe<T>(Action<T> handler)
+    {
+        var type = typeof(T);
+        if (_handlers.ContainsKey(type))
+        {
+            _handlers[type].Remove(handler);
+        }
+    }
+
+    public static void Publish<T>(T eventMessage)
+    {
+        var type = typeof(T);
+        if (_handlers.TryGetValue(type, out var handlers))
+        {
+            // Iterate backwards to allow Unsubscribing inside handler safely
+            for (int i = handlers.Count - 1; i >= 0; i--)
+            {
+                var action = handlers[i] as Action<T>;
+                action?.Invoke(eventMessage);
+            }
+        }
+    }
+}
+
+// === Common Event Definitions (Example) ===
+public struct UnitDamagedEvent
+{
+    public BattleUnit Target;
+    public int Amount;
+    public bool IsCrit;
+    
+    public UnitDamagedEvent(BattleUnit target, int amount, bool isCrit)
+    {
+        Target = target;
+        Amount = amount;
+        IsCrit = isCrit;
+    }
+}
+
+
+
+================================================
 FILE: 01_Scripts/Core/System/GameResetter.cs
 ================================================
 using UnityEngine;
@@ -21342,314 +21816,296 @@ namespace Project
 
 
 ================================================
+FILE: 01_Scripts/Core/System/IInventory.cs
+================================================
+[Binary file]
+
+
+================================================
 FILE: 01_Scripts/Core/System/InventoryManager.cs
 ================================================
 using System.Collections.Generic;
-
 using UnityEngine;
-
 using System;
 
-
-
-public class InventoryManager : MonoBehaviour
-
+public class InventoryManager : MonoBehaviour, IInventory
 {
-
     public static InventoryManager Instance;
 
-
-
     [Header("설정")]
-
     public int maxSlots = 12;
-
     public int maxStack = 6;
 
-
-
     // 실제 아이템들이 담길 배열 (빈칸은 null)
-
     public InventoryItem[] slots;
 
-
+    // [Optimization] O(1) 검색을 위한 캐시
+    private Dictionary<string, int> _itemCountCache = new Dictionary<string, int>();
 
     // UI 갱신 등을 위한 이벤트
-
     public event Action OnInventoryChanged;
 
-
-
     void Awake()
-
     {
-
         if (Instance == null)
-
         {
-
             Instance = this;
-
             slots = new InventoryItem[maxSlots];
-
+            DontDestroyOnLoad(gameObject); // 매니저 객체 유지 보장
         }
-
-        else Destroy(gameObject);
-
+        else 
+        {
+            // 중복 생성 시 객체 전체 파괴 (InventoryManager + PlayerDataManager가 같이 있다면 통째로 정리됨)
+            Destroy(gameObject);
+        }
     }
 
+    // 캐시 전체 재구축 (초기화나 로드 시 사용)
+    private void RefreshCache()
+    {
+        _itemCountCache.Clear();
+        foreach (var item in slots)
+        {
+            if (item != null)
+            {
+                if (!_itemCountCache.ContainsKey(item.itemID))
+                    _itemCountCache[item.itemID] = 0;
+                _itemCountCache[item.itemID] += item.count;
+            }
+        }
+    }
 
+    // 캐시 단일 업데이트 헬퍼
+    private void UpdateCache(string id, int delta)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        
+        if (!_itemCountCache.ContainsKey(id))
+            _itemCountCache[id] = 0;
+        
+        _itemCountCache[id] += delta;
+        
+        if (_itemCountCache[id] <= 0)
+            _itemCountCache.Remove(id);
+    }
 
     // 아이템 추가 로직 (중첩 및 빈자리 찾기)
-
     public void AddItem(string id, int amount)
-
     {
-
         int remaining = amount;
-
-
 
         // 1. 기존에 같은 아이템이 있고, 여유 공간이 있는 슬롯이 있는지 확인
-
         for (int i = 0; i < maxSlots; i++)
-
         {
-
             if (slots[i] != null && slots[i].itemID == id && slots[i].count < maxStack)
-
             {
-
                 int canAdd = maxStack - slots[i].count;
-
                 int addAmount = Mathf.Min(canAdd, remaining);
 
-
-
                 slots[i].count += addAmount;
-
                 remaining -= addAmount;
 
-
-
                 if (remaining <= 0) break;
-
             }
-
         }
-
-
 
         // 2. 남은 수량이 있다면 빈 슬롯에 새로 추가
-
         if (remaining > 0)
-
         {
-
             for (int i = 0; i < maxSlots; i++)
-
             {
-
                 if (slots[i] == null)
-
                 {
-
                     int addAmount = Mathf.Min(maxStack, remaining);
-
                     slots[i] = new InventoryItem(id, addAmount, i);
-
                     remaining -= addAmount;
 
-
-
                     if (remaining <= 0) break;
-
                 }
-
             }
-
         }
 
-
+        // 실제 추가된 양 계산 (요청량 - 남은량)
+        int actualAdded = amount - remaining;
+        if (actualAdded > 0) UpdateCache(id, actualAdded);
 
         OnInventoryChanged?.Invoke();
-
     }
-
-
 
     // 슬롯 위치 변경 (드래그 앤 드롭용)
-
     public void SwapSlots(int fromIndex, int toIndex)
-
     {
-
         if (fromIndex < 0 || fromIndex >= maxSlots || toIndex < 0 || toIndex >= maxSlots) return;
 
-
-
         // 데이터 교체
-
         InventoryItem temp = slots[fromIndex];
-
         slots[fromIndex] = slots[toIndex];
-
         slots[toIndex] = temp;
 
-
-
         // 중요: 바뀐 자리에 맞게 데이터 내부의 slotIndex 정보도 동기화
-
         if (slots[fromIndex] != null) slots[fromIndex].slotIndex = fromIndex;
-
         if (slots[toIndex] != null) slots[toIndex].slotIndex = toIndex;
 
-
-
         // UI 전체 갱신 신호 발송
-
         OnInventoryChanged?.Invoke();
-
     }
-
-
 
     public bool ConsumeItem(string id, int amount)
-
     {
-
         if (GetItemCount(id) < amount) return false;
 
+        int remaining = amount;
+        for (int i = 0; i < maxSlots; i++)
+        {
+            if (slots[i] != null && slots[i].itemID == id)
+            {
+                if (slots[i].count > remaining)
+                {
+                    slots[i].count -= remaining;
+                    remaining = 0;
+                }
+                else
+                {
+                    remaining -= slots[i].count;
+                    slots[i] = null;
+                }
+            }
+            if (remaining <= 0) break;
+        }
 
+        UpdateCache(id, -amount); // 소모된 만큼 캐시 차감
+        OnInventoryChanged?.Invoke();
+        return true;
+    }
 
+    // 제작 시스템 등을 위한 아이템 개수 확인 [Optimized]
+    public int GetItemCount(string id)
+    {
+        if (_itemCountCache.TryGetValue(id, out int count))
+            return count;
+        return 0;
+    }
+
+    /// <summary>
+    /// 아이템을 추가할 수 있는지 확인 (스택 + 빈슬롯 고려)
+    /// </summary>
+    public bool CanAddItem(string id, int amount)
+    {
         int remaining = amount;
 
+        // 1. 스택 가능 여부 확인
         for (int i = 0; i < maxSlots; i++)
-
         {
-
-            if (slots[i] != null && slots[i].itemID == id)
-
+            if (slots[i] != null && slots[i].itemID == id && slots[i].count < maxStack)
             {
-
-                if (slots[i].count > remaining)
-
-                {
-
-                    slots[i].count -= remaining;
-
-                    remaining = 0;
-
-                }
-
-                else
-
-                {
-
-                    remaining -= slots[i].count;
-
-                    slots[i] = null;
-
-                }
-
+                remaining -= (maxStack - slots[i].count);
+                if (remaining <= 0) return true;
             }
-
-            if (remaining <= 0) break;
-
         }
 
-        OnInventoryChanged?.Invoke();
-
-        return true;
-
-    }
-
-
-
-    // 제작 시스템 등을 위한 아이템 개수 확인
-
-    public int GetItemCount(string id)
-
-    {
-
-        int total = 0;
-
-        foreach (var item in slots)
-
+        // 2. 빈 슬롯 확인
+        for (int i = 0; i < maxSlots; i++)
         {
-
-            if (item != null && item.itemID == id) total += item.count;
-
+            if (slots[i] == null)
+            {
+                remaining -= maxStack;
+                if (remaining <= 0) return true;
+            }
         }
 
-        return total;
-
+        return remaining <= 0;
     }
 
-
-
-
+    public bool HasSpace()
+    {
+        for (int i = 0; i < maxSlots; i++)
+        {
+            if (slots[i] == null) return true;
+        }
+        return false;
+    }
 
     // 인벤에서 아이템을 버릴 시 
-
     public void RemoveItemAtSlot(int index)
-
     {
-
-        if (index >= 0 && index < maxSlots)
-
+        if (index >= 0 && index < maxSlots && slots[index] != null)
         {
-
+            // 캐시 업데이트
+            UpdateCache(slots[index].itemID, -slots[index].count);
+            
             slots[index] = null;
-
             OnInventoryChanged?.Invoke();
-
         }
-
     }
-
-
 
     public List<InventoryItem> GetSaveData()
-
     {
-
         List<InventoryItem> saveList = new List<InventoryItem>();
-
         foreach (var item in slots)
-
         {
-
             if (item != null) saveList.Add(item);
-
         }
-
         return saveList;
-
     }
-
-
 
     public void LoadData(List<InventoryItem> savedItems)
-
     {
-
         Array.Clear(slots, 0, slots.Length);
 
-        foreach (var item in savedItems)
-
+        // [Fix] 세이브 데이터가 없거나 null일 경우 초기화만 하고 종료
+        if (savedItems == null)
         {
-
-            if (item.slotIndex >= 0 && item.slotIndex < maxSlots)
-
-                slots[item.slotIndex] = item;
-
+            RefreshCache();
+            OnInventoryChanged?.Invoke();
+            return;
         }
 
+        foreach (var item in savedItems)
+        {
+            if (item != null && item.slotIndex >= 0 && item.slotIndex < maxSlots)
+                slots[item.slotIndex] = item;
+        }
+        RefreshCache(); // 로드 후 캐시 재구축
         OnInventoryChanged?.Invoke();
-
     }
 
+    /// <summary>
+    /// 보상 테이블을 처리하고 (Flavor Text 포함) 결과 로그를 반환
+    /// </summary>
+    public List<string> GiveReward(RewardTableSO table)
+    {
+        var logs = new List<string>();
+        if (table == null) return logs;
+
+        var items = table.PickRewards();
+        bool hasReward = items.Count > 0;
+
+        // 1. 성공 멘트 추가
+        if (hasReward && !string.IsNullOrWhiteSpace(table.successText))
+        {
+            logs.Add(table.successText);
+        }
+
+        // 2. 아이템 지급 및 한 줄 로그 작성
+        if (hasReward)
+        {
+            List<string> itemLogParts = new List<string>();
+
+            foreach (var stack in items)
+            {
+                AddItem(stack.data.itemID, stack.count);
+                itemLogParts.Add($"{stack.data.itemName} x{stack.count}");
+            }
+
+            // "획득: 사과 x1, 철 x2" 형태로 조립
+            if (itemLogParts.Count > 0)
+            {
+                logs.Add($"획득: {string.Join(", ", itemLogParts)}");
+            }
+        }
+
+        return logs;
+    }
 }
 
 
@@ -21657,383 +22113,293 @@ public class InventoryManager : MonoBehaviour
 FILE: 01_Scripts/Core/System/PlayerDataManager.cs
 ================================================
 using UnityEngine;
-
 using System.Collections.Generic;
-
 using System;
-
-using UnityEngine.AddressableAssets; // 어드레서블 네임스페이스
-
-using UnityEngine.ResourceManagement.AsyncOperations; // 비동기 핸들
-
-using System.Threading.Tasks; // async/await 사용 시
-
-
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using System.Threading.Tasks;
 
 [System.Serializable]
-
 public class SaveData
-
 {
-
     public List<InventoryItem> inventory;
-
     public int gold;
-
-    // 여기에 보유 유닛(ownedUnits) 정보 등도 포함시켜라
-
 }
 
+[System.Serializable]
+public class RuntimeUnitData
+{
+    public float currentHP;
+    public float currentMP;
+    public float currentRage;
+    public bool isDead;
 
+    public RuntimeUnitData(float hp, float mp, float rage)
+    {
+        currentHP = hp;
+        currentMP = mp;
+        currentRage = rage;
+        isDead = false;
+    }
+}
 
 public class PlayerDataManager : MonoBehaviour
-
 {
-
-    // 싱글톤 패턴 (어디서든 접근 가능하게)
-
     public static PlayerDataManager Instance;
 
-
-
     [Header("1. [설정용] 시작 시 보유할 유닛 (주소값)")]
-
-    // 기존: public List<UnitData> ownedUnits; -> 이건 이제 인스펙터에서 안 씀
-
-    // 변경: AssetReferenceT<UnitData>를 써서 특정 타입만 넣게 강제함 (실수 방지)
-
     public List<AssetReferenceT<UnitData>> startingUnitRefs = new List<AssetReferenceT<UnitData>>();
 
-
-
     [Header("2. [런타임] 실제 로딩된 유닛들")]
-
-    // 게임 로직(UI, 배틀 등)은 여전히 이 리스트를 씀. (기존 코드 호환성 100%)
-
     public List<UnitData> ownedUnits = new List<UnitData>();
 
-
+    // [New] 런타임 상태 저장소
+    private Dictionary<UnitData, RuntimeUnitData> unitStates = new Dictionary<UnitData, RuntimeUnitData>();
 
     [Header("전투 진형")]
-
     public UnitData[] formation = new UnitData[19];
 
-
-
     public event Action OnFormationChanged;
-
-    public event Action OnUnitsLoaded; // 로딩 완료 알림 이벤트 추가
-
-
-
-    // 로딩 상태 확인용
+    public event Action OnUnitsLoaded;
 
     public bool IsLoading { get; private set; } = true;
 
-
-
     void Awake()
-
     {
-
         if (Instance == null)
-
         {
-
             Instance = this;
-
-            DontDestroyOnLoad(gameObject); // 씬 넘어가도 파괴 안 됨
-
+            DontDestroyOnLoad(gameObject);
         }
-
         else
-
         {
-
             Destroy(gameObject);
-
         }
-
     }
-
-
 
     private void Start()
-
     {
-
-        // 생성되자마자 로딩 시작
-
-        if(Instance == null)
-
-            LoadStartingUnitsByLabel();
-
-
-
-        // 게임 시작 시 자동으로 로드 시도
-
-        LoadGame();
-
-    }
-
-    // === 어드레서블 로딩 로직 ===
-
-    public async void LoadStartingUnitsByLabel()
-
-    {
-
-        // "StartingUnit" 라벨이 붙은 모든 UnitData를 가져와라!
-
-        var handle = Addressables.LoadAssetsAsync<UnitData>("StartingUnit", (loadedUnit) =>
-
+        // 이미 유닛이 있다면(인스펙터 할당 등) 로딩 완료 처리
+        if (ownedUnits.Count > 0)
         {
-
-            // 하나씩 로딩될 때마다 실행됨
-
-            if (loadedUnit != null)
-
+            IsLoading = false;
+            // 기존 유닛들에 대해 런타임 데이터 초기화 보장
+            foreach (var unit in ownedUnits)
             {
-
-                ownedUnits.Add(loadedUnit);
-
-                Debug.Log($"[라벨 로딩] 유닛 획득: {loadedUnit.DisplayName}");
-
+                InitializeRuntimeData(unit);
             }
-
-        });
-
-
-
-        await handle.Task; // 다 끝날 때까지 대기
-
-        IsLoading = false;
-
-        OnUnitsLoaded?.Invoke();
-
-        Debug.Log("초기 유닛 로딩 완료!");
-
-    }
-
-
-
-    // 게임 도중 유닛을 획득했을 때 로딩하는 함수
-
-    public async void AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
-
-    {
-
-        if (unitRef == null) return;
-
-
-
-        var handle = unitRef.LoadAssetAsync();
-
-        await handle.Task;
-
-
-
-        if (handle.Status == AsyncOperationStatus.Succeeded)
-
+        }
+        else
         {
-
-            ownedUnits.Add(handle.Result);
-
-            Debug.Log($"[UnitGet] 신규 유닛 획득: {handle.Result.DisplayName}");
-
+            // 유닛이 없다면 어드레서블 로딩 시도
+            LoadStartingUnitsByLabel();
         }
 
+        LoadGame();
+    }
+
+    public async void LoadStartingUnitsByLabel()
+    {
+        var handle = Addressables.LoadAssetsAsync<UnitData>("StartingUnit", (loadedUnit) =>
+        {
+            if (loadedUnit != null)
+            {
+                ownedUnits.Add(loadedUnit);
+                InitializeRuntimeData(loadedUnit); // [추가] 초기 상태 생성
+                Debug.Log($"[라벨 로딩] 유닛 획득: {loadedUnit.DisplayName}");
+            }
+        });
+
+        await handle.Task;
+        IsLoading = false;
+        OnUnitsLoaded?.Invoke();
+        Debug.Log("초기 유닛 로딩 완료!");
+    }
+
+    public async void AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
+    {
+        if (unitRef == null) return;
+
+        var handle = unitRef.LoadAssetAsync();
+        await handle.Task;
+
+        if (handle.Status == AsyncOperationStatus.Succeeded)
+        {
+            ownedUnits.Add(handle.Result);
+            InitializeRuntimeData(handle.Result); // [추가] 초기 상태 생성
+            Debug.Log($"[UnitGet] 신규 유닛 획득: {handle.Result.DisplayName}");
+        }
     }
 
     public UnitData GetOwnedUnit(int index)
-
     {
-
-        // 인덱스 범위 체크 (에러 방지용)
-
         if (index < 0 || index >= ownedUnits.Count)
-
         {
-
             Debug.LogWarning($"[PlayerData] 인덱스 {index}에 해당하는 유닛이 없습니다.");
-
             return null;
-
         }
-
         return ownedUnits[index];
-
+    }
+    
+    public int GetOwnedUnitCount()
+    {
+        return ownedUnits.Count;
     }
 
-
-
-    // 진형 설정 함수
-
     public void SetFormation(int targetIndex, UnitData incomingUnit)
-
     {
-
-        // 들어오려는 유닛(incomingUnit)이 이미 진형 어딘가에 있는지 찾음
-
         int oldIndex = -1;
-
         for (int i = 0; i < formation.Length; i++)
-
         {
-
             if (formation[i] == incomingUnit)
-
             {
-
                 oldIndex = i;
-
                 break;
-
             }
-
         }
-
-
-
-        // 목표 자리(targetIndex)에 원래 있던 유닛을 기억 (없으면 null)
 
         UnitData unitAtTarget = formation[targetIndex];
 
-
-
-        // 로직 분기
-
-        if (oldIndex != -1) // Case A: 이미 배치된 유닛이다 -> 스왑 (Swap)
-
+        if (oldIndex != -1)
         {
-
-            if (oldIndex == targetIndex) return; // 제자리 클릭이면 무시
-
-
-
-            // 스왑 로직
-
-            formation[targetIndex] = incomingUnit; // 목표 자리에 내 유닛
-
-            formation[oldIndex] = unitAtTarget;    // 내 원래 자리에 쫓겨난 유닛
-
-
-
-            Debug.Log($"[진형 변경] {incomingUnit.DisplayName}({oldIndex}) <-> {(unitAtTarget != null ? unitAtTarget.DisplayName : "빈칸")}({targetIndex}) 위치 교체 완료.");
-
-        }
-
-        else // Case B: 진형에 없던 새 유닛이다 -> 덮어쓰기 (Overwrite)
-
-        {
+            if (oldIndex == targetIndex) return;
 
             formation[targetIndex] = incomingUnit;
+            formation[oldIndex] = unitAtTarget;
 
-            // (unitAtTarget은 갈 곳이 없으므로 그냥 사라짐 - 덮어쓰기)
-
-
-
+            Debug.Log($"[진형 변경] {incomingUnit.DisplayName}({oldIndex}) <-> {(unitAtTarget != null ? unitAtTarget.DisplayName : "빈칸")}({targetIndex}) 위치 교체 완료.");
+        }
+        else
+        {
+            formation[targetIndex] = incomingUnit;
             Debug.Log($"[진형 배치] {targetIndex}번에 {incomingUnit.DisplayName} 신규 배치됨.");
-
         }
 
-
-
-        // 변경 사항이 생겼으니 구독자들에게 알림
-
         OnFormationChanged?.Invoke();
-
     }
-
-
-
-    // 해당 인덱스에 누가 있는지 확인
 
     public UnitData GetUnitAt(int index)
-
     {
-
         if (index < 0 || index >= formation.Length) return null;
-
         return formation[index];
-
     }
 
+    // ========================================================================
+    // [Data Persistence] 전투 <-> 탐험 데이터 동기화
+    // ========================================================================
 
+    public void SyncToBattle(BattleUnit battleUnit)
+    {
+        if (battleUnit == null || battleUnit.data == null) return;
+
+        if (unitStates.TryGetValue(battleUnit.data, out RuntimeUnitData savedState))
+        {
+            float applyHP = savedState.currentHP;
+            if (applyHP <= 0 && !savedState.isDead) applyHP = 1;
+
+            float maxHP = battleUnit.MaxHP;
+            float maxMP = battleUnit.MaxMP;
+            float maxRage = battleUnit.MaxRage;
+
+            battleUnit.Stats.SetHP(Mathf.Clamp(applyHP, 0, maxHP));
+            battleUnit.Stats.SetMP(Mathf.Clamp(savedState.currentMP, 0, maxMP));
+            battleUnit.Stats.SetRage(Mathf.Clamp(savedState.currentRage, 0, maxRage));
+            
+            Debug.Log($"[SyncToBattle] {battleUnit.name} 상태 로드: HP {battleUnit.HP}/{maxHP}");
+        }
+        else
+        {
+            Debug.Log($"[SyncToBattle] {battleUnit.name} 신규 데이터. (초기화 상태 유지)");
+        }
+    }
+
+    public void SyncFromBattle(BattleUnit battleUnit)
+    {
+        if (battleUnit == null || battleUnit.data == null) return;
+
+        if (!unitStates.ContainsKey(battleUnit.data))
+        {
+            unitStates[battleUnit.data] = new RuntimeUnitData(battleUnit.HP, battleUnit.MP, battleUnit.Rage);
+        }
+        else
+        {
+            var data = unitStates[battleUnit.data];
+            data.currentHP = battleUnit.HP;
+            data.currentMP = battleUnit.MP;
+            data.currentRage = battleUnit.Rage;
+            data.isDead = battleUnit.IsDead;
+        }
+
+        Debug.Log($"[SyncFromBattle] {battleUnit.name} 상태 저장 완료: HP {battleUnit.HP}");
+    }
+
+    public RuntimeUnitData GetRuntimeData(UnitData data)
+    {
+        if (data == null)
+        {
+            Debug.LogWarning("[PlayerData] GetRuntimeData called with null UnitData!");
+            return null;
+        }
+
+        if (unitStates.TryGetValue(data, out RuntimeUnitData savedState))
+        {
+            // Debug.Log($"[PlayerData] Returning saved data for {data.DisplayName}. HP:{savedState.currentHP}");
+            return savedState;
+        }
+        
+        Debug.Log($"[PlayerData] No saved data found for {data.DisplayName}. Total States: {unitStates.Count}");
+        return null; 
+    }
+
+    private void InitializeRuntimeData(UnitData data)
+    {
+        if (data == null) return;
+        if (unitStates.ContainsKey(data)) return; // 이미 있으면 패스
+
+        // UnitData의 Helper 메서드 사용
+        var (maxHP, maxMP, maxRage) = data.CalcMaxStats();
+        
+        // [수정] MP도 꽉 찬 상태로 시작하도록 변경 (Rage는 0 유지)
+        unitStates[data] = new RuntimeUnitData(maxHP, maxMP, 0); 
+        Debug.Log($"[PlayerData] {data.DisplayName} 초기 RuntimeData 생성 (HP: {maxHP}, MP: {maxMP})");
+    }
+
+    // ========================================================================
 
     public void SaveGame()
-
     {
-
         SaveData data = new SaveData();
-
-        data.inventory = InventoryManager.Instance.GetSaveData();
-
-        data.gold = CurrencyManager.Instance.gold;
-
-
+        if (InventoryManager.Instance != null)
+            data.inventory = InventoryManager.Instance.GetSaveData();
+        if (CurrencyManager.Instance != null)
+            data.gold = CurrencyManager.Instance.gold;
 
         string json = JsonUtility.ToJson(data);
-
         PlayerPrefs.SetString("SaveSlot_1", json);
-
         PlayerPrefs.Save();
-
     }
 
     public void LoadGame()
-
     {
-
         if (!PlayerPrefs.HasKey("SaveSlot_1")) return;
 
-
-
         string json = PlayerPrefs.GetString("SaveSlot_1");
-
         SaveData data = JsonUtility.FromJson<SaveData>(json);
 
-
-
-        // 인벤토리 매니저에 데이터 주입
-
-        InventoryManager.Instance.LoadData(data.inventory);
-
-        CurrencyManager.Instance.gold = data.gold;
-
-
+        if (InventoryManager.Instance != null)
+            InventoryManager.Instance.LoadData(data.inventory);
+        if (CurrencyManager.Instance != null)
+            CurrencyManager.Instance.gold = data.gold;
 
         Debug.Log("데이터 로드 완료.");
-
     }
 
     private void InitNewGame()
-
     {
-
-        // 처음 시작할 때 필요한 기본값 설정
-
-        // 인벤토리는 InventoryManager의 Dictionary가 생성될 때 이미 비어있으므로 
-
-        // 특별히 추가할 게 없다면 그냥 놔두면 됨 (자동으로 모든 재료 0개)
-
-
-
-        CurrencyManager.Instance.gold = 500; // 초기 자금 정도만 설정
-
-
-
-        // 필요하다면 초기 지급 아이템 추가
-
-        // InventoryManager.Instance.AddItem("MAT_WOOD", 1); 
-
-
-
-        // 초기 상태를 한 번 저장해두는 것도 방법
-
+        if (CurrencyManager.Instance != null)
+            CurrencyManager.Instance.gold = 500;
         SaveGame();
-
     }
-
 }
 
 
@@ -24000,7 +24366,7 @@ public class ItemData : ScriptableObject
 
         // 로그를 통해 실제로 어떤 값이 들어있는지 강제로 확인
 
-        Debug.Log($"[Debug] Item: {itemName}, Atlas: '{atlasAddress}', Sprite: '{spriteName}'");
+        //Debug.Log($"[Debug] Item: {itemName}, Atlas: '{atlasAddress}', Sprite: '{spriteName}'");
 
 
 
@@ -24023,6 +24389,82 @@ public class ItemData : ScriptableObject
 FILE: 01_Scripts/Data/Definitions/ItemLibray.cs
 ================================================
 [Binary file]
+
+
+================================================
+FILE: 01_Scripts/Data/Definitions/RewardTableSO.cs
+================================================
+using System.Collections.Generic;
+using UnityEngine;
+
+[CreateAssetMenu(fileName = "NewRewardTable", menuName = "Data/RewardTable")]
+public class RewardTableSO : ScriptableObject
+{
+    [System.Serializable]
+    public class DropEntry
+    {
+        public ItemData item;
+        [Min(1)] public int minCount = 1;
+        [Min(1)] public int maxCount = 1;
+        [Range(0, 100)] public int weight = 10;
+    }
+
+    [Header("드롭 설정")]
+    public bool guaranteedDrop = false; // true면 반드시 하나 이상(가중치 기반) 드롭
+    public int pickCount = 1; // 몇 번 추첨할 것인가
+
+    [Header("메시지 설정 (Flavor Text)")]
+    [TextArea] public string successText; // 아이템 획득 성공 시 출력
+
+    [Header("드롭 목록")]
+    public List<DropEntry> entries = new List<DropEntry>();
+
+    /// <summary>
+    /// 가중치 기반으로 아이템을 추첨하여 반환 (인벤토리에 넣지는 않음)
+    /// </summary>
+    public List<ItemStack> PickRewards()
+    {
+        List<ItemStack> results = new List<ItemStack>();
+        if (entries == null || entries.Count == 0) return results;
+
+        // 가중치 총합 계산
+        int totalWeight = 0;
+        foreach (var e in entries)
+            if (e.item != null && e.weight > 0) totalWeight += e.weight;
+
+        if (totalWeight <= 0) return results;
+
+        for (int i = 0; i < pickCount; i++)
+        {
+            int roll = Random.Range(0, totalWeight);
+            int current = 0;
+
+            foreach (var e in entries)
+            {
+                if (e.item == null || e.weight <= 0) continue;
+
+                current += e.weight;
+                if (roll < current)
+                {
+                    // 당첨
+                    int count = Random.Range(e.minCount, e.maxCount + 1);
+                    results.Add(new ItemStack(e.item, count));
+                    break;
+                }
+            }
+        }
+        return results;
+    }
+
+    // 간단한 데이터 전달용 구조체
+    public struct ItemStack
+    {
+        public ItemData data;
+        public int count;
+        public ItemStack(ItemData d, int c) { data = d; count = c; }
+    }
+}
+
 
 
 ================================================
@@ -24140,6 +24582,14 @@ public class UnitData : ScriptableObject
 
     }
 
+
+    public (float maxHP, float maxMP, float maxRage) CalcMaxStats()
+    {
+        float maxHP = Mathf.Max(1, (baseBDY * 3f) + baseSTR);
+        float maxMP = Mathf.Max(0, (baseMND * 3f) + baseCLV);
+        float maxRage = Mathf.Max(0, baseSTR + baseCLV + baseAGI + baseBDY + baseMND + baseINS);
+        return (maxHP, maxMP, maxRage);
+    }
 }
 
 
@@ -24373,6 +24823,189 @@ public class StageQuizMapData : ScriptableObject
     [Tooltip("퀴즈맵 프리팹 리스트")] public GameObject[] quizMapPrefabs;
 
 }
+
+
+================================================
+FILE: 01_Scripts/Editor/AddressablesBuilder.cs
+================================================
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Settings;
+using UnityEngine;
+
+public class AddressablesBuilder : EditorWindow
+{
+    [MenuItem("Tools/Build Addressables")]
+    public static void BuildContent()
+    {
+        Debug.Log("Starting Addressables Build...");
+        AddressableAssetSettings.CleanPlayerContent();
+        AddressableAssetSettings.BuildPlayerContent();
+        Debug.Log("Addressables Build Complete!");
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Editor/MapIDBaker.cs
+================================================
+using UnityEngine;
+using UnityEditor;
+using System.Collections.Generic;
+
+public class MapIDBaker : EditorWindow
+{
+    [MenuItem("Tools/Lemegeton/Bake Map IDs")]
+    public static void Init()
+    {
+        GetWindow<MapIDBaker>("Map ID Baker");
+    }
+
+    private GameObject targetMapPrefab;
+
+    void OnGUI()
+    {
+        GUILayout.Label("Map ID Baker", EditorStyles.boldLabel);
+        GUILayout.Space(10);
+
+        targetMapPrefab = (GameObject)EditorGUILayout.ObjectField("Target Map Prefab", targetMapPrefab, typeof(GameObject), false);
+
+        GUILayout.Space(10);
+
+        if (GUILayout.Button("Bake IDs (Assign Persistent IDs)"))
+        {
+            if (targetMapPrefab == null)
+            {
+                EditorUtility.DisplayDialog("Error", "Please assign a Map Prefab.", "OK");
+                return;
+            }
+            BakeIDs(targetMapPrefab);
+        }
+    }
+
+    static void BakeIDs(GameObject prefabAsset)
+    {
+        string path = AssetDatabase.GetAssetPath(prefabAsset);
+        if (string.IsNullOrEmpty(path))
+        {
+            // Scene Object case (Optional support)
+            BakeHierarchy(prefabAsset);
+            return;
+        }
+
+        using (var editScope = new PrefabUtility.EditPrefabContentsScope(path))
+        {
+            GameObject root = editScope.prefabContentsRoot;
+            BakeHierarchy(root);
+        }
+    }
+
+    static void BakeHierarchy(GameObject root)
+    {
+        var ids = root.GetComponentsInChildren<ExplorationPersistId>(true);
+        int count = 0;
+        int updated = 0;
+        HashSet<string> usedIds = new HashSet<string>();
+
+        // 1. Collect existing
+        foreach (var pid in ids)
+        {
+            if (!string.IsNullOrEmpty(pid.Id))
+            {
+                if (usedIds.Contains(pid.Id))
+                {
+                    // Clean duplicate
+                    var so = new SerializedObject(pid);
+                    so.FindProperty("id").stringValue = "";
+                    so.ApplyModifiedProperties();
+                }
+                else
+                {
+                    usedIds.Add(pid.Id);
+                }
+            }
+        }
+
+        // 2. Assign new
+        foreach (var pid in ids)
+        {
+            if (string.IsNullOrEmpty(pid.Id))
+            {
+                string newId = System.Guid.NewGuid().ToString("N");
+                while (usedIds.Contains(newId)) 
+                    newId = System.Guid.NewGuid().ToString("N");
+
+                var so = new SerializedObject(pid);
+                so.FindProperty("id").stringValue = newId;
+                so.ApplyModifiedProperties();
+                
+                usedIds.Add(newId);
+                updated++;
+            }
+            count++;
+        }
+
+        Debug.Log($"[MapIDBaker] Processed {count} objects. Updated {updated} IDs in '{root.name}'");
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Editor/MissingScriptFinder.cs
+================================================
+using UnityEngine;
+using UnityEditor;
+using System.Collections.Generic;
+
+public class MissingScriptFinder : EditorWindow
+{
+    [MenuItem("Tools/Find Missing Scripts")]
+    public static void FindMissingScripts()
+    {
+        GameObject[] allObjects = Object.FindObjectsOfType<GameObject>();
+        int count = 0;
+        foreach (GameObject go in allObjects)
+        {
+
+            Component[] components = go.GetComponents<Component>();
+            for (int i = 0; i < components.Length; i++)
+            {
+                if (components[i] == null)
+                {
+                    Debug.LogError($"[Missing Script] GameObject: '{GetFullPath(go)}' has a missing script at index {i}", go);
+                    count++;
+                }
+            }
+        }
+        Debug.Log($"Finished searching. Found {count} missing scripts.");
+    }
+
+    private static string GetFullPath(GameObject go)
+    {
+        string path = go.name;
+        while (go.transform.parent != null)
+        {
+            go = go.transform.parent.gameObject;
+            path = go.name + "/" + path;
+        }
+        return path;
+    }
+
+    [MenuItem("Tools/Open Exploration")]
+    public static void OpenExploration()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/00_Scenes/ExplorationScene.unity");
+    }
+
+    [MenuItem("Tools/Open Title")]
+    public static void OpenTitle()
+    {
+        UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/00_Scenes/TitleScene.unity");
+    }
+}
+
 
 
 ================================================
@@ -24628,629 +25261,7 @@ public class ExplorationQTEManager : MonoBehaviour
 ================================================
 FILE: 01_Scripts/Exploration/MapManager.cs
 ================================================
-using System.Collections.Generic;
-
-using System.Linq;
-
-using UnityEngine;
-
-using UnityEngine.Tilemaps;
-
-using UnityEngine.AddressableAssets; // [필수] 어드레서블
-
-using UnityEngine.ResourceManagement.AsyncOperations; // [필수] 핸들
-
-using System.Threading.Tasks; // [필수] Task
-
-
-
-public class MapManager : MonoBehaviour
-
-{
-
-    public static MapManager Instance;
-
-    public StageDatabase stageDB;
-
-    public int currentStage = 1;
-
-    public Transform gridParent;
-
-    public GameObject playerPrefab;
-
-
-
-    private GameObject currentMap; // 최초 선택된 맵 프리팹
-
-    private GameObject backUpMapPrefab;  // 최초 선택된 맵 저장 프리팹
-
-    private MapToggleManager mapToggle;
-
-
-
-    // [개선 1] 생성된 어드레서블 오브젝트를 추적하기 위한 리스트
-
-    private List<GameObject> activeSnapshotObjects = new List<GameObject>();
-
-
-
-    void Awake()
-
-    {
-
-        if (Instance == null) Instance = this;
-
-        else Destroy(gameObject);
-
-
-
-        mapToggle = GetComponent<MapToggleManager>();
-
-    }
-
-
-
-    void Start()
-
-    {
-
-        GenerateStageMap();
-
-    }
-
-
-
-    void GenerateStageMap()
-
-    {
-
-        if (SceneTransitionManager.Instance != null &&
-
-            SceneTransitionManager.Instance.explorationMapPrefabOverride != null)
-
-        {
-
-            backUpMapPrefab = SceneTransitionManager.Instance.explorationMapPrefabOverride;
-
-            Debug.Log("[MapManager] Override prefab 사용(재로딩 유지)");
-
-        }
-
-        else
-
-        {
-
-            backUpMapPrefab = GetRandomNormalMapPrefab();
-
-
-
-            if (SceneTransitionManager.Instance != null)
-
-                SceneTransitionManager.Instance.explorationMapPrefabOverride = backUpMapPrefab;
-
-        }
-
-
-
-        ResetExplorationMap();
-
-    }
-
-
-
-    GameObject GetRandomNormalMapPrefab()
-
-    {
-
-        if (stageDB == null) return null;
-
-        var data = stageDB.normalStages.FirstOrDefault(x => x.stageNumber == currentStage);
-
-        if (data == null || data.normalMapPrefabs == null || data.normalMapPrefabs.Length == 0)
-
-            return null;
-
-        return data.normalMapPrefabs[Random.Range(0, data.normalMapPrefabs.Length)];
-
-    }
-
-
-
-    void InstantiatePlayer(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
-
-    {
-
-        if (playerPrefab == null) return;
-
-
-
-        if (PlayerMovement.Instance != null)
-
-            Destroy(PlayerMovement.Instance.gameObject);
-
-
-
-        GameObject player = Instantiate(playerPrefab);
-
-        var playermovement = player.GetComponent<PlayerMovement>();
-
-
-
-        if (playermovement != null)
-
-        {
-
-            playermovement.SetTilemaps(_floors, _obstacles, _walls);
-
-        }
-
-
-
-        if (currentMap != null)
-
-        {
-
-            var spawn = currentMap.transform.Find("PlayerStart");
-
-            if (spawn != null)
-
-            {
-
-                Vector3 spawnPos = spawn.position;
-
-                spawnPos.z = 0f;
-
-                player.transform.position = spawnPos;
-
-            }
-
-            else
-
-                Debug.LogWarning("[MapManager] 맵에 'PlayerStart' 오브젝트가 없습니다.");
-
-        }
-
-
-
-        var camScript = FindAnyObjectByType<CameraFollow2D>();
-
-        if (camScript != null)
-
-        {
-
-            camScript.target = player.transform;
-
-            camScript.SnapToTarget();
-
-        }
-
-    }
-
-
-
-    void SetupMapToggle(Tilemap _floors, Tilemap _wall)
-
-    {
-
-        mapToggle.mainMap = currentMap;
-
-        mapToggle.gridParent = gridParent;
-
-    }
-
-
-
-    void TrySpawnObjects(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _walls)
-
-    {
-
-        var spawner = currentMap.GetComponentInChildren<MapObjectSpawner>();
-
-
-
-        if (spawner == null) return;
-
-
-
-        List<Collider2D> excludeList = new List<Collider2D>();
-
-
-
-        var tagged = currentMap.GetComponentsInChildren<Collider2D>()
-
-            .Where(c => c.CompareTag("ExcludeSpawn"));
-
-        excludeList.AddRange(tagged);
-
-
-
-        spawner.Spawn(_floors, _obstacles, _walls, excludeList.ToArray());
-
-    }
-
-
-
-    void HookCameraToPlayer(Transform player)
-
-    {
-
-        var cam = Camera.main ? Camera.main.GetComponent<CameraFollow2D>()
-
-                              : FindObjectOfType<CameraFollow2D>(true);
-
-        if (!cam) return;
-
-
-
-        cam.SetTarget(player, snap: true);
-
-
-
-        Collider2D bounds = null;
-
-        var t = currentMap.transform.Find("WorldBounds");
-
-        if (t) t.TryGetComponent(out bounds);
-
-        if (!bounds) bounds = currentMap.GetComponentInChildren<CompositeCollider2D>(true);
-
-        if (!bounds) bounds = currentMap.GetComponentInChildren<BoxCollider2D>(true);
-
-
-
-        if (bounds) cam.worldBounds = bounds;
-
-    }
-
-
-
-    // [개선 2] 병렬 로딩 적용 (속도 최적화)
-
-    async void ApplyExplorationSnapshot(ExplorationSnapshot snap, Tilemap floorMap, List<Tilemap> wallMap)
-
-    {
-
-        var existing = new Dictionary<string, IExplorationPersistable>();
-
-        foreach (var mb in currentMap.GetComponentsInChildren<MonoBehaviour>(true))
-
-            if (mb is IExplorationPersistable ip && !existing.ContainsKey(ip.PersistID))
-
-                existing.Add(ip.PersistID, ip);
-
-
-
-        Transform container = floorMap.transform.parent.Find("Object");
-
-        if (container == null) container = (currentMap != null) ? currentMap.transform : gridParent;
-
-
-
-        // 병렬 처리를 위한 Task 리스트 생성
-
-        List<Task> loadingTasks = new List<Task>();
-
-
-
-        foreach (var s in snap.objects)
-
-        {
-
-            // 1. 이미 존재하는 오브젝트 복구 (동기 처리)
-
-            if (existing.TryGetValue(s.id, out var existIp))
-
-            {
-
-                if (existIp is PushObject existPush)
-
-                    existPush.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
-
-                existIp.LoadState(s);
-
-                continue;
-
-            }
-
-
-
-            // 2. 새로 생성해야 하는 오브젝트 (비동기 처리 대상)
-
-            if (s.kind == "Chest" || s.kind == "Trap" || s.kind == "Encounter")
-
-            {
-
-                if (s.kind == "Trap" && (s.b1 || !s.b2)) continue;
-
-                if (s.kind == "Encounter" && s.b1) continue;
-
-
-
-                var refObj = FindPrefabByName(s.prefabName);
-
-                if (refObj == null)
-
-                {
-
-                    Debug.LogWarning($"[Snapshot] prefab '{s.prefabName}' not found for {s.kind}/{s.id}");
-
-                    continue;
-
-                }
-
-
-
-                // 로딩 태스크를 리스트에 추가 (즉시 await 하지 않음 -> 병렬 실행)
-
-                //loadingTasks.Add(RestoreSingleObjectAsync(refObj, s, container, floorMap, wallMap));
-
-            }
-
-            else
-
-            {
-
-                Debug.LogWarning($"[Snapshot] No existing object for ID={s.id} kind={s.kind}. Skipped instantiate.");
-
-            }
-
-        }
-
-
-
-        // 모든 로딩이 끝날 때까지 대기
-
-        await Task.WhenAll(loadingTasks);
-
-
-
-        Debug.Log($"[Snapshot] applied objects = {snap.objects.Count} (Active Addressables: {activeSnapshotObjects.Count})");
-
-    }
-
-
-
-    // [헬퍼 함수] 단일 오브젝트 비동기 복구 로직 (ApplyExplorationSnapshot에서 호출)
-
-    //async Task RestoreSingleObjectAsync(AssetReferenceGameObject refObj, ExplorationSnapshot.ObjectData s, Transform container, Tilemap floorMap, List<Tilemap> wallMap)
-
-    //{
-
-    //    var handle = refObj.InstantiateAsync(s.position, Quaternion.identity, container);
-
-    //    await handle.Task;
-
-
-
-    //    if (handle.Status == AsyncOperationStatus.Succeeded)
-
-    //    {
-
-    //        GameObject obj = handle.Result;
-
-
-
-    //        // [개선 1] 메모리 관리를 위해 리스트에 등록
-
-    //        activeSnapshotObjects.Add(obj);
-
-
-
-    //        var pid = obj.GetComponent<ExplorationPersistId>();
-
-    //        if (!pid) pid = obj.AddComponent<ExplorationPersistId>();
-
-    //        pid.OverrideIdForRestore(s.id);
-
-
-
-    //        // 이름 설정
-
-    //        obj.name = refObj.editorAsset != null ? refObj.editorAsset.name : s.prefabName;
-
-
-
-    //        if (obj.TryGetComponent<PushObject>(out var push))
-
-    //            push.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
-
-
-
-    //        if (obj.TryGetComponent<MonoBehaviour>(out var mb) && mb is IExplorationPersistable ip2)
-
-    //            ip2.LoadState(s);
-
-    //    }
-
-    //    else
-
-    //    {
-
-    //        Debug.LogError($"[Snapshot] Failed to instantiate {s.prefabName}");
-
-    //    }
-
-    //}
-
-
-
-    AssetReferenceGameObject FindPrefabByName(string prefabName)
-
-    {
-
-        var spawner = currentMap != null ? currentMap.GetComponentInChildren<MapObjectSpawner>(true) : null;
-
-
-
-        if (spawner != null)
-
-        {
-
-            if (spawner.trapRefs != null)
-
-            {
-
-                foreach (var p in spawner.trapRefs)
-
-                    if (CheckNameMatch(p, prefabName)) return p;
-
-            }
-
-            if (spawner.chestRefs != null)
-
-            {
-
-                foreach (var p in spawner.chestRefs)
-
-                    if (CheckNameMatch(p, prefabName)) return p;
-
-            }
-
-            if (spawner.patternRefs != null)
-
-            {
-
-                foreach (var p in spawner.patternRefs)
-
-                    if (CheckNameMatch(p, prefabName)) return p;
-
-            }
-
-        }
-
-        return null;
-
-    }
-
-
-
-    bool CheckNameMatch(AssetReferenceGameObject refObj, string targetName)
-
-    {
-
-        if (refObj == null) return false;
-
-
-
-#if UNITY_EDITOR
-
-        if (refObj.editorAsset != null && refObj.editorAsset.name == targetName) return true;
-
-#endif
-
-        string key = refObj.RuntimeKey.ToString();
-
-        return key.Contains(targetName);
-
-    }
-
-
-
-    public void ResetExplorationMap()
-
-    {
-
-        // [개선 1] 어드레서블로 생성된 오브젝트들 정식 반납 (메모리 해제)
-
-        // 리스트를 역순으로 돌거나, foreach로 돌며 해제합니다.
-
-        foreach (var obj in activeSnapshotObjects)
-
-        {
-
-            if (obj != null)
-
-            {
-
-                Addressables.ReleaseInstance(obj);
-
-            }
-
-        }
-
-        activeSnapshotObjects.Clear(); // 리스트 비우기
-
-
-
-        // 기존 맵 파괴
-
-        if (currentMap != null) Destroy(currentMap);
-
-        if (PlayerMovement.Instance != null) Destroy(PlayerMovement.Instance.gameObject);
-
-
-
-        if (backUpMapPrefab == null)
-
-        {
-
-            Debug.LogError("[MapManager] 생성할 맵 프리팹이 없습니다!");
-
-            return;
-
-        }
-
-
-
-        currentMap = Instantiate(backUpMapPrefab, Vector3.zero, Quaternion.identity, gridParent);
-
-
-
-        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(currentMap);
-
-
-
-        if (floorMaps.Count == 0)
-
-        {
-
-            Debug.LogError("Floor 타일맵을 찾을 수 없습니다! (WalkableLayers 하위에 있는지 확인 필요)");
-
-            return;
-
-        }
-
-
-
-        InstantiatePlayer(floorMaps, obstacleMaps, wallMaps);
-
-        TrySpawnObjects(floorMaps, obstacleMaps, wallMaps);
-
-    }
-
-
-
-    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
-
-    {
-
-        List<Tilemap> floors = new List<Tilemap>();
-
-        List<Tilemap> obstacles = new List<Tilemap>();
-
-        List<Tilemap> walls = new List<Tilemap>();
-
-
-
-        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
-
-        {
-
-            if (tm.CompareTag("Wall")) walls.Add(tm);
-
-            else if (tm.CompareTag("Obstacle")) obstacles.Add(tm);
-
-            else if (tm.CompareTag("Ground")) floors.Add(tm);
-
-            else Debug.LogWarning($"[MapManager] Tag가 설정되지 않은 타일맵 발견: {tm.name}");
-
-        }
-
-        return (floors, obstacles, walls);
-
-    }
-
-}
+Error reading file with 'cp949': 'cp949' codec can't decode byte 0xec in position 1672: illegal multibyte sequence
 
 
 ================================================
@@ -25576,7 +25587,7 @@ public class MapToggleManager : MonoBehaviour
 ================================================
 FILE: 01_Scripts/Exploration/PlayerMovement.cs
 ================================================
-// PlayerMovement.cs
+﻿// PlayerMovement.cs
 
 using System;
 
@@ -25644,15 +25655,15 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 타일 경로 기반 이동 상태
+    // 자동경로 기반 이동 상태
 
-    [Header("타일 경로 이동 설정")]
+    [Header("자동경로 이동 설정")]
 
     [SerializeField] private GameObject pathMarkerPrefab;   // 경로 표시용 프리팹
 
-    [SerializeField] private GameObject pushMarkerPrefab; // Push 후보 타일 표시 전용
+    [SerializeField] private GameObject pushMarkerPrefab; // Push 후보 타일 표시용
 
-    [SerializeField] private GameObject goalMarkerPrefab; // 목표 지점(끝부분) 전용 마커(노란 테두리)
+    [SerializeField] private GameObject goalMarkerPrefab; // 목표 지점 표시용 마커(최종 도착)
 
 
 
@@ -25660,7 +25671,7 @@ public class PlayerMovement : MonoBehaviour
 
     private List<Vector3Int> currentPathCells = new List<Vector3Int>();
 
-    // 현재 선택된 목표 셀 (첫 번째 클릭으로 선택된 타일)
+    // 현재 선택된 목표 셀 (첫 번째 클릭으로 선택된 상태)
 
     private Vector3Int? selectedTargetCell = null;
 
@@ -25678,21 +25689,21 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 경로 도착 시 실행할 콜백 (예: 상자 열기)
+    // 경로 도착 후 실행할 콜백 (예: 상자 열기)
 
     private Action pathArrivalCallback = null;
 
 
 
-    // 상호작용 이동용으로 선택된 상자(있다면)
+    // 상호작용 의도로 선택된 상자(또는 다른 것)
 
-    private BoxInteract pendingChest = null;
+    private IInteractable pendingInteractable = null;
 
     private PortalController pendingPortal = null;
 
 
 
-    // 현재 상호작용 대상(관찰/조사 버튼이 가리키는 대상)
+    // 현재 상호작용 타겟(관찰/조사 버튼이 가리키는 대상)
 
     private Collider2D currentInteractTarget = null;
 
@@ -25704,7 +25715,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // Push 선택(타일 클릭) 모드
+    // Push 선택(우클릭) 모드
 
     private bool isPushSelectMode = false;
 
@@ -25712,13 +25723,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 박스가 이동할 수 있는 목표 타일만 허용
+    // 박스가 이동해야 하는 목표 타일만 사용
 
     private HashSet<Vector3Int> pushValidTargetCells = new HashSet<Vector3Int>();
 
 
 
-    // 표시용 마커(기존 pathMarkerPrefab 재사용 가능)
+    // 임시 마커(기존 pathMarkerPrefab 복사해서 사용)
 
     private readonly List<GameObject> activePushMarkers = new List<GameObject>();
 
@@ -25734,7 +25745,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    [Header("높이 이동 설정")]
+    [Header("점프 이동 설정")]
 
     public AnimationCurve jumpCurve;      // 점프 곡선
 
@@ -25744,7 +25755,7 @@ public class PlayerMovement : MonoBehaviour
 
     [SerializeField] private LayerMask encounterLayerMask;
 
-    [SerializeField] private string battleSceneName = "BattleScene"; // 실제 전투씬 이름으로
+    [SerializeField] private string battleSceneName = "BattleScene"; // 현재 전투 씬 이름으로
 
 
 
@@ -25772,7 +25783,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 마우스 이동 충돌 예측 필터 (자기 자신은 자동 제외됨)
+        // 마우스 이동 충돌 예측 필터 (자기 자신은 충돌 제외)
 
         _castFilter.useTriggers = false;
 
@@ -25786,11 +25797,11 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 관찰/대화 Dialog가 열려 있을 때: 
+        // 관찰창(Dialog)가 열려 있을 때 
 
         // 좌클릭으로 닫기
 
-        // 닫히기 전까지는 이동/타일 클릭을 전부 막는다
+        // 닫히기 전까지는 이동/추가 클릭 등을 막는다
 
         if (DescriptionDialogUI.Instance != null && DescriptionDialogUI.Instance.IsOpen)
 
@@ -25814,7 +25825,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 입력 차단 조건을 한 곳에서 체크
+        // 입력 차단 조건은 이곳에서 체크
 
         bool isInputBlocked =
 
@@ -25848,7 +25859,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            HandleTileClickInput(); // 타일 클릭/상자 클릭 이동
+            HandleTileClickInput(); // 일반 클릭/상자 클릭 이동
 
         }
 
@@ -25858,7 +25869,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // RMB 취소(요구사항 5)
+            // RMB 취소(?�구?�항 5)
 
             if (Input.GetMouseButtonDown(1))
 
@@ -25872,7 +25883,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // LMB: 허용 타일만
+            // LMB: ?�용 ?�?�만
 
             if (Input.GetMouseButtonDown(0))
 
@@ -25898,7 +25909,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // “목표 셀”만 넘기고, 실제 연속/단발 푸시는 내부에서 처리
+                // ?�목???�?�만 ?�기�? ?�제 ?�속/?�발 ?�시???��??�서 처리
 
                 StartPushToCell(pendingPushBox, clickedCell);
 
@@ -25907,462 +25918,236 @@ public class PlayerMovement : MonoBehaviour
                 ExitPushSelectMode(keepBoxHighlight: false);
 
                 return;
-
+                return;
             }
 
-
-
             return; // pushSelectMode 중에는 일반 이동/상호작용 입력 차단
-
         }
-
-
 
         if (!isPushSelectMode && pendingPushBox != null && Input.GetMouseButtonDown(1))
-
         {
-
             pendingPushBox.SetHighlight(false);
-
             pendingPushBox = null;
-
             InteractionHintUI.Instance?.HideAll();
-
             return;
-
         }
-
     }
-
-
 
     void FixedUpdate()
-
     {
-
         if (isPerformingPush) return;
-
         if (GamePause.IsPaused)
-
         {
-
             if (animator != null)
-
                 animator.SetInteger("Move", 0);
-
             return;
-
         }
-
     }
-
-
 
     void ExitPushSelectMode(bool keepBoxHighlight = false)
-
     {
-
         ClearPushTargets();
-
         pushValidTargetCells.Clear();
 
-
-
         if (animator != null)
-
         {
-
             animator.SetInteger("Move", 0);
-
             animator.SetBool("IsPushIdle", false);
-
         }
 
-
-
         isPushSelectMode = false;
-
         isPushMode = false;
 
-
-
         if (!keepBoxHighlight)
-
             pendingPushBox?.SetHighlight(false);
 
-
-
         pendingPushBox = null;
-
         pendingDirectionKey = Direction.None;
 
-
-
         InteractionHintUI.Instance?.HideAll();
-
     }
 
-
-
     // --- 타일 클릭 입력 처리 ---
-
     void HandleTileClickInput()
-
     {
-
-        // 카메라/마우스 좌표 계산
-
+        // 카메라 마우스 좌표 계산
         var cam = Camera.main;
-
         if (cam == null) return;
 
-
-
         float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-
         Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-
         wp.z = 0;
 
-
-
-        // 타일 판정 및 디버그 갱신
-
+        // 타일 좌표계 갱신
         Vector3Int clickedCell = GetClickedCellWithHeight(wp);
-
         Vector3Int currentCell = GetCellFromWorldPos(rb.position);
 
-
-
         clickedCell.z = 0;
-
         currentCell.z = 0;
 
-
-
-        // UI 및 이동 중 차단
-
+        // UI 위 클릭 시 차단
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-
             return;
-
-
 
         if (isMovingByPath)
-
             return;
 
-
-
-        // 왼쪽 클릭: 경로 프리뷰 or 이동 실행
-
+        // 좌클릭: 경로 프리뷰 or 이동 수행
         if (Input.GetMouseButtonDown(0))
-
         {
-
             // 먼저, 클릭 지점에 상호작용 가능한 오브젝트가 있는지 검사
-
-            BoxInteract clickedChest = null;
-
+            IInteractable clickedInteractable = null;
             Collider2D clickedCollider = null;
-
             DescriptionData clickedDesc = null;
-
             PushObject clickedPush = null;
-
             PortalController clickedPortal = null;
-
-
 
             var hits = Physics2D.OverlapPointAll(wp);
 
-
-
             foreach (var h in hits)
-
             {
-
                 // PushObject 감지
-
                 var push = h.GetComponentInParent<PushObject>();
-
                 if (push != null)
-
                 {
-
                     clickedPush = push;
-
                     if (!clickedCollider) clickedCollider = h;
-
                 }
-
-
 
                 // 상자(부모 포함) 검사
-
-                var chest = h.GetComponentInParent<BoxInteract>();
-
+                var chest = h.GetComponentInParent<IInteractable>();
                 if (chest != null)
-
                 {
-
-                    // 이미 열린 상자는 완전히 무시 (모든 콜라이더 포함)
-
-                    if (chest.IsOpened)
-
+                    // 이미 열린 상자라면 완전히 무시 (모든 콜라이더 포함)
+                    if (chest.CanInteract == false)
                         continue;
 
+                    // 닫힌 상자라면 상자 정보를 획득(클릭 우선권)
+                    if (clickedInteractable == null)
+                        clickedInteractable = chest;
 
-
-                    // 닫힌 상자라면 상자 정보만 저장 (클릭 대상 우선)
-
-                    if (clickedChest == null)
-
-                        clickedChest = chest;
-
-
-
-                    // 상자 콜라이더도 상호작용 대상 콜라이더로 인정
-
+                    // 상자 콜라이더를 상호작용 타겟 콜라이더로 지정
                     if (!clickedCollider)
-
                         clickedCollider = h;
-
                 }
-
-
 
                 // 설명 데이터는 상자/기타 공통으로 가져온다
-
                 if (clickedDesc == null && h.TryGetComponent<DescriptionData>(out var descriptiondata))
-
                 {
-
                     clickedDesc = descriptiondata;
-
                     if (!clickedCollider)
-
                         clickedCollider = h;
-
                 }
-
-
 
                 // Portal 감지
-
                 var portal = h.GetComponentInParent<PortalController>();
-
                 if (portal != null)
-
                 {
-
                     if (clickedPortal == null) clickedPortal = portal;
-
                     if (!clickedCollider) clickedCollider = h;
-
                 }
-
             }
-
-
 
             if (clickedPush != null)
-
             {
-
-                CancelSelectionAndHint(); // 기존 선택/경로 정리:contentReference[oaicite:9]{index=9}
-
-
+                CancelSelectionAndHint(); // 기존 선택/경로 정리
 
                 pendingPushBox = clickedPush;
-
                 pendingPushBox.SetHighlight(true);
 
-
-
-                // 밀기/취소 2버튼만 표시
-
+                // 밀기/취소 2버튼 표시
                 InteractionHintUI.Instance?.ShowPushCancelAt(pendingPushBox.transform);
-
                 return;
-
             }
 
-
-
             // 오브젝트(상자, NPC, 기타) 클릭
-
-            if (clickedChest != null || clickedPortal != null || clickedCollider != null)
-
+            if (clickedInteractable != null || clickedPortal != null || clickedCollider != null)
             {
-
-                // 목표가 될 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
-
-                Transform targetTr = clickedChest ? clickedChest.transform :
-
+                // 목표 타겟 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
+                Transform targetTr = clickedInteractable != null ? clickedInteractable.GetTransform() :
                                     (clickedPortal != null ? clickedPortal.transform :
-
                                      clickedCollider.transform);
 
-
-
-                // 대상 셀
-
+                // 타겟 타일
                 Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
-
                 
 
-
-
-                // 현재 셀이 대상 셀과 같은 셀이거나, 인접 6칸 중 하나라면 "이동 없이 상호작용 가능"
-
+                // 현재 타일과 같거나 인접 6방향 중 하나라면 "이동 없이 상호작용 가능"
                 bool isAdjacentOrSame = false;
-
                 {
-
                     if (currentCell == targetCell)
-
                     {
-
                         isAdjacentOrSame = true;
-
                     }
-
                     else
-
                     {
-
                         Direction[] dirs =
-
                         {
-
                             Direction.West,
-
                             Direction.East,
-
                             Direction.NW,
-
                             Direction.NE,
-
                             Direction.SW,
-
                             Direction.SE
-
                         };
 
-
-
                         bool odd = (targetCell.y & 1) != 0;
-
                         foreach (var dir in dirs)
-
                         {
-
                             Vector3Int offset = GetOffsetForDirection(dir, odd);
-
                             Vector3Int adj = targetCell + offset;
-
                             if (adj == currentCell)
-
                             {
-
                                 isAdjacentOrSame = true;
-
                                 break;
-
                             }
-
                         }
-
                     }
-
                 }
-
-
 
                 if (isAdjacentOrSame)
-
                 {
-
                     // 이동 없이 바로 상호작용할 수 있는 거리
-
                     selectedTargetCell = currentCell;
-
                     currentPathCells = new List<Vector3Int> { currentCell };
 
-
-
-                    // 현재 상호작용 대상/관찰 대상 저장
-
-                    currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
-
+                    // 현재 상호작용 타겟(관찰 등) 설정
+                    currentInteractTarget = clickedCollider ?? (clickedInteractable != null ? clickedInteractable.GetTransform().GetComponent<Collider2D>() : null);
                     currentDescData = clickedDesc;
-
-                    pendingChest = clickedChest;
-
+                    pendingInteractable = clickedInteractable;
                     pendingPortal = clickedPortal;
 
-
-
-                    // 제자리에선 경로 프리뷰는 필요 없으니 호출해도 표시가 안 됨(Count < 2라서)
-
+                    // 제자리에서는 경로 프리뷰가 필요 없으므로 호출해도 표시가 안됨(Count < 2라서)
                     ShowPathPreview(currentPathCells);
 
-
-
-                    // HintUI를 대상 위치에 표시 (조사/관찰/취소 버튼 모두)
-
+                    // HintUI를 타겟 위치에 표시 (조사/관찰/취소 버튼 모두)
                     InteractionHintUI.Instance?.HideAll();
 
-
-
                     if (clickedPortal != null)
-
                     {
-
                         InteractionHintUI.Instance?.ShowSurveyAt(targetTr, clickedPortal.GetHintLabel()); // "이동"
-
-                                                                                                        // Portal은 관찰 버튼 불필요하면 생략
-
+                                                                                                        // Portal은 관찰버튼 불필요하므로 생략
                     }
-
                     else
-
                     {
-
                         InteractionHintUI.Instance?.ShowBothAt(targetTr); // 기존 상자/기타
-
                     }
-
-
 
                     InteractionHintUI.Instance?.ShowCancelAt(targetTr);
-
                     return;
-
                 }
-
-
-
 
 
                 var newPath = FindPathToAdjacentCell(currentCell, targetCell);
 
-
-
                 if (newPath == null || newPath.Count < 2)
-
                 {
-
-                    // 도달 불가 → 선택/프리뷰 해제
-
+                    // 도달 불가 시 선택/프리뷰 해제
                     selectedTargetCell = null;
-
                     currentPathCells.Clear();
-
                     ClearPathPreview();
 
-                    pendingChest = null;
+                    pendingInteractable = null;
 
                     pendingPortal = null;
 
@@ -26386,15 +26171,15 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 현재 상호작용 대상/관찰 대상 저장
+                // 현재 상호작용 타겟(관찰 대상 등) 설정
 
-                currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
+                currentInteractTarget = clickedCollider ?? (clickedInteractable != null ? clickedInteractable.GetTransform().GetComponent<Collider2D>() : null);
 
                 currentDescData = clickedDesc;
 
 
 
-                pendingChest = clickedChest;
+                pendingInteractable = clickedInteractable;
 
                 pendingPortal = clickedPortal;
 
@@ -26404,7 +26189,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // HintUI를 대상 위치에 표시 (조사/관찰/취소 버튼 모두)
+                // HintUI를 타겟 위치에 표시 (조사/관찰/취소 버튼 모두)
 
                 InteractionHintUI.Instance?.ShowBothAt(targetTr); // 조사 + 관찰
 
@@ -26416,13 +26201,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 오브젝트가 아닌 그냥 타일 클릭인 경우
+            // 오브젝트가 아닌 그냥 타일 클릭한 경우
 
-            if (pendingChest != null)
+            if (pendingInteractable != null)
 
             {
 
-                // 왼쪽 클릭은 무시 (버튼으로만 이동 시작)
+                // 좌클릭은 무시 (버튼으로만 이동 시작)
 
                 return;
 
@@ -26430,7 +26215,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이미 같은 타일이 선택된 상태에서 다시 왼쪽 클릭 → 이동 실행
+            // 같은 타일이 선택된 상태에서 다시 한 번 클릭 시 이동 수행
 
             if (selectedTargetCell.HasValue
 
@@ -26454,7 +26239,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                Debug.Log($"[이동 불가] 좌표: {clickedCell} - 바닥이 없거나 벽/장애물이 있습니다.");
+                Debug.Log($"[이동 불가] 좌표: {clickedCell} - 바닥이 없거나 장애물이 있습니다.");
 
                 return;
 
@@ -26468,7 +26253,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 경로가 없거나 1칸(제자리)이면 선택/프리뷰 해제
+            // 경로가 없거나 1개(제자리)라면 선택/프리뷰 해제
 
             if (newPath2 == null || newPath2.Count <= 1)
 
@@ -26480,7 +26265,7 @@ public class PlayerMovement : MonoBehaviour
 
                 ClearPathPreview();
 
-                pendingChest = null;
+                pendingInteractable = null;
 
                 pathArrivalCallback = null;
 
@@ -26496,13 +26281,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 첫 번째 클릭: 경로만 표시 (이 경우 관찰 대상은 없음)
+            // 첫 번째 클릭: 경로를 표시 (이 경우 상호작용은 없음)
 
             selectedTargetCell = clickedCell;
 
             currentPathCells = newPath2;
 
-            pendingChest = null;
+            pendingInteractable = null;
 
             pathArrivalCallback = null;
 
@@ -26520,7 +26305,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 오른쪽 클릭: 같은 타일을 클릭하면 선택/프리뷰 취소
+        // 우클릭: 같은 타일을 클릭하면 선택/프리뷰 취소
 
         if (Input.GetMouseButtonDown(1))
 
@@ -26550,7 +26335,7 @@ public class PlayerMovement : MonoBehaviour
 
         ClearPathPreview();
 
-        pendingChest = null;
+        pendingInteractable = null;
 
         pathArrivalCallback = null;
 
@@ -26576,7 +26361,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 경로 이동 중에는 코루틴을 끊지 말고 입력만 잠금
+        // 경로 이동 중에도 코루틴을 멈추지 말고 입력을 잠금
 
         if (!isMovingByPath)
 
@@ -26628,7 +26413,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 리스트 뒤쪽(높은 층)부터 검사해야 겹쳤을 때 위쪽 타일을 가져옴
+        // 리스트의 뒤쪽(높이 높은 부분)부터 검사해서 겹쳤을 때 높은 타일을 가져옴
 
         for (int i = floorMaps.Count - 1; i >= 0; i--)
 
@@ -26706,7 +26491,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 해당 셀이 소속된 타일맵을 찾음 (높이 정보 포함)
+            // 해당 타일의 소속 타일맵을 찾음 (높이 정보 포함)
 
             Tilemap targetMap = GetWalkableMapAt(cell);
 
@@ -26714,7 +26499,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 그 타일맵 기준으로 월드 좌표를 가져온다 (Anchor 값 자동 반영됨)
+            // 해당 타일맵 기준으로 월드 좌표를 가져옴 (Anchor 값 자동 반영)
 
             Vector3 world = targetMap.GetCellCenterWorld(cell);
 
@@ -26746,7 +26531,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 마커가 타일에 파묻히지 않게 Sorting Order 동적 조절
+            // 마커가 타일에 묻히지 않게 Sorting Order 적절 조절
 
             var mapRenderer = targetMap.GetComponent<TilemapRenderer>();
 
@@ -26764,7 +26549,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 순서는 타일맵보다 1 높게 설정 (무조건 타일 위에 그려짐)
+                // 그 중에서 타일맵보다 1 높게 설정 (무조건 타일 위에 그려지도록)
 
                 markerRenderer.sortingOrder = mapRenderer.sortingOrder + 1;
 
@@ -26778,7 +26563,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 목표 지점에 총 필요 활기 표시
+        // 목표 지점에 소모 기력 표시
 
         var vigor = VigorManager.Instance;
 
@@ -26822,7 +26607,7 @@ public class PlayerMovement : MonoBehaviour
 
                 _pathCostTMP.alignment = TextAlignmentOptions.Center;
 
-                _pathCostTMP.fontSize = 30;                // 스케일과 함께 튜닝
+                _pathCostTMP.fontSize = 30;                // 가독성과 함께 튜닝
 
                 _pathCostTMP.enableWordWrapping = false;
 
@@ -26836,7 +26621,7 @@ public class PlayerMovement : MonoBehaviour
 
                 _pathCostTMP.sortingOrder = baseOrder + 2; // 텍스트는 확실하게 위로
 
-                _pathCostTMP.outlineWidth = 0.2f;          // 가독성
+                _pathCostTMP.outlineWidth = 0.2f;          // 가시성
 
                 _pathCostTMP.color = (cost <= vigor.CurrentVigor) ? Color.white : Color.red;
 
@@ -26854,7 +26639,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 두 타일 사이의 높이 차이가 이동 가능한 수준인지 확인 (3칸 이상 불가)
+    // 이동 가능한 타일의 높이 차이가 이동 가능한 범위인지 확인 (3칸 이상 불가)
 
     bool IsHeightDiffValid(Vector3Int from, Vector3Int to)
 
@@ -26866,7 +26651,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 맵을 못 찾으면 바닥(0)으로 가정
+        // 맵을 못찾으면 바닥(0)으로 간주
 
         float fromH = (fromMap != null) ? fromMap.tileAnchor.y : 0f;
 
@@ -26878,7 +26663,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 위로 가든 아래로 가든 차이가 0.6f 미만이어야 함
+        // 위로 가거나 아래로 가거나 차이가 0.6f 미만이어야 함
 
         if (Mathf.Abs(diff) < 0.55f)
 
@@ -26910,7 +26695,7 @@ public class PlayerMovement : MonoBehaviour
 
         Vector3 worldPos = map.GetCellCenterWorld(cell);
 
-        worldPos.z = 0; // 거리는 2D 평면(XY) 기준으로만 볼 거니까 Z 무시
+        worldPos.z = 0; // 거리는 2D 평면(XY) 기준으로만 재거나 Z 무시
 
         return worldPos;
 
@@ -26990,15 +26775,15 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 2. 높이 차이 안 맞으면 스킵
+                // 2. 높이 차이 안맞으면 스킵
 
                 if (!IsHeightDiffValid(current, next)) continue;
 
 
 
-                // 3. 물리적 거리가 너무 멀면(앵커 오차 등으로 끊긴 곳) 스킵
+                // 3. 물리적 거리가 너무 멀어서 헥사 타일이 아닌 다른 타일이면 스킵
 
-                // 안전하게 2.0f로 유지
+                // 안전하게 2.0f로 둠
 
                 Vector3 nextWorldPos = GetWorldPosForLogic(next);
 
@@ -27028,7 +26813,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 경로 역추적
+        // 경로 재구성
 
         var path = new List<Vector3Int>();
 
@@ -27054,7 +26839,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 특정 오브젝트 셀 주변(인접 6칸) 중 하나까지의 최단 경로를 찾는다.
+    // 특정 오브젝트 주변(인접 6칸 중 하나까지) 최단 경로를 찾는 함수
 
     List<Vector3Int> FindPathToAdjacentCell(Vector3Int start, Vector3Int objectCell)
 
@@ -27160,7 +26945,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // adj(플레이어 위치)에서 box를 밀 때의 “플레이어→박스 상대 방향”을 dirKey로 산출
+            // adj(플레이어 위치)에서 box를 밀 수 있는지 여부와 플레이어→박스 이동 방향을 dirKey로 추출
 
             var delta = boxCell - adj;
 
@@ -27172,9 +26957,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 그 자리에서 실제로 1칸이라도 밀 수 있어야 “push-ready”
+            // 이 자리에서 최소 1칸이라도 밀 수 있어야 push-ready임
 
-            // (후보 타일 계산 함수는 아래 2)에서 추가할 BuildPushLineTargets를 사용)
+            // (이 부분은 계산 함수인 아래 BuildPushLineTargets를 이용)
 
             var line = BuildPushLineTargets(box, boxCell, dirKey);
 
@@ -27200,7 +26985,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    //심볼 인카운터 몬스터 타일 체크
+    //인카운터 몬스터 유무 체크
 
     bool TryGetEncounterAtCell(Vector3Int cell, out EncounterMonster monster)
 
@@ -27214,13 +26999,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 탐지된 개수 확인
+        // 오브젝트 개수 확인
 
         if (hits.Length == 0)
 
         {
 
-            Debug.Log($"[Encounter] 해당 타일({cell}) 중심에서 반경 0.4f 내에 'Water' 레이어 감지 안 됨. 위치: {world}");
+            Debug.Log($"[Encounter] 해당 타일({cell}) 중심에서 반경 0.4f 내에 'Water' 레이어 감지 안됨. 위치: {world}");
 
             return false;
 
@@ -27240,7 +27025,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                if (!m.IsActive) Debug.Log($"[Encounter] 몬스터 감지됨({m.name}) 그러나 IsActive가 false임.");
+                if (!m.IsActive) Debug.Log($"[Encounter] 몬스터 감지됨({m.name}) 그러나 IsActive가 false임");
 
                 else
 
@@ -27264,7 +27049,7 @@ public class PlayerMovement : MonoBehaviour
 
     }
 
-    //함정 타일 체크
+    //함정 발동 체크
 
     void TryTriggerTrapAtCell(Vector3Int cell)
 
@@ -27308,7 +27093,7 @@ public class PlayerMovement : MonoBehaviour
 
             if (!trap) continue;
 
-            if (!trap.gameObject.activeInHierarchy) continue; // 비활성 트랩 스킵(권장)
+            if (!trap.gameObject.activeInHierarchy) continue; // 비활성 함정 스킵(권장)
 
 
 
@@ -27328,9 +27113,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 시퀀스 시작 시점의 “방향”은 EnterPushSelectMode에서 결정된 pendingDirectionKey를 사용
+        // 시퀀스 시작 시점의 이동 방향은 EnterPushSelectMode에서 결정된 pendingDirectionKey를 사용
 
-        // (해당 모드에서는 방향이 하나로 고정되는 설계)
+        // (해당 모드에서는 방향이 하나로 고정되는 구조)
 
         if (pendingDirectionKey == Direction.None) return;
 
@@ -27344,7 +27129,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 경로를 따라 실제로 이동
+    // 경로를 따라 실제 이동
 
     void StartPathMove(List<Vector3Int> cells, Action onArrive = null, int? overrideVigorCost = null)
 
@@ -27366,7 +27151,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // 복귀 후 이어서 이동: "총 예정 비용"을 그대로 이어받는다
+            // 복귀 시 이어지는 이동: "지정 비용"을 그대로 이어받는다
 
             _pendingMoveVigorCost = Mathf.Max(0, overrideVigorCost.Value);
 
@@ -27382,13 +27167,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 선 차감 대신 가능 여부만 확인
+            // 비용 차감 가능 여부 확인
 
             if (cost > 0 && !vigor.CanSpend(cost))
 
             {
 
-                ExplorationLogUI.Instance?.Push($"활기가 부족합니다. 이동 필요: {cost}, 현재: {vigor.CurrentVigor}");
+                ExplorationLogUI.Instance?.Push($"기력이 부족합니다. 이동 필요: {cost}, 현재: {vigor.CurrentVigor}");
 
                 CancelSelectionAndHint();
 
@@ -27426,13 +27211,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 프리뷰는 이동 시작 시 지움
+        // 프리뷰는 이동 시작 즉시 지움
 
         ClearPathPreview();
 
 
 
-        var moveCells = new List<Vector3Int>(cells);   // 복사본 생성
+        var moveCells = new List<Vector3Int>(cells);   // 복사해서 사용
 
         pathMoveRoutine = StartCoroutine(Co_MoveAlongPath(moveCells));
 
@@ -27462,7 +27247,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 물리 엔진(Raycast)을 이용한 정확한 타일 감지
+    // 물리 엔진(Raycast)을 이용해 정확한 타일 감지
 
     // [Physics 방식 + 좌표 보정]
 
@@ -27470,11 +27255,11 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 화면상 마우스 위치에서 레이 발사
+        // 화면의 마우스 위치에서 레이 발사
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 
-        // 레이에 충돌된 타일 모두 가져오기
+        // 레이에 충돌한 타일을 모두 가져옴
 
         RaycastHit2D[] hits = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
 
@@ -27498,7 +27283,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 가장 위에 그려진(Sorting Order 높은) 타일 찾기
+            // 가장 위에 그려진(Sorting Order 높은) 맵 찾기
 
             foreach (var hit in hits)
 
@@ -27510,7 +27295,7 @@ public class PlayerMovement : MonoBehaviour
 
                 {
 
-                    // 이 맵 기준으로 좌표 보정
+                    // 그리드 기준으로 좌표 보정
 
                     Grid grid = map.layoutGrid;
 
@@ -27528,7 +27313,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                    // 실제로 그 좌표에 타일이 있는지 확인
+                    // 실제 해당 좌표에 타일이 있는지 확인
 
                     if (map.HasTile(tempCell))
 
@@ -27540,7 +27325,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                        // Order 높거나, 같으면 화면상 아래쪽(Y가 작은) 우선
+                        // Order 크거나 같으면 (같으면 아래쪽이 우선)
 
                         if (!found || order > maxOrder || (order == maxOrder && hit.point.y < bestHitY))
 
@@ -27552,7 +27337,7 @@ public class PlayerMovement : MonoBehaviour
 
                             bestCell = tempCell;
 
-                            bestHitY = hit.point.y; // 비교용 Y값 저장
+                            bestHitY = hit.point.y; // 비교용 Y값 갱신
 
                             found = true;
 
@@ -27578,7 +27363,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 허공 클릭 시 Fallback(가장 바닥 맵 기준)
+        // 허공 클릭 시 Fallback(가장 아래 바닥 기준)
 
         if (floorTilemap != null)
 
@@ -27632,7 +27417,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                // 장애물/벽 제외하고 바닥만 체크 (필요시 wall 포함 여부 결정)
+                // 장애물은 제외하고 바닥만 체크 (필요 시 wall 포함 여부 결정)
 
                 if (obstacleMaps.Contains(map)) continue;
 
@@ -27670,7 +27455,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 밟고 있는 맵의 Anchor만큼 좌표를 내려서 계산
+            // 밟고 있는 맵의 Anchor만큼 좌표를 보정해서 계산
 
             Grid grid = bestMap.layoutGrid;
 
@@ -27692,13 +27477,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 바닥을 못 찾았을 경우 Fallback
+        // 바닥 맵을 못 찾았을 경우 Fallback
 
         if (floorTilemap != null)
 
         {
 
-            // 혹시 모르니 기본 바닥 앵커라도 빼줌
+            // 혹시 모를 기본 바닥 앵커값도 빼줌
 
             Vector3 correctedPos = worldPos;
 
@@ -27740,13 +27525,13 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // 시작 셀은 현재 위치라고 가정, 1번째 인덱스부터 끝까지 순서대로 이동
+            // 시작 점(현재 위치) 빼고 1번째 인덱스부터 끝까지 순서대로 이동
 
             for (int i = 1; i < cells.Count; i++)
 
             {
 
-                // 이전 타일(출발)과 현재 타일(도착)의 층수(Index) 구하기
+                // 이전 셀(출발)과 현재 셀(도착)의 층수(Index) 구하기
 
                 Vector3Int startCell = cells[i - 1];
 
@@ -27754,7 +27539,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 각 셀이 소속된 맵을 찾아서 실제 월드 좌표를 가져옴
+                // 각 타일이 소속된 맵을 찾아서 실제 월드 좌표를 가져옴
 
                 Tilemap startMap = GetWalkableMapAt(startCell);
 
@@ -27778,7 +27563,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 타일맵의 고유 높이(Anchor.y)나 맵 인스턴스 자체가 다를 때만 점프
+                // 타일맵의 고유 높이(Anchor.y) 차이가 있을 때만 점프
 
                 float startHeight = (startMap != null) ? startMap.tileAnchor.y : 0f;
 
@@ -27824,7 +27609,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 점프 높이 동적 계산
+                // 점프 높이 누적 계산
 
                 float currentJumpMultiplier = jumpHeightMultiplier;
 
@@ -27836,19 +27621,19 @@ public class PlayerMovement : MonoBehaviour
 
                     // 1칸 차이 vs 2칸 차이 구분
 
-                    // 0.18(약 1.5칸)보다 크면 2칸 점프로 간주하여 높이를 키움
+                    // 0.18(대략 1.5층)보다 크면 2단 점프로 간주하여 높이를 키움
 
                     if (heightDiff > 0.26f)
 
                     {
 
-                        currentJumpMultiplier *= 1.5f; // 2칸일 때 1.6배 더 높게 점프 (취향껏 조절)
+                        currentJumpMultiplier *= 1.5f; // 2칸일 때 1.6배 높게 점프 (취향껏 조절)
 
                     }
 
 
 
-                    // 내려가는 점프는 살짝 낮게 (기존 로직 유지)
+                    // 내려가는 점프는 살짝 낮춤 (기존 로직 유지)
 
                     if (endHeight < startHeight)
 
@@ -27886,7 +27671,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                    // 기본 선형 이동 (높이 차이가 있으면 대각선으로 이동됨)
+                    // 기본 선형 이동 (높이 차이가 있으면 대각선으로 이동)
 
                     Vector3 currentPos = Vector3.Lerp(startPos, endPos, percent);
 
@@ -27918,19 +27703,19 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 도착 셀 함정 체크
+                // 도착 후 함정 체크
 
                 TryTriggerTrapAtCell(cells[i]);
 
 
 
-                // 도착 셀에서 인카운터 체크
+                // 도착 지점에서 인카운터 체크
 
                 if (TryGetEncounterAtCell(cells[i], out var monster))
 
                 {
 
-                    // 남은 경로 구성: 현재(몬스터 셀)부터 끝까지
+                    // 남은 경로 구성: 현재(몬스터 만남)부터 끝까지
 
                     var remaining = new List<Vector3Int>();
 
@@ -27964,7 +27749,7 @@ public class PlayerMovement : MonoBehaviour
 
                         Vector3 returnPos = encounterMap.GetCellCenterWorld(cells[i]);
 
-                        // Z축은 0으로 맞추거나 필요시 transform.position.z 사용
+                        // Z축을 0으로 맞추거나 필요 시 transform.position.z 사용
 
                         returnPos.z = 0;
 
@@ -27974,11 +27759,15 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                        stm.SaveExplorationSnapshot(stm.BuildExplorationSnapshotFromScene());
-
-
+                        // 중요: 몬스터를 먼저 소비 처리하고 스냅샷 찍음
 
                         monster.MarkConsumed();
+
+                        
+
+                        // 몬스터가 비활성화된 상태로 스냅샷 저장
+
+                        stm.SaveExplorationSnapshot(stm.BuildExplorationSnapshotFromScene());
 
                         stm.SaveVigor(VigorManager.Instance.CurrentVigor);
 
@@ -28018,7 +27807,7 @@ public class PlayerMovement : MonoBehaviour
 
                     VigorManager.Instance.FailExploration(
 
-                        $"탐색을 실패했습니다. (이동 결제 실패 / 필요 {_pendingMoveVigorCost}, 현재 {VigorManager.Instance.CurrentVigor})"
+                        $"탐색에 실패했습니다. (이동 결제 실패 / 필요 {_pendingMoveVigorCost}, 현재 {VigorManager.Instance.CurrentVigor})"
 
                     );
 
@@ -28054,11 +27843,11 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이동 후 상호작용 예약은 한 번 쓰고 비움
+            // 이동 후 상호작용 예약 초기화
 
             pathArrivalCallback = null;
 
-            pendingChest = null;
+            pendingInteractable = null;
 
             currentInteractTarget = null;
 
@@ -28070,7 +27859,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    //탐험씬 복귀 후 남은 경로 이동
+    // 탐험에서 복귀 후 이어지는 경로 이동
 
     public void ResumePathAfterBattle(List<Vector3Int> resumeCells)
 
@@ -28086,7 +27875,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 전투 전에 저장해 둔 총 예정 이동 비용을 이어받는다
+        // 전투 전에 예약해 둔(유예된) 이동 비용을 이어받는다
 
         int plannedCost = 0;
 
@@ -28102,7 +27891,7 @@ public class PlayerMovement : MonoBehaviour
 
     #endregion
 
-    // === Hint UI 버튼용 콜백 ===
+    // === Hint UI 버튼 콜백 ===
 
     public void OnClickSurveyButton()
 
@@ -28130,7 +27919,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이동 없이 즉시 실행(인접/제자리)
+            // 이동 없이 즉시 실행(인접/상자 등)
 
             if (currentPathCells == null || currentPathCells.Count < 2)
 
@@ -28176,7 +27965,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // Push 전용 분기
+        // Push 사용 분기
 
         if (pendingPushBox != null)
 
@@ -28190,7 +27979,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이미 인접이면 즉시 진입
+            // 이미 인접하면 즉시 진입
 
             if (IsAdjacentOrSame(playerCell, boxCell))
 
@@ -28204,7 +27993,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 멀리 있으면: “밀기 가능한 인접 타일”까지 이동 후 진입
+            // 멀리 있으므로 인접한 '준비 위치'까지 이동 후 진입
 
             var pathToReady = FindPathToPushReadyCell(playerCell, boxCell, box);
 
@@ -28232,7 +28021,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 도착 후 밀기 모드 진입
+            // 도착 후 밀기모드 진입
 
             Action onArrive = () =>
 
@@ -28244,7 +28033,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 도착 후에는 인접일 것이며, 이때 EnterPushSelectMode가 다칸 후보까지 표시(2번 수정)
+                // 도착 후에는 인접한 것이므로, 이때 EnterPushSelectMode가 타일 정보까지 표시(2차 보정)
 
                 EnterPushSelectMode(box);
 
@@ -28258,23 +28047,23 @@ public class PlayerMovement : MonoBehaviour
 
         }
 
-        // 이동 없이 즉시 실행해야 하는 경우 (한 칸 이내)
+        // 이동 없이 즉시 실행해야 하는 경우 (사거리 내)
 
         if (currentPathCells == null || currentPathCells.Count < 2)
 
         {
 
-            if (pendingChest != null)
+            if (pendingInteractable != null)
 
             {
 
-                pendingChest.OpenChest();
+                pendingInteractable.OnInteract();
 
                 InteractionHintUI.Instance?.HideAll();
 
             }
 
-            // 나중에 조사 대상이 더 생기면 여기에 else-if로 추가
+            // 나중에 조사 기능이 추가되면 여기에 else-if로 추가
 
 
 
@@ -28296,9 +28085,9 @@ public class PlayerMovement : MonoBehaviour
 
             Action onArrive = null;
 
-            if (pendingChest != null)
+            if (pendingInteractable != null)
 
-                onArrive = () => pendingChest.OpenChest();
+                onArrive = () => pendingInteractable.OnInteract();
 
 
 
@@ -28318,7 +28107,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 한 칸 이내면 이동 없이 즉시 관찰
+        // 사거리 내면 이동 없이 즉시 관찰
 
         if (currentPathCells == null || currentPathCells.Count < 2)
 
@@ -28402,7 +28191,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 플레이어 위치/박스 위치로 "밀 수 있는 방향 1개" 계산(플레이어 인접 기준)
+        // 플레이어 위치/박스 위치로 "밀 수 있는 방향" 1차 계산(플레이어 인접 기준)
 
         var playerCell = floorTilemap.WorldToCell(rb.position);
 
@@ -28422,7 +28211,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        //현재 플레이어가 서 있는 방향으로 밀수 있는 후보 생성
+        // 현재 플레이어가 보고 있는 방향으로 밀 수 있는 후보 생성
 
         var startBoxCell = floorTilemap.WorldToCell(box.transform.position);
 
@@ -28466,7 +28255,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // [체크] box나 MainFloorMap이 없으면 계산 불가
+        // [체크] box에 MainFloorMap이 없으면 계산 불가
 
         if (box == null || box.MainFloorMap == null) return results;
 
@@ -28474,7 +28263,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 다른 PushObject 점유 셀(가상 충돌 체크)
+        // 다른 PushObject 점유 체크(가장 간단한 충돌 체크)
 
         var occupied = new HashSet<Vector3Int>();
 
@@ -28516,7 +28305,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 리스트 호환 메서드 사용
+            // 바닥 확인 메서드 사용
 
             bool hasFloor = box.HasFloorAt(next);
 
@@ -28552,7 +28341,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 장애물 레이어 (기준 맵 사용)
+            // 장애물 레이어(기둥 등 용도)
 
             var world = box.MainFloorMap.GetCellCenterWorld(next);
 
@@ -28568,7 +28357,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 여기까지 통과하면 “next는 밀기 가능한 목적지”
+            // 여기까지 통과하면 next는 밀기 가능한 목적지임
 
             results.Add(next);
 
@@ -28592,7 +28381,7 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 경로/상호작용 예약만 취소 (이동 중이 아닐 때)
+        // 경로/상호작용 예약 취소 (이동 중이 아닐 때)
 
         if (!isMovingByPath)
 
@@ -28602,7 +28391,7 @@ public class PlayerMovement : MonoBehaviour
 
             ExitPushSelectMode();
 
-        else if (pendingPushBox != null)    //푸시 타겟 선택 상태 정리
+        else if (pendingPushBox != null)    // 임시 선택 상태 정리
 
         {
 
@@ -28730,13 +28519,13 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 기존 마우스 경로 리스트 정리
+        // 기존 마우스/경로 리스트 정리
 
         path.Clear();
 
 
 
-        // 타일 경로 이동 상태 정리
+        // 현재 경로 이동 상태 정리
 
         currentPathCells.Clear();
 
@@ -28762,7 +28551,7 @@ public class PlayerMovement : MonoBehaviour
 
         pathArrivalCallback = null;
 
-        pendingChest = null;
+        pendingInteractable = null;
 
         currentInteractTarget = null;
 
@@ -28802,7 +28591,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                if (wall.HasTile(cell)) return false; // 벽 하나라도 있으면 이동 불가
+                if (wall.HasTile(cell)) return false; // 하나라도 있으면 이동 불가
 
             }
 
@@ -28810,7 +28599,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 이 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다.
+        // 해당 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다
 
         Tilemap topMap = null;
 
@@ -28836,7 +28625,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 그 맵이 장애물인지 확인
+        // 해당 맵이 장애물인지 확인
 
         string mapName = topMap.name.ToLower();
 
@@ -28844,17 +28633,17 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            return false; // 가장 위의 타일이 물이라면 이동 불가 (선택도 안 됨)
+            return false; // 가장 위의 타일이 물이라면 이동 불가 (선택 불가)
 
         }
 
 
 
-        // 해당 타일 위치에 오브젝트(박스 등)가 있는지 물리 검사
+        // 해당 셀 위치에 오브젝트(박스 등)가 있는지 물리 검사
 
         Vector3 worldPos = GetWorldPosForLogic(cell);
 
-        // 반경 0.3f 정도로 겹치는 콜라이더 검사 (타일 중앙 기준)
+        // 반경 0.3f 정도로 겹치는 콜라이더 검사(셀 중앙 기준)
 
         Collider2D[] colliders = Physics2D.OverlapCircleAll(worldPos, 0.3f);
 
@@ -28862,9 +28651,9 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // BoxInteract(상자)가 있고, 아직 안 열린(닫힌) 상태라면 이동 불가
+            // BoxInteract(상자)가 있고, 아직 안 열린(닫힌) 상태면 이동 불가
 
-            var box = col.GetComponentInParent<BoxInteract>();
+            var box = col.GetComponentInParent<IInteractable>();
 
             if (box != null)
 
@@ -28900,19 +28689,19 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 바닥이 하나라도 있어야 이동 가능
+        // 바닥이 하나라도 있다면 이동 가능
 
         if (GetWalkableMapAt(cell) != null) return true;
 
 
 
-        return false; // 바닥도 없으면 이동 불가
+        return false; // 바닥이 없으면 이동 불가
 
     }
 
 
 
-    // 밀기 상자용 인접 판정
+    // 밀기 상자와의 인접 판정
 
     bool IsAdjacentOrSame(Vector3Int a, Vector3Int b)
 
@@ -29034,7 +28823,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 상자가 최종적으로 도착한 셀
+        // 상자가 최종적으로 도착한 곳
 
         var boxArrivedCell = fromCell + dir;
 
@@ -29054,9 +28843,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    //연속 밀기 기능
+    // 연속 밀기 기능
 
-    // PerformPushToTarget에서 연속으로 밀 수 있는지 확인 후 이동은 PerformPush로 진행됨
+    // PerformPushToTarget에서 연속으로 밀 수 있는지 확인 후 이동은 PerformPush로 진행함
 
     IEnumerator PerformPushToTarget(PushObject box, Direction dirKey, Vector3Int targetCell)
 
@@ -29114,11 +28903,11 @@ public class PlayerMovement : MonoBehaviour
 
                 if (line.Count == 0)
 
-                    yield break; // 더 이상 못 밈(중간에 막힘)
+                    yield break; // 더 이상 불가(중간에 막힘)
 
 
 
-                // 다음 1칸 목적지(라인의 첫 칸)
+                // 다음 1칸 목적지(라인의 첫번째)
 
                 var nextCell = line[0];
 
@@ -29188,7 +28977,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 경로 초기화 등 필요한 로직
+        // 경로 초기화 및 필요한 로직
 
         ClearPath();
 
@@ -29208,9 +28997,9 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                // [수정] PushObject.SetTilemaps가 이제 List<Tilemap>을 받으므로
+                // [수정] PushObject.SetTilemaps가 실제 List<Tilemap>을 받으므로
 
-                // _wall 리스트를 그대로 전달하면 됩니다.
+                // _wall 리스트를 그대로 전달하면 됨
 
                 push.SetTilemaps(_floors, _wall);
 
@@ -29252,7 +29041,7 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // Push 상태 강제 정리 (안전망)
+        // Push 상태 강제 정리 (안전하게)
 
         if (isPushSelectMode)
 
@@ -29276,7 +29065,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 타일 경로 이동 즉시 중단
+        // 현재 경로 이동 즉시 중단
 
         if (pathMoveRoutine != null)
 
@@ -29302,7 +29091,7 @@ public class PlayerMovement : MonoBehaviour
 
         pathArrivalCallback = null;
 
-        pendingChest = null;
+        pendingInteractable = null;
 
         currentInteractTarget = null;
 
@@ -29310,7 +29099,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 기존 마우스 이동/키 입력도 모두 정지
+        // 기존 마우스 이동/예약 입력 등 모두 해제
 
         path.Clear();
 
@@ -29323,6 +29112,7 @@ public class PlayerMovement : MonoBehaviour
     }
 
 }
+
 
 
 
@@ -29740,6 +29530,365 @@ public class VigorManager : MonoBehaviour
 
 
 ================================================
+FILE: 01_Scripts/Exploration/System/ExplorationEntitySpawner.cs
+================================================
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using System.Collections.Generic;
+using System.Linq;
+
+public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
+{
+    private MapManager _manager;
+
+    public void Initialize(MapManager manager)
+    {
+        _manager = manager;
+    }
+
+    public void SpawnPlayer(GameObject playerPrefab, GameObject map, List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls)
+    {
+        if (PlayerMovement.Instance != null)
+        {
+            Destroy(PlayerMovement.Instance.gameObject);
+        }
+
+        if (playerPrefab == null)
+        {
+            Debug.LogError("[EntitySpawner] Player Prefab is null!");
+            return;
+        }
+
+        GameObject player = Instantiate(playerPrefab);
+        var movement = player.GetComponent<PlayerMovement>();
+        
+        if (movement != null)
+        {
+            movement.SetTilemaps(floors, obstacles, walls);
+        }
+
+        // Find Start Position
+        if (map != null)
+        {
+            var spawn = map.transform.Find("PlayerStart");
+            if (spawn != null)
+            {
+                Vector3 pos = spawn.position;
+                pos.z = 0f;
+                player.transform.position = pos;
+            }
+            else
+            {
+                Debug.LogWarning("[EntitySpawner] 'PlayerStart' point not found in map.");
+            }
+        }
+
+        // Camera Setup
+        var camScript = FindAnyObjectByType<CameraFollow2D>();
+        if (camScript != null)
+        {
+            camScript.target = player.transform;
+            camScript.SnapToTarget();
+        }
+    }
+
+    public void SpawnMapObjects(GameObject map, List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls)
+    {
+        if (map == null) return;
+
+        var spawner = map.GetComponentInChildren<MapObjectSpawner>();
+        if (spawner == null) return;
+
+        List<Collider2D> excludeList = new List<Collider2D>();
+        var tagged = map.GetComponentsInChildren<Collider2D>().Where(c => c.CompareTag("ExcludeSpawn"));
+        excludeList.AddRange(tagged);
+
+        spawner.Spawn(floors, obstacles, walls, excludeList.ToArray());
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Exploration/System/ExplorationMapLoader.cs
+================================================
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using System.Collections.Generic;
+
+public class ExplorationMapLoader : MonoBehaviour, IMapComponent
+{
+    private MapManager _manager;
+
+    public void Initialize(MapManager manager)
+    {
+        _manager = manager;
+    }
+
+    public GameObject CurrentMap { get; private set; }
+
+    // Backup Prefab for reloading
+    private GameObject _mapPrefab;
+
+    public void SetMapPrefab(GameObject prefab)
+    {
+        _mapPrefab = prefab;
+    }
+
+    public void LoadMap(Transform parent, bool forceCreate = false)
+    {
+        if (!forceCreate)
+        {
+            // Try to find existing map first
+            if (FindExistingMap(parent))
+            {
+                Debug.Log("[MapLoader] Found existing map in scene.");
+                return;
+            }
+        }
+
+        // Clean up old map if forcing create or not found
+        UnloadMap();
+
+        if (_mapPrefab == null)
+        {
+            Debug.LogError("[MapLoader] No Map Prefab assigned!");
+            return;
+        }
+
+        Debug.Log($"[MapLoader] Instantiating new map: {_mapPrefab.name}");
+        CurrentMap = Instantiate(_mapPrefab, Vector3.zero, Quaternion.identity, parent);
+    }
+
+    public void UnloadMap()
+    {
+        if (CurrentMap != null)
+        {
+            Destroy(CurrentMap);
+            CurrentMap = null;
+        }
+    }
+
+    // Refactored logic from MapManager.ResetExplorationMap (The Fix)
+    private bool FindExistingMap(Transform gridParent)
+    {
+        // 1. Check direct child of Grid
+        if (gridParent != null && gridParent.childCount > 0)
+        {
+            CurrentMap = gridParent.GetChild(0).gameObject;
+            return true;
+        }
+
+        // 2. Check by MapObjectSpawner in scene
+        var spawners = FindObjectsOfType<MapObjectSpawner>(true);
+        if (spawners.Length > 0)
+        {
+            // Try to find the root map object from spawner
+            Transform current = spawners[0].transform;
+            
+            // Traverse UP including self
+            while (current != null)
+            {
+                // Check if this looks like a Map Root
+                if (current.name.Contains("DEVOTION") || current.name.Contains("BRIDGE") || 
+                    current.name.Contains("Map") || current.GetComponent<MapObjectSpawner>() != null)
+                {
+                    // Verify it's not just a spawner child object unless it's the root
+                    // If the object name is generic but has spawner, we assume it's the map part
+                    
+                    // If we found a named map root, verify parentage
+                    if (current.parent == gridParent || current.parent == null || current.parent.name == "Grid")
+                    {
+                        CurrentMap = current.gameObject;
+                        return true;
+                    }
+                }
+                current = current.parent;
+            }
+
+            // Fallback: direct parent of spawner (Common case: Spawner is child of Map)
+            if (spawners[0].transform.parent != null)
+            {
+                CurrentMap = spawners[0].transform.parent.gameObject;
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Exploration/System/ExplorationPersistenceManager.cs
+================================================
+using UnityEngine;
+using UnityEngine.Tilemaps;
+using UnityEngine.AddressableAssets;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+public class ExplorationPersistenceManager : MonoBehaviour, IMapComponent
+{
+    private MapManager _manager;
+    private List<GameObject> _activeAddressables = new List<GameObject>();
+
+    public void Initialize(MapManager manager)
+    {
+        _manager = manager;
+    }
+
+    public void ClearActiveAddressables()
+    {
+        foreach (var obj in _activeAddressables)
+        {
+            if (obj != null) Addressables.ReleaseInstance(obj);
+        }
+        _activeAddressables.Clear();
+    }
+
+    public async Task RestoreSnapshot(ExplorationSnapshot snap, GameObject map, Transform container, Tilemap floorMap, List<Tilemap> wallMap)
+    {
+        if (snap == null) return;
+
+        // 1. Gather existing Persistables
+        var existing = new Dictionary<string, IExplorationPersistable>();
+        foreach (var mb in map.GetComponentsInChildren<MonoBehaviour>(true))
+        {
+            if (mb is IExplorationPersistable ip && !existing.ContainsKey(ip.PersistID))
+                existing.Add(ip.PersistID, ip);
+        }
+
+        List<Task> loadingTasks = new List<Task>();
+
+        foreach (var s in snap.objects)
+        {
+            // Case A: Existing Object (Update State)
+            if (existing.TryGetValue(s.id, out var existIp))
+            {
+                if (s.kind == "Encounter" && s.b1)
+                {
+                    Debug.Log($"[Persistence] Disabling consumed existing Encounter: {s.id}");
+                    // Explicitly disable the gameobject or load state as consumed
+                    if (existIp is MonoBehaviour mb)
+                    {
+                         mb.gameObject.SetActive(false);
+                    }
+                    continue; 
+                }
+
+                if (existIp is PushObject existPush)
+                    existPush.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
+
+                existIp.LoadState(s);
+                continue;
+            }
+
+            // Case B: Spawn New Object (Async)
+            if (s.kind == "Chest" || s.kind == "Trap" || s.kind == "Encounter")
+            {
+                if (s.kind == "Trap" && (s.b1 || !s.b2)) continue; // Trap destroyed/used
+                if (s.kind == "Encounter" && s.b1) continue; // Encounter consumed
+
+                var refObj = FindPrefabByName(map, s.prefabName);
+                if (refObj == null) continue;
+
+                loadingTasks.Add(RestoreSingleObjectAsync(refObj, s, container, floorMap, wallMap));
+            }
+        }
+
+        await Task.WhenAll(loadingTasks);
+        Debug.Log("[Persistence] Snapshot restoration complete.");
+    }
+
+    private async Task RestoreSingleObjectAsync(AssetReferenceGameObject refObj, ExplorationObjectState s, Transform container, Tilemap floorMap, List<Tilemap> wallMap)
+    {
+        var handle = refObj.InstantiateAsync(s.position, Quaternion.identity, container);
+        await handle.Task;
+
+        if (handle.Status == UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
+        {
+            GameObject obj = handle.Result;
+            _activeAddressables.Add(obj);
+
+            var pid = obj.GetComponent<ExplorationPersistId>();
+            if (!pid) pid = obj.AddComponent<ExplorationPersistId>();
+            pid.OverrideIdForRestore(s.id);
+
+            // Restore Name
+            #if UNITY_EDITOR
+            obj.name = refObj.editorAsset != null ? refObj.editorAsset.name : s.prefabName;
+            #else
+            obj.name = s.prefabName;
+            #endif
+
+            if (obj.TryGetComponent<PushObject>(out var push))
+                push.SetTilemaps(new List<Tilemap> { floorMap }, wallMap);
+
+            if (obj.TryGetComponent<MonoBehaviour>(out var mb) && mb is IExplorationPersistable ip)
+                ip.LoadState(s);
+        }
+    }
+
+    private AssetReferenceGameObject FindPrefabByName(GameObject map, string prefabName)
+    {
+        var spawner = map.GetComponentInChildren<MapObjectSpawner>(true);
+        if (spawner == null) return null;
+
+        // Helper to check list
+        AssetReferenceGameObject FindInList(List<AssetReferenceGameObject> list) {
+            if (list == null) return null;
+            foreach(var p in list) {
+                if (CheckNameMatch(p, prefabName)) return p;
+            }
+            return null;
+        }
+
+        var result = FindInList(spawner.trapRefs) ?? FindInList(spawner.chestRefs) ?? FindInList(spawner.patternRefs);
+        return result;
+    }
+
+    private bool CheckNameMatch(AssetReferenceGameObject refObj, string targetName)
+    {
+        if (refObj == null) return false;
+        #if UNITY_EDITOR
+        if (refObj.editorAsset != null && refObj.editorAsset.name == targetName) return true;
+        #endif
+        return refObj.RuntimeKey.ToString().Contains(targetName);
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/Exploration/System/IMapComponent.cs
+================================================
+using UnityEngine;
+
+public interface IMapComponent
+{
+    void Initialize(MapManager manager);
+}
+
+
+
+================================================
+FILE: 01_Scripts/Interactables/IInteractable.cs
+================================================
+using UnityEngine;
+
+public interface IInteractable
+{
+    void OnInteract();
+    void SetHighlight(bool isActive);
+    Transform GetTransform();
+    bool CanInteract { get; }
+}
+
+
+
+================================================
 FILE: 01_Scripts/Interactables/Core/ExplorationPersistId.cs
 ================================================
 [Binary file]
@@ -29842,46 +29991,32 @@ FILE: 01_Scripts/Interactables/Encounters/EncounterMonster.cs
 ================================================
 using UnityEngine;
 
-
-
 public class EncounterMonster : MonoBehaviour
-
 {
-
     [SerializeField] private bool destroyOnTrigger = true;
-
     public bool IsActive { get; private set; } = true;
 
-
-
     public void MarkConsumed()
-
     {
-
         if (!IsActive) return;
-
         IsActive = false;
 
-
-
-        if (destroyOnTrigger)
-
-            gameObject.SetActive(false); // 또는 Destroy(gameObject)
-
-        else
-
+        // EncounterPersist도 함께 업데이트 (persistence 시스템 반영)
+        var persist = GetComponent<EncounterPersist>();
+        if (persist != null)
         {
-
-            // 나중에 "사용된 리소스"로 외형만 교체하고 클릭/충돌만 막기 등
-
-            var col = GetComponent<Collider2D>(); if (col) col.enabled = false;
-
+            persist.MarkConsumed();
         }
 
+        if (destroyOnTrigger)
+            gameObject.SetActive(false); // 또는 Destroy(gameObject)
+        else
+        {
+            // 나중에 "사용된 리소스"로 외형만 교체하고 클릭/충돌만 막기 등
+            var col = GetComponent<Collider2D>(); if (col) col.enabled = false;
+        }
     }
-
 }
-
 
 
 
@@ -30018,868 +30153,322 @@ public class EncounterPersist : MonoBehaviour, IExplorationPersistable
 
 
 ================================================
-FILE: 01_Scripts/Interactables/Props/BarrierController.cs
-================================================
-using UnityEngine;
-
-using UnityEngine.Events;
-
-
-
-public class BarrierController : MonoBehaviour
-
-{
-
-    [Header("Barrier Components")]
-
-    [Tooltip("Barrier의 Collider2D (닫힐 때 활성화)")]
-
-    Collider2D barrierCollider;
-
-    [Tooltip("Barrier 앞에 위치한 트리거 Collider2D (Player 진입 감지)")]
-
-    Collider2D exitTrigger;
-
-
-
-    public int stageIndex;  // 이 배리어가 속한 스테이지 번호
-
-
-
-    [Header("Interaction")]
-
-    [Tooltip("UI로 'Press F to Exit' 표시용 이벤트")]
-
-    public UnityEvent onShowPrompt;
-
-    public UnityEvent onHidePrompt;
-
-
-
-    private bool isOpen = false;
-
-    private bool playerInRange = false;
-
-    private bool hasLoaded = false;
-
-    [SerializeField] private KeyCode surveyKey = KeyCode.F;
-
-
-
-    void Start()
-
-    {
-
-        // 장벽용 콜라이더와 진입 감지용 트리거를 구분해서 찾기
-
-        var allCols = GetComponentsInChildren<Collider2D>();
-
-        foreach (var col in allCols)
-
-        {
-
-            if (col.isTrigger) exitTrigger = col;
-
-            else barrierCollider = col;
-
-        }
-
-
-
-        if (exitTrigger == null) Debug.LogError("ExitTrigger 콜라이더가 없습니다!");
-
-        if (barrierCollider == null) Debug.LogError("BarrierCollider 콜라이더가 없습니다!");
-
-
-
-        Close();
-
-
-
-        //Open();
-
-    }
-
-
-
-    void Update()
-
-    {
-
-        if (!isOpen || !playerInRange || hasLoaded) return;
-
-
-
-        if (Input.GetKeyDown(surveyKey))
-
-        {
-
-            LoadNextMap();
-
-            Debug.Log("[Barrier] 퀴즈맵으로 이동함");
-
-        }
-
-    }
-
-
-
-    void OnTriggerEnter2D(Collider2D other)
-
-    {
-
-        if (!isOpen || hasLoaded) return;
-
-        if (other.CompareTag("Player"))
-
-        {
-
-            playerInRange = true;
-
-            onShowPrompt?.Invoke();
-
-        }
-
-    }
-
-
-
-    void OnTriggerExit2D(Collider2D other)
-
-    {
-
-        if (!isOpen || hasLoaded) return;
-
-        if (other.CompareTag("Player"))
-
-        {
-
-            playerInRange = false;
-
-            onHidePrompt?.Invoke();
-
-        }
-
-    }
-
-
-
-    public void Open()
-
-    {
-
-        isOpen = true;
-
-        barrierCollider.enabled = false;
-
-        Debug.Log("[Barrier] 열림 상태");
-
-    }
-
-
-
-    public void Close()
-
-    {
-
-        isOpen = false;
-
-        barrierCollider.enabled = true;
-
-    }
-
-
-
-    // 다음 맵으로 이동
-
-    private void LoadNextMap()
-
-    {
-
-        if (MapToggleManager.Instance == null)
-
-        {
-
-            Debug.LogError("[Barrier] MapToggleManager가 설정되지 않았습니다!");
-
-            return;
-
-        }
-
-
-
-        hasLoaded = true;
-
-        onHidePrompt?.Invoke();
-
-
-
-        PuzzleManager.Instance?.ClearMaps();
-
-        MapToggleManager.Instance.currentStage = stageIndex;
-
-
-
-        //StartCoroutine(Shared.SceneTransitionManager.RunWithFade(() =>
-
-        //{
-
-        //    // 페이드 아웃이 완료된 정확한 타이밍에 전환 실행
-
-           
-
-        //}));
-
-        MapToggleManager.Instance.EnterQuizMap();
-
-    }
-
-}
-
-
-
-
-================================================
 FILE: 01_Scripts/Interactables/Props/BoxInteract.cs
 ================================================
 using UnityEngine;
-
 using UnityEngine.UI;
-
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 
-
-
-public class BoxInteract : MonoBehaviour, IExplorationPersistable
-
+public class BoxInteract : MonoBehaviour, IInteractable, IExplorationPersistable
 {
-
     private ExplorationPersistId pid;
-
     public Animator animator;
-
     public bool isPlayerNear = false;
-
     [SerializeField] private bool isOpened = false;
-
     private bool _applyOpenOnStart = false;  // 복원 시 다음 프레임에 반영
 
-
-
     // === 하이라이트 필드 ===
-
     [Header("하이라이트 처리")]
-
     public SpriteRenderer highlightRenderer;   // 지정 없으면 GetComponent로 자동 할당
-
     private Color originalColor;
-
     private bool isHighlighted = false;
 
-
-
-    [Header("확률 설명 (상자 열 때)")]
-
-    public WeightedDescriptionsSO openDescriptions;
-
-
+    [Header("보상 설정")]
+    public ItemLibrary itemLibrary; // 인스펙터에서 할당 필요
 
     [Header("열린 후 처리")]
-
     [SerializeField] private bool removeOnOpen = true; // true면 열고 나서 상자를 화면/충돌에서 제거
+    private const float REMOVE_ON_OPEN_DELAY = 1.5f; // 애니메이션 보여줄 시간 (초)
+    private const string ANIM_PARAM_IS_OPEN = "IsOpen";
+    private const string ANIM_PARAM_IS_OPENED = "IsOpened"; // 복원 시 사용되는 파라미터 (일관성 유지 위해 별도 상수)
 
-    private float removeOnOpenDelay = 1.5f; // 애니메이션 보여줄 시간 (초)
-
-    private int _pendingInspectCost = -1; // 상자 비용을 "사라질 때" 결제하기 위한 예약값
-
-    private string _pendingOpenLogText = null;
 
 
 
     // 인식된 상자 확인
-
     private bool isFocused = false;
 
-
-
     [Header("Animator Restore")]
-
     [SerializeField] private string openedStateName = "Box_Open"; // 또는 "Opened"/"OpenIdle" 등 프로젝트 상태명
-
     [SerializeField] private int openedLayer = 0;             // 기본 레이어
-
     [SerializeField] private bool jumpToOpenedPoseOnRestore = true;
 
-
-
     // === 외부 확인용 프로퍼티 ===
-
     public bool IsOpened => isOpened;
 
-
-
     private void OnEnable()
-
     {
-
         if (isOpened)
-
             ForceOpenedVisual();
-
     }
-
-
 
     private void Awake()
-
     {
-
         pid = GetComponent<ExplorationPersistId>();
-
         if (!pid) pid = gameObject.AddComponent<ExplorationPersistId>();
 
-
-
         // SpriteRenderer 캐시 및 원본 색상 저장
-
         if (highlightRenderer == null)
-
             highlightRenderer = GetComponent<SpriteRenderer>();
-
         if (highlightRenderer != null)
-
             originalColor = highlightRenderer.color;
-
-
-
-        // 시작 시 안내 UI OFF
-
-        //if (targetMarker != null) targetMarker.SetActive(false);
-
     }
-
-
 
     void Start()
-
     {
-
         if (animator == null)
-
             animator = GetComponent<Animator>();
 
-        //if (targetMarker != null)
-
-        //    targetMarker.SetActive(false); // 시작시 꺼두기
-
-
+        // 데이터 무결성 체크
+        if (rewardTable == null)
+        {
+            Debug.LogError($"[BoxInteract] '{gameObject.name}'의 RewardTable이 할당되지 않았습니다! (Position: {transform.position}) 프리팹 설정을 확인하세요.");
+        }
 
         // 복귀 직후 Animator 초기 상태가 덮어써도 여기서 다시 강제로 맞춤
-
         if (isOpened || _applyOpenOnStart)
-
         {
-
             _applyOpenOnStart = false;
-
             ForceOpenedVisual();
-
         }
-
     }
 
-
-
-    void Update(){}
-
+    void Update() { }
     // 외부에서 포커스 지정
-
     public void SetFocused(bool on)
-
     {
-
         if (isFocused == on) return;
-
         isFocused = on;
-
     }
 
-
-
-    // PushObject와 동일 패턴의 하이라이트 메서드
-
+    // IInteractable 구현
     public void SetHighlight(bool on)
-
     {
-
         if (highlightRenderer != null && isHighlighted != on)
-
         {
-
             // 열렸으면 굳이 켜지 않도록 방어
-
             if (on && isOpened) on = false;
 
-
-
             // PushObject는 노란색, 상자는 시각적으로 구분되도록 청록 계열 예시
-
             highlightRenderer.color = on ? new Color(0.4f, 1f, 1f, 1f) : originalColor;
-
             isHighlighted = on;
-
         }
-
     }
 
+    public void OnInteract()
+    {
+        OpenChest();
+    }
 
+    public Transform GetTransform()
+    {
+        return transform;
+    }
+
+    public bool CanInteract => !isOpened;
+
+    [Header("보상 설정")]
+    public RewardTableSO rewardTable;
+
+    // 이벤트에 의해 쌓인 로그들을 저장할 버퍼
+    private List<string> _pendingRewardLogs = new List<string>();
 
     // 실제 열기 동작 함수
-
     public void OpenChest()
-
     {
-
         if (isOpened) return;
 
-
+        // 활기 소모 먼저 체크 및 실행 (즉시 차감)
+        var vigor = VigorManager.Instance;
+        if (vigor != null)
+        {
+            int cost = Mathf.Max(0, vigor.costInspectBox);
+            if (cost > 0)
+            {
+                // 즉시 차감 시도
+                if (!vigor.TrySpend(cost, VigorSpendReason.InspectBox))
+                {
+                    ExplorationLogUI.Instance?.Push($"활기가 부족합니다. (상자 조사 / 필요 {cost}, 현재 {vigor.CurrentVigor})", pause: false);
+                    return; // 활기 부족 시 열기 중단
+                }
+            }
+        }
 
         // 상자 처리 중에는 플레이어 입력 완전 차단
-
         PlayerMovement.Instance?.LockMovementIndefinite();
 
-
-
-        // 활기 소모 상자 조사/개봉 비용 ===
-
-        var vigor = VigorManager.Instance;
-
-        if (vigor != null)
-
-        {
-
-            int cost = Mathf.Max(0, vigor.costInspectBox);
-
-            if (cost > 0 && !vigor.CanSpend(cost))
-
-            {
-
-                ExplorationLogUI.Instance?.Push($"활기가 부족합니다. (상자 조사 / 필요 {cost}, 현재 {vigor.CurrentVigor})");
-
-                return;
-
-            }
-
-
-
-            _pendingInspectCost = cost;
-
-        }
-
-        else
-
-        {
-
-            _pendingInspectCost = 0;
-
-        }
-
-
-
         isOpened = true;
+        animator.SetBool(ANIM_PARAM_IS_OPEN, isOpened);
 
-        animator.SetBool("IsOpen", isOpened);
+        // 1. 로그 버퍼 초기화
+        _pendingRewardLogs.Clear();
 
+        // 2. 보상 지급 (매니저 위임) -> 지연 지급으로 변경됨 (Co_DelayedPostOpen)
+        // if (InventoryManager.Instance != null && rewardTable != null)
+        // {
+        //     var logs = InventoryManager.Instance.GiveReward(rewardTable);
+        //     if (logs != null) _pendingRewardLogs.AddRange(logs);
+        // }
 
-
-        int idx = openDescriptions ? openDescriptions.PickIndex() : -1;
-
-        if (idx >= 0 && idx < openDescriptions.entries.Length)
-
-        {
-
-            switch (idx)
-
-            {
-
-                case 0: /* 40% 케이스 로직 */ break;
-
-                case 1: /* 30% 케이스 로직 */ break;
-
-                case 2:  break;
-
-                case 3: /* 10% 케이스 로직 */ break;
-
-                default: /* 예외 처리(프리셋이 더 길어질 수도) */ break;
-
-            }
-
-
-
-            // 문구 출력
-
-            var text = openDescriptions.entries[idx].text;
-
-            if (!string.IsNullOrWhiteSpace(text))
-
-            {
-
-                _pendingOpenLogText = text; // 사라질 때 출력
-
-            }
-
-
-
-        }
-
-
+        // 3. 설명 텍스트 처리 및 이벤트 실행 (이제 RewardTableSO에서 통합 관리되므로 별도 호출 불필요)
+        // 기존 WeightedDescriptionsSO 로직 제거됨.
 
         var descriptiondata = GetComponent<DescriptionData>();
-
         if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
 
-
-
         // 열린 뒤에는 포커스/하이라이트/안내 UI 정리
-
-        SetHighlight(false);;
-
+        SetHighlight(false);
         isFocused = false;
 
-        // 열린 뒤 잠깐 애니메이션을 보여준 다음 제거/비활성 처리
-
-        if (removeOnOpen)
-
-        {
-
-            StartCoroutine(Co_DelayedPostOpen());
-
-        }
-
+        // 열린 뒤 잠깐 애니메이션을 보여준 다음 로그 출력 및 제거
+        StartCoroutine(Co_DelayedPostOpen());
     }
 
 
 
     // 상자가 열린 뒤 후처리
-
-    // removeOnOpen == true 이면, 화면/충돌에서 제거 (타일 통행 가능)
-
     private void ApplyPostOpenBehavior()
-
     {
-
         if (!removeOnOpen)
-
             return;
 
-
-
-        // 모든 콜라이더 비활성화 → impassableLayerMask 충돌 제거 + 클릭 불가
-
+        // 모든 콜라이더 비활성화
         foreach (var col in GetComponents<Collider2D>())
-
         {
-
             if (col) col.enabled = false;
-
         }
 
-
-
-        // 모든 SpriteRenderer 비활성화 → 시각적으로 완전히 사라짐
-
+        // 모든 SpriteRenderer 비활성화
         foreach (var sr in GetComponentsInChildren<SpriteRenderer>())
-
         {
-
             if (sr) sr.enabled = false;
-
         }
-
-
 
         // 필요하다면 Animator도 더 이상 돌지 않게 막을 수 있음
-
         if (animator != null)
-
         {
-
             animator.enabled = false;
-
         }
-
     }
 
-
-
-    // 딜레이 후 오브잭트 제거
-
-    // 애니메이션이 끝난 후 제거가 되게 하기 위해
-
+    // 딜레이 후 로그 출력 및 오브젝트 제거
     private IEnumerator Co_DelayedPostOpen()
-
     {
+        if (REMOVE_ON_OPEN_DELAY > 0f)
+            yield return new WaitForSeconds(REMOVE_ON_OPEN_DELAY);
 
-        if (removeOnOpenDelay > 0f)
-
-            yield return new WaitForSeconds(removeOnOpenDelay);
-
-
-
-        // 사라지는 순간 활기 소모
-
-        var vigor = VigorManager.Instance;
-
-        if (vigor != null && _pendingInspectCost > 0)
-
+        // 버퍼에 쌓인 보상 로그 출력 (pause: false) -> 이제 여기서 보상도 같이 지급
+        if (InventoryManager.Instance != null && rewardTable != null)
         {
-
-            if (!vigor.TrySpend(_pendingInspectCost, VigorSpendReason.InspectBox))
-
+            var logs = InventoryManager.Instance.GiveReward(rewardTable);
+            if (logs != null)
             {
-
-                vigor.FailExploration($"탐색을 실패했습니다. (상자 결제 실패 / 필요 {_pendingInspectCost}, 현재 {vigor.CurrentVigor})");
-
-                yield break;
-
+                foreach (var log in logs)
+                {
+                    ExplorationLogUI.Instance?.Push(log, pause: false);
+                }
             }
-
         }
 
-
-
-        if (!string.IsNullOrWhiteSpace(_pendingOpenLogText))
-
+        if (removeOnOpen)
         {
-
-            ExplorationLogUI.Instance?.Push(_pendingOpenLogText);
-
-            //Shared.interactionHintUI?.HideAll();
-
-            _pendingOpenLogText = null;
-
+            ApplyPostOpenBehavior(); // 상자 제거
         }
-
-
-
-        _pendingInspectCost = -1;
-
-
-
-        ApplyPostOpenBehavior(); // 상자 제거
-
                                  
-
         PlayerMovement.Instance?.UnlockMovementIndefinite();// 입력 해제
-
     }
-
-
 
     void OnTriggerEnter2D(Collider2D other)
-
     {
-
         if (other.CompareTag("Player"))
-
         {
-
             isPlayerNear = true;
-
         }
-
     }
-
-
 
     void OnTriggerExit2D(Collider2D other)
-
     {
-
         if (other.CompareTag("Player"))
-
         {
-
             isPlayerNear = false;
 
-
-
             // 안전하게 안내 UI/하이라이트 꺼줌
-
             if (!isOpened)
-
             {
-
                 SetHighlight(false);
-
-                //if (targetMarker != null) targetMarker.SetActive(false);
-
                 isFocused = false;
-
             }
-
         }
-
     }
-
-
 
     // 복원용: 즉시 열린 상태로 세팅
-
     public void OpenImmediately()
-
     {
-
         isOpened = true;
-
         ForceOpenedVisual();
 
-
-
         // 복원/즉시 열기 시에도 같은 처리
-
         var descriptiondata = GetComponent<DescriptionData>();
-
         if (descriptiondata) descriptiondata.ApplyOpenedTextIfAny();
 
-
-
         // 복원 시에도 "이미 열린 상자"는 제거/비활성 처리
-
         ApplyPostOpenBehavior();
-
     }
-
-
 
     private void ForceOpenedVisual()
-
     {
-
         if (animator == null) animator = GetComponent<Animator>();
-
         if (animator == null) return;
 
-
-
         // 파라미터
-
-        animator.SetBool("IsOpened", true);
-
-
+        animator.SetBool(ANIM_PARAM_IS_OPENED, true);
 
         if (jumpToOpenedPoseOnRestore)
-
         {
-
-            // 1) 상태 이름으로 바로 점프: 트랜지션/크로스페이드 없이 "그 상태의 마지막 포즈"로 고정
-
+            // 1) 상태 이름으로 바로 점프
             if (!string.IsNullOrEmpty(openedStateName))
-
             {
-
                 int hash = Animator.StringToHash(openedStateName);
-
                 if (animator.HasState(openedLayer, hash))
-
                 {
-
-                    // Play(..., normalizedTime=1f) → 마지막 프레임로 스냅
-
                     animator.Play(hash, openedLayer, 1f);
-
                 }
-
-                else
-
-                {
-
-                    // 폴백: 현재 컨트롤러에 "Open"이 없다면 그냥 bool만 맞추고 넘어감
-
-                }
-
             }
-
-            else
-
-            {
-
-                // 이름 미지정 폴백: bool만 맞추기
-
-            }
-
         }
 
-
-
-        // 즉시 평가(한 프레임 대기 없이 포즈 적용)
-
+        // 즉시 평가
         animator.Update(0f);
-
-
-
-        // 포커스/UI도 열린 상태에 맞춰 정리
-
-        //if (targetMarker) targetMarker.SetActive(false);
-
     }
-
-
 
     // IExplorationPersistable
-
     public string PersistID => pid.Id;
-
     public ExplorationObjectState SaveState()
-
     {
-
         return new ExplorationObjectState
-
         {
-
             id = PersistID,
-
             kind = "Chest",
-
             prefabName = gameObject.name.Replace("(Clone)", "").Trim(),
-
             position = transform.position,
-
             b1 = isOpened
-
         };
-
     }
-
-
 
     public void LoadState(ExplorationObjectState s)
-
     {
-
         transform.position = s.position;
-
         isOpened = s.b1;
-
         if (isOpened)
-
         {
-
             // 즉시 반영 + 다음 프레임에도 한 번 더 보정
-
             OpenImmediately();
-
             _applyOpenOnStart = true;
-
         }
-
     }
 
-
-
 }
-
 
 
 
@@ -31784,7 +31373,12 @@ public class MapObjectSpawner : MonoBehaviour
 
             // 이름 설정 (EditorAsset을 통해 원래 프리팹 이름을 가져올 수 있음)
 
+            // 이름 설정 (EditorAsset을 통해 원래 프리팹 이름을 가져올 수 있음)
+#if UNITY_EDITOR
             obj.name = targetRef.editorAsset != null ? targetRef.editorAsset.name : "SpawnedObject";
+#else
+            obj.name = "SpawnedObject";
+#endif
 
 
 
@@ -32476,6 +32070,106 @@ public class ActionPanelUI : MonoBehaviour
 
 }
 
+
+
+
+================================================
+FILE: 01_Scripts/UI/Battle/BattleUnitAdapter.cs
+================================================
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class BattleUnitAdapter : IUnitStatus
+{
+    private readonly BattleUnit _unit;
+    private readonly UnitStateController _stateController;
+    private readonly StatusController _statusController;
+
+    public string Name => _unit.name;
+    public float HP => _unit.HP;
+    public float MaxHP => _unit.MaxHP;
+    public float MP => _unit.MP;
+    public float MaxMP => _unit.MaxMP;
+    public float Rage => _unit.Rage;
+    public float MaxRage => _unit.MaxRage;
+    public bool IsDead => _unit.HP <= 0; // Simplified check
+
+    public event Action OnStatusChanged;
+    public event Action<bool> OnDead;
+
+    public BattleUnitAdapter(BattleUnit unit)
+    {
+        _unit = unit;
+        _stateController = unit.GetComponent<UnitStateController>();
+        _statusController = unit.GetComponent<StatusController>();
+
+        // Subscribe to BattleUnit events
+        if (_statusController != null)
+            _statusController.OnStatusChanged += HandleStatusChanged;
+
+        if (_stateController != null)
+        {
+            _stateController.OnStatesChanged += HandleStatusChanged;
+            _stateController.OnBuffsChanged += HandleStatusChanged;
+        }
+
+        _unit.OnDied += HandleDied;
+        
+        // HP/MP/Rage changes might not have a direct event in BattleUnit other than OnDamaged, 
+        // relying on UnitStatusItemUI's Update loop for bars usually, but for event-based UI we might need more triggers.
+        // However, the original UnitStatusItemUI used Update() for bars, and events for Chips.
+        // We will maintain that pattern or adapt.
+    }
+
+    public void Dispose()
+    {
+        if (_statusController != null)
+            _statusController.OnStatusChanged -= HandleStatusChanged;
+
+        if (_stateController != null)
+        {
+            _stateController.OnStatesChanged -= HandleStatusChanged;
+            _stateController.OnBuffsChanged -= HandleStatusChanged;
+        }
+
+        _unit.OnDied -= HandleDied;
+    }
+
+    private void HandleStatusChanged()
+    {
+        OnStatusChanged?.Invoke();
+    }
+
+    private void HandleDied(BattleUnit unit)
+    {
+        OnDead?.Invoke(true);
+    }
+
+    public IReadOnlyCollection<UnitStateId> GetStates()
+    {
+        return _stateController != null ? _stateController.GetAll() : Array.Empty<UnitStateId>();
+    }
+
+    public IEnumerable<UnitStateController.BuffView> GetBuffs()
+    {
+        if (_stateController == null) return Array.Empty<UnitStateController.BuffView>();
+
+        var allBuffs = _stateController.GetAllBuffs();
+        var list = new List<UnitStateController.BuffView>();
+        foreach (var b in allBuffs)
+        {
+            int remain = _stateController.GetRemainingBuffTurns(b);
+            list.Add(new UnitStateController.BuffView(b, remain));
+        }
+        return list;
+    }
+
+    public IEnumerable<StatusController.StatusView> GetStacks()
+    {
+        return _statusController != null ? _statusController.GetStatusViews() : Array.Empty<StatusController.StatusView>();
+    }
+}
 
 
 
@@ -33461,893 +33155,422 @@ FILE: 01_Scripts/UI/Battle/TurnBarUI.cs
 FILE: 01_Scripts/UI/Battle/UnitStatusItemUI.cs
 ================================================
 using System.Collections.Generic;
-
 using System.Linq;
-
 using UnityEngine;
-
 using UnityEngine.UI;
 
-using static StatusController;
-
-using static UnitStateController;
-
-
-
 public class UnitStatusItemUI : MonoBehaviour
-
 {
-
     [Header("Widgets (있는 것만 연결하면 됨)")]
-
     public Text nameText;
-
     public Slider hpBar;
-
     public Text hpText;         // 현재 HP 숫자 표시
-
     public Slider mpBar;        // 아군용: 없으면 비워두기
-
     public Text mpText;         // 현재 MP 숫자 표시
-
     public Slider rageBar;      // 아군용: 분노 게이지(없으면 비워두기)
-
     public Text rageText;         // 현재 Rage 숫자 표시
-
     public Text skillNameText;  // 적 전용(적 카드에만 배치)
 
 
-
-
-
     [SerializeField] private Transform chipRoot;                 // 공용 칩 루트 (오른쪽 정렬)
-
     [SerializeField] private HorizontalLayoutGroup chipLayout;   // ChipRoot에 붙은 LayoutGroup
 
-
-
     [Header("Visual DB (상태 버프)")]
-
     [SerializeField] private UnitStateVisualDB visualDB;
-
     [SerializeField] private GameObject stateChipPrefab;
-
     [SerializeField] private Sprite defaultIcon;           // 매핑 없을 때 대체
 
-
-
     [Header("Stackable Status (중첩 버프)")]
-
     [SerializeField] private StackableStatusVisualDB stackVisualDB; 
-
     [SerializeField] private GameObject stackChipPrefab;// 아이콘 칩 프리팹(둔화에서 쓰던 것)
-
     [SerializeField] private Sprite defaultDebuffIcon;
 
-
-
     [Header("UnitState Buff (버프)")]
-
     [SerializeField] private UnitStateBuffVisualDB buffVisualDB;
-
     [SerializeField] private GameObject buffChipPrefab;     // 없으면 stateChipPrefab 재사용해도 됨
-
     [SerializeField] private Sprite defaultBuffIcon;
 
-
-
     [Header("Highlight (둘 중 하나/둘 다 가능)")]
-
     public Image highlightOverlay;                 // 예: 전체를 덮는 Image
-
     public Sprite defaultHighlightSprite;          // 기본 하이라이트 스프라이트
-
     public List<Graphic> tintTargets = new List<Graphic>(); //오버레이가 없을 때 색상으로 강조하고 싶은 Graphic들
-
     public Color highlightTint = new Color(255f / 255f, 173f / 255f, 122f / 255f, 1f); // 밝은 노란 톤
 
-
-
     [Header("Death Style")]
-
     //public Color deadTint = new Color(0.6f, 0.6f, 0.6f, 1f);   // 회색 강조
-
     [Range(0f, 1f)] public float deadNameAlpha = 0.4f; // 죽었을 때 이름 투명도
-
     public Sprite deadHighlightSprite;                         // (선택) 사망 오버레이
-
     Color _nameOrigColor;
-
     bool _nameColorCached;
 
-
-
     Color[] _originalColors;
-
     bool _highlighted;
-
     bool _isDead;
-
     Sprite _pendingOverlaySprite;         // SetHighlighted에서 전달받아 보관
 
-
-
-    BattleUnit Battleunit;
-
-    StatusController StatusController;
-
-    UnitStateController unitStateController;
-
-
+    // Refactored to use interface
+    private IUnitStatus _targetUnit;
 
     // 패널에서 주입 가능하도록 열어둠
-
     public void SetVisualDB(UnitStateVisualDB db) => visualDB = db;
-
     public void SetStackVisualDB(StackableStatusVisualDB db) => stackVisualDB = db;
 
-
-
     void Unsubscribe()
-
     {
-
-        if (StatusController != null)
-
-            StatusController.OnStatusChanged -= HandleStatusChanged;
-
-
-
-        if (unitStateController != null)
-
+        if (_targetUnit != null)
         {
-
-            unitStateController.OnStatesChanged -= HandleStatesChanged;
-
-            unitStateController.OnBuffsChanged -= HandleStatesChanged;
-
+            _targetUnit.OnStatusChanged -= HandleStatusChanged; // 통합 이벤트
+            _targetUnit.OnDead -= HandleUnitDied; // 통합 이벤트
         }
-
-
-
-        if (Battleunit != null)
-
-            Battleunit.OnDied -= HandleUnitDied;
-
     }
-
-
 
     private void Awake()
-
     {
-
         CacheOriginalColors();
-
         if (highlightOverlay) highlightOverlay.enabled = false;
-
     }
-
-
 
     void OnDisable()
-
     {
-
         Unsubscribe();
-
     }
-
     void OnDestroy()
-
     {
-
         Unsubscribe();
-
     }
 
-
-
+    // 하위 호환성 유지 (전투용)
     public void Bind(BattleUnit u)
-
     {
+        if (u == null)
+        {
+            Bind((IUnitStatus)null);
+            return;
+        }
+        Bind(new BattleUnitAdapter(u));
+    }
 
+    // 신규 (인터페이스 주입)
+    public void Bind(IUnitStatus unit)
+    {
         // 이전 유닛과의 구독 해제
-
         Unsubscribe();
 
+        _targetUnit = unit;
 
-
-        Battleunit = u;
-
-
+        if (_targetUnit == null) return;
 
         if (nameText)
-
         {
-
-            nameText.text = u ? u.name : "-";
-
-
+            nameText.text = _targetUnit.Name;
 
             if (!_nameColorCached)
-
             {
-
                 _nameOrigColor = nameText.color;
-
                 _nameColorCached = true;
-
             }
-
-            ApplyNameAlpha(); // 현재 dead 상태에 맞춰 이름 알파 적용
-
+            ApplyNameAlpha(); 
         }
 
+        UpdateBars(); // 초기 값 설정
 
-
-        if (hpBar)
-
-        {
-
-            hpBar.minValue = 0;
-
-            hpBar.maxValue = Mathf.Max(1, u.MaxHP);
-
-            hpBar.value = u.HP;
-
-        }
-
-
-
-        if (mpBar)
-
-        {
-
-            mpBar.minValue = 0;
-
-            mpBar.maxValue = Mathf.Max(1, u.MaxMP);
-
-            mpBar.value = u.MP;
-
-        }
-
-
-
-        if (rageBar)
-
-        {
-
-            rageBar.minValue = 0;
-
-            rageBar.maxValue = Mathf.Max(1, u.MaxRage);
-
-            rageBar.value = u.Rage;
-
-        }
-
-
-
-        if (hpText) hpText.text = (u != null ? u.HP : 0).ToString();  // 현재 HP 텍스트 세팅
-
-        if (mpText) mpText.text = (u != null ? u.MP : 0).ToString();  // 현재 MP 텍스트 세팅
-
-        if (rageText) rageText.text = (u != null ? u.Rage : 0).ToString();  // 현재 Rage 텍스트 세팅
-
-
-
-        StatusController = u ? u.GetComponent<StatusController>() : null;
-
-        unitStateController = u ? u.GetComponent<UnitStateController>() : null;
-
-
+        // 상태 및 사망 상태 동기화
+        _isDead = _targetUnit.IsDead;
+        SetDeadStyle(_isDead); // 초기 사망 스타일
 
         // 이벤트 구독
-
-        if (StatusController != null)
-
-            StatusController.OnStatusChanged += HandleStatusChanged;
-
-
-
-        if (unitStateController != null)
-
-        {
-
-            unitStateController.OnStatesChanged += HandleStatesChanged;
-
-            unitStateController.OnBuffsChanged += HandleStatesChanged;
-
-        }
-
-
-
-        if (Battleunit != null)
-
-            Battleunit.OnDied += HandleUnitDied;
-
-
+        _targetUnit.OnStatusChanged += HandleStatusChanged;
+        _targetUnit.OnDead += HandleUnitDied;
 
         // 현재 상태/버프/스택으로 아이콘 한 번 갱신
-
-        RefreshFromControllers(unitStateController, StatusController);
-
+        RefreshChips();
     }
 
-
-
-    void HandleUnitDied(BattleUnit dead)
-
+    void HandleUnitDied(bool isDead)
     {
+        _isDead = isDead;
+        SetDeadStyle(_isDead);
 
-        ClearChildren(chipRoot);
+        if (isDead)
+        {
+            ClearChildren(chipRoot);
+            if (chipRoot) chipRoot.gameObject.SetActive(false);
+        }
+    }
 
-        if (chipRoot) chipRoot.gameObject.SetActive(false);
-
+    void HandleStatusChanged()
+    {
+        RefreshChips();
     }
 
     static void ClearChildren(Transform root)
-
     {
-
         if (!root) return;
-
         for (int i = root.childCount - 1; i >= 0; i--)
-
             Destroy(root.GetChild(i).gameObject);
-
     }
 
-
-
     void Update()
-
     {
+        if (_targetUnit == null) return;
+        UpdateBars();
+        UpdateTexts();
+    }
 
-        if (Battleunit == null) return;
-
-
-
-        if (hpBar) hpBar.value = Battleunit.HP;
-
-
+    void UpdateBars()
+    {
+        if (hpBar)
+        {
+            hpBar.minValue = 0;
+            hpBar.maxValue = Mathf.Max(1, _targetUnit.MaxHP);
+            hpBar.value = _targetUnit.HP;
+        }
 
         if (mpBar)
-
         {
-
-            mpBar.maxValue = Mathf.Max(1, Battleunit.MaxMP);
-
-            mpBar.value = Battleunit.MP;
-
+            mpBar.minValue = 0;
+            mpBar.maxValue = Mathf.Max(1, _targetUnit.MaxMP);
+            mpBar.value = _targetUnit.MP;
         }
 
         if (rageBar)
-
         {
-
-            rageBar.maxValue = Mathf.Max(1, Battleunit.MaxRage);
-
-            rageBar.value = Battleunit.Rage;
-
+            rageBar.minValue = 0;
+            rageBar.maxValue = Mathf.Max(1, _targetUnit.MaxRage);
+            rageBar.value = _targetUnit.Rage;
         }
-
-
-
-        if (hpText) hpText.text = Battleunit.HP.ToString();  // 매 프레임 현재 HP 갱신
-
-        if (mpText) mpText.text = Battleunit.MP.ToString();  // 매 프레임 현재 HP 갱신
-
-        if (rageText) rageText.text = Battleunit.Rage.ToString();  // 매 프레임 현재 HP 갱신
-
     }
 
-
+    void UpdateTexts()
+    {
+        if (hpText) hpText.text = _targetUnit.HP.ToString();
+        if (mpText) mpText.text = _targetUnit.MP.ToString();
+        if (rageText) rageText.text = _targetUnit.Rage.ToString();
+    }
 
     void CacheOriginalColors()
-
     {
-
         if (tintTargets == null) return;
-
         _originalColors = new Color[tintTargets.Count];
-
         for (int i = 0; i < tintTargets.Count; i++)
-
             _originalColors[i] = tintTargets[i] ? tintTargets[i].color : Color.white;
 
-
-
         // tintTargets가 비어있고 카드 루트에 Image가 있다면 자동 등록(편의)
-
         if (tintTargets.Count == 0)
-
         {
-
             var auto = GetComponent<Image>();
-
             if (auto) { tintTargets.Add(auto); _originalColors = new[] { auto.color }; }
-
         }
-
     }
-
-
 
     static Color MulRGB(Color a, Color b) // 알파는 원본 유지
-
         => new Color(a.r * b.r, a.g * b.g, a.b * b.b, a.a);
 
-
-
     // 사망 스타일 토글 API
-
     public void SetDeadStyle(bool dead)
-
     {
-
         _isDead = dead;
-
         ApplyNameAlpha();
-
         ApplyVisualState();
-
     }
-
-
 
     public void SetHighlighted(bool on, Sprite overlaySprite = null)
-
     {
-
         _highlighted = on;
-
         _pendingOverlaySprite = overlaySprite;
-
         ApplyVisualState();
-
     }
-
-
 
     void ApplyNameAlpha()
-
     {
-
         if (!nameText || !_nameColorCached) return;
-
         var c = _nameOrigColor;
-
         c.a = _isDead ? deadNameAlpha : _nameOrigColor.a;
-
         nameText.color = c;
-
     }
-
-
 
     void ApplyVisualState()
-
     {
-
         // 1) Overlay
-
         if (highlightOverlay)
-
         {
-
             if (_isDead)
-
             {
-
                 highlightOverlay.enabled = false; // 사망 시 오버레이 비활성
-
             }
-
             else
-
             {
-
                 if (_highlighted)
-
                 {
-
                     if (_pendingOverlaySprite != null) highlightOverlay.sprite = _pendingOverlaySprite;
-
                     else if (highlightOverlay.sprite == null && defaultHighlightSprite != null)
-
                         highlightOverlay.sprite = defaultHighlightSprite;
-
                     highlightOverlay.enabled = true;
-
                     highlightOverlay.color = Color.white;
-
                 }
-
                 else
-
                 {
-
                     highlightOverlay.enabled = false;
-
                 }
-
             }
-
         }
-
-
 
         // 2) Tint (사망 > 하이라이트 > 원본)
-
         if (tintTargets != null && tintTargets.Count > 0)
-
         {
-
             if (_originalColors == null || _originalColors.Length != tintTargets.Count)
-
                 CacheOriginalColors();
 
-
-
             Color tint = _highlighted ? highlightTint : Color.white; // 죽었을 때 deadTint 대신, 하이라이트 시에만 tint 적용
-
             for (int i = 0; i < tintTargets.Count; i++)
-
             {
-
                 var g = tintTargets[i];
-
                 if (!g) continue;
-
                 g.color = MulRGB(_originalColors[i], tint);
-
             }
-
         }
-
     }
 
-
-
-    public void RefreshFromControllers(UnitStateController usc, StatusController sc)
-
+    public void RefreshChips()
     {
-
-        var states = usc != null ? usc.GetAll() : null;            // SelfState 집합
-
-        var stacks = sc != null ? sc.GetStatusViews() : null;     // 중첩 디버프 뷰들
-
-
-
-        BuffView[] buffs = null;
-
-        if (usc != null)
-
-        {
-
-            var allBuffs = usc.GetAllBuffs(); // ← 이미 있는 API
-
-            var list = new List<BuffView>();
-
-            foreach (var b in allBuffs)
-
-            {
-
-                int remain = usc.GetRemainingBuffTurns(b); // 새로 추가한 함수
-
-                list.Add(new BuffView(b, remain));
-
-            }
-
-            buffs = list.ToArray();
-
-        }
-
-
-
-        RefreshChips(states, buffs, stacks);
-
-    }
-
-
-
-    void HandleStatusChanged()
-
-    {
-
-        RefreshFromControllers(unitStateController, StatusController);
-
-    }
-
-
-
-    void HandleStatesChanged()
-
-    {
-
-        RefreshFromControllers(unitStateController, StatusController);
-
-    }
-
-
-
-    public void RefreshChips(
-
-    IReadOnlyCollection<UnitStateId> states,
-
-    IEnumerable<BuffView> buffs,
-
-    IEnumerable<StatusView> stacks)
-
-    {
-
+        if (_targetUnit == null) return;
         if (!chipRoot) return;
 
-
+        var states = _targetUnit.GetStates();
+        var buffs = _targetUnit.GetBuffs();
+        var stacks = _targetUnit.GetStacks();
 
         // 0) 초기화
-
         for (int i = chipRoot.childCount - 1; i >= 0; i--)
-
             Destroy(chipRoot.GetChild(i).gameObject);
 
-
-
         // 1) UnitStateId 상태칩 (오른쪽)
-
         GameObject rightmostState = null;
-
         if (states != null && states.Count > 0)
-
         {
-
             foreach (var s in states)
-
             {
-
                 var go = Instantiate(stateChipPrefab, chipRoot);
-
                 var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
-
                 var sprite = visualDB ? (visualDB.GetIcon(s) ?? defaultIcon) : defaultIcon;
-
                 var color = visualDB ? visualDB.GetColor(s) : Color.white;
-
                 if (icon)
-
                 {
-
                     icon.sprite = sprite;
-
                     icon.color = color;
-
                     icon.enabled = (sprite != null);
-
                 }
-
-
 
                 // 상태칩은 텍스트 숨김
-
                 var texts = go.GetComponentsInChildren<Text>(true);
-
                 var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
-
                 var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
-
                 if (tTurn) tTurn.gameObject.SetActive(false);
-
                 if (tStack) tStack.gameObject.SetActive(false);
 
-
-
                 go.transform.SetAsLastSibling();
-
                 rightmostState = go;
-
             }
-
         }
-
-
 
         // 2) UnitStateBuffId 버프칩 (상태 바로 왼쪽)
-
         if (buffs != null)
-
         {
-
             foreach (var v in buffs)
-
             {
-
                 var go = Instantiate(buffChipPrefab ? buffChipPrefab : stateChipPrefab, chipRoot);
-
                 var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(i => i.name == "Icon");
 
-
-
                 Sprite sprite = defaultBuffIcon;
-
                 Color color = Color.white;
-
                 bool showTurns = true;
 
-
-
                 if (buffVisualDB != null)
-
                 {
-
                     sprite = buffVisualDB.GetIcon(v.id) ?? defaultBuffIcon;
-
                     color = buffVisualDB.GetColor(v.id);
-
                     showTurns = buffVisualDB.GetShowTurns(v.id);
-
                 }
-
-
 
                 if (icon)
-
                 {
-
                     icon.sprite = sprite;
-
                     icon.color = color;
-
                     icon.enabled = (sprite != null);
-
                 }
-
-
 
                 var texts = go.GetComponentsInChildren<Text>(true);
-
                 var tTurn = texts.FirstOrDefault(t => t.name == "Text_Turn");
-
                 var tStack = texts.FirstOrDefault(t => t.name == "Text_Stack");
 
-
-
                 if (tStack) tStack.gameObject.SetActive(false);           // 버프는 스택 없음
-
                 if (tTurn)
-
                 {
-
                     tTurn.gameObject.SetActive(showTurns);
-
                     if (showTurns)
-
                         tTurn.text = (v.remainingTurns > 0) ? v.remainingTurns.ToString() : "∞";
-
                 }
-
-
 
                 if (rightmostState)
-
                 {
-
                     int idx = rightmostState.transform.GetSiblingIndex();
-
                     go.transform.SetSiblingIndex(idx);  // 상태칩 바로 왼쪽
-
                 }
-
                 else
-
                 {
-
                     go.transform.SetAsLastSibling();
-
                     rightmostState = go;
-
                 }
-
             }
-
         }
-
-
 
         // 3) 기존 Stackable Status 칩 (디버프)
-
         if (stacks != null)
-
         {
-
             var list = stacks.ToList();
-
             for (int i = list.Count - 1; i >= 0; --i)
-
             {
-
                 var v = list[i];
-
                 var go = Instantiate(stackChipPrefab, chipRoot);
-
                 var icon = go.GetComponentsInChildren<Image>(true).FirstOrDefault(ii => ii.name == "Icon");
-
                 var tStk = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Stack");
-
                 var tTurn = go.GetComponentsInChildren<Text>(true).FirstOrDefault(t => t.name == "Text_Turn");
 
-
-
                 var entry = stackVisualDB ? stackVisualDB.Get(v.id) : null;
-
                 var sprite = entry?.icon ?? defaultDebuffIcon;
-
                 var color = entry?.tint ?? Color.white;
 
-
-
                 if (icon) { icon.sprite = sprite; icon.color = color; icon.enabled = (sprite != null); }
-
                 if (tStk) { tStk.gameObject.SetActive(entry?.showStacks ?? true); if (tStk.gameObject.activeSelf) tStk.text = v.stacks.ToString(); }
-
                 if (tTurn) { tTurn.gameObject.SetActive(entry?.showTurns ?? true); if (tTurn.gameObject.activeSelf) tTurn.text = v.remainingTurns > 0 ? v.remainingTurns + "" : "∞"; }
 
-
-
                 if (rightmostState)
-
                 {
-
                     int idx = rightmostState.transform.GetSiblingIndex();
-
                     go.transform.SetSiblingIndex(idx);
-
                 }
-
                 else
-
                 {
-
                     go.transform.SetAsLastSibling();
-
                 }
-
             }
-
         }
-
-
 
         // 4) 레이아웃 강제 갱신
-
         var rt = chipRoot as RectTransform;
-
         if (rt)
-
         {
-
             Canvas.ForceUpdateCanvases();
-
             LayoutRebuilder.ForceRebuildLayoutImmediate(rt);
-
         }
-
     }
-
-
 
     // === 외부 이벤트 훅 ===
-
     public void SetSkillLabel(string label)
-
     {
-
         if (skillNameText) skillNameText.text = label ?? "";
-
     }
-
 }
-
 
 
 
@@ -34355,433 +33578,187 @@ public class UnitStatusItemUI : MonoBehaviour
 FILE: 01_Scripts/UI/Battle/UnitStatusPanelUI.cs
 ================================================
 using System.Collections.Generic;
-
 using System.Linq;
-
 using UnityEngine;
 
-
-
 public class UnitStatusPanelUI : MonoBehaviour
-
 {
-
     [Header("Refs")]
-
     public BattleManager battle;              // 비워두면 자동 찾음
-
     public RectTransform enemyParent;         // 왼쪽 중앙 정렬 컨테이너
-
     public RectTransform playerParent;          // 오른쪽 중앙 정렬 컨테이너
-
     public UnitStatusItemUI enemyItemPrefab;  // 적용 카드 프리팹
-
     public UnitStatusItemUI playerItemPrefab;   // 아군용 카드 프리팹
-
-
 
     readonly Dictionary<BattleUnit, UnitStatusItemUI> views = new();
 
-
-
     [Header("Highlight")]
-
     public Sprite defaultHighlightSprite;
 
-
-
     [SerializeField] private UnitStateVisualDB sharedUnitStateDB;
-
     [SerializeField] private StackableStatusVisualDB sharedStackVisualDB;
 
 
 
-
-
-
-
     public enum UnitSort { AsFound, NameAsc, YPosDesc, AgiDesc }    //정렬 방식
-
     [SerializeField] UnitSort enemySort = UnitSort.AsFound;  // 적 정렬 기준
-
     [SerializeField] UnitSort playerSort = UnitSort.AsFound;  // 아군 정렬 기준
 
-
-
     void Awake()
-
     {
-
         if (!battle) battle = FindObjectOfType<BattleManager>();
-
         if (battle != null) battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
-
     }
-
-
 
     void Start()
-
     {
-
         BuildOnce();
-
         if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // 기술명 라벨 업데이트
 
-
-
         //아군 카드가 하나도 없으면 즉시 보강
-
         if (!views.Keys.Any(k => k && k.data.team == Team.Player))
-
             BuildOnce();
-
     }
-
-
 
     void OnDestroy()
-
     {
-
         if (battle != null) battle.OnUnitActionLabel -= HandleActionLabel;
-
         if (battle != null) battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
-
         foreach (var kv in views)
-
             if (kv.Key)
-
             {
-
                 kv.Key.OnDied -= OnUnitDied; //사망 이벤트 구독 해제
-
                 kv.Key.OnRetreated -= OnUnitRetreated;  //도주 이벤트 구독 해제
-
             }
-
     }
-
-
 
     // === 정렬 함수 추가 ===
-
     IEnumerable<BattleUnit> Sort(IEnumerable<BattleUnit> src, UnitSort mode)
-
     {
-
         switch (mode)
-
         {
-
             case UnitSort.NameAsc: return src.OrderBy(u => u.name);
-
             case UnitSort.YPosDesc: return src.OrderByDescending(u => u.transform.position.y); // 화면 위→아래
-
             case UnitSort.AgiDesc: return src.OrderByDescending(u => u.EffectiveAGI);
-
             default: return src; // 검색된 그대로
-
         }
-
     }
-
-
 
     void BuildOnce()
-
     {
-
         // 현재 씬의 생존 유닛 조회
-
         var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
 
-
-
         var enemies = Sort(units.Where(u => u.data.team == Team.Enemy), enemySort);
-
         var allies = Sort(units.Where(u => u.data.team == Team.Player), playerSort);
 
-
-
         // 이미 만들어진 카드가 있어도 없는 것만 채워 넣음
-
         foreach (var u in enemies) if (!views.ContainsKey(u)) SpawnCard(enemyParent, enemyItemPrefab, u);
-
         foreach (var u in allies) if (!views.ContainsKey(u)) SpawnCard(playerParent, playerItemPrefab, u);
-
     }
-
     void SpawnCard(RectTransform parent, UnitStatusItemUI prefab, BattleUnit u)
-
     {
-
         if (!parent || !prefab) return;
-
         var item = Instantiate(prefab, parent);
-
         item.Bind(u);
-
         item.SetHighlighted(false);
-
         item.SetSkillLabel(""); // 초기 라벨 비우기
 
-
-
         if (sharedUnitStateDB) item.SetVisualDB(sharedUnitStateDB);
-
         if (sharedStackVisualDB) item.SetStackVisualDB(sharedStackVisualDB);
 
-
-
-        var usc = u.GetComponent<UnitStateController>();
-
-        var sc = u.GetComponent<StatusController>();
-
-
-
-        // 초기 렌더
-
-        item.RefreshFromControllers(usc, sc);
-
-
-
-        // 이벤트 구독(둘 다 같은 콜백으로)
-
-        if (usc != null)
-
-        {
-
-            usc.OnStatesChanged += () =>
-
-            {
-
-                if (u) item.RefreshFromControllers(usc, sc);
-
-            };
-
-        }
-
-        if (sc != null)
-
-        {
-
-            sc.OnStatusChanged += () =>
-
-            {
-
-                if (u) item.RefreshFromControllers(usc, sc);
-
-            };
-
-        }
-
-
-
         // 초기 상태가 이미 죽어있다면(예외 케이스), Player만 회색 유지
-
         if (u.data.team == Team.Player && u.IsDead) item.SetDeadStyle(true);
 
-
-
         views[u] = item;
-
         u.OnDied += OnUnitDied; //사망 이벤트 구독
-
         u.OnRetreated += OnUnitRetreated; //도주 이벤트 구독
-
     }
-
-    //public void Resort()  // 현재 views에 있는 유닛만 대상으로 정렬해 재배치
-
-    //{
-
-    //    var enemies = Sort(views.Keys.Where(u => u && u.team == Team.Enemy), enemySort).ToList();
-
-    //    for (int i = 0; i < enemies.Count; i++)
-
-    //        views[enemies[i]].transform.SetSiblingIndex(i);
-
-
-
-    //    var allies = Sort(views.Keys.Where(u => u && u.team == Team.Player), playerSort).ToList();
-
-    //    for (int i = 0; i < allies.Count; i++)
-
-    //        views[allies[i]].transform.SetSiblingIndex(i);
-
-    //}
-
-
 
     void OnUnitDied(BattleUnit u)
-
     {
-
         if (u == null) return;
-
         if (!views.TryGetValue(u, out var item)) return;
 
-
-
         if (u.data.team == Team.Enemy)
-
         {
-
             // 적은 즉시 제거
-
             RemoveView(u);
-
         }
-
         else
-
         {
-
             // 플레이어는 유지 + 회색 하이라이트
-
             item.SetDeadStyle(true);
-
             // 필요 시 상태칩/라벨 업데이트 등 추가 작업 가능
-
         }
-
     }
-
     void OnUnitRetreated(BattleUnit u)
-
     {
-
         if (u == null) return;
-
         if (u.data.team == Team.Enemy) return;
-
         RemoveView(u);
-
     }
-
-
 
     void RemoveView(BattleUnit u)
-
     {
-
         if (!views.ContainsKey(u)) return;
-
         Destroy(views[u].gameObject);
-
         views.Remove(u);
-
     }
-
-
-
 
 
     // 웨이브 변경 시 적 카드 재구성
-
     void HandleWaveChanged_RebuildEnemies(int cur, int total, string _)
-
     {
-
         var toRemove = views
-
         .Where(kv =>
-
             (kv.Key != null && kv.Key.data.team == Team.Enemy) ||
-
             (kv.Key == null && kv.Value != null && kv.Value.transform != null &&
-
               enemyParent != null && kv.Value.transform.IsChildOf(enemyParent)))
-
         .Select(kv => kv.Key)
-
         .ToList();
 
-
-
         foreach (var key in toRemove)
-
         {
-
             var view = views[key];
-
             if (view) Destroy(view.gameObject);
-
             views.Remove(key);
-
         }
-
-
 
         // 2) 현재 씬의 '생존 적'만 다시 카드 생성
-
         var enemies = Sort(
-
         FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead && u.data.team == Team.Enemy),
-
         enemySort
-
             );
-
         foreach (var u in enemies)
-
         {
-
             if (views.ContainsKey(u)) continue; // 이미 있으면 스킵(이론상 없음)
-
             SpawnCard(enemyParent, enemyItemPrefab, u);
-
         }
-
     }
-
-
 
     // 범위 안의 유닛만 하이라이트
-
     public void HighlightUnits(IEnumerable<BattleUnit> units, Sprite overlaySprite = null)
-
     {
-
         var set = (units != null) ? new HashSet<BattleUnit>(units) : new HashSet<BattleUnit>();
-
         foreach (var kv in views)
-
         {
-
             bool on = set.Contains(kv.Key);
-
             kv.Value.SetHighlighted(on, overlaySprite ?? defaultHighlightSprite);
-
         }
-
     }
-
-
 
     // 전부 끄기
-
     public void ClearHighlights() => HighlightUnits(null);
 
-
-
     // === 이벤트 핸들러 ===
-
     void HandleActionLabel(BattleUnit u, string label)
-
     {
-
         if (u == null) return;
-
         if (!views.TryGetValue(u, out var v)) return;
-
         v.SetSkillLabel(label);
-
     }
-
 }
-
 
 
 
@@ -34813,6 +33790,7 @@ public class CampCraftPage : MonoBehaviour
     [Header("Data Source")]
 
     public List<CraftRecipe> allDatabaseRecipes; // 게임의 모든 레시피를 여기에 등록 (Project 탭에서 드래그)
+
 
 
 
@@ -34893,7 +33871,6 @@ public class CampCraftPage : MonoBehaviour
 
 
         SwitchState(false);
-
     }
 
     private void OnDestroy() 
@@ -35122,19 +34099,11 @@ public class CampCraftPage : MonoBehaviour
 
     {
 
-        // 인벤토리 공간 체크 (가정)
-
-        // if (!InventoryManager.Instance.HasSpace()) 
-
-        // {
-
-        //     txtInvenFull.gameObject.SetActive(true);
-
-        //     return; 
-
-        // }
-
-
+if (!InventoryManager.Instance.CanAddItem(currentSelectedRecipe.resultItem.itemID, 1)) 
+        {
+            if(txtInvenFull != null) txtInvenFull.gameObject.SetActive(true);
+            return; 
+        }
 
         // 아이템 지급
 
@@ -37338,7 +36307,475 @@ public class CampTabController : MonoBehaviour
 ================================================
 FILE: 01_Scripts/UI/Camp/CampUIManager.cs
 ================================================
-[Binary file]
+using Project.UI;
+
+using System.Collections.Generic;
+
+using UnityEngine;
+
+using UnityEngine.UI;
+
+
+
+
+
+// 헤더 종류 정의
+
+public enum CampHeaderType
+
+{
+
+    None,       // 아무것도 안 띄움 (Option 등)
+
+    Character,  // 캐릭터 선택창 (Status, Skill 등)
+
+    Item        // 아이템 선택창 (Inventory 등)
+
+}
+
+
+
+[System.Serializable]
+
+public struct CampTab
+
+{
+
+    public string tabName;       // 에디터 식별용 이름
+
+    public Toggle tabToggle;     // 상단 탭 토글 버튼
+
+    public GameObject contentPage; // 연결된 페이지 오브젝트 (Page_Status 등)
+
+    public CampHeaderType headerType;   // 이 탭을 눌렀을 때 상단에 뭘 띄울지 결정
+
+
+
+    [Header("Visual Settings")]
+
+    public Image tabImage;           // 탭 버튼의 배경 이미지가 있는 컴포넌트
+
+    public Sprite normalSprite;      // 선택 안 됐을 때 (테두리 4면 다 있음)
+
+    public Sprite selectedSprite;    // 선택 됐을 때 (하단 테두리 없음, 배경색과 일치)
+
+}
+
+
+
+public class CampUIManager : ModalWindowBase
+
+{
+
+    public static CampUIManager Instance {  get; private set; }
+
+
+
+    // 관리 컴포넌트들
+
+    [SerializeField] private CampTabController tabController;
+
+    [SerializeField] private CampHeaderController headerController;
+
+    [SerializeField] private CharacterHeaderController charHeader;
+
+    //[SerializeField] private CraftHeaderController itemHeader;
+
+
+
+    private CampHeaderType currentHeaderType;
+
+
+
+    [Header("UI Control")]
+
+    [SerializeField] private KeyCode toggleKey = KeyCode.Tab;
+
+    [SerializeField] private bool pauseTimerWhileOpen = true;
+
+
+
+    [Header("Tabs Configuration")]
+
+    public List<CampTab> tabs = new List<CampTab>(); // 여기에 탭과 페이지를 등록
+
+
+
+    [Header("Character Selection")]
+
+    public UnitData selectedUnit;
+
+
+
+    [Header("Drag & Drop Visuals")]
+
+    [SerializeField] private Image dragGhostImage; // 마우스 따라다닐 투명 이미지
+
+
+
+    [Header("UI Pages References")]
+
+    public CampStatusPage statusPage;
+
+    public CampSkillPage skillPage;
+
+
+
+    [Header("Databases")]
+
+    public TrainingDB trainingDB;
+
+
+
+    [Header("Button")]
+
+    public Button closeCampBtn; 
+
+
+
+    private bool isOpen = false;
+
+
+
+    protected override void Awake()
+
+    {
+
+        base.Awake();
+
+
+
+        if (Instance == null) Instance = this;
+
+        else Destroy(gameObject);
+
+
+
+        InitializeTabs(); // 탭 리스너 등록은 미리 해둠
+
+
+
+        // 로딩 완료 이벤트 구독
+
+        if (PlayerDataManager.Instance != null)
+
+        {
+
+            PlayerDataManager.Instance.OnUnitsLoaded += OnDataLoaded;
+
+        }
+
+
+
+
+
+        // 고스트 이미지는 평소에 꺼둠 + 레이캐스트 차단
+
+        if (dragGhostImage)
+
+        {
+
+            dragGhostImage.gameObject.SetActive(false);
+
+            dragGhostImage.raycastTarget = false; // 이게 꺼져 있어야 Drop 이벤트가 아래 슬롯에 전달됨
+
+        }
+
+
+
+        if (closeCampBtn != null) closeCampBtn.onClick.AddListener(OnClickClose);
+
+    }
+
+    private void Start()
+
+    {
+
+        // Awake만으로는 다른 컴포넌트 초기화 순서에 밀릴 수 있으므로 Start에서 확실하게 처리
+
+        if (root == null) root = GetComponent<CanvasGroup>();
+
+        Hide();
+
+
+
+        if (PlayerDataManager.Instance != null && !PlayerDataManager.Instance.IsLoading)
+
+        {
+
+            OnDataLoaded();
+
+        }
+
+    }
+
+    private void OnDataLoaded()
+
+    {
+
+        // 데이터가 로드된 후에야 캐릭터 헤더를 초기화함
+
+        charHeader.Initialize((index) => {
+
+            UnitData data = PlayerDataManager.Instance.GetOwnedUnit(index);
+
+            if (data != null) OnSelectCharacter(data);
+
+        });
+
+
+
+        // 첫 번째 탭 강제 실행 (데이터가 있으니 이제 안전함)
+
+        ResetToFirstTab();
+
+    }
+
+
+
+    private void Update()
+
+    {
+
+        // 키 입력으로 열고 닫기
+
+        if (Input.GetKeyDown(toggleKey))
+
+        {
+
+            Toggle();
+
+        }
+
+    }
+
+
+
+    // --- 드래그 지원 함수들 (FormationSlotUI에서 호출) ---
+
+
+
+    public void StartDrag(Sprite sprite)
+
+    {
+
+        if (dragGhostImage == null) return;
+
+
+
+        dragGhostImage.sprite = sprite;
+
+        dragGhostImage.gameObject.SetActive(true);
+
+        // 맨 위로 올려서 다른 UI에 안 가려지게 함
+
+        dragGhostImage.transform.SetAsLastSibling();
+
+    }
+
+
+
+    public void UpdateDragPosition(Vector2 position)
+
+    {
+
+        if (dragGhostImage == null) return;
+
+        dragGhostImage.transform.position = position;
+
+    }
+
+
+
+    public void EndDrag()
+
+    {
+
+        if (dragGhostImage == null) return;
+
+        dragGhostImage.gameObject.SetActive(false);
+
+    }
+
+
+
+    // --- 탭 초기화 및 이벤트 등록 ---
+
+    private void InitializeTabs()
+
+    {
+
+        foreach (var tab in tabs)
+
+        {
+
+            if (tab.tabToggle != null)
+
+            {
+
+                // 토글 값이 바뀔 때(클릭될 때) 실행될 함수 연결
+
+                tab.tabToggle.onValueChanged.AddListener((isOn) =>
+
+                {
+
+                    if (isOn) OnTabSelected(tab);
+
+                });
+
+            }
+
+        }
+
+    }
+
+
+
+    // 탭 선택 시 실행되는 로직
+
+    private void OnTabSelected(CampTab activeTab)
+
+    {
+
+        currentHeaderType = activeTab.headerType; // 현재 헤더 타입 저장
+
+
+
+        // 페이지 스위칭
+
+        foreach (var tab in tabs)
+
+        {
+
+            if (tab.contentPage != null)
+
+                tab.contentPage.SetActive(tab.contentPage == activeTab.contentPage);
+
+        }
+
+
+
+        // 비주얼 위임
+
+        tabController.UpdateTabVisuals(tabs, activeTab);
+
+
+
+        // 헤더 위임
+
+        headerController.UpdateHeader(activeTab.headerType);
+
+    }
+
+
+
+    private void OnClickClose()
+
+    {
+
+        Hide();
+
+    }
+
+
+
+    public override void Show()
+
+    {
+
+        base.Show();
+
+        ResetToFirstTab();
+
+    }
+
+
+
+    public override void Hide()
+
+    {
+
+        base.Hide();
+
+
+
+        if (isOpen)
+
+        {
+
+            // 이동 잠금 해제
+
+            if (pauseTimerWhileOpen)
+
+                PlayerMovement.Instance?.UnlockMovementIndefinite();
+
+        }
+
+
+
+        isOpen = false;
+
+    }
+
+
+
+    // 탭 강제 초기화 함수
+
+    private void ResetToFirstTab()
+
+    {
+
+        if (tabs.Count > 0)
+
+        {
+
+            tabs[0].tabToggle.isOn = true; // 리스너가 OnTabSelected 호출함
+
+            OnTabSelected(tabs[0]);
+
+        }
+
+    }
+
+
+
+    // 캐릭터 선택 로직 
+
+    public void OnSelectCharacter(UnitData unit)
+
+    {
+
+        selectedUnit = unit;
+
+
+
+        // 상태창 정보 갱신
+
+        if (statusPage != null && statusPage.gameObject.activeInHierarchy)
+
+        {
+
+            // 페이지가 직접 selectedUnit을 참조하거나, 아래처럼 명시적으로 갱신 명령
+
+            statusPage.RefreshUI();
+
+        }
+
+
+
+        // 스킬창 정보 갱신
+
+        if (skillPage != null && skillPage.gameObject.activeInHierarchy)
+
+        {
+
+            skillPage.RefreshUI();
+
+        }
+
+    }
+
+}
 
 
 ================================================
@@ -37964,6 +37401,8 @@ public class CraftSlotUI : MonoBehaviour
 
     [SerializeField] private Text nameText;
 
+    [SerializeField] private Text descriptionText;
+
     [SerializeField] private Button button;
 
     [SerializeField] private GameObject highlightObj; // 선택됐을 때 켜질 테두리 같은 거 (옵션)
@@ -37985,6 +37424,7 @@ public class CraftSlotUI : MonoBehaviour
         {
 
             nameText.text = recipe.resultItem.itemName;
+            descriptionText.text = recipe.resultItem.itemDescription;
 
 
 
@@ -38035,6 +37475,83 @@ public class CraftSlotUI : MonoBehaviour
     }
 
 }
+
+
+================================================
+FILE: 01_Scripts/UI/Camp/ExplorationUnitAdapter.cs
+================================================
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ExplorationUnitAdapter : IUnitStatus
+{
+    private readonly UnitData _data;
+
+    public string Name => _data != null ? _data.DisplayName : "Unknown";
+    
+    // 탐험 모드에서는 현재 상태가 저장되지 않는다면 Max 값을 보여주거나
+    // 별도의 런타임 데이터가 있다면 그걸 사용해야 함.
+    // 현재는 Preview 느낌으로 Max 값을 표시.
+    public float HP => MaxHP; 
+    public float MaxHP => CalculateMaxHP();
+    public float MP => MaxMP;
+    public float MaxMP => CalculateMaxMP();
+    public float Rage => 0; // 탐험 중에는 분노 0 가정
+    public float MaxRage => CalculateMaxRage();
+    public bool IsDead => false;
+
+    public event Action OnStatusChanged;
+#pragma warning disable 67
+    public event Action<bool> OnDead;
+#pragma warning restore 67
+
+    public ExplorationUnitAdapter(UnitData data)
+    {
+        _data = data;
+    }
+
+    private float CalculateMaxHP()
+    {
+        if (_data == null) return 1;
+        // BattleUnit 공식: BDY * 3 + STR + Buffs
+        return Mathf.Max(1, (_data.baseBDY * 3f) + _data.baseSTR);
+    }
+
+    private float CalculateMaxMP()
+    {
+        if (_data == null) return 0;
+        // BattleUnit 공식: MND * 3 + CLV
+        return Mathf.Max(0, (_data.baseMND * 3f) + _data.baseCLV);
+    }
+
+    private float CalculateMaxRage()
+    {
+        if (_data == null) return 0;
+        return Mathf.Max(0, _data.baseSTR + _data.baseCLV + _data.baseAGI + _data.baseBDY + _data.baseMND + _data.baseINS);
+    }
+
+    public IReadOnlyCollection<UnitStateId> GetStates()
+    {
+        return Array.Empty<UnitStateId>();
+    }
+
+    public IEnumerable<UnitStateController.BuffView> GetBuffs()
+    {
+        return Array.Empty<UnitStateController.BuffView>();
+    }
+
+    public IEnumerable<StatusController.StatusView> GetStacks()
+    {
+        return Array.Empty<StatusController.StatusView>();
+    }
+
+    public void NotifyChanged()
+    {
+        OnStatusChanged?.Invoke();
+    }
+}
+
 
 
 ================================================
@@ -38092,7 +37609,7 @@ public class ItemTooltipUI : MonoBehaviour
 
         // ItemData에 type이나 등급 정보가 있다면 추가 표시
 
-        // typeText.text = data.itemType.ToString();
+        typeText.text = data.itemType.ToString();
 
 
 
@@ -41911,6 +41428,37 @@ namespace Project.UI
 
 
 ================================================
+FILE: 01_Scripts/UI/Core/IUnitStatus.cs
+================================================
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public interface IUnitStatus
+{
+    string Name { get; }
+    float HP { get; }
+    float MaxHP { get; }
+    float MP { get; }
+    float MaxMP { get; }
+    float Rage { get; }
+    float MaxRage { get; }
+
+    bool IsDead { get; }
+
+    // Events
+    event Action OnStatusChanged;
+    event Action<bool> OnDead; // bool: isDead
+
+    // State & Buffs
+    IReadOnlyCollection<UnitStateId> GetStates();
+    IEnumerable<UnitStateController.BuffView> GetBuffs();
+    IEnumerable<StatusController.StatusView> GetStacks();
+}
+
+
+
+================================================
 FILE: 01_Scripts/UI/Core/ModalWindowBase.cs
 ================================================
 using Unity.VisualScripting.Antlr3.Runtime;
@@ -42703,6 +42251,244 @@ public class ExplorationResetUi : MonoBehaviour
 
 }
 
+
+
+
+================================================
+FILE: 01_Scripts/UI/Exploration/ExplorationSidebarController.cs
+================================================
+using UnityEngine;
+using System.Collections.Generic;
+using Project.UI; // For potentially common UI interfaces if needed, but not strictly required here
+
+public class ExplorationSidebarController : MonoBehaviour
+{
+    [Header("UI Components")]
+    [SerializeField] private List<ExplorationStatusSlot> statusSlots = new List<ExplorationStatusSlot>();
+    [SerializeField] private Transform slotsRoot; // 슬롯들이 모여있는 부모 (Stat)
+
+    private void Start()
+    {
+        // 1. 컴포넌트 찾기
+        if (slotsRoot != null)
+        {
+            statusSlots.Clear();
+            foreach (Transform child in slotsRoot)
+            {
+                var slot = child.GetComponent<ExplorationStatusSlot>();
+                if (slot != null) statusSlots.Add(slot);
+            }
+        }
+        else
+        {
+            // Root가 안잡혀있으면 자식 전체에서 검색 (혹은 직접 할당 유도)
+            if (statusSlots.Count == 0)
+            {
+                var slots = GetComponentsInChildren<ExplorationStatusSlot>(true);
+                statusSlots.AddRange(slots);
+            }
+        }
+
+        if (statusSlots.Count == 0)
+        {
+            Debug.LogWarning($"[ExplorationSidebarController] No 'ExplorationStatusSlot' found. Please check hierarchy or assign in inspector.");
+        }
+
+        // 2. 초기화 시작
+        Debug.Log($"[ExplorationSidebarController] Start. Slots found: {statusSlots.Count}");
+        InitializeStatusUI();
+    }
+
+    private void InitializeStatusUI()
+    {
+        StartCoroutine(Co_InitializeStatusUI());
+    }
+
+    private System.Collections.IEnumerator Co_InitializeStatusUI()
+    {
+        // 1. 매니저가 준비될 때까지 대기
+        while (PlayerDataManager.Instance == null)
+        {
+            Debug.Log("[ExplorationSidebarController] Waiting for PlayerDataManager...");
+            yield return null;
+        }
+
+        // 2. 로딩이 끝날 때까지 대기
+        while (PlayerDataManager.Instance.IsLoading)
+        {
+            Debug.Log("[ExplorationSidebarController] Waiting for Unit Loading...");
+            yield return null;
+        }
+
+        // 3. 유닛 리스트가 확보될 때까지 잠시 대기 (안전장치)
+        if (PlayerDataManager.Instance.ownedUnits.Count == 0)
+        {
+            Debug.LogWarning("[ExplorationSidebarController] Owned units are 0. Waiting for data...");
+            // 타임아웃을 둘 수도 있지만, 일단은 이벤트나 상태 변화를 기다리거나,
+            // 여기서는 일단 바인딩을 시도합니다. (빈 상태로라도)
+        }
+
+        Debug.Log($"[ExplorationSidebarController] Initialization Ready. Binding {PlayerDataManager.Instance.ownedUnits.Count} units.");
+        BindUnits();
+    }
+
+    private void OnDestroy()
+    {
+        // Coroutine 사용으로 이벤트 구독 해제 불필요
+    }
+
+    private void BindUnits()
+    {
+        var ownedUnits = PlayerDataManager.Instance.ownedUnits;
+        
+        for (int i = 0; i < statusSlots.Count; i++)
+        {
+            if (i < ownedUnits.Count)
+            {
+                statusSlots[i].Bind(ownedUnits[i]);
+            }
+            else
+            {
+                statusSlots[i].Bind(null); // 남는 슬롯은 비활성화
+            }
+        }
+        
+        Debug.Log($"[ExplorationSidebarController] Binding {Mathf.Min(ownedUnits.Count, statusSlots.Count)} units. Total Owned: {ownedUnits.Count}");
+    }
+}
+
+
+
+================================================
+FILE: 01_Scripts/UI/Exploration/ExplorationStatusSlot.cs
+================================================
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections.Generic;
+
+public class ExplorationStatusSlot : MonoBehaviour
+{
+    [Header("UI Components")]
+    [SerializeField] private Text nameText;
+    [SerializeField] private Slider hpSlider;
+    [SerializeField] private Slider mpSlider;
+    [SerializeField] private Slider rageSlider;
+
+    [Header("Text Indicators")]
+    [SerializeField] private Text hpText;
+    [SerializeField] private Text mpText;
+    [SerializeField] private Text rageText;
+
+    [Header("Equipment Slots")]
+    [SerializeField] private List<Image> itemIcons = new List<Image>(); // 아이콘 표시용 (3개)
+
+    private UnitData _targetData;
+
+    // 초기화 및 데이터 바인딩
+    public void Bind(UnitData data)
+    {
+        _targetData = data;
+
+        if (_targetData == null)
+        {
+            // 데이터가 없으면 비활성화
+            Debug.Log($"[ExplorationStatusSlot] {name}: Data is null, disabling slot.");
+            gameObject.SetActive(false);
+            return;
+        }
+
+        Debug.Log($"[ExplorationStatusSlot] {name}: Binding unit {_targetData.DisplayName}");
+        gameObject.SetActive(true);
+
+        // 1. 기본 정보 설정
+        if (nameText) nameText.text = _targetData.DisplayName;
+        else Debug.LogWarning($"[ExplorationStatusSlot] {name}: nameText is null!");
+
+        // 2. 런타임 데이터 가져오기
+        Refresh();
+    }
+
+    // 상태 갱신 (데이터 매니저에서 최신 상태를 가져옴)
+    public void Refresh()
+    {
+        if (_targetData == null) return;
+
+        // PlayerDataManager에서 런타임 데이터 조회
+        // (만약 데이터가 없으면 풀피로 가정하거나 0으로 표시)
+        var runtimeData = PlayerDataManager.Instance.GetRuntimeData(_targetData);
+
+        // 최대치 계산 (현재 UnitData에는 Base 스탯만 있고, 장비/보정을 통한 MaxHP 계산 로직이 여기엔 없음)
+        // 임시 방편: UnitData의 Base 스탯을 기반으로 대략적인 MaxHP 계산
+        // *정확한 계산을 위해서는 BattleUnit과 동일한 스탯 계산 로직을 공유하는 클래스가 필요함 (Refactoring 대상)
+        // 일단은 RuntimeData가 있으면 그걸 쓰고, 없으면 기본값
+        
+        float currentHP = 0;
+        float currentMP = 0;
+        float currentRage = 0;
+
+        // UnitData의 Helper 메서드 사용하여 Max 스탯 계산
+        var (maxHP, maxMP, maxRage) = _targetData.CalcMaxStats();
+
+        // 런타임 데이터가 있으면 적용, 없으면 기본값 (보통 PlayerMng에서 초기화해주지만 안전장치)
+        if (runtimeData != null)
+        {
+            currentHP = runtimeData.currentHP;
+            currentMP = runtimeData.currentMP;
+            currentRage = runtimeData.currentRage;
+        }
+        else
+        {
+            currentHP = maxHP;
+            currentMP = 0;
+            currentRage = 0;
+        }
+
+        Debug.Log($"[ExplorationStatusSlot] {_targetData.DisplayName}: RuntimeData={(runtimeData != null ? "Found" : "Null")}, HP={currentHP}/{maxHP}");
+
+        // 3. UI 반영
+        UpdateSlider(hpSlider, hpText, currentHP, maxHP);
+        UpdateSlider(mpSlider, mpText, currentMP, maxMP);
+        UpdateSlider(rageSlider, rageText, currentRage, maxRage);
+        
+        // Items (임시)
+        // UnitData에 장비 정보가 있다면 여기서 아이콘 갱신
+        // currently no logic for equipment in this snippet
+    }
+
+    private void UpdateSlider(Slider slider, Text text, float current, float max)
+    {
+        if (slider != null)
+        {
+            var prev = slider.value;
+            slider.maxValue = max;
+            slider.value = current;
+            Debug.Log($"[ExplorationStatusSlot] {name} {slider.gameObject.name}: Set Value {current}/{max} (Prev: {prev})");
+        }
+        else
+        {
+            Debug.LogWarning($"[ExplorationStatusSlot] {name}: A slider is null! (Target Component: {slider})");
+        }
+
+        // 별도의 텍스트 컴포넌트가 연결되어 있다면 갱신
+        if (text != null)
+        {
+            // [수정] "현재/최대" -> "현재" 만 표시
+            text.text = $"{Mathf.FloorToInt(current)}";
+        }
+        else
+        {
+            // 혹시 슬라이더 내부에 자식으로 텍스트가 있는 경우
+            if (slider != null)
+            {
+                var childText = slider.GetComponentInChildren<Text>();
+                if (childText != null)
+                {
+                    childText.text = $"{Mathf.FloorToInt(current)}";
+                }
+            }
+        }
+    }
+}
 
 
 
@@ -45511,83 +45297,7 @@ public class UI_ButtonFeedback : MonoBehaviour, IPointerDownHandler, IPointerUpH
 ================================================
 FILE: 01_Scripts/Utils/Tester.cs
 ================================================
-using UnityEngine;
-
-
-
-public class Tester : MonoBehaviour
-
-{
-
-    private void Update()
-
-    {
-
-        if (Input.GetKeyDown(KeyCode.Space))
-
-            Test_AddRandomItem();
-
-    }
-
-
-
-    public void Test_AddRandomItem()
-
-    {
-
-        string testID;
-
-        int testAmount = 1;
-
-        int pick = Random.Range(0, 2);
-
-
-
-        switch (pick)
-
-        {
-
-            case 0:
-
-                testID = "101";
-
-                break;
-
-            case 1:
-
-                testID = "102";
-
-                break;
-
-            default:
-
-                testID = "101";
-
-                break;
-
-        }
-
-
-
-        
-
-
-
-        InventoryManager.Instance.AddItem(testID, testAmount);
-
-        Debug.Log($"[Test] {testID} 아이템 1개 획득");
-
-
-
-        // 아이템 획득 후 즉시 저장
-
-        PlayerDataManager.Instance.SaveGame();
-
-    }
-
-}
-
-
+Error reading file with 'cp949': 'cp949' codec can't decode byte 0xec in position 1120: illegal multibyte sequence
 
 
 ================================================
@@ -46218,7 +45928,7 @@ SpriteAtlasAsset:
   m_MasterAtlas: {fileID: 0}
   m_ImporterData:
     packables:
-    - {fileID: 2800000, guid: 0e4a8ddf1f60caa4d8f0366225344627, type: 3}
+    - {fileID: 2800000, guid: e6cdaaa2efff45c459cb1508e2b9bd5b, type: 3}
   m_IsVariant: 0
 
 
@@ -48511,7 +48221,7 @@ public class UniversalDataImporter : EditorWindow
     {
         var map = LoadAssetMap<PassiveAsset>();
         var rows = ParseCSV(csv);
-        int updated = 0, created = 0;
+        int updated = 0;
 
         foreach (var cols in rows)
         {

@@ -78,6 +78,12 @@ public abstract class SkillAsset : ScriptableObject
     [Tooltip("훈련 UI에 표시할 3개 루트의 제목/설명. 비어 있으면 기본 텍스트로 대체.")]
     public TrainingRouteInfo[] trainingRoutes = new TrainingRouteInfo[3];
 
+    [Header("Cost Override")]
+    public bool trainingUseCostOverride = false;
+    [Range(-1, 2)]
+    public int routeForCostOverride = -1;
+    public int trainingCostOverride = 0;
+
     // BattleManager는 이 함수만 호출하고, 구체적인 절차(선택, 애니, 효과)는 스킬이 알아서 함.
     public virtual IEnumerator Execute(BattleManager _battlemanager, BattleUnit _caster, BattleUnit _targetUnit = null, Tilemap _targetMap = null, Vector3Int _targetCell = default)
     {
@@ -266,8 +272,20 @@ public abstract class SkillAsset : ScriptableObject
     }
     public virtual int GetEffectiveCost(BattleUnit _caster)
     {
-        // 기본값: base cost (MP/Rage 공통)
-        return Mathf.Max(0, GetBaseCost());
+        // 1. 기본 비용
+        int baseCost = Mathf.Max(0, GetBaseCost());
+
+        // 2. 훈련 오버라이드 체크
+        if (_caster != null)
+        {
+            int route = _caster.GetTrainingRouteIndex(this);
+            if (trainingUseCostOverride && routeForCostOverride >= 0 && route == routeForCostOverride)
+            {
+                baseCost = trainingCostOverride;
+            }
+        }
+        
+        return Mathf.Max(0, baseCost);
     }
     public virtual int GetEffectiveCooldownTurns(BattleUnit _caster)
     {

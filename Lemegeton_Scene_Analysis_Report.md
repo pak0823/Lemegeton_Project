@@ -90,6 +90,11 @@
 - **위치**: 3대 씬 파일(`Title`, `Exploration`, `Battle`) 내에 **존재하지 않음**.
 - **결론**: `DontDestroyOnLoad` 속성을 가진 싱글톤으로, 별도의 부트(Boot) 씬이나 개발용 씬(`Test`/`Ui_Test`)에서 출발하거나, 초기화 시점에 코드로 생성되는 구조입니다.
 
+### 3.2 글로벌 데이터 매니저 (Persistent Singletons)
+
+- **InventoryManager**: `DontDestroyOnLoad`로 보호되며, 씬 전환 시 파괴되지 않는 전역 인벤토리 시스템입니다. 중복 생성 방지(`Destroy(this)`) 로직이 적용되어 안정성이 확보되었습니다.
+- **PlayerDataManager**: 유닛 정보 및 골드 데이터를 관리하며, `InventoryManager`와 함께 게임의 상태를 유지합니다.
+
 ### 3.2 맵/오브젝트 매니지먼트
 
 - **MapManager**: 씬에 내장.

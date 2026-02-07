@@ -50,14 +50,7 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
     public bool useDirectionalDashTrigger = true;
 
     [Header("Training")]
-    [Header("소모값 감소 적용")]
-    [Tooltip("훈련에서 자원 비용을 덮어쓸지 여부")]
-    public bool trainingUseCostOverride = false;
-    [Range(-1, 2)]
-    [Tooltip("이 스킬에서 자원 감소가 적용될 훈련 루트 인덱스 (-1이면 미사용)")]
-    public int routeForCostOverride = 0;
-    [Tooltip("훈련 시 실제 소모 자원")]
-    public int trainingCostRoute = 5;
+    // Cost Override Removed (Handled by SkillAsset)
 
     [Header("적의 감소 적용")]
     [Tooltip("현재 적대감에서 이 값만큼 즉시 감소 (양수 입력)")]
@@ -361,14 +354,6 @@ public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITarget
         yield return null;
     }
 
-    public override int GetEffectiveCost(BattleUnit _caster)
-    {
-        int baseCost = base.GetEffectiveCost(_caster);
-        if (!_caster) return baseCost;
-        int route = _caster.GetTrainingRouteIndex(this);
-        if (trainingUseCostOverride && route == 0) return Mathf.Max(0, trainingCostRoute);
-        return baseCost;
-    }
     public override string GetFullDescriptionRich(BattleUnit _caster)
     {
         string baseDesc = base.GetFullDescriptionRich(_caster);
