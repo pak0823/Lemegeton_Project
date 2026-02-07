@@ -1,4 +1,4 @@
-// PlayerMovement.cs
+﻿// PlayerMovement.cs
 
 using System;
 
@@ -66,15 +66,15 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 타일 경로 기반 이동 상태
+    // 자동경로 기반 이동 상태
 
-    [Header("타일 경로 이동 설정")]
+    [Header("자동경로 이동 설정")]
 
     [SerializeField] private GameObject pathMarkerPrefab;   // 경로 표시용 프리팹
 
-    [SerializeField] private GameObject pushMarkerPrefab; // Push 후보 타일 표시 전용
+    [SerializeField] private GameObject pushMarkerPrefab; // Push 후보 타일 표시용
 
-    [SerializeField] private GameObject goalMarkerPrefab; // 목표 지점(끝부분) 전용 마커(노란 테두리)
+    [SerializeField] private GameObject goalMarkerPrefab; // 목표 지점 표시용 마커(최종 도착)
 
 
 
@@ -82,7 +82,7 @@ public class PlayerMovement : MonoBehaviour
 
     private List<Vector3Int> currentPathCells = new List<Vector3Int>();
 
-    // 현재 선택된 목표 셀 (첫 번째 클릭으로 선택된 타일)
+    // 현재 선택된 목표 셀 (첫 번째 클릭으로 선택된 상태)
 
     private Vector3Int? selectedTargetCell = null;
 
@@ -100,21 +100,21 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 경로 도착 시 실행할 콜백 (예: 상자 열기)
+    // 경로 도착 후 실행할 콜백 (예: 상자 열기)
 
     private Action pathArrivalCallback = null;
 
 
 
-    // 상호작용 이동용으로 선택된 상자(있다면)
+    // 상호작용 의도로 선택된 상자(또는 다른 것)
 
-    private BoxInteract pendingChest = null;
+    private IInteractable pendingInteractable = null;
 
     private PortalController pendingPortal = null;
 
 
 
-    // 현재 상호작용 대상(관찰/조사 버튼이 가리키는 대상)
+    // 현재 상호작용 타겟(관찰/조사 버튼이 가리키는 대상)
 
     private Collider2D currentInteractTarget = null;
 
@@ -126,7 +126,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // Push 선택(타일 클릭) 모드
+    // Push 선택(우클릭) 모드
 
     private bool isPushSelectMode = false;
 
@@ -134,13 +134,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 박스가 이동할 수 있는 목표 타일만 허용
+    // 박스가 이동해야 하는 목표 타일만 사용
 
     private HashSet<Vector3Int> pushValidTargetCells = new HashSet<Vector3Int>();
 
 
 
-    // 표시용 마커(기존 pathMarkerPrefab 재사용 가능)
+    // 임시 마커(기존 pathMarkerPrefab 복사해서 사용)
 
     private readonly List<GameObject> activePushMarkers = new List<GameObject>();
 
@@ -156,7 +156,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    [Header("높이 이동 설정")]
+    [Header("점프 이동 설정")]
 
     public AnimationCurve jumpCurve;      // 점프 곡선
 
@@ -166,7 +166,7 @@ public class PlayerMovement : MonoBehaviour
 
     [SerializeField] private LayerMask encounterLayerMask;
 
-    [SerializeField] private string battleSceneName = "BattleScene"; // 실제 전투씬 이름으로
+    [SerializeField] private string battleSceneName = "BattleScene"; // 현재 전투 씬 이름으로
 
 
 
@@ -194,7 +194,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 마우스 이동 충돌 예측 필터 (자기 자신은 자동 제외됨)
+        // 마우스 이동 충돌 예측 필터 (자기 자신은 충돌 제외)
 
         _castFilter.useTriggers = false;
 
@@ -208,11 +208,11 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 관찰/대화 Dialog가 열려 있을 때: 
+        // 관찰창(Dialog)가 열려 있을 때 
 
         // 좌클릭으로 닫기
 
-        // 닫히기 전까지는 이동/타일 클릭을 전부 막는다
+        // 닫히기 전까지는 이동/추가 클릭 등을 막는다
 
         if (DescriptionDialogUI.Instance != null && DescriptionDialogUI.Instance.IsOpen)
 
@@ -236,7 +236,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 입력 차단 조건을 한 곳에서 체크
+        // 입력 차단 조건은 이곳에서 체크
 
         bool isInputBlocked =
 
@@ -270,7 +270,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            HandleTileClickInput(); // 타일 클릭/상자 클릭 이동
+            HandleTileClickInput(); // 일반 클릭/상자 클릭 이동
 
         }
 
@@ -280,7 +280,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // RMB 취소(요구사항 5)
+            // RMB 취소(?�구?�항 5)
 
             if (Input.GetMouseButtonDown(1))
 
@@ -294,7 +294,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // LMB: 허용 타일만
+            // LMB: ?�용 ?�?�만
 
             if (Input.GetMouseButtonDown(0))
 
@@ -320,7 +320,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // “목표 셀”만 넘기고, 실제 연속/단발 푸시는 내부에서 처리
+                // ?�목???�?�만 ?�기�? ?�제 ?�속/?�발 ?�시???��??�서 처리
 
                 StartPushToCell(pendingPushBox, clickedCell);
 
@@ -329,462 +329,236 @@ public class PlayerMovement : MonoBehaviour
                 ExitPushSelectMode(keepBoxHighlight: false);
 
                 return;
-
+                return;
             }
 
-
-
             return; // pushSelectMode 중에는 일반 이동/상호작용 입력 차단
-
         }
-
-
 
         if (!isPushSelectMode && pendingPushBox != null && Input.GetMouseButtonDown(1))
-
         {
-
             pendingPushBox.SetHighlight(false);
-
             pendingPushBox = null;
-
             InteractionHintUI.Instance?.HideAll();
-
             return;
-
         }
-
     }
-
-
 
     void FixedUpdate()
-
     {
-
         if (isPerformingPush) return;
-
         if (GamePause.IsPaused)
-
         {
-
             if (animator != null)
-
                 animator.SetInteger("Move", 0);
-
             return;
-
         }
-
     }
-
-
 
     void ExitPushSelectMode(bool keepBoxHighlight = false)
-
     {
-
         ClearPushTargets();
-
         pushValidTargetCells.Clear();
 
-
-
         if (animator != null)
-
         {
-
             animator.SetInteger("Move", 0);
-
             animator.SetBool("IsPushIdle", false);
-
         }
 
-
-
         isPushSelectMode = false;
-
         isPushMode = false;
 
-
-
         if (!keepBoxHighlight)
-
             pendingPushBox?.SetHighlight(false);
 
-
-
         pendingPushBox = null;
-
         pendingDirectionKey = Direction.None;
 
-
-
         InteractionHintUI.Instance?.HideAll();
-
     }
 
-
-
     // --- 타일 클릭 입력 처리 ---
-
     void HandleTileClickInput()
-
     {
-
-        // 카메라/마우스 좌표 계산
-
+        // 카메라 마우스 좌표 계산
         var cam = Camera.main;
-
         if (cam == null) return;
 
-
-
         float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-
         Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-
         wp.z = 0;
 
-
-
-        // 타일 판정 및 디버그 갱신
-
+        // 타일 좌표계 갱신
         Vector3Int clickedCell = GetClickedCellWithHeight(wp);
-
         Vector3Int currentCell = GetCellFromWorldPos(rb.position);
 
-
-
         clickedCell.z = 0;
-
         currentCell.z = 0;
 
-
-
-        // UI 및 이동 중 차단
-
+        // UI 위 클릭 시 차단
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-
             return;
-
-
 
         if (isMovingByPath)
-
             return;
 
-
-
-        // 왼쪽 클릭: 경로 프리뷰 or 이동 실행
-
+        // 좌클릭: 경로 프리뷰 or 이동 수행
         if (Input.GetMouseButtonDown(0))
-
         {
-
             // 먼저, 클릭 지점에 상호작용 가능한 오브젝트가 있는지 검사
-
-            BoxInteract clickedChest = null;
-
+            IInteractable clickedInteractable = null;
             Collider2D clickedCollider = null;
-
             DescriptionData clickedDesc = null;
-
             PushObject clickedPush = null;
-
             PortalController clickedPortal = null;
-
-
 
             var hits = Physics2D.OverlapPointAll(wp);
 
-
-
             foreach (var h in hits)
-
             {
-
                 // PushObject 감지
-
                 var push = h.GetComponentInParent<PushObject>();
-
                 if (push != null)
-
                 {
-
                     clickedPush = push;
-
                     if (!clickedCollider) clickedCollider = h;
-
                 }
-
-
 
                 // 상자(부모 포함) 검사
-
-                var chest = h.GetComponentInParent<BoxInteract>();
-
+                var chest = h.GetComponentInParent<IInteractable>();
                 if (chest != null)
-
                 {
-
-                    // 이미 열린 상자는 완전히 무시 (모든 콜라이더 포함)
-
-                    if (chest.IsOpened)
-
+                    // 이미 열린 상자라면 완전히 무시 (모든 콜라이더 포함)
+                    if (chest.CanInteract == false)
                         continue;
 
+                    // 닫힌 상자라면 상자 정보를 획득(클릭 우선권)
+                    if (clickedInteractable == null)
+                        clickedInteractable = chest;
 
-
-                    // 닫힌 상자라면 상자 정보만 저장 (클릭 대상 우선)
-
-                    if (clickedChest == null)
-
-                        clickedChest = chest;
-
-
-
-                    // 상자 콜라이더도 상호작용 대상 콜라이더로 인정
-
+                    // 상자 콜라이더를 상호작용 타겟 콜라이더로 지정
                     if (!clickedCollider)
-
                         clickedCollider = h;
-
                 }
-
-
 
                 // 설명 데이터는 상자/기타 공통으로 가져온다
-
                 if (clickedDesc == null && h.TryGetComponent<DescriptionData>(out var descriptiondata))
-
                 {
-
                     clickedDesc = descriptiondata;
-
                     if (!clickedCollider)
-
                         clickedCollider = h;
-
                 }
-
-
 
                 // Portal 감지
-
                 var portal = h.GetComponentInParent<PortalController>();
-
                 if (portal != null)
-
                 {
-
                     if (clickedPortal == null) clickedPortal = portal;
-
                     if (!clickedCollider) clickedCollider = h;
-
                 }
-
             }
-
-
 
             if (clickedPush != null)
-
             {
-
-                CancelSelectionAndHint(); // 기존 선택/경로 정리:contentReference[oaicite:9]{index=9}
-
-
+                CancelSelectionAndHint(); // 기존 선택/경로 정리
 
                 pendingPushBox = clickedPush;
-
                 pendingPushBox.SetHighlight(true);
 
-
-
-                // 밀기/취소 2버튼만 표시
-
+                // 밀기/취소 2버튼 표시
                 InteractionHintUI.Instance?.ShowPushCancelAt(pendingPushBox.transform);
-
                 return;
-
             }
 
-
-
             // 오브젝트(상자, NPC, 기타) 클릭
-
-            if (clickedChest != null || clickedPortal != null || clickedCollider != null)
-
+            if (clickedInteractable != null || clickedPortal != null || clickedCollider != null)
             {
-
-                // 목표가 될 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
-
-                Transform targetTr = clickedChest ? clickedChest.transform :
-
+                // 목표 타겟 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
+                Transform targetTr = clickedInteractable != null ? clickedInteractable.GetTransform() :
                                     (clickedPortal != null ? clickedPortal.transform :
-
                                      clickedCollider.transform);
 
-
-
-                // 대상 셀
-
+                // 타겟 타일
                 Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
-
                 
 
-
-
-                // 현재 셀이 대상 셀과 같은 셀이거나, 인접 6칸 중 하나라면 "이동 없이 상호작용 가능"
-
+                // 현재 타일과 같거나 인접 6방향 중 하나라면 "이동 없이 상호작용 가능"
                 bool isAdjacentOrSame = false;
-
                 {
-
                     if (currentCell == targetCell)
-
                     {
-
                         isAdjacentOrSame = true;
-
                     }
-
                     else
-
                     {
-
                         Direction[] dirs =
-
                         {
-
                             Direction.West,
-
                             Direction.East,
-
                             Direction.NW,
-
                             Direction.NE,
-
                             Direction.SW,
-
                             Direction.SE
-
                         };
 
-
-
                         bool odd = (targetCell.y & 1) != 0;
-
                         foreach (var dir in dirs)
-
                         {
-
                             Vector3Int offset = GetOffsetForDirection(dir, odd);
-
                             Vector3Int adj = targetCell + offset;
-
                             if (adj == currentCell)
-
                             {
-
                                 isAdjacentOrSame = true;
-
                                 break;
-
                             }
-
                         }
-
                     }
-
                 }
-
-
 
                 if (isAdjacentOrSame)
-
                 {
-
                     // 이동 없이 바로 상호작용할 수 있는 거리
-
                     selectedTargetCell = currentCell;
-
                     currentPathCells = new List<Vector3Int> { currentCell };
 
-
-
-                    // 현재 상호작용 대상/관찰 대상 저장
-
-                    currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
-
+                    // 현재 상호작용 타겟(관찰 등) 설정
+                    currentInteractTarget = clickedCollider ?? (clickedInteractable != null ? clickedInteractable.GetTransform().GetComponent<Collider2D>() : null);
                     currentDescData = clickedDesc;
-
-                    pendingChest = clickedChest;
-
+                    pendingInteractable = clickedInteractable;
                     pendingPortal = clickedPortal;
 
-
-
-                    // 제자리에선 경로 프리뷰는 필요 없으니 호출해도 표시가 안 됨(Count < 2라서)
-
+                    // 제자리에서는 경로 프리뷰가 필요 없으므로 호출해도 표시가 안됨(Count < 2라서)
                     ShowPathPreview(currentPathCells);
 
-
-
-                    // HintUI를 대상 위치에 표시 (조사/관찰/취소 버튼 모두)
-
+                    // HintUI를 타겟 위치에 표시 (조사/관찰/취소 버튼 모두)
                     InteractionHintUI.Instance?.HideAll();
 
-
-
                     if (clickedPortal != null)
-
                     {
-
                         InteractionHintUI.Instance?.ShowSurveyAt(targetTr, clickedPortal.GetHintLabel()); // "이동"
-
-                                                                                                        // Portal은 관찰 버튼 불필요하면 생략
-
+                                                                                                        // Portal은 관찰버튼 불필요하므로 생략
                     }
-
                     else
-
                     {
-
                         InteractionHintUI.Instance?.ShowBothAt(targetTr); // 기존 상자/기타
-
                     }
-
-
 
                     InteractionHintUI.Instance?.ShowCancelAt(targetTr);
-
                     return;
-
                 }
-
-
-
 
 
                 var newPath = FindPathToAdjacentCell(currentCell, targetCell);
 
-
-
                 if (newPath == null || newPath.Count < 2)
-
                 {
-
-                    // 도달 불가 → 선택/프리뷰 해제
-
+                    // 도달 불가 시 선택/프리뷰 해제
                     selectedTargetCell = null;
-
                     currentPathCells.Clear();
-
                     ClearPathPreview();
 
-                    pendingChest = null;
+                    pendingInteractable = null;
 
                     pendingPortal = null;
 
@@ -808,15 +582,15 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 현재 상호작용 대상/관찰 대상 저장
+                // 현재 상호작용 타겟(관찰 대상 등) 설정
 
-                currentInteractTarget = clickedCollider ?? (clickedChest ? clickedChest.GetComponent<Collider2D>() : null);
+                currentInteractTarget = clickedCollider ?? (clickedInteractable != null ? clickedInteractable.GetTransform().GetComponent<Collider2D>() : null);
 
                 currentDescData = clickedDesc;
 
 
 
-                pendingChest = clickedChest;
+                pendingInteractable = clickedInteractable;
 
                 pendingPortal = clickedPortal;
 
@@ -826,7 +600,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // HintUI를 대상 위치에 표시 (조사/관찰/취소 버튼 모두)
+                // HintUI를 타겟 위치에 표시 (조사/관찰/취소 버튼 모두)
 
                 InteractionHintUI.Instance?.ShowBothAt(targetTr); // 조사 + 관찰
 
@@ -838,13 +612,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 오브젝트가 아닌 그냥 타일 클릭인 경우
+            // 오브젝트가 아닌 그냥 타일 클릭한 경우
 
-            if (pendingChest != null)
+            if (pendingInteractable != null)
 
             {
 
-                // 왼쪽 클릭은 무시 (버튼으로만 이동 시작)
+                // 좌클릭은 무시 (버튼으로만 이동 시작)
 
                 return;
 
@@ -852,7 +626,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이미 같은 타일이 선택된 상태에서 다시 왼쪽 클릭 → 이동 실행
+            // 같은 타일이 선택된 상태에서 다시 한 번 클릭 시 이동 수행
 
             if (selectedTargetCell.HasValue
 
@@ -876,7 +650,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                Debug.Log($"[이동 불가] 좌표: {clickedCell} - 바닥이 없거나 벽/장애물이 있습니다.");
+                Debug.Log($"[이동 불가] 좌표: {clickedCell} - 바닥이 없거나 장애물이 있습니다.");
 
                 return;
 
@@ -890,7 +664,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 경로가 없거나 1칸(제자리)이면 선택/프리뷰 해제
+            // 경로가 없거나 1개(제자리)라면 선택/프리뷰 해제
 
             if (newPath2 == null || newPath2.Count <= 1)
 
@@ -902,7 +676,7 @@ public class PlayerMovement : MonoBehaviour
 
                 ClearPathPreview();
 
-                pendingChest = null;
+                pendingInteractable = null;
 
                 pathArrivalCallback = null;
 
@@ -918,13 +692,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 첫 번째 클릭: 경로만 표시 (이 경우 관찰 대상은 없음)
+            // 첫 번째 클릭: 경로를 표시 (이 경우 상호작용은 없음)
 
             selectedTargetCell = clickedCell;
 
             currentPathCells = newPath2;
 
-            pendingChest = null;
+            pendingInteractable = null;
 
             pathArrivalCallback = null;
 
@@ -942,7 +716,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 오른쪽 클릭: 같은 타일을 클릭하면 선택/프리뷰 취소
+        // 우클릭: 같은 타일을 클릭하면 선택/프리뷰 취소
 
         if (Input.GetMouseButtonDown(1))
 
@@ -972,7 +746,7 @@ public class PlayerMovement : MonoBehaviour
 
         ClearPathPreview();
 
-        pendingChest = null;
+        pendingInteractable = null;
 
         pathArrivalCallback = null;
 
@@ -998,7 +772,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 경로 이동 중에는 코루틴을 끊지 말고 입력만 잠금
+        // 경로 이동 중에도 코루틴을 멈추지 말고 입력을 잠금
 
         if (!isMovingByPath)
 
@@ -1050,7 +824,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 리스트 뒤쪽(높은 층)부터 검사해야 겹쳤을 때 위쪽 타일을 가져옴
+        // 리스트의 뒤쪽(높이 높은 부분)부터 검사해서 겹쳤을 때 높은 타일을 가져옴
 
         for (int i = floorMaps.Count - 1; i >= 0; i--)
 
@@ -1128,7 +902,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 해당 셀이 소속된 타일맵을 찾음 (높이 정보 포함)
+            // 해당 타일의 소속 타일맵을 찾음 (높이 정보 포함)
 
             Tilemap targetMap = GetWalkableMapAt(cell);
 
@@ -1136,7 +910,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 그 타일맵 기준으로 월드 좌표를 가져온다 (Anchor 값 자동 반영됨)
+            // 해당 타일맵 기준으로 월드 좌표를 가져옴 (Anchor 값 자동 반영)
 
             Vector3 world = targetMap.GetCellCenterWorld(cell);
 
@@ -1168,7 +942,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 마커가 타일에 파묻히지 않게 Sorting Order 동적 조절
+            // 마커가 타일에 묻히지 않게 Sorting Order 적절 조절
 
             var mapRenderer = targetMap.GetComponent<TilemapRenderer>();
 
@@ -1186,7 +960,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 순서는 타일맵보다 1 높게 설정 (무조건 타일 위에 그려짐)
+                // 그 중에서 타일맵보다 1 높게 설정 (무조건 타일 위에 그려지도록)
 
                 markerRenderer.sortingOrder = mapRenderer.sortingOrder + 1;
 
@@ -1200,7 +974,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 목표 지점에 총 필요 활기 표시
+        // 목표 지점에 소모 기력 표시
 
         var vigor = VigorManager.Instance;
 
@@ -1244,7 +1018,7 @@ public class PlayerMovement : MonoBehaviour
 
                 _pathCostTMP.alignment = TextAlignmentOptions.Center;
 
-                _pathCostTMP.fontSize = 30;                // 스케일과 함께 튜닝
+                _pathCostTMP.fontSize = 30;                // 가독성과 함께 튜닝
 
                 _pathCostTMP.enableWordWrapping = false;
 
@@ -1258,7 +1032,7 @@ public class PlayerMovement : MonoBehaviour
 
                 _pathCostTMP.sortingOrder = baseOrder + 2; // 텍스트는 확실하게 위로
 
-                _pathCostTMP.outlineWidth = 0.2f;          // 가독성
+                _pathCostTMP.outlineWidth = 0.2f;          // 가시성
 
                 _pathCostTMP.color = (cost <= vigor.CurrentVigor) ? Color.white : Color.red;
 
@@ -1276,7 +1050,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 두 타일 사이의 높이 차이가 이동 가능한 수준인지 확인 (3칸 이상 불가)
+    // 이동 가능한 타일의 높이 차이가 이동 가능한 범위인지 확인 (3칸 이상 불가)
 
     bool IsHeightDiffValid(Vector3Int from, Vector3Int to)
 
@@ -1288,7 +1062,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 맵을 못 찾으면 바닥(0)으로 가정
+        // 맵을 못찾으면 바닥(0)으로 간주
 
         float fromH = (fromMap != null) ? fromMap.tileAnchor.y : 0f;
 
@@ -1300,7 +1074,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 위로 가든 아래로 가든 차이가 0.6f 미만이어야 함
+        // 위로 가거나 아래로 가거나 차이가 0.6f 미만이어야 함
 
         if (Mathf.Abs(diff) < 0.55f)
 
@@ -1332,7 +1106,7 @@ public class PlayerMovement : MonoBehaviour
 
         Vector3 worldPos = map.GetCellCenterWorld(cell);
 
-        worldPos.z = 0; // 거리는 2D 평면(XY) 기준으로만 볼 거니까 Z 무시
+        worldPos.z = 0; // 거리는 2D 평면(XY) 기준으로만 재거나 Z 무시
 
         return worldPos;
 
@@ -1412,15 +1186,15 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 2. 높이 차이 안 맞으면 스킵
+                // 2. 높이 차이 안맞으면 스킵
 
                 if (!IsHeightDiffValid(current, next)) continue;
 
 
 
-                // 3. 물리적 거리가 너무 멀면(앵커 오차 등으로 끊긴 곳) 스킵
+                // 3. 물리적 거리가 너무 멀어서 헥사 타일이 아닌 다른 타일이면 스킵
 
-                // 안전하게 2.0f로 유지
+                // 안전하게 2.0f로 둠
 
                 Vector3 nextWorldPos = GetWorldPosForLogic(next);
 
@@ -1450,7 +1224,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 경로 역추적
+        // 경로 재구성
 
         var path = new List<Vector3Int>();
 
@@ -1476,7 +1250,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 특정 오브젝트 셀 주변(인접 6칸) 중 하나까지의 최단 경로를 찾는다.
+    // 특정 오브젝트 주변(인접 6칸 중 하나까지) 최단 경로를 찾는 함수
 
     List<Vector3Int> FindPathToAdjacentCell(Vector3Int start, Vector3Int objectCell)
 
@@ -1582,7 +1356,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // adj(플레이어 위치)에서 box를 밀 때의 “플레이어→박스 상대 방향”을 dirKey로 산출
+            // adj(플레이어 위치)에서 box를 밀 수 있는지 여부와 플레이어→박스 이동 방향을 dirKey로 추출
 
             var delta = boxCell - adj;
 
@@ -1594,9 +1368,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 그 자리에서 실제로 1칸이라도 밀 수 있어야 “push-ready”
+            // 이 자리에서 최소 1칸이라도 밀 수 있어야 push-ready임
 
-            // (후보 타일 계산 함수는 아래 2)에서 추가할 BuildPushLineTargets를 사용)
+            // (이 부분은 계산 함수인 아래 BuildPushLineTargets를 이용)
 
             var line = BuildPushLineTargets(box, boxCell, dirKey);
 
@@ -1622,7 +1396,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    //심볼 인카운터 몬스터 타일 체크
+    //인카운터 몬스터 유무 체크
 
     bool TryGetEncounterAtCell(Vector3Int cell, out EncounterMonster monster)
 
@@ -1636,13 +1410,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 탐지된 개수 확인
+        // 오브젝트 개수 확인
 
         if (hits.Length == 0)
 
         {
 
-            Debug.Log($"[Encounter] 해당 타일({cell}) 중심에서 반경 0.4f 내에 'Water' 레이어 감지 안 됨. 위치: {world}");
+            Debug.Log($"[Encounter] 해당 타일({cell}) 중심에서 반경 0.4f 내에 'Water' 레이어 감지 안됨. 위치: {world}");
 
             return false;
 
@@ -1662,7 +1436,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                if (!m.IsActive) Debug.Log($"[Encounter] 몬스터 감지됨({m.name}) 그러나 IsActive가 false임.");
+                if (!m.IsActive) Debug.Log($"[Encounter] 몬스터 감지됨({m.name}) 그러나 IsActive가 false임");
 
                 else
 
@@ -1686,7 +1460,7 @@ public class PlayerMovement : MonoBehaviour
 
     }
 
-    //함정 타일 체크
+    //함정 발동 체크
 
     void TryTriggerTrapAtCell(Vector3Int cell)
 
@@ -1730,7 +1504,7 @@ public class PlayerMovement : MonoBehaviour
 
             if (!trap) continue;
 
-            if (!trap.gameObject.activeInHierarchy) continue; // 비활성 트랩 스킵(권장)
+            if (!trap.gameObject.activeInHierarchy) continue; // 비활성 함정 스킵(권장)
 
 
 
@@ -1750,9 +1524,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 시퀀스 시작 시점의 “방향”은 EnterPushSelectMode에서 결정된 pendingDirectionKey를 사용
+        // 시퀀스 시작 시점의 이동 방향은 EnterPushSelectMode에서 결정된 pendingDirectionKey를 사용
 
-        // (해당 모드에서는 방향이 하나로 고정되는 설계)
+        // (해당 모드에서는 방향이 하나로 고정되는 구조)
 
         if (pendingDirectionKey == Direction.None) return;
 
@@ -1766,7 +1540,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 경로를 따라 실제로 이동
+    // 경로를 따라 실제 이동
 
     void StartPathMove(List<Vector3Int> cells, Action onArrive = null, int? overrideVigorCost = null)
 
@@ -1788,7 +1562,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // 복귀 후 이어서 이동: "총 예정 비용"을 그대로 이어받는다
+            // 복귀 시 이어지는 이동: "지정 비용"을 그대로 이어받는다
 
             _pendingMoveVigorCost = Mathf.Max(0, overrideVigorCost.Value);
 
@@ -1804,13 +1578,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 선 차감 대신 가능 여부만 확인
+            // 비용 차감 가능 여부 확인
 
             if (cost > 0 && !vigor.CanSpend(cost))
 
             {
 
-                ExplorationLogUI.Instance?.Push($"활기가 부족합니다. 이동 필요: {cost}, 현재: {vigor.CurrentVigor}");
+                ExplorationLogUI.Instance?.Push($"기력이 부족합니다. 이동 필요: {cost}, 현재: {vigor.CurrentVigor}");
 
                 CancelSelectionAndHint();
 
@@ -1848,13 +1622,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 프리뷰는 이동 시작 시 지움
+        // 프리뷰는 이동 시작 즉시 지움
 
         ClearPathPreview();
 
 
 
-        var moveCells = new List<Vector3Int>(cells);   // 복사본 생성
+        var moveCells = new List<Vector3Int>(cells);   // 복사해서 사용
 
         pathMoveRoutine = StartCoroutine(Co_MoveAlongPath(moveCells));
 
@@ -1884,7 +1658,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 물리 엔진(Raycast)을 이용한 정확한 타일 감지
+    // 물리 엔진(Raycast)을 이용해 정확한 타일 감지
 
     // [Physics 방식 + 좌표 보정]
 
@@ -1892,11 +1666,11 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 화면상 마우스 위치에서 레이 발사
+        // 화면의 마우스 위치에서 레이 발사
 
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 
-        // 레이에 충돌된 타일 모두 가져오기
+        // 레이에 충돌한 타일을 모두 가져옴
 
         RaycastHit2D[] hits = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
 
@@ -1920,7 +1694,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 가장 위에 그려진(Sorting Order 높은) 타일 찾기
+            // 가장 위에 그려진(Sorting Order 높은) 맵 찾기
 
             foreach (var hit in hits)
 
@@ -1932,7 +1706,7 @@ public class PlayerMovement : MonoBehaviour
 
                 {
 
-                    // 이 맵 기준으로 좌표 보정
+                    // 그리드 기준으로 좌표 보정
 
                     Grid grid = map.layoutGrid;
 
@@ -1950,7 +1724,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                    // 실제로 그 좌표에 타일이 있는지 확인
+                    // 실제 해당 좌표에 타일이 있는지 확인
 
                     if (map.HasTile(tempCell))
 
@@ -1962,7 +1736,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                        // Order 높거나, 같으면 화면상 아래쪽(Y가 작은) 우선
+                        // Order 크거나 같으면 (같으면 아래쪽이 우선)
 
                         if (!found || order > maxOrder || (order == maxOrder && hit.point.y < bestHitY))
 
@@ -1974,7 +1748,7 @@ public class PlayerMovement : MonoBehaviour
 
                             bestCell = tempCell;
 
-                            bestHitY = hit.point.y; // 비교용 Y값 저장
+                            bestHitY = hit.point.y; // 비교용 Y값 갱신
 
                             found = true;
 
@@ -2000,7 +1774,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 허공 클릭 시 Fallback(가장 바닥 맵 기준)
+        // 허공 클릭 시 Fallback(가장 아래 바닥 기준)
 
         if (floorTilemap != null)
 
@@ -2054,7 +1828,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                // 장애물/벽 제외하고 바닥만 체크 (필요시 wall 포함 여부 결정)
+                // 장애물은 제외하고 바닥만 체크 (필요 시 wall 포함 여부 결정)
 
                 if (obstacleMaps.Contains(map)) continue;
 
@@ -2092,7 +1866,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 밟고 있는 맵의 Anchor만큼 좌표를 내려서 계산
+            // 밟고 있는 맵의 Anchor만큼 좌표를 보정해서 계산
 
             Grid grid = bestMap.layoutGrid;
 
@@ -2114,13 +1888,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 바닥을 못 찾았을 경우 Fallback
+        // 바닥 맵을 못 찾았을 경우 Fallback
 
         if (floorTilemap != null)
 
         {
 
-            // 혹시 모르니 기본 바닥 앵커라도 빼줌
+            // 혹시 모를 기본 바닥 앵커값도 빼줌
 
             Vector3 correctedPos = worldPos;
 
@@ -2162,13 +1936,13 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // 시작 셀은 현재 위치라고 가정, 1번째 인덱스부터 끝까지 순서대로 이동
+            // 시작 점(현재 위치) 빼고 1번째 인덱스부터 끝까지 순서대로 이동
 
             for (int i = 1; i < cells.Count; i++)
 
             {
 
-                // 이전 타일(출발)과 현재 타일(도착)의 층수(Index) 구하기
+                // 이전 셀(출발)과 현재 셀(도착)의 층수(Index) 구하기
 
                 Vector3Int startCell = cells[i - 1];
 
@@ -2176,7 +1950,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 각 셀이 소속된 맵을 찾아서 실제 월드 좌표를 가져옴
+                // 각 타일이 소속된 맵을 찾아서 실제 월드 좌표를 가져옴
 
                 Tilemap startMap = GetWalkableMapAt(startCell);
 
@@ -2200,7 +1974,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 타일맵의 고유 높이(Anchor.y)나 맵 인스턴스 자체가 다를 때만 점프
+                // 타일맵의 고유 높이(Anchor.y) 차이가 있을 때만 점프
 
                 float startHeight = (startMap != null) ? startMap.tileAnchor.y : 0f;
 
@@ -2246,7 +2020,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 점프 높이 동적 계산
+                // 점프 높이 누적 계산
 
                 float currentJumpMultiplier = jumpHeightMultiplier;
 
@@ -2258,19 +2032,19 @@ public class PlayerMovement : MonoBehaviour
 
                     // 1칸 차이 vs 2칸 차이 구분
 
-                    // 0.18(약 1.5칸)보다 크면 2칸 점프로 간주하여 높이를 키움
+                    // 0.18(대략 1.5층)보다 크면 2단 점프로 간주하여 높이를 키움
 
                     if (heightDiff > 0.26f)
 
                     {
 
-                        currentJumpMultiplier *= 1.5f; // 2칸일 때 1.6배 더 높게 점프 (취향껏 조절)
+                        currentJumpMultiplier *= 1.5f; // 2칸일 때 1.6배 높게 점프 (취향껏 조절)
 
                     }
 
 
 
-                    // 내려가는 점프는 살짝 낮게 (기존 로직 유지)
+                    // 내려가는 점프는 살짝 낮춤 (기존 로직 유지)
 
                     if (endHeight < startHeight)
 
@@ -2308,7 +2082,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                    // 기본 선형 이동 (높이 차이가 있으면 대각선으로 이동됨)
+                    // 기본 선형 이동 (높이 차이가 있으면 대각선으로 이동)
 
                     Vector3 currentPos = Vector3.Lerp(startPos, endPos, percent);
 
@@ -2340,19 +2114,19 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 도착 셀 함정 체크
+                // 도착 후 함정 체크
 
                 TryTriggerTrapAtCell(cells[i]);
 
 
 
-                // 도착 셀에서 인카운터 체크
+                // 도착 지점에서 인카운터 체크
 
                 if (TryGetEncounterAtCell(cells[i], out var monster))
 
                 {
 
-                    // 남은 경로 구성: 현재(몬스터 셀)부터 끝까지
+                    // 남은 경로 구성: 현재(몬스터 만남)부터 끝까지
 
                     var remaining = new List<Vector3Int>();
 
@@ -2386,7 +2160,7 @@ public class PlayerMovement : MonoBehaviour
 
                         Vector3 returnPos = encounterMap.GetCellCenterWorld(cells[i]);
 
-                        // Z축은 0으로 맞추거나 필요시 transform.position.z 사용
+                        // Z축을 0으로 맞추거나 필요 시 transform.position.z 사용
 
                         returnPos.z = 0;
 
@@ -2396,7 +2170,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                        // 중요: 몬스터를 먼저 소비 처리한 후 스냅샷 저장
+                        // 중요: 몬스터를 먼저 소비 처리하고 스냅샷 찍음
 
                         monster.MarkConsumed();
 
@@ -2444,7 +2218,7 @@ public class PlayerMovement : MonoBehaviour
 
                     VigorManager.Instance.FailExploration(
 
-                        $"탐색을 실패했습니다. (이동 결제 실패 / 필요 {_pendingMoveVigorCost}, 현재 {VigorManager.Instance.CurrentVigor})"
+                        $"탐색에 실패했습니다. (이동 결제 실패 / 필요 {_pendingMoveVigorCost}, 현재 {VigorManager.Instance.CurrentVigor})"
 
                     );
 
@@ -2480,11 +2254,11 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이동 후 상호작용 예약은 한 번 쓰고 비움
+            // 이동 후 상호작용 예약 초기화
 
             pathArrivalCallback = null;
 
-            pendingChest = null;
+            pendingInteractable = null;
 
             currentInteractTarget = null;
 
@@ -2496,7 +2270,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    //탐험씬 복귀 후 남은 경로 이동
+    // 탐험에서 복귀 후 이어지는 경로 이동
 
     public void ResumePathAfterBattle(List<Vector3Int> resumeCells)
 
@@ -2512,7 +2286,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 전투 전에 저장해 둔 총 예정 이동 비용을 이어받는다
+        // 전투 전에 예약해 둔(유예된) 이동 비용을 이어받는다
 
         int plannedCost = 0;
 
@@ -2528,7 +2302,7 @@ public class PlayerMovement : MonoBehaviour
 
     #endregion
 
-    // === Hint UI 버튼용 콜백 ===
+    // === Hint UI 버튼 콜백 ===
 
     public void OnClickSurveyButton()
 
@@ -2556,7 +2330,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이동 없이 즉시 실행(인접/제자리)
+            // 이동 없이 즉시 실행(인접/상자 등)
 
             if (currentPathCells == null || currentPathCells.Count < 2)
 
@@ -2602,7 +2376,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // Push 전용 분기
+        // Push 사용 분기
 
         if (pendingPushBox != null)
 
@@ -2616,7 +2390,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 이미 인접이면 즉시 진입
+            // 이미 인접하면 즉시 진입
 
             if (IsAdjacentOrSame(playerCell, boxCell))
 
@@ -2630,7 +2404,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 멀리 있으면: “밀기 가능한 인접 타일”까지 이동 후 진입
+            // 멀리 있으므로 인접한 '준비 위치'까지 이동 후 진입
 
             var pathToReady = FindPathToPushReadyCell(playerCell, boxCell, box);
 
@@ -2658,7 +2432,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 도착 후 밀기 모드 진입
+            // 도착 후 밀기모드 진입
 
             Action onArrive = () =>
 
@@ -2670,7 +2444,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                // 도착 후에는 인접일 것이며, 이때 EnterPushSelectMode가 다칸 후보까지 표시(2번 수정)
+                // 도착 후에는 인접한 것이므로, 이때 EnterPushSelectMode가 타일 정보까지 표시(2차 보정)
 
                 EnterPushSelectMode(box);
 
@@ -2684,23 +2458,23 @@ public class PlayerMovement : MonoBehaviour
 
         }
 
-        // 이동 없이 즉시 실행해야 하는 경우 (한 칸 이내)
+        // 이동 없이 즉시 실행해야 하는 경우 (사거리 내)
 
         if (currentPathCells == null || currentPathCells.Count < 2)
 
         {
 
-            if (pendingChest != null)
+            if (pendingInteractable != null)
 
             {
 
-                pendingChest.OpenChest();
+                pendingInteractable.OnInteract();
 
                 InteractionHintUI.Instance?.HideAll();
 
             }
 
-            // 나중에 조사 대상이 더 생기면 여기에 else-if로 추가
+            // 나중에 조사 기능이 추가되면 여기에 else-if로 추가
 
 
 
@@ -2722,9 +2496,9 @@ public class PlayerMovement : MonoBehaviour
 
             Action onArrive = null;
 
-            if (pendingChest != null)
+            if (pendingInteractable != null)
 
-                onArrive = () => pendingChest.OpenChest();
+                onArrive = () => pendingInteractable.OnInteract();
 
 
 
@@ -2744,7 +2518,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 한 칸 이내면 이동 없이 즉시 관찰
+        // 사거리 내면 이동 없이 즉시 관찰
 
         if (currentPathCells == null || currentPathCells.Count < 2)
 
@@ -2828,7 +2602,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 플레이어 위치/박스 위치로 "밀 수 있는 방향 1개" 계산(플레이어 인접 기준)
+        // 플레이어 위치/박스 위치로 "밀 수 있는 방향" 1차 계산(플레이어 인접 기준)
 
         var playerCell = floorTilemap.WorldToCell(rb.position);
 
@@ -2848,7 +2622,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        //현재 플레이어가 서 있는 방향으로 밀수 있는 후보 생성
+        // 현재 플레이어가 보고 있는 방향으로 밀 수 있는 후보 생성
 
         var startBoxCell = floorTilemap.WorldToCell(box.transform.position);
 
@@ -2892,7 +2666,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // [체크] box나 MainFloorMap이 없으면 계산 불가
+        // [체크] box에 MainFloorMap이 없으면 계산 불가
 
         if (box == null || box.MainFloorMap == null) return results;
 
@@ -2900,7 +2674,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 다른 PushObject 점유 셀(가상 충돌 체크)
+        // 다른 PushObject 점유 체크(가장 간단한 충돌 체크)
 
         var occupied = new HashSet<Vector3Int>();
 
@@ -2942,7 +2716,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 리스트 호환 메서드 사용
+            // 바닥 확인 메서드 사용
 
             bool hasFloor = box.HasFloorAt(next);
 
@@ -2978,7 +2752,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 장애물 레이어 (기준 맵 사용)
+            // 장애물 레이어(기둥 등 용도)
 
             var world = box.MainFloorMap.GetCellCenterWorld(next);
 
@@ -2994,7 +2768,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // 여기까지 통과하면 “next는 밀기 가능한 목적지”
+            // 여기까지 통과하면 next는 밀기 가능한 목적지임
 
             results.Add(next);
 
@@ -3018,7 +2792,7 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 경로/상호작용 예약만 취소 (이동 중이 아닐 때)
+        // 경로/상호작용 예약 취소 (이동 중이 아닐 때)
 
         if (!isMovingByPath)
 
@@ -3028,7 +2802,7 @@ public class PlayerMovement : MonoBehaviour
 
             ExitPushSelectMode();
 
-        else if (pendingPushBox != null)    //푸시 타겟 선택 상태 정리
+        else if (pendingPushBox != null)    // 임시 선택 상태 정리
 
         {
 
@@ -3156,13 +2930,13 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // 기존 마우스 경로 리스트 정리
+        // 기존 마우스/경로 리스트 정리
 
         path.Clear();
 
 
 
-        // 타일 경로 이동 상태 정리
+        // 현재 경로 이동 상태 정리
 
         currentPathCells.Clear();
 
@@ -3188,7 +2962,7 @@ public class PlayerMovement : MonoBehaviour
 
         pathArrivalCallback = null;
 
-        pendingChest = null;
+        pendingInteractable = null;
 
         currentInteractTarget = null;
 
@@ -3228,7 +3002,7 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                if (wall.HasTile(cell)) return false; // 벽 하나라도 있으면 이동 불가
+                if (wall.HasTile(cell)) return false; // 하나라도 있으면 이동 불가
 
             }
 
@@ -3236,7 +3010,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 이 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다.
+        // 해당 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다
 
         Tilemap topMap = null;
 
@@ -3262,7 +3036,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 그 맵이 장애물인지 확인
+        // 해당 맵이 장애물인지 확인
 
         string mapName = topMap.name.ToLower();
 
@@ -3270,17 +3044,17 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            return false; // 가장 위의 타일이 물이라면 이동 불가 (선택도 안 됨)
+            return false; // 가장 위의 타일이 물이라면 이동 불가 (선택 불가)
 
         }
 
 
 
-        // 해당 타일 위치에 오브젝트(박스 등)가 있는지 물리 검사
+        // 해당 셀 위치에 오브젝트(박스 등)가 있는지 물리 검사
 
         Vector3 worldPos = GetWorldPosForLogic(cell);
 
-        // 반경 0.3f 정도로 겹치는 콜라이더 검사 (타일 중앙 기준)
+        // 반경 0.3f 정도로 겹치는 콜라이더 검사(셀 중앙 기준)
 
         Collider2D[] colliders = Physics2D.OverlapCircleAll(worldPos, 0.3f);
 
@@ -3288,9 +3062,9 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // BoxInteract(상자)가 있고, 아직 안 열린(닫힌) 상태라면 이동 불가
+            // BoxInteract(상자)가 있고, 아직 안 열린(닫힌) 상태면 이동 불가
 
-            var box = col.GetComponentInParent<BoxInteract>();
+            var box = col.GetComponentInParent<IInteractable>();
 
             if (box != null)
 
@@ -3326,19 +3100,19 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 바닥이 하나라도 있어야 이동 가능
+        // 바닥이 하나라도 있다면 이동 가능
 
         if (GetWalkableMapAt(cell) != null) return true;
 
 
 
-        return false; // 바닥도 없으면 이동 불가
+        return false; // 바닥이 없으면 이동 불가
 
     }
 
 
 
-    // 밀기 상자용 인접 판정
+    // 밀기 상자와의 인접 판정
 
     bool IsAdjacentOrSame(Vector3Int a, Vector3Int b)
 
@@ -3460,7 +3234,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 상자가 최종적으로 도착한 셀
+        // 상자가 최종적으로 도착한 곳
 
         var boxArrivedCell = fromCell + dir;
 
@@ -3480,9 +3254,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    //연속 밀기 기능
+    // 연속 밀기 기능
 
-    // PerformPushToTarget에서 연속으로 밀 수 있는지 확인 후 이동은 PerformPush로 진행됨
+    // PerformPushToTarget에서 연속으로 밀 수 있는지 확인 후 이동은 PerformPush로 진행함
 
     IEnumerator PerformPushToTarget(PushObject box, Direction dirKey, Vector3Int targetCell)
 
@@ -3540,11 +3314,11 @@ public class PlayerMovement : MonoBehaviour
 
                 if (line.Count == 0)
 
-                    yield break; // 더 이상 못 밈(중간에 막힘)
+                    yield break; // 더 이상 불가(중간에 막힘)
 
 
 
-                // 다음 1칸 목적지(라인의 첫 칸)
+                // 다음 1칸 목적지(라인의 첫번째)
 
                 var nextCell = line[0];
 
@@ -3614,7 +3388,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 경로 초기화 등 필요한 로직
+        // 경로 초기화 및 필요한 로직
 
         ClearPath();
 
@@ -3634,9 +3408,9 @@ public class PlayerMovement : MonoBehaviour
 
             {
 
-                // [수정] PushObject.SetTilemaps가 이제 List<Tilemap>을 받으므로
+                // [수정] PushObject.SetTilemaps가 실제 List<Tilemap>을 받으므로
 
-                // _wall 리스트를 그대로 전달하면 됩니다.
+                // _wall 리스트를 그대로 전달하면 됨
 
                 push.SetTilemaps(_floors, _wall);
 
@@ -3678,7 +3452,7 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
-        // Push 상태 강제 정리 (안전망)
+        // Push 상태 강제 정리 (안전하게)
 
         if (isPushSelectMode)
 
@@ -3702,7 +3476,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 타일 경로 이동 즉시 중단
+        // 현재 경로 이동 즉시 중단
 
         if (pathMoveRoutine != null)
 
@@ -3728,7 +3502,7 @@ public class PlayerMovement : MonoBehaviour
 
         pathArrivalCallback = null;
 
-        pendingChest = null;
+        pendingInteractable = null;
 
         currentInteractTarget = null;
 
@@ -3736,7 +3510,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-        // 기존 마우스 이동/키 입력도 모두 정지
+        // 기존 마우스 이동/예약 입력 등 모두 해제
 
         path.Clear();
 
@@ -3749,4 +3523,5 @@ public class PlayerMovement : MonoBehaviour
     }
 
 }
+
 

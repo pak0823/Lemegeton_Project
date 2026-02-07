@@ -18,9 +18,6 @@ public class ExplorationStatusSlot : MonoBehaviour
     [Header("Equipment Slots")]
     [SerializeField] private List<Image> itemIcons = new List<Image>(); // 아이콘 표시용 (3개)
 
-    [Header("UI Formats")]
-    [SerializeField] private string hpFormat = "{0}/{1}";
-
     private UnitData _targetData;
 
     // 초기화 및 데이터 바인딩

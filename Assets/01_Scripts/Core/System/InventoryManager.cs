@@ -25,8 +25,13 @@ public class InventoryManager : MonoBehaviour, IInventory
         {
             Instance = this;
             slots = new InventoryItem[maxSlots];
+            DontDestroyOnLoad(gameObject); // 매니저 객체 유지 보장
         }
-        else Destroy(gameObject);
+        else 
+        {
+            // 중복 생성 시 객체 전체 파괴 (InventoryManager + PlayerDataManager가 같이 있다면 통째로 정리됨)
+            Destroy(gameObject);
+        }
     }
 
     // 캐시 전체 재구축 (초기화나 로드 시 사용)
@@ -220,12 +225,59 @@ public class InventoryManager : MonoBehaviour, IInventory
     public void LoadData(List<InventoryItem> savedItems)
     {
         Array.Clear(slots, 0, slots.Length);
+
+        // [Fix] 세이브 데이터가 없거나 null일 경우 초기화만 하고 종료
+        if (savedItems == null)
+        {
+            RefreshCache();
+            OnInventoryChanged?.Invoke();
+            return;
+        }
+
         foreach (var item in savedItems)
         {
-            if (item.slotIndex >= 0 && item.slotIndex < maxSlots)
+            if (item != null && item.slotIndex >= 0 && item.slotIndex < maxSlots)
                 slots[item.slotIndex] = item;
         }
         RefreshCache(); // 로드 후 캐시 재구축
         OnInventoryChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// 보상 테이블을 처리하고 (Flavor Text 포함) 결과 로그를 반환
+    /// </summary>
+    public List<string> GiveReward(RewardTableSO table)
+    {
+        var logs = new List<string>();
+        if (table == null) return logs;
+
+        var items = table.PickRewards();
+        bool hasReward = items.Count > 0;
+
+        // 1. 성공 멘트 추가
+        if (hasReward && !string.IsNullOrWhiteSpace(table.successText))
+        {
+            logs.Add(table.successText);
+        }
+
+        // 2. 아이템 지급 및 한 줄 로그 작성
+        if (hasReward)
+        {
+            List<string> itemLogParts = new List<string>();
+
+            foreach (var stack in items)
+            {
+                AddItem(stack.data.itemID, stack.count);
+                itemLogParts.Add($"{stack.data.itemName} x{stack.count}");
+            }
+
+            // "획득: 사과 x1, 철 x2" 형태로 조립
+            if (itemLogParts.Count > 0)
+            {
+                logs.Add($"획득: {string.Join(", ", itemLogParts)}");
+            }
+        }
+
+        return logs;
     }
 }
