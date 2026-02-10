@@ -12,17 +12,18 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
         _manager = manager;
     }
 
-    public void SpawnPlayer(GameObject playerPrefab, GameObject map, List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls)
+    public PlayerMovement SpawnPlayer(GameObject playerPrefab, GameObject map, List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls)
     {
         if (PlayerMovement.Instance != null)
         {
-            Destroy(PlayerMovement.Instance.gameObject);
+            // Destroy immediately to ensure Instance is cleared
+            DestroyImmediate(PlayerMovement.Instance.gameObject); 
         }
 
         if (playerPrefab == null)
         {
             Debug.LogError("[EntitySpawner] Player Prefab is null!");
-            return;
+            return null;
         }
 
         GameObject player = Instantiate(playerPrefab);
@@ -56,6 +57,8 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
             camScript.target = player.transform;
             camScript.SnapToTarget();
         }
+
+        return movement;
     }
 
     public void SpawnMapObjects(GameObject map, List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls)

@@ -102,9 +102,10 @@ public class MapManager : MonoBehaviour
         }
 
         // 3. Entity Spawn Phase (Player)
-        entitySpawner.SpawnPlayer(playerPrefab, currentMap, floors, obstacles, walls);
+        var playerMovement = entitySpawner.SpawnPlayer(playerPrefab, currentMap, floors, obstacles, walls);
+        Transform playerTransform = (playerMovement != null) ? playerMovement.transform : null;
         
-        HookCameraToPlayer(PlayerMovement.Instance.transform, currentMap);
+        HookCameraToPlayer(playerTransform, currentMap);
 
         // 4. Object Spawn Phase
         if (!isReturning)
@@ -117,13 +118,26 @@ public class MapManager : MonoBehaviour
         {
             RestoreSnapshotAsync(currentMap, floors[0], walls);
         }
+        
+        // 6. Fog Initialization
+        // 맵의 전체 크기(Bounds)를 가져와서 Fog를 덮음
+        Collider2D mapBounds = null;
+        var t = currentMap.transform.Find("WorldBounds");
+        if (t) t.TryGetComponent(out mapBounds);
+        if (!mapBounds) mapBounds = currentMap.GetComponentInChildren<CompositeCollider2D>(true);
+        if (!mapBounds) mapBounds = currentMap.GetComponentInChildren<BoxCollider2D>(true);
+        
+        if (mapBounds && ExplorationFogManager.Instance && playerTransform != null)
+        {
+            ExplorationFogManager.Instance.Initialize(playerTransform, mapBounds.bounds);
+        }
     }
 
     async void RestoreSnapshotAsync(GameObject map, Tilemap floorMap, List<Tilemap> wallMap)
     {
         if (SceneTransitionManager.Instance == null || !SceneTransitionManager.Instance.HasExplorationSnapshot)
             return;
-
+        
         var snap = SceneTransitionManager.Instance.explorationSnapshot;
         Transform container = (map != null) ? map.transform : gridParent;
 

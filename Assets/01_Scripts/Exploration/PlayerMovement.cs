@@ -177,29 +177,25 @@ public class PlayerMovement : MonoBehaviour
 
 
     void Awake()
-
     {
-
         if(Instance == null) Instance = this;
-
-        else Destroy(gameObject);
-
-
+        else if (Instance != this) Destroy(gameObject); // 중복 방지 강화
 
         rb = GetComponent<Rigidbody2D>();
-
         spriterenderer = GetComponent<SpriteRenderer>();
-
         animator = GetComponent<Animator>();
 
-
-
         // 마우스 이동 충돌 예측 필터 (자기 자신은 충돌 제외)
-
         _castFilter.useTriggers = false;
-
         _castFilter.SetLayerMask(impassableLayerMask);
+    }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
 
