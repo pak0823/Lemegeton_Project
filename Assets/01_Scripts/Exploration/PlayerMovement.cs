@@ -2000,7 +2000,8 @@ public class PlayerMovement : MonoBehaviour
 
                 Vector2 dir = (endPos - startPos).normalized;
 
-                float speed = Mathf.Max(0.01f, defaultMoveSpeed);
+                float speedMultiplier = ExplorationStatusManager.Instance != null ? ExplorationStatusManager.Instance.GetMoveSpeedMultiplier() : 1f;
+                float speed = Mathf.Max(0.01f, defaultMoveSpeed * speedMultiplier);
 
                 float duration = dist / speed;
 

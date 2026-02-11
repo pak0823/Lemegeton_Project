@@ -118,6 +118,13 @@ public class CampUIManager : ModalWindowBase
 
 
 
+    [Header("Layout Control")]
+    [SerializeField] private RectTransform selectorAreaRT; // Selector_Area
+    [SerializeField] private RectTransform contentAreaRT;  // Content_Area
+
+    private float defaultContentHeight;
+    private float expandedContentHeight;
+
     [Header("Button")]
 
     public Button closeCampBtn; 
@@ -139,6 +146,16 @@ public class CampUIManager : ModalWindowBase
         if (Instance == null) Instance = this;
 
         else Destroy(gameObject);
+
+        // 초기 높이 저장 (Content_Area의 원래 높이)
+        if (contentAreaRT != null)
+        {
+            defaultContentHeight = contentAreaRT.sizeDelta.y;
+            // Selector_Area 높이만큼 더함 (Selector_Area가 252라고 가정하거나, 직접 가져와도 됨)
+            // 여기서는 안전하게 Selector_Area의 높이를 동적으로 가져옴
+            float selectorHeight = (selectorAreaRT != null) ? selectorAreaRT.sizeDelta.y : 252f;
+            expandedContentHeight = defaultContentHeight + selectorHeight;
+        }
 
 
 
@@ -353,9 +370,30 @@ public class CampUIManager : ModalWindowBase
 
 
         // 헤더 위임
-
         headerController.UpdateHeader(activeTab.headerType);
 
+        // 레이아웃 갱신 (Option 탭일 때 Selector 숨기고 Content 확장)
+        UpdateLayout(activeTab.headerType);
+    }
+
+    private void UpdateLayout(CampHeaderType type)
+    {
+        bool isOption = (type == CampHeaderType.None); // 헤더가 없는 경우(Option 등)
+
+        // 1. Selector_Area 켜고 끄기
+        if (selectorAreaRT != null)
+        {
+            selectorAreaRT.gameObject.SetActive(!isOption);
+        }
+
+        // 2. Content_Area 높이 조절
+        if (contentAreaRT != null)
+        {
+            Vector2 size = contentAreaRT.sizeDelta;
+            size.y = isOption ? expandedContentHeight : defaultContentHeight;
+            contentAreaRT.sizeDelta = size;
+            contentAreaRT.sizeDelta = size;
+        }
     }
 
 
