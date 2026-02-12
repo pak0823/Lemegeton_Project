@@ -666,6 +666,17 @@ public class BattleManager : MonoBehaviour
             }
         }
 
+        // [Reward] 전투 승리 보상 생성 및 전달
+        if (BattleRewardManager.Instance != null)
+        {
+            var rewards = BattleRewardManager.Instance.GenerateRewards();
+            if (SceneTransitionManager.Instance != null)
+            {
+                SceneTransitionManager.Instance.SetPendingRewards(rewards);
+                Debug.Log($"[Battle] Rewards generated: {rewards.Count} types.");
+            }
+        }
+
         SceneTransitionManager.Instance.ReturnToSavedPoint();
     }
     void CheckBattleEnd()

@@ -64,7 +64,16 @@ public class InventoryManager : MonoBehaviour, IInventory
     }
 
     // 아이템 추가 로직 (중첩 및 빈자리 찾기)
+    // 아이템 추가 로직 (중첩 및 빈자리 찾기)
     public void AddItem(string id, int amount)
+    {
+        AddPartialItem(id, amount);
+    }
+
+    /// <summary>
+    /// 아이템을 넣고 남은 수량을 반환 (보상 시스템용)
+    /// </summary>
+    public int AddPartialItem(string id, int amount)
     {
         int remaining = amount;
 
@@ -101,9 +110,13 @@ public class InventoryManager : MonoBehaviour, IInventory
 
         // 실제 추가된 양 계산 (요청량 - 남은량)
         int actualAdded = amount - remaining;
-        if (actualAdded > 0) UpdateCache(id, actualAdded);
+        if (actualAdded > 0)
+        {
+            UpdateCache(id, actualAdded);
+            OnInventoryChanged?.Invoke();
+        }
 
-        OnInventoryChanged?.Invoke();
+        return remaining;
     }
 
     // 슬롯 위치 변경 (드래그 앤 드롭용)
