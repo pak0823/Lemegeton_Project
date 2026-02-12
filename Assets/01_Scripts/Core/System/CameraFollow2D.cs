@@ -5,9 +5,6 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 
-
-[RequireComponent(typeof(Camera))]
-
 public class CameraFollow2D : MonoBehaviour
 
 {
@@ -51,6 +48,15 @@ public class CameraFollow2D : MonoBehaviour
 
 
     Camera _cam;
+
+    void Awake()
+    {
+        // 자식 오브젝트(MainCamera)에 있는 카메라 컴포넌트를 가져옵니다.
+        _cam = GetComponentInChildren<Camera>();
+
+        // 만약 자기 자신에게 카메라가 있다면 그것을 가져옵니다.
+        if (_cam == null) _cam = GetComponent<Camera>();
+    }
 
 
 

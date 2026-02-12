@@ -276,7 +276,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            // RMB 취소(?�구?�항 5)
+            // RMB 취소
 
             if (Input.GetMouseButtonDown(1))
 
@@ -290,7 +290,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            // LMB: ?�용 ?�?�만
+            // LMB
 
             if (Input.GetMouseButtonDown(0))
 
@@ -298,10 +298,10 @@ public class PlayerMovement : MonoBehaviour
 
                 var cam = Camera.main;
 
+                if (!cam.pixelRect.Contains(Input.mousePosition)) return;
+
                 float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-
                 var wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-
                 wp.z = 0;
 
 
@@ -377,9 +377,17 @@ public class PlayerMovement : MonoBehaviour
     // --- 타일 클릭 입력 처리 ---
     void HandleTileClickInput()
     {
-        // 카메라 마우스 좌표 계산
+        // UI 위 클릭 체크
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            return;
+
         var cam = Camera.main;
         if (cam == null) return;
+
+        // 마우스 위치가 카메라의 실제 렌더링 픽셀 영역 안에 있는지 체크
+        // cam.pixelRect는 Viewport Rect(0.234 등)와 현재 해상도가 계산된 실제 픽셀 범위를 반환함
+        if (!cam.pixelRect.Contains(Input.mousePosition))
+            return;
 
         float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
         Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
@@ -1662,9 +1670,18 @@ public class PlayerMovement : MonoBehaviour
 
     {
 
+        var cam = Camera.main;
+        if (cam == null) return Vector3Int.zero;
+
+        // 마우스가 카메라 뷰포트(게임 화면) 영역 밖이면 즉시 리턴
+        if (!cam.pixelRect.Contains(Input.mousePosition))
+        {
+            return Vector3Int.zero; 
+        }
+
         // 화면의 마우스 위치에서 레이 발사
 
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
 
         // 레이에 충돌한 타일을 모두 가져옴
 
