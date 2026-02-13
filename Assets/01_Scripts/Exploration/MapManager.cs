@@ -14,11 +14,13 @@ public class MapManager : MonoBehaviour
     public int currentStage = 1;
     public Transform gridParent;
     public GameObject playerPrefab;
+    [SerializeField] public LayerMask impassableLayerMask; // Pathfinding용
 
     [Header("Sub-Systems")]
     public ExplorationMapLoader mapLoader;
     public ExplorationEntitySpawner entitySpawner;
     public ExplorationPersistenceManager persistenceManager;
+    public PathfindingSystem pathfindingSystem;
 
     private void Awake()
     {
@@ -29,10 +31,12 @@ public class MapManager : MonoBehaviour
         if (!mapLoader) mapLoader = gameObject.AddComponent<ExplorationMapLoader>();
         if (!entitySpawner) entitySpawner = gameObject.AddComponent<ExplorationEntitySpawner>();
         if (!persistenceManager) persistenceManager = gameObject.AddComponent<ExplorationPersistenceManager>();
+        if (!pathfindingSystem) pathfindingSystem = gameObject.AddComponent<PathfindingSystem>();
 
         mapLoader.Initialize(this);
         entitySpawner.Initialize(this);
         persistenceManager.Initialize(this);
+        // PathfindingSystem initialized in ResetExplorationMap with tilemaps
     }
 
     void Start()
@@ -99,6 +103,12 @@ public class MapManager : MonoBehaviour
         {
             Debug.LogError("Floor 타일맵을 찾을 수 없습니다! (WalkableLayers 하위에 있는지 확인 필요)");
             return;
+        }
+
+        // Initialize PathfindingSystem
+        if (pathfindingSystem)
+        {
+            pathfindingSystem.Initialize(floors, obstacles, walls, impassableLayerMask);
         }
 
         // 3. Entity Spawn Phase (Player)

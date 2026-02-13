@@ -26,19 +26,13 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    [Header("타일맵 설정")]
 
-    public List<Tilemap> floorMaps = new List<Tilemap>();
 
-    public List<Tilemap> wallMaps = new List<Tilemap>();
 
-    public List<Tilemap> obstacleMaps = new List<Tilemap>();
 
     public float defaultMoveSpeed = 2f;
 
-    public LayerMask impassableLayerMask;
-
-    public Tilemap floorTilemap => (floorMaps != null && floorMaps.Count > 0) ? floorMaps[0] : null;
+    public Tilemap floorTilemap => PathfindingSystem.Instance != null ? PathfindingSystem.Instance.floorTilemap : null;
 
 
 
@@ -60,7 +54,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    ContactFilter2D _castFilter;
+
 
     readonly RaycastHit2D[] _castHits = new RaycastHit2D[4];
 
@@ -186,9 +180,19 @@ public class PlayerMovement : MonoBehaviour
         animator = GetComponent<Animator>();
 
         // 마우스 이동 충돌 예측 필터 (자기 자신은 충돌 제외)
-        _castFilter.useTriggers = false;
-        _castFilter.SetLayerMask(impassableLayerMask);
+
+        // Controller 자동 부착 및 초기화
+        var interactionCtrl = GetComponent<ExplorationInteractionController>();
+        if (interactionCtrl == null) interactionCtrl = gameObject.AddComponent<ExplorationInteractionController>();
+        
+        var inputCtrl = GetComponent<PlayerInputController>();
+        if (inputCtrl == null) inputCtrl = gameObject.AddComponent<PlayerInputController>();
+        
+        interactionCtrl.Initialize(this);
+        inputCtrl.Initialize(interactionCtrl);
     }
+    
+
 
     private void OnDestroy()
     {
@@ -200,542 +204,204 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    void Update()
+    public bool IsMoving => isMovingByPath;
 
+    private bool IsInputBlocked => (Time.time < movementLockUntil) || (_hardLockTokens > 0) || isPerformingPush || GamePause.IsPaused;
+
+    // 공통적으로 클릭 시 다이얼로그가 열려있으면 닫고 입력을 소비함
+    private bool HandleGlobalClickBlocking()
     {
-
-        // 관찰창(Dialog)가 열려 있을 때 
-
-        // 좌클릭으로 닫기
-
-        // 닫히기 전까지는 이동/추가 클릭 등을 막는다
-
         if (DescriptionDialogUI.Instance != null && DescriptionDialogUI.Instance.IsOpen)
-
         {
-
-            if (Input.GetMouseButtonDown(0))
-
-            {
-
-                DescriptionDialogUI.Instance.Hide();
-
-            }
-
-
-
+            DescriptionDialogUI.Instance.Hide();
             HaltImmediately();
-
-            return;
-
+            return true; // 입력 소비됨
         }
 
-
-
-        // 입력 차단 조건은 이곳에서 체크
-
-        bool isInputBlocked =
-
-                                (Time.time < movementLockUntil)
-
-                              || (_hardLockTokens > 0)
-
-                              || isPerformingPush
-
-                              || GamePause.IsPaused;
-
-
-
-        if (isInputBlocked)
-
+        if (IsInputBlocked)
         {
-
-            if (!isMovingByPath)
-
-                HaltImmediately();
-
-
-
-            return;
-
+            if (!isMovingByPath) HaltImmediately();
+            return true;
         }
+        return false;
+    }
 
+    void Update()
+    {
+        // 입력 로직 제거됨 (PlayerInputController 사용)
+    }
 
+    // --- Controller에서 호출하는 메서드들 ---
 
-        if (!isPushSelectMode && pendingPushBox == null)
-
-        {
-
-            HandleTileClickInput(); // 일반 클릭/상자 클릭 이동
-
-        }
-
-
+    public void ProcessRightClick()
+    {
+        // 우클릭은 다이얼로그 등을 닫는 동작으로 사용될 수도 있지만, 
+        // 기존 로직에서는 좌클릭으로 닫았음. 
+        // 우클릭 시에도 일단 블락 체크
+        if (IsInputBlocked) return;
 
         if (isPushSelectMode)
-
         {
-
-            // RMB 취소
-
-            if (Input.GetMouseButtonDown(1))
-
-            {
-
-                ExitPushSelectMode();
-
-                return;
-
-            }
-
-
-
-            // LMB
-
-            if (Input.GetMouseButtonDown(0))
-
-            {
-
-                var cam = Camera.main;
-
-                if (!cam.pixelRect.Contains(Input.mousePosition)) return;
-
-                float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-                var wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-                wp.z = 0;
-
-
-
-                var clickedCell = floorTilemap.WorldToCell(wp);
-
-
-
-                if (!pushValidTargetCells.Contains(clickedCell))
-
-                    return;
-
-
-
-                // ?�목???�?�만 ?�기�? ?�제 ?�속/?�발 ?�시???��??�서 처리
-
-                StartPushToCell(pendingPushBox, clickedCell);
-
-
-
-                ExitPushSelectMode(keepBoxHighlight: false);
-
-                return;
-                return;
-            }
-
-            return; // pushSelectMode 중에는 일반 이동/상호작용 입력 차단
+            ExitPushSelectMode();
+            return;
         }
 
-        if (!isPushSelectMode && pendingPushBox != null && Input.GetMouseButtonDown(1))
+        if (pendingPushBox != null)
         {
             pendingPushBox.SetHighlight(false);
             pendingPushBox = null;
             InteractionHintUI.Instance?.HideAll();
             return;
         }
-    }
-
-    void FixedUpdate()
-    {
-        if (isPerformingPush) return;
-        if (GamePause.IsPaused)
+        
+        // 일반 이동/상호작용 취소
+        if (selectedTargetCell.HasValue || (currentPathCells != null && currentPathCells.Count > 0))
         {
-            if (animator != null)
-                animator.SetInteger("Move", 0);
-            return;
+            CancelSelectionAndHint();
         }
     }
 
-    void ExitPushSelectMode(bool keepBoxHighlight = false)
+    public void ProcessPushObjectClick(PushObject push)
     {
-        ClearPushTargets();
-        pushValidTargetCells.Clear();
+        if (HandleGlobalClickBlocking()) return;
+        if (isMovingByPath) return;
 
-        if (animator != null)
-        {
-            animator.SetInteger("Move", 0);
-            animator.SetBool("IsPushIdle", false);
-        }
+        CancelSelectionAndHint(); // 기존 선택/경로 정리
 
-        isPushSelectMode = false;
-        isPushMode = false;
+        pendingPushBox = push;
+        pendingPushBox.SetHighlight(true);
 
-        if (!keepBoxHighlight)
-            pendingPushBox?.SetHighlight(false);
-
-        pendingPushBox = null;
-        pendingDirectionKey = Direction.None;
-
-        InteractionHintUI.Instance?.HideAll();
+        // 밀기/취소 2버튼 표시
+        InteractionHintUI.Instance?.ShowPushCancelAt(pendingPushBox.transform);
     }
 
-    // --- 타일 클릭 입력 처리 ---
-    void HandleTileClickInput()
+    public void ProcessInteractionClick(Vector3Int clickedCell, Transform targetTr, IInteractable interactable, PortalController portal, Collider2D collider, DescriptionData desc)
     {
-        // UI 위 클릭 체크
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
+        if (HandleGlobalClickBlocking()) return;
+        if (isMovingByPath) return;
 
-        var cam = Camera.main;
-        if (cam == null) return;
-
-        // 마우스 위치가 카메라의 실제 렌더링 픽셀 영역 안에 있는지 체크
-        // cam.pixelRect는 Viewport Rect(0.234 등)와 현재 해상도가 계산된 실제 픽셀 범위를 반환함
-        if (!cam.pixelRect.Contains(Input.mousePosition))
-            return;
-
-        float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
-        Vector3 wp = cam.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, zDist));
-        wp.z = 0;
-
-        // 타일 좌표계 갱신
-        Vector3Int clickedCell = GetClickedCellWithHeight(wp);
-        Vector3Int currentCell = GetCellFromWorldPos(rb.position);
-
-        clickedCell.z = 0;
+        // 현재 타일과 같거나 인접 6방향 중 하나라면 "이동 없이 상호작용 가능"
+        Vector3Int currentCell = PathfindingSystem.Instance.GetCellFromWorldPos(rb.position);
         currentCell.z = 0;
-
-        // UI 위 클릭 시 차단
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
-
-        if (isMovingByPath)
-            return;
-
-        // 좌클릭: 경로 프리뷰 or 이동 수행
-        if (Input.GetMouseButtonDown(0))
+        
+        bool isAdjacentOrSame = false;
+        if (currentCell == clickedCell)
         {
-            // 먼저, 클릭 지점에 상호작용 가능한 오브젝트가 있는지 검사
-            IInteractable clickedInteractable = null;
-            Collider2D clickedCollider = null;
-            DescriptionData clickedDesc = null;
-            PushObject clickedPush = null;
-            PortalController clickedPortal = null;
-
-            var hits = Physics2D.OverlapPointAll(wp);
-
-            foreach (var h in hits)
-            {
-                // PushObject 감지
-                var push = h.GetComponentInParent<PushObject>();
-                if (push != null)
-                {
-                    clickedPush = push;
-                    if (!clickedCollider) clickedCollider = h;
-                }
-
-                // 상자(부모 포함) 검사
-                var chest = h.GetComponentInParent<IInteractable>();
-                if (chest != null)
-                {
-                    // 이미 열린 상자라면 완전히 무시 (모든 콜라이더 포함)
-                    if (chest.CanInteract == false)
-                        continue;
-
-                    // 닫힌 상자라면 상자 정보를 획득(클릭 우선권)
-                    if (clickedInteractable == null)
-                        clickedInteractable = chest;
-
-                    // 상자 콜라이더를 상호작용 타겟 콜라이더로 지정
-                    if (!clickedCollider)
-                        clickedCollider = h;
-                }
-
-                // 설명 데이터는 상자/기타 공통으로 가져온다
-                if (clickedDesc == null && h.TryGetComponent<DescriptionData>(out var descriptiondata))
-                {
-                    clickedDesc = descriptiondata;
-                    if (!clickedCollider)
-                        clickedCollider = h;
-                }
-
-                // Portal 감지
-                var portal = h.GetComponentInParent<PortalController>();
-                if (portal != null)
-                {
-                    if (clickedPortal == null) clickedPortal = portal;
-                    if (!clickedCollider) clickedCollider = h;
-                }
-            }
-
-            if (clickedPush != null)
-            {
-                CancelSelectionAndHint(); // 기존 선택/경로 정리
-
-                pendingPushBox = clickedPush;
-                pendingPushBox.SetHighlight(true);
-
-                // 밀기/취소 2버튼 표시
-                InteractionHintUI.Instance?.ShowPushCancelAt(pendingPushBox.transform);
-                return;
-            }
-
-            // 오브젝트(상자, NPC, 기타) 클릭
-            if (clickedInteractable != null || clickedPortal != null || clickedCollider != null)
-            {
-                // 목표 타겟 Transform 결정 (상자 우선, 아니면 해당 콜라이더)
-                Transform targetTr = clickedInteractable != null ? clickedInteractable.GetTransform() :
-                                    (clickedPortal != null ? clickedPortal.transform :
-                                     clickedCollider.transform);
-
-                // 타겟 타일
-                Vector3Int targetCell = floorTilemap.WorldToCell(targetTr.position);
-                
-
-                // 현재 타일과 같거나 인접 6방향 중 하나라면 "이동 없이 상호작용 가능"
-                bool isAdjacentOrSame = false;
-                {
-                    if (currentCell == targetCell)
-                    {
-                        isAdjacentOrSame = true;
-                    }
-                    else
-                    {
-                        Direction[] dirs =
-                        {
-                            Direction.West,
-                            Direction.East,
-                            Direction.NW,
-                            Direction.NE,
-                            Direction.SW,
-                            Direction.SE
-                        };
-
-                        bool odd = (targetCell.y & 1) != 0;
-                        foreach (var dir in dirs)
-                        {
-                            Vector3Int offset = GetOffsetForDirection(dir, odd);
-                            Vector3Int adj = targetCell + offset;
-                            if (adj == currentCell)
-                            {
-                                isAdjacentOrSame = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (isAdjacentOrSame)
-                {
-                    // 이동 없이 바로 상호작용할 수 있는 거리
-                    selectedTargetCell = currentCell;
-                    currentPathCells = new List<Vector3Int> { currentCell };
-
-                    // 현재 상호작용 타겟(관찰 등) 설정
-                    currentInteractTarget = clickedCollider ?? (clickedInteractable != null ? clickedInteractable.GetTransform().GetComponent<Collider2D>() : null);
-                    currentDescData = clickedDesc;
-                    pendingInteractable = clickedInteractable;
-                    pendingPortal = clickedPortal;
-
-                    // 제자리에서는 경로 프리뷰가 필요 없으므로 호출해도 표시가 안됨(Count < 2라서)
-                    ShowPathPreview(currentPathCells);
-
-                    // HintUI를 타겟 위치에 표시 (조사/관찰/취소 버튼 모두)
-                    InteractionHintUI.Instance?.HideAll();
-
-                    if (clickedPortal != null)
-                    {
-                        InteractionHintUI.Instance?.ShowSurveyAt(targetTr, clickedPortal.GetHintLabel()); // "이동"
-                                                                                                        // Portal은 관찰버튼 불필요하므로 생략
-                    }
-                    else
-                    {
-                        InteractionHintUI.Instance?.ShowBothAt(targetTr); // 기존 상자/기타
-                    }
-
-                    InteractionHintUI.Instance?.ShowCancelAt(targetTr);
-                    return;
-                }
-
-
-                var newPath = FindPathToAdjacentCell(currentCell, targetCell);
-
-                if (newPath == null || newPath.Count < 2)
-                {
-                    // 도달 불가 시 선택/프리뷰 해제
-                    selectedTargetCell = null;
-                    currentPathCells.Clear();
-                    ClearPathPreview();
-
-                    pendingInteractable = null;
-
-                    pendingPortal = null;
-
-                    pathArrivalCallback = null;
-
-                    currentInteractTarget = null;
-
-                    currentDescData = null;
-
-                    InteractionHintUI.Instance?.HideAll();
-
-                    return;
-
-                }
-
-
-
-                selectedTargetCell = newPath[newPath.Count - 1];
-
-                currentPathCells = newPath;
-
-
-
-                // 현재 상호작용 타겟(관찰 대상 등) 설정
-
-                currentInteractTarget = clickedCollider ?? (clickedInteractable != null ? clickedInteractable.GetTransform().GetComponent<Collider2D>() : null);
-
-                currentDescData = clickedDesc;
-
-
-
-                pendingInteractable = clickedInteractable;
-
-                pendingPortal = clickedPortal;
-
-
-
-                ShowPathPreview(newPath);
-
-
-
-                // HintUI를 타겟 위치에 표시 (조사/관찰/취소 버튼 모두)
-
-                InteractionHintUI.Instance?.ShowBothAt(targetTr); // 조사 + 관찰
-
-                InteractionHintUI.Instance?.ShowCancel();         // 취소 버튼 추가
-
-                return;
-
-            }
-
-
-
-            // 오브젝트가 아닌 그냥 타일 클릭한 경우
-
-            if (pendingInteractable != null)
-
-            {
-
-                // 좌클릭은 무시 (버튼으로만 이동 시작)
-
-                return;
-
-            }
-
-
-
-            // 같은 타일이 선택된 상태에서 다시 한 번 클릭 시 이동 수행
-
-            if (selectedTargetCell.HasValue
-
-                && selectedTargetCell.Value == clickedCell
-
-                && currentPathCells != null
-
-                && currentPathCells.Count >= 2)
-
-            {
-
-                StartPathMove(currentPathCells, pathArrivalCallback);
-
-                return;
-
-            }
-
-
-
-            if (!IsWalkableCell(clickedCell))
-
-            {
-
-                Debug.Log($"[이동 불가] 좌표: {clickedCell} - 바닥이 없거나 장애물이 있습니다.");
-
-                return;
-
-            }
-
-
-
-            // 새 경로 계산
-
-            var newPath2 = FindPath(currentCell, clickedCell);
-
-
-
-            // 경로가 없거나 1개(제자리)라면 선택/프리뷰 해제
-
-            if (newPath2 == null || newPath2.Count <= 1)
-
-            {
-
-                selectedTargetCell = null;
-
-                currentPathCells.Clear();
-
-                ClearPathPreview();
-
-                pendingInteractable = null;
-
-                pathArrivalCallback = null;
-
-                currentInteractTarget = null;
-
-                currentDescData = null;
-
-                InteractionHintUI.Instance?.HideAll();
-
-                return;
-
-            }
-
-
-
-            // 첫 번째 클릭: 경로를 표시 (이 경우 상호작용은 없음)
-
-            selectedTargetCell = clickedCell;
-
-            currentPathCells = newPath2;
-
-            pendingInteractable = null;
-
-            pathArrivalCallback = null;
-
-            currentInteractTarget = null;
-
-            currentDescData = null;
-
-            ShowPathPreview(newPath2);
+            isAdjacentOrSame = true;
+        }
+        else
+        {
+             // 인접 체크 (PathfindingSystem 메서드 활용)
+            var path = PathfindingSystem.Instance.FindPathToAdjacentCell(currentCell, clickedCell);
+             // 인접하면 경로 길이가 2 (start, end)가 나옴. 
+             // 다만 여기서는 'targetCell'이 'clickedCell'임.
+             // 기존 로직: clickedCell이 targetCell임.
+             // 인접 체크를 단순 거리나 오프셋으로 먼저 하고, 안되면 경로 탐색
+             
+             Direction[] dirs = { Direction.West, Direction.East, Direction.NW, Direction.NE, Direction.SW, Direction.SE };
+             bool odd = (clickedCell.y & 1) != 0;
+             foreach (var dir in dirs)
+             {
+                 Vector3Int offset = PathfindingSystem.Instance.GetOffsetForDirection(dir, odd);
+                 if (clickedCell + offset == currentCell) { isAdjacentOrSame = true; break; }
+             }
+        }
+
+        if (isAdjacentOrSame)
+        {
+            selectedTargetCell = currentCell;
+            currentPathCells = new List<Vector3Int> { currentCell };
+
+            currentInteractTarget = collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null);
+            currentDescData = desc;
+            pendingInteractable = interactable;
+            pendingPortal = portal;
+
+            ShowPathPreview(currentPathCells); 
 
             InteractionHintUI.Instance?.HideAll();
 
+            if (portal != null)
+                InteractionHintUI.Instance?.ShowSurveyAt(targetTr, portal.GetHintLabel());
+            else
+                InteractionHintUI.Instance?.ShowBothAt(targetTr);
+
+            InteractionHintUI.Instance?.ShowCancelAt(targetTr);
             return;
-
         }
 
+        // 인접하지 않으면 이동 경로 계산
+        var newPath = PathfindingSystem.Instance.FindPathToAdjacentCell(currentCell, clickedCell);
 
-
-        // 우클릭: 같은 타일을 클릭하면 선택/프리뷰 취소
-
-        if (Input.GetMouseButtonDown(1))
-
+        if (newPath == null || newPath.Count < 2)
         {
-
-            if (selectedTargetCell.HasValue || (currentPathCells != null && currentPathCells.Count > 0))
-
-            {
-
-                CancelSelectionAndHint();
-
-            }
-
+            ClearAllSelection();
+            return;
         }
 
+        selectedTargetCell = newPath[newPath.Count - 1];
+        currentPathCells = newPath;
+
+        currentInteractTarget = collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null);
+        currentDescData = desc;
+        pendingInteractable = interactable;
+        pendingPortal = portal;
+
+        ShowPathPreview(newPath);
+
+        InteractionHintUI.Instance?.ShowBothAt(targetTr);
+        InteractionHintUI.Instance?.ShowCancel();
+    }
+
+    public void ProcessMoveClick(Vector3Int clickedCell)
+    {
+        if (HandleGlobalClickBlocking()) return;
+        if (isMovingByPath) return;
+
+        if (selectedTargetCell.HasValue 
+            && selectedTargetCell.Value == clickedCell 
+            && currentPathCells != null 
+            && currentPathCells.Count >= 2)
+        {
+            StartPathMove(currentPathCells, pathArrivalCallback);
+            return;
+        }
+
+        Vector3Int currentCell = PathfindingSystem.Instance.GetCellFromWorldPos(rb.position);
+        currentCell.z = 0;
+
+        var newPath = PathfindingSystem.Instance.FindPath(currentCell, clickedCell);
+
+        if (newPath == null || newPath.Count <= 1)
+        {
+             ClearAllSelection();
+             return;
+        }
+
+        selectedTargetCell = clickedCell;
+        currentPathCells = newPath;
+        
+        pendingInteractable = null;
+        pendingPortal = null;
+        pathArrivalCallback = null;
+        currentInteractTarget = null;
+        currentDescData = null;
+
+        ShowPathPreview(newPath);
+        InteractionHintUI.Instance?.HideAll();
+    }
+
+    private void ClearAllSelection()
+    {
+        selectedTargetCell = null;
+        currentPathCells.Clear();
+        ClearPathPreview();
+        pendingInteractable = null;
+        pendingPortal = null;
+        pathArrivalCallback = null;
+        currentInteractTarget = null;
+        currentDescData = null;
+        InteractionHintUI.Instance?.HideAll();
     }
 
     //HintUi 공통 취소 메서드
@@ -818,29 +484,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    #region Movement
-
-    public Tilemap GetWalkableMapAt(Vector3Int cell)
-
-    {
-
-        if (floorMaps == null) return null;
 
 
 
-        // 리스트의 뒤쪽(높이 높은 부분)부터 검사해서 겹쳤을 때 높은 타일을 가져옴
-
-        for (int i = floorMaps.Count - 1; i >= 0; i--)
-
-        {
-
-            if (floorMaps[i].HasTile(cell)) return floorMaps[i];
-
-        }
-
-        return null;
-
-    }
 
 
 
@@ -907,9 +553,7 @@ public class PlayerMovement : MonoBehaviour
 
 
             // 해당 타일의 소속 타일맵을 찾음 (높이 정보 포함)
-
-            Tilemap targetMap = GetWalkableMapAt(cell);
-
+            Tilemap targetMap = PathfindingSystem.Instance.GetWalkableMapAt(cell);
             if (targetMap == null) targetMap = floorTilemap;
 
 
@@ -993,9 +637,7 @@ public class PlayerMovement : MonoBehaviour
 
 
             Vector3Int goalCell = cells[cells.Count - 1];
-
-            Tilemap goalMap = GetWalkableMapAt(goalCell);
-
+            Tilemap goalMap = PathfindingSystem.Instance.GetWalkableMapAt(goalCell);
             if (goalMap == null) goalMap = floorTilemap;
 
 
@@ -1054,275 +696,8 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 이동 가능한 타일의 높이 차이가 이동 가능한 범위인지 확인 (3칸 이상 불가)
-
-    bool IsHeightDiffValid(Vector3Int from, Vector3Int to)
-
-    {
-
-        Tilemap fromMap = GetWalkableMapAt(from);
-
-        Tilemap toMap = GetWalkableMapAt(to);
-
-
-
-        // 맵을 못찾으면 바닥(0)으로 간주
-
-        float fromH = (fromMap != null) ? fromMap.tileAnchor.y : 0f;
-
-        float toH = (toMap != null) ? toMap.tileAnchor.y : 0f;
-
-
-
-        float diff = Mathf.Abs(toH - fromH);    // (도착 - 출발)
-
-
-
-        // 위로 가거나 아래로 가거나 차이가 0.6f 미만이어야 함
-
-        if (Mathf.Abs(diff) < 0.55f)
-
-        {
-
-            return true;
-
-        }
-
-
-
-        return false;
-
-    }
-
-    // 논리적 판단을 위한 정확한 월드 좌표 반환
-
-    Vector3 GetWorldPosForLogic(Vector3Int cell)
-
-    {
-
-        Tilemap map = GetWalkableMapAt(cell);
-
-        if (map == null) map = floorTilemap; // 없으면 바닥 기준
-
-
-
-        // 해당 맵의 앵커가 적용된 월드 중심 좌표
-
-        Vector3 worldPos = map.GetCellCenterWorld(cell);
-
-        worldPos.z = 0; // 거리는 2D 평면(XY) 기준으로만 재거나 Z 무시
-
-        return worldPos;
-
-    }
-
-
-
     // --- 타일 기반 최소 경로 탐색 (BFS) ---
-
-    List<Vector3Int> FindPath(Vector3Int start, Vector3Int goal)
-
-    {
-
-        if (start == goal) return new List<Vector3Int> { start };
-
-
-
-        var queue = new Queue<Vector3Int>();
-
-        var cameFrom = new Dictionary<Vector3Int, Vector3Int>();
-
-
-
-        queue.Enqueue(start);
-
-        cameFrom[start] = start;
-
-
-
-        Direction[] dirs =
-
-        {
-
-            Direction.West, Direction.East,
-
-            Direction.NW, Direction.NE,
-
-            Direction.SW, Direction.SE
-
-        };
-
-
-
-        while (queue.Count > 0)
-
-        {
-
-            var current = queue.Dequeue();
-
-            if (current == goal) break;
-
-
-
-            bool odd = (current.y & 1) != 0;
-
-            Vector3 currentWorldPos = GetWorldPosForLogic(current);
-
-
-
-            foreach (var dir in dirs)
-
-            {
-
-                Vector3Int offset = GetOffsetForDirection(dir, odd);
-
-                Vector3Int next = current + offset;
-
-
-
-                if (cameFrom.ContainsKey(next)) continue;
-
-
-
-                // 1. 바닥 타일 없으면 스킵
-
-                if (!IsWalkableCell(next)) continue;
-
-
-
-                // 2. 높이 차이 안맞으면 스킵
-
-                if (!IsHeightDiffValid(current, next)) continue;
-
-
-
-                // 3. 물리적 거리가 너무 멀어서 헥사 타일이 아닌 다른 타일이면 스킵
-
-                // 안전하게 2.0f로 둠
-
-                Vector3 nextWorldPos = GetWorldPosForLogic(next);
-
-                float dist = Vector2.Distance(currentWorldPos, nextWorldPos);
-
-                if (dist > 2.0f) continue;
-
-
-
-                cameFrom[next] = current;
-
-                queue.Enqueue(next);
-
-            }
-
-        }
-
-
-
-        if (!cameFrom.ContainsKey(goal))
-
-        {
-
-            return null; // 경로 없음 (조용히 리턴)
-
-        }
-
-
-
-        // 경로 재구성
-
-        var path = new List<Vector3Int>();
-
-        var cur = goal;
-
-        while (true)
-
-        {
-
-            path.Add(cur);
-
-            if (cur == start) break;
-
-            cur = cameFrom[cur];
-
-        }
-
-        path.Reverse();
-
-        return path;
-
-    }
-
-
-
-    // 특정 오브젝트 주변(인접 6칸 중 하나까지) 최단 경로를 찾는 함수
-
-    List<Vector3Int> FindPathToAdjacentCell(Vector3Int start, Vector3Int objectCell)
-
-    {
-
-        Direction[] dirs =
-
-        {
-
-            Direction.West,
-
-            Direction.East,
-
-            Direction.NW,
-
-            Direction.NE,
-
-            Direction.SW,
-
-            Direction.SE
-
-        };
-
-
-
-        List<Vector3Int> bestPath = null;
-
-
-
-        bool odd = (objectCell.y & 1) != 0;
-
-
-
-        foreach (var dir in dirs)
-
-        {
-
-            Vector3Int offset = GetOffsetForDirection(dir, odd);
-
-            Vector3Int adj = objectCell + offset;
-
-
-
-            if (!IsWalkableCell(adj))
-
-                continue;
-
-
-
-            var path = FindPath(start, adj);
-
-            if (path == null || path.Count < 2)
-
-                continue;
-
-
-
-            if (bestPath == null || path.Count < bestPath.Count)
-
-                bestPath = path;
-
-        }
-
-
-
-        return bestPath;
-
-    }
+    // (PathfindingSystem으로 이관됨)
 
 
 
@@ -1354,9 +729,9 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            var adj = boxCell + GetOffsetForDirection(d, oddBox);
+            var adj = boxCell + PathfindingSystem.Instance.GetOffsetForDirection(d, oddBox);
 
-            if (!IsWalkableCell(adj)) continue;
+            if (!PathfindingSystem.Instance.IsWalkableCell(adj)) continue;
 
 
 
@@ -1382,7 +757,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-            var path = FindPath(playerCell, adj);
+            var path = PathfindingSystem.Instance.FindPath(playerCell, adj);
 
             if (path == null || path.Count < 2) continue;
 
@@ -1520,27 +895,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    void StartPushToCell(PushObject box, Vector3Int targetCell)
 
-    {
-
-        if (box == null || floorTilemap == null) return;
-
-
-
-        // 시퀀스 시작 시점의 이동 방향은 EnterPushSelectMode에서 결정된 pendingDirectionKey를 사용
-
-        // (해당 모드에서는 방향이 하나로 고정되는 구조)
-
-        if (pendingDirectionKey == Direction.None) return;
-
-
-
-        // 입력 잠금은 시퀀스에서만 관리
-
-        StartCoroutine(PerformPushToTarget(box, pendingDirectionKey, targetCell));
-
-    }
 
 
 
@@ -1662,266 +1017,9 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 물리 엔진(Raycast)을 이용해 정확한 타일 감지
-
-    // [Physics 방식 + 좌표 보정]
-
-    Vector3Int GetClickedCellWithHeight(Vector3 mouseWorldPos)
-
-    {
-
-        var cam = Camera.main;
-        if (cam == null) return Vector3Int.zero;
-
-        // 마우스가 카메라 뷰포트(게임 화면) 영역 밖이면 즉시 리턴
-        if (!cam.pixelRect.Contains(Input.mousePosition))
-        {
-            return Vector3Int.zero; 
-        }
-
-        // 화면의 마우스 위치에서 레이 발사
-
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-
-        // 레이에 충돌한 타일을 모두 가져옴
-
-        RaycastHit2D[] hits = Physics2D.GetRayIntersectionAll(ray, Mathf.Infinity);
-
-
-
-        if (hits.Length > 0)
-
-        {
-
-            Tilemap bestMap = null;
-
-            int maxOrder = int.MinValue;
-
-            Vector3Int bestCell = Vector3Int.zero;
-
-            bool found = false;
-
-
-
-            float bestHitY = float.MaxValue;
-
-
-
-            // 가장 위에 그려진(Sorting Order 높은) 맵 찾기
-
-            foreach (var hit in hits)
-
-            {
-
-                Tilemap map = hit.collider.GetComponent<Tilemap>();
-
-                if (map != null)
-
-                {
-
-                    // 그리드 기준으로 좌표 보정
-
-                    Grid grid = map.layoutGrid;
-
-                    Vector3 exactWorldAnchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(map.tileAnchor))
-
-                                                   - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
-
-
-
-                    Vector3 correctedPoint = (Vector3)hit.point - exactWorldAnchorOffset;
-
-                    Vector3Int tempCell = map.WorldToCell(correctedPoint);
-
-                    tempCell.z = 0;
-
-
-
-                    // 실제 해당 좌표에 타일이 있는지 확인
-
-                    if (map.HasTile(tempCell))
-
-                    {
-
-                        var renderer = map.GetComponent<TilemapRenderer>();
-
-                        int order = renderer != null ? renderer.sortingOrder : 0;
-
-
-
-                        // Order 크거나 같으면 (같으면 아래쪽이 우선)
-
-                        if (!found || order > maxOrder || (order == maxOrder && hit.point.y < bestHitY))
-
-                        {
-
-                            maxOrder = order;
-
-                            bestMap = map;
-
-                            bestCell = tempCell;
-
-                            bestHitY = hit.point.y; // 비교용 Y값 갱신
-
-                            found = true;
-
-                        }
-
-                    }
-
-                }
-
-            }
-
-
-
-            if (found && bestMap != null)
-
-            {
-
-                return bestCell;
-
-            }
-
-        }
-
-
-
-        // 허공 클릭 시 Fallback(가장 아래 바닥 기준)
-
-        if (floorTilemap != null)
-
-        {
-
-            Vector3 correctedMouse = mouseWorldPos;
-
-            correctedMouse -= floorTilemap.tileAnchor;
-
-            Vector3Int baseCell = floorTilemap.WorldToCell(correctedMouse);
-
-            baseCell.z = 0;
-
-            return baseCell;
-
-        }
-
-
-
-        return Vector3Int.zero;
-
-    }
-
-
-
     // 플레이어(또는 특정 월드 좌표)가 밟고 있는 타일의 정확한 셀 좌표 구하기
 
-    public Vector3Int GetCellFromWorldPos(Vector3 worldPos)
-
-    {
-
-        // 해당 위치에 있는 모든 콜라이더 검사
-
-        Collider2D[] cols = Physics2D.OverlapPointAll(worldPos);
-
-
-
-        Tilemap bestMap = null;
-
-        int maxOrder = int.MinValue;
-
-
-
-        foreach (var col in cols)
-
-        {
-
-            Tilemap map = col.GetComponent<Tilemap>();
-
-            if (map != null)
-
-            {
-
-                // 장애물은 제외하고 바닥만 체크 (필요 시 wall 포함 여부 결정)
-
-                if (obstacleMaps.Contains(map)) continue;
-
-
-
-                var renderer = map.GetComponent<TilemapRenderer>();
-
-                int order = renderer != null ? renderer.sortingOrder : 0;
-
-
-
-                // 가장 위에 그려진(Sorting Order가 높은) 맵 선택
-
-                if (order > maxOrder)
-
-                {
-
-                    maxOrder = order;
-
-                    bestMap = map;
-
-                }
-
-            }
-
-        }
-
-
-
-        if (bestMap != null)
-
-        {
-
-            Vector3 correctedPos = worldPos;
-
-
-
-            // 밟고 있는 맵의 Anchor만큼 좌표를 보정해서 계산
-
-            Grid grid = bestMap.layoutGrid;
-
-            Vector3 anchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(bestMap.tileAnchor))
-
-                                 - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
-
-            correctedPos -= anchorOffset;
-
-
-
-            Vector3Int cell = bestMap.WorldToCell(correctedPos);
-
-            cell.z = 0;
-
-            return cell;
-
-        }
-
-
-
-        // 바닥 맵을 못 찾았을 경우 Fallback
-
-        if (floorTilemap != null)
-
-        {
-
-            // 혹시 모를 기본 바닥 앵커값도 빼줌
-
-            Vector3 correctedPos = worldPos;
-
-            correctedPos -= floorTilemap.tileAnchor;
-
-            return floorTilemap.WorldToCell(correctedPos);
-
-        }
-
-
-
-        return Vector3Int.zero;
-
-    }
+    // public Vector3Int GetCellFromWorldPos(Vector3 worldPos) ... PathfindingSystem 사용
 
     IEnumerator Co_MoveAlongPath(List<Vector3Int> cells)
 
@@ -1964,10 +1062,8 @@ public class PlayerMovement : MonoBehaviour
 
 
                 // 각 타일이 소속된 맵을 찾아서 실제 월드 좌표를 가져옴
-
-                Tilemap startMap = GetWalkableMapAt(startCell);
-
-                Tilemap endMap = GetWalkableMapAt(endCell);
+                Tilemap startMap = PathfindingSystem.Instance.GetWalkableMapAt(startCell);
+                Tilemap endMap = PathfindingSystem.Instance.GetWalkableMapAt(endCell);
 
 
 
@@ -2166,7 +1262,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                        Tilemap encounterMap = GetWalkableMapAt(cells[i]);
+                        Tilemap encounterMap = PathfindingSystem.Instance.GetWalkableMapAt(cells[i]);
 
                         if (encounterMap == null) encounterMap = floorTilemap;
 
@@ -2314,7 +1410,7 @@ public class PlayerMovement : MonoBehaviour
 
     }
 
-    #endregion
+
 
     // === Hint UI 버튼 콜백 ===
 
@@ -2724,7 +1820,7 @@ public class PlayerMovement : MonoBehaviour
 
             bool odd = (cur.y & 1) != 0;
 
-            var offset = GetOffsetForDirection(dirKey, odd);
+            var offset = PathfindingSystem.Instance.GetOffsetForDirection(dirKey, odd);
 
             var next = cur + offset;
 
@@ -2738,11 +1834,11 @@ public class PlayerMovement : MonoBehaviour
 
             bool hasWall = false;
 
-            if (wallMaps != null)
+            if (PathfindingSystem.Instance.wallMaps != null)
 
             {
 
-                foreach (var wall in wallMaps)
+                foreach (var wall in PathfindingSystem.Instance.wallMaps)
 
                 {
 
@@ -2854,7 +1950,7 @@ public class PlayerMovement : MonoBehaviour
 
             if (dir == Direction.None) continue;
 
-            if (GetOffsetForDirection(dir, odd) == delta)
+            if (PathfindingSystem.Instance.GetOffsetForDirection(dir, odd) == delta)
 
                 return dir;
 
@@ -2866,31 +1962,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    Vector3Int GetOffsetForDirection(Direction dir, bool odd)
 
-    {
-
-        return dir switch
-
-        {
-
-            Direction.West => new Vector3Int(-1, 0, 0),
-
-            Direction.East => new Vector3Int(1, 0, 0),
-
-            Direction.NW => odd ? new Vector3Int(0, 1, 0) : new Vector3Int(-1, 1, 0),
-
-            Direction.NE => odd ? new Vector3Int(1, 1, 0) : new Vector3Int(0, 1, 0),
-
-            Direction.SW => odd ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0),
-
-            Direction.SE => odd ? new Vector3Int(1, -1, 0) : new Vector3Int(0, -1, 0),
-
-            _ => Vector3Int.zero,
-
-        };
-
-    }
 
     void ShowPushTargets(IEnumerable<Vector3Int> cells)
 
@@ -2986,143 +2058,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    private bool IsWalkableCell(Vector3Int cell)
 
-    {
-
-        // 장애물 맵에 타일이 하나라도 있다면 무조건 이동 불가
-
-        if (obstacleMaps != null)
-
-        {
-
-            foreach (var obsMap in obstacleMaps)
-
-            {
-
-                if (obsMap.HasTile(cell)) return false; // 즉시 차단
-
-            }
-
-        }
-
-        // 벽 체크: 리스트 전체 순회
-
-        if (wallMaps != null)
-
-        {
-
-            foreach (var wall in wallMaps)
-
-            {
-
-                if (wall.HasTile(cell)) return false; // 하나라도 있으면 이동 불가
-
-            }
-
-        }
-
-
-
-        // 해당 좌표에 있는 타일맵 중 "가장 위에 있는(리스트의 뒤쪽)" 맵을 찾는다
-
-        Tilemap topMap = null;
-
-        for (int i = floorMaps.Count - 1; i >= 0; i--)
-
-        {
-
-            if (floorMaps[i].HasTile(cell))
-
-            {
-
-                topMap = floorMaps[i];
-
-                break; 
-
-            }
-
-        }
-
-
-
-        if (topMap == null) return false; // 아무 타일도 없음
-
-
-
-        // 해당 맵이 장애물인지 확인
-
-        string mapName = topMap.name.ToLower();
-
-        if (mapName.Contains("water") || mapName.Contains("obstacle") || mapName.Contains("void"))
-
-        {
-
-            return false; // 가장 위의 타일이 물이라면 이동 불가 (선택 불가)
-
-        }
-
-
-
-        // 해당 셀 위치에 오브젝트(박스 등)가 있는지 물리 검사
-
-        Vector3 worldPos = GetWorldPosForLogic(cell);
-
-        // 반경 0.3f 정도로 겹치는 콜라이더 검사(셀 중앙 기준)
-
-        Collider2D[] colliders = Physics2D.OverlapCircleAll(worldPos, 0.3f);
-
-        foreach (var col in colliders)
-
-        {
-
-            // BoxInteract(상자)가 있고, 아직 안 열린(닫힌) 상태면 이동 불가
-
-            var box = col.GetComponentInParent<IInteractable>();
-
-            if (box != null)
-
-            {
-
-                return false;
-
-            }
-
-
-
-            // PushObject(밀기 상자)가 있으면 이동 불가
-
-            var push = col.GetComponentInParent<PushObject>();
-
-            if (push != null)
-
-            {
-
-                return false;
-
-            }
-
-
-
-            // NPC나 기타 장애물 태그가 있다면 여기서 추가 체크
-
-            // if (col.CompareTag("NPC")) return false;
-
-        }
-
-
-
-
-
-        // 바닥이 하나라도 있다면 이동 가능
-
-        if (GetWalkableMapAt(cell) != null) return true;
-
-
-
-        return false; // 바닥이 없으면 이동 불가
-
-    }
 
 
 
@@ -3156,7 +2092,7 @@ public class PlayerMovement : MonoBehaviour
 
         {
 
-            var off = GetOffsetForDirection(dir, odd);
+            var off = PathfindingSystem.Instance.GetOffsetForDirection(dir, odd);
 
             if (b + off == a) return true;
 
@@ -3390,49 +2326,94 @@ public class PlayerMovement : MonoBehaviour
 
     }
 
-    public void SetTilemaps(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall)
+    public bool IsPushSelectMode => isPushSelectMode;
 
+    public void ExitPushSelectMode(bool keepBoxHighlight = false)
     {
+        isPushSelectMode = false;
+        isPushMode = false;
+        
+        if (animator != null)
+            animator.SetBool("IsPushIdle", false);
 
-        this.floorMaps = _floors;
+        ClearPushTargets();
+        pushValidTargetCells.Clear();
 
-        this.obstacleMaps = _obstacles; // 전달받은 장애물 리스트 저장
-
-        this.wallMaps = _wall;
-
-
-
-        // 경로 초기화 및 필요한 로직
-
-        ClearPath();
-
-        HaltImmediately();
-
-
-
-        Debug.Log($"[PlayerMovement] 맵 설정 완료. 바닥 맵 개수: {_floors?.Count ?? 0}");
-
-
-
-        if (_floors != null && _floors.Count > 0)
-
+        if (pendingPushBox != null)
         {
-
-            foreach (var push in FindObjectsOfType<PushObject>())
-
+            if (!keepBoxHighlight)
             {
-
-                // [수정] PushObject.SetTilemaps가 실제 List<Tilemap>을 받으므로
-
-                // _wall 리스트를 그대로 전달하면 됨
-
-                push.SetTilemaps(_floors, _wall);
-
+                pendingPushBox.SetHighlight(false);
+                pendingPushBox = null;
             }
+        }
+        
+        InteractionHintUI.Instance?.HideAll();
+    }
 
+    public void ProcessPushTargetClick(Vector3Int clickedCell)
+    {
+        if (HandleGlobalClickBlocking()) return;
+        
+        if (!isPushSelectMode) return;
+        
+        if (!pushValidTargetCells.Contains(clickedCell)) return;
+
+        StartPushToCell(pendingPushBox, clickedCell);
+        
+        ExitPushSelectMode(keepBoxHighlight: false);
+    }
+
+    void StartPushToCell(PushObject box, Vector3Int targetCell)
+    {
+        Vector3Int currentCell = PathfindingSystem.Instance.GetCellFromWorldPos(rb.position);
+        currentCell.z = 0;
+
+        var boxCell = floorTilemap.WorldToCell(box.transform.position);
+
+        // Find best path to a "push ready" cell
+        var pathToReady = FindPathToPushReadyCell(currentCell, boxCell, box);
+
+        if (pathToReady != null)
+        {
+            if (pathMoveRoutine != null) StopCoroutine(pathMoveRoutine);
+            pathMoveRoutine = StartCoroutine(Co_MoveToPushReadyAndPush(pathToReady, box, targetCell));
+        }
+    }
+
+    IEnumerator Co_MoveToPushReadyAndPush(List<Vector3Int> pathToReady, PushObject box, Vector3Int targetCell)
+    {
+        isMovingByPath = true;
+        isPushMode = true;
+
+        // 1. 준비 지점까지 이동
+        if (pathToReady.Count > 1) // 이미 인접해있지 않다면
+        {
+            // ready position은 path의 마지막 지점
+            // Co_MoveAlongPath는 0번째(현재위치) 제외하고 1번째부터 이동함.
+            // pathToReady[0] == currentCell.
+            yield return StartCoroutine(Co_MoveAlongPath(pathToReady));
         }
 
+        // 2. 밀기 방향 결정
+        // 플레이어는 이제 pathToReady의 마지막 지점에 있음
+        Vector3Int readyCell = pathToReady[pathToReady.Count - 1];
+        Vector3Int boxPos = floorTilemap.WorldToCell(box.transform.position);
+
+        Vector3Int dirVec = boxPos - readyCell;
+        bool odd = (readyCell.y & 1) != 0;
+        Direction pushDir = GetDirectionFromDelta(dirVec, odd);
+
+        if (pushDir != Direction.None)
+        {
+            yield return StartCoroutine(PerformPushToTarget(box, pushDir, targetCell));
+        }
+
+        isMovingByPath = false;
+        isPushMode = false;
     }
+
+
 
     (Vector2 blend, bool flipX) GetPushBlend(Direction dir)
 
@@ -3537,5 +2518,7 @@ public class PlayerMovement : MonoBehaviour
     }
 
 }
+
+
 
 

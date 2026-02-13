@@ -29,10 +29,10 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
         GameObject player = Instantiate(playerPrefab);
         var movement = player.GetComponent<PlayerMovement>();
         
-        if (movement != null)
-        {
-            movement.SetTilemaps(floors, obstacles, walls);
-        }
+        // if (movement != null)
+        // {
+        //     movement.SetTilemaps(floors, obstacles, walls);
+        // }
 
         // Find Start Position
         if (map != null)
