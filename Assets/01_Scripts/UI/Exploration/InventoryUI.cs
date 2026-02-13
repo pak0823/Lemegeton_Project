@@ -108,6 +108,61 @@ public class InventoryUI : MonoBehaviour
 
     }
 
+
+    // --- 드래그 고스트 이미지 ---
+    [Header("Drag Visual")]
+    public UnityEngine.UI.Image dragGhostImage; // 인스펙터 할당 필요
+
+    private Canvas _cachedCanvas;
+
+    public void StartDrag(Sprite sprite, Vector2 size)
+    {
+        if (dragGhostImage == null) return;
+
+        if (_cachedCanvas == null) _cachedCanvas = GetComponentInParent<Canvas>();
+
+        dragGhostImage.sprite = sprite;
+        
+        // 앵커를 중앙으로 강제 설정 (sizeDelta가 절대 크기로 작동하도록)
+        dragGhostImage.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        dragGhostImage.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        dragGhostImage.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+
+        dragGhostImage.rectTransform.sizeDelta = size; // 크기 동기화
+        dragGhostImage.gameObject.SetActive(true);
+        
+        dragGhostImage.transform.SetAsLastSibling();
+        dragGhostImage.raycastTarget = false;
+    }
+
+    public void UpdateDrag(Vector2 screenPosition)
+    {
+        if (dragGhostImage == null) return;
+
+        if (_cachedCanvas == null)
+        {
+             // 혹시 StartDrag를 안 거치고 왔을 경우 대비
+             _cachedCanvas = GetComponentInParent<Canvas>();
+        }
+
+        // 캔버스 렌더 모드에 따라 카메라 설정 (Overlay면 null, Camera면 worldCamera)
+        Camera uiCamera = (_cachedCanvas != null && _cachedCanvas.renderMode == RenderMode.ScreenSpaceOverlay) ? null : (_cachedCanvas != null ? _cachedCanvas.worldCamera : null);
+
+        // 부모 RectTransform 기준으로 로컬 좌표 변환
+        RectTransform parentRect = dragGhostImage.transform.parent as RectTransform;
+        
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, screenPosition, uiCamera, out Vector2 localPoint))
+        {
+            dragGhostImage.transform.localPosition = localPoint;
+        }
+    }
+
+    public void EndDrag()
+    {
+        if (dragGhostImage == null) return;
+        dragGhostImage.gameObject.SetActive(false);
+    }
+
     private void OnDestroy()
     {
         if (InventoryManager.Instance != null)
