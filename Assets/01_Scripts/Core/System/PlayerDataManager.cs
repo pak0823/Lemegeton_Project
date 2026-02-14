@@ -26,7 +26,11 @@ public class RuntimeUnitData
         currentMP = mp;
         currentRage = rage;
         isDead = false;
+        statModifiers = new Dictionary<string, int>();
     }
+
+    // [New] 영구적 스탯 변화량 (음수면 감소, 양수면 증가)
+    public Dictionary<string, int> statModifiers = new Dictionary<string, int>();
 }
 
 public class PlayerDataManager : MonoBehaviour
@@ -300,6 +304,61 @@ public class PlayerDataManager : MonoBehaviour
 		runtime.currentMP = Mathf.Min(maxMP, runtime.currentMP + restoreAmount);
 
 		return Mathf.FloorToInt(runtime.currentMP - oldMP);
+    }
+
+    // ========================================================================
+    // [Phase 2] 스탯 변동 (부상/함정)
+    // ========================================================================
+
+    /// <summary>
+    /// 유닛의 특정 스탯에 영구적인 변동치(modifier)를 적용합니다.
+    /// (예: 함정으로 인해 "STR" -1)
+    /// </summary>
+    public void ApplyStatModifier(UnitData unit, string statName, int value)
+    {
+        if (unit == null || value == 0) return;
+
+        InitializeRuntimeData(unit);
+        var runtime = unitStates[unit];
+
+        if (!runtime.statModifiers.ContainsKey(statName))
+        {
+            runtime.statModifiers[statName] = 0;
+        }
+
+        runtime.statModifiers[statName] += value;
+        Debug.Log($"[PlayerData] {unit.DisplayName}의 {statName} 스탯이 {value}만큼 변동됨. (현재 누적: {runtime.statModifiers[statName]})");
+    }
+
+    /// <summary>
+    /// 유닛의 최종 스탯(기본값 + 변동치)을 반환합니다.
+    /// </summary>
+    public int GetFinalStat(UnitData unit, string statName)
+    {
+        if (unit == null) return 0;
+
+        // 기본 스탯 조회 (Reflection 대신 switch-case 권장)
+        int baseValue = 0;
+        switch (statName)
+        {
+            case "STR": baseValue = unit.baseSTR; break;
+            case "CLV": baseValue = unit.baseCLV; break;
+            case "AGI": baseValue = unit.baseAGI; break;
+            case "BDY": baseValue = unit.baseBDY; break;
+            case "MND": baseValue = unit.baseMND; break;
+            case "INS": baseValue = unit.baseINS; break;
+        }
+
+        // 변동치 적용
+        if (unitStates.TryGetValue(unit, out RuntimeUnitData runtime))
+        {
+            if (runtime.statModifiers.TryGetValue(statName, out int mod))
+            {
+                baseValue += mod;
+            }
+        }
+
+        return Mathf.Max(0, baseValue); // 스탯은 음수가 될 수 없음
     }
 
     // ========================================================================
