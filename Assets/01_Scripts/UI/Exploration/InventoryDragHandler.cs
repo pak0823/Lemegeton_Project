@@ -21,7 +21,10 @@ public class InventoryDragHandler : MonoBehaviour, IBeginDragHandler, IDragHandl
 
     private void OnDisable()
     {
-        // 오브젝트가 꺼질 때(버려질 때 포함) 무조건 레이캐스트를 다시 켬
+        // 1. 드래그 중인 상태에서 비활성화되었다면(아이템 삭제 등) 고스트 이미지 정리
+        if (InventoryUI.Instance != null) InventoryUI.Instance.EndDrag();
+
+        // 2. 오브젝트가 꺼질 때(버려질 때 포함) 무조건 레이캐스트를 다시 켬
         if (canvasGroup != null) canvasGroup.blocksRaycasts = true;
     }
 

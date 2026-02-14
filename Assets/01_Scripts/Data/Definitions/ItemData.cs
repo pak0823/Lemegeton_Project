@@ -40,6 +40,9 @@ public class ItemData : ScriptableObject
 
 
 
+    [Header("소비 효과 (Optional)")]
+    public Project.Data.ItemEffectSO useContextEffect; // 소비 아이템일 경우 할당
+
     // 런타임에 이 문자열로 이미지를 로드: "ItemAtlas[icon_potion]"
 
     public string GetAtlasKey()

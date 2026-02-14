@@ -1,8 +1,9 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using System.Collections.Generic;
 
-public class ExplorationStatusSlot : MonoBehaviour
+public class ExplorationStatusSlot : MonoBehaviour, IDropHandler
 {
     [Header("UI Components")]
     [SerializeField] private Text nameText;
@@ -42,6 +43,17 @@ public class ExplorationStatusSlot : MonoBehaviour
 
         // 2. 런타임 데이터 가져오기
         Refresh();
+    }
+
+    private void Awake()
+    {
+        // IDropHandler가 작동하려면 Raycast Target이 되는 Graphic 컴포넌트(Image 등)가 필수입니다.
+        if (GetComponent<Graphic>() == null)
+        {
+            var img = gameObject.AddComponent<Image>();
+            img.color = Color.clear; // 투명하게 설정
+            Debug.Log($"[ExplorationStatusSlot] Added transparent Image to {name} for Drop events.");
+        }
     }
 
     // 상태 갱신 (데이터 매니저에서 최신 상태를 가져옴)
@@ -121,6 +133,31 @@ public class ExplorationStatusSlot : MonoBehaviour
                 {
                     childText.text = $"{Mathf.FloorToInt(current)}";
                 }
+            }
+        }
+    }
+
+    // ========================================================================
+    // [Phase 3] 드래그 앤 드롭 아이템 사용
+    // ========================================================================
+
+    public void OnDrop(UnityEngine.EventSystems.PointerEventData eventData)
+    {
+        // 1. 드롭된 객체가 인벤토리 아이템인지 확인
+        if (eventData.pointerDrag == null) return;
+
+        var dragHandler = eventData.pointerDrag.GetComponent<InventoryDragHandler>();
+        if (dragHandler != null)
+        {
+            int slotIndex = dragHandler.GetFromIndex();
+            
+            // 2. 소비 아이템 사용 요청
+            bool success = InventoryManager.Instance.UseConsumableItem(slotIndex, _targetData);
+
+            if (success)
+            {
+                // 성공 시 UI 즉시 갱신 (HP/MP bar 업데이트)
+                Refresh();
             }
         }
     }

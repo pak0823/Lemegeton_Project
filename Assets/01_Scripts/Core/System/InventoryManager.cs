@@ -64,7 +64,6 @@ public class InventoryManager : MonoBehaviour, IInventory
     }
 
     // 아이템 추가 로직 (중첩 및 빈자리 찾기)
-    // 아이템 추가 로직 (중첩 및 빈자리 찾기)
     public void AddItem(string id, int amount)
     {
         AddPartialItem(id, amount);
@@ -292,5 +291,68 @@ public class InventoryManager : MonoBehaviour, IInventory
         }
 
         return logs;
+    }
+
+    /// <summary>
+    /// [Phase 2] 소비 아이템 사용 로직. (ExplorationStatusSlot에 드롭 시 호출)
+    /// </summary>
+    public bool UseConsumableItem(int slotIndex, UnitData targetUnit)
+    {
+        if (slotIndex < 0 || slotIndex >= maxSlots) return false;
+        var item = slots[slotIndex];
+        if (item == null || targetUnit == null) return false;
+        
+        // [Refactor] 전략 패턴 사용: 아이템 데이터에 할당된 효과 실행
+        // 아이템 ID 하드코딩 제거됨
+        // InventoryUIManager -> InventoryUI 로 수정 (싱글톤 이름 확인 필요, 보통 InventoryUI)
+        ItemData itemData = null;
+
+        if (InventoryUI.Instance != null && InventoryUI.Instance.itemLibrary != null)
+        {
+            itemData = InventoryUI.Instance.itemLibrary.GetItem(item.itemID);
+        }
+
+        // 변수 선언
+        bool used = false;
+        int recoveredAmount = 0;
+        string statName = "";
+
+        if (itemData != null && itemData.useContextEffect != null)
+        {
+            // 효과 실행
+            if (itemData.useContextEffect.ExecuteEffect(targetUnit, out recoveredAmount, out statName))
+            {
+                used = true;
+            }
+        }
+        else
+        {
+            // 효과가 없는 아이템(재료 등)은 사용 불가
+            Debug.Log($"[InventoryManager] {item.itemID} has no context effect.");
+        }
+
+        // 사용 성공 시 처리
+        if (used)
+        {
+            // 아이템 1개 감소
+            item.count--;
+            if (item.count <= 0) slots[slotIndex] = null;
+            
+            UpdateCache(item.itemID, -1);
+            OnInventoryChanged?.Invoke();
+
+            // 로그 출력
+            string logMsg = $"{targetUnit.DisplayName}의 {statName}가 {recoveredAmount} 회복됐습니다.";
+            if (ExplorationLogUI.Instance != null)
+                ExplorationLogUI.Instance.Push(logMsg);
+
+            // 저장
+            PlayerDataManager.Instance.SaveGame();
+
+            Debug.Log($"[ItemUsed] {item.itemID} used on {targetUnit.DisplayName}. Recovered {recoveredAmount} {statName}.");
+            return true;
+        }
+
+        return false;
     }
 }

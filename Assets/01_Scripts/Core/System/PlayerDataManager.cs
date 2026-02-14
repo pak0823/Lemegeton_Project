@@ -251,6 +251,58 @@ public class PlayerDataManager : MonoBehaviour
     }
 
     // ========================================================================
+    // [Phase 1] 소비 아이템 효과 적용 (회복)
+    // ========================================================================
+
+    /// <summary>
+    /// 유닛의 체력을 최대 체력 비례(ratio)로 회복합니다.
+    /// </summary>
+    /// <returns>실제 회복된 HP 양</returns>
+    public int HealUnit(UnitData unit, float ratio)
+    {
+        if (unit == null) return 0;
+
+        InitializeRuntimeData(unit);
+        var runtime = unitStates[unit];
+        var (maxHP, _, _) = unit.CalcMaxStats(); // UnitData의 메서드 재사용
+
+        float oldHP = runtime.currentHP;
+		// [Fix] 소수점 버림 처리하여 정수로 회복
+		int healAmount = Mathf.FloorToInt(maxHP * ratio);
+		
+		// runtime.currentHP도 float이지만 UI 표시를 위해 깔끔한 정수 단위로 관리하고 싶다면 여기서도 Floor/Round 처리 고려
+		// 일단은 더해지는 값(healAmount)을 정수로 만듦
+		runtime.currentHP = Mathf.Min(maxHP, runtime.currentHP + healAmount);
+		
+		// 죽은 상태였다면 부활 처리 (필요 시)
+		if (runtime.isDead && runtime.currentHP > 0) runtime.isDead = false;
+
+		// 실제 회복된 양 반환 (정수 차이)
+		return Mathf.FloorToInt(runtime.currentHP - oldHP);
+    }
+
+    /// <summary>
+    /// 유닛의 판단력(MP)을 최대 판단력 비례(ratio)로 회복합니다.
+    /// </summary>
+    /// <returns>실제 회복된 MP 양</returns>
+    public int RestoreMP(UnitData unit, float ratio)
+    {
+        if (unit == null) return 0;
+
+        InitializeRuntimeData(unit);
+        var runtime = unitStates[unit];
+        var (_, maxMP, _) = unit.CalcMaxStats();
+
+        float oldMP = runtime.currentMP;
+		// [Fix] 소수점 버림 처리하여 정수로 회복
+		int restoreAmount = Mathf.FloorToInt(maxMP * ratio);
+
+		runtime.currentMP = Mathf.Min(maxMP, runtime.currentMP + restoreAmount);
+
+		return Mathf.FloorToInt(runtime.currentMP - oldMP);
+    }
+
+    // ========================================================================
 
     public void SaveGame()
     {
