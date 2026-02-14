@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 public class SaveData
 {
     public List<InventoryItem> inventory;
-    public int gold;
 }
 
 [System.Serializable]
@@ -368,8 +367,6 @@ public class PlayerDataManager : MonoBehaviour
         SaveData data = new SaveData();
         if (InventoryManager.Instance != null)
             data.inventory = InventoryManager.Instance.GetSaveData();
-        if (CurrencyManager.Instance != null)
-            data.gold = CurrencyManager.Instance.gold;
 
         string json = JsonUtility.ToJson(data);
         PlayerPrefs.SetString("SaveSlot_1", json);
@@ -385,16 +382,12 @@ public class PlayerDataManager : MonoBehaviour
 
         if (InventoryManager.Instance != null)
             InventoryManager.Instance.LoadData(data.inventory);
-        if (CurrencyManager.Instance != null)
-            CurrencyManager.Instance.gold = data.gold;
 
         Debug.Log("데이터 로드 완료.");
     }
 
     private void InitNewGame()
     {
-        if (CurrencyManager.Instance != null)
-            CurrencyManager.Instance.gold = 500;
         SaveGame();
     }
 }

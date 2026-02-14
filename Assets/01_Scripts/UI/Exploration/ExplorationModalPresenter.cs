@@ -8,6 +8,7 @@ public class ExplorationModalPresenter : MonoBehaviour
 
     [Header("UI Root / Prefabs")]
     [SerializeField] private Transform uiRoot;
+    [SerializeField] private Transform uiCenterAnchor; // [New] 게임 화면 중앙 앵커 (팝업용)
     [SerializeField] private EncounterBannerUI encounterBannerPrefab;
     [SerializeField] private RewardPopupUI rewardPopupPrefab;
 
@@ -37,7 +38,9 @@ public class ExplorationModalPresenter : MonoBehaviour
             return;
         }
 
-        _bannerInstance = Instantiate(encounterBannerPrefab, uiRoot);
+        // Anchor가 있으면 Anchor 밑에, 없으면 uiRoot 밑에 생성
+        Transform parent = uiCenterAnchor != null ? uiCenterAnchor : uiRoot;
+        _bannerInstance = Instantiate(encounterBannerPrefab, parent);
         _bannerInstance.SetMessage(message);
 
         if (_bannerCo != null) StopCoroutine(_bannerCo);
@@ -81,7 +84,9 @@ public class ExplorationModalPresenter : MonoBehaviour
             return;
         }
 
-        _rewardInstance = Instantiate(rewardPopupPrefab, uiRoot);
+        // Anchor가 있으면 Anchor 밑에, 없으면 uiRoot 밑에 생성
+        Transform parent = uiCenterAnchor != null ? uiCenterAnchor : uiRoot;
+        _rewardInstance = Instantiate(rewardPopupPrefab, parent);
         _rewardInstance.Open(rewards, () =>
         {
             _rewardInstance = null;
