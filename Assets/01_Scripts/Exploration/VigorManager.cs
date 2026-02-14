@@ -132,8 +132,9 @@ public class VigorManager : MonoBehaviour
 
         if (playerMovement != null)
         {
-            var pos = playerMovement.transform.position + Vector3.up * 0.3f;
-            FloatingTextManager.Instance?.Spawn(pos, $"-{finalAmount}");
+            var pos = playerMovement.transform.position + Vector3.up * 0.5f;
+            // [Mod] 스타일 시스템 적용 (VigorLoss)
+            FloatingTextManager.Instance?.Spawn(pos, $"-{finalAmount}", FloatingTextStyle.VigorLoss);
         }
 
         return true;
