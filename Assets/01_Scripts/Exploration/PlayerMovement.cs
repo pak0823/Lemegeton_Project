@@ -2198,7 +2198,8 @@ public class PlayerMovement : MonoBehaviour
 
         // 퍼즐 박스 위치 갱신 및 목표 체크 호출
 
-        PuzzleManager.Instance?.ExecutePush(box, fromCell, fromCell + dir);
+        // PuzzleManager removed
+        // PuzzleManager.Instance?.ExecutePush(box, fromCell, fromCell + dir);
 
     }
 

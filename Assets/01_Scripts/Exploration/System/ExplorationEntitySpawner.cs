@@ -16,8 +16,7 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
     {
         if (PlayerMovement.Instance != null)
         {
-            // Destroy immediately to ensure Instance is cleared
-            DestroyImmediate(PlayerMovement.Instance.gameObject); 
+            DestroyImmediate(PlayerMovement.Instance.gameObject);
         }
 
         if (playerPrefab == null)
@@ -28,25 +27,43 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
 
         GameObject player = Instantiate(playerPrefab);
         var movement = player.GetComponent<PlayerMovement>();
-        
-        // if (movement != null)
-        // {
-        //     movement.SetTilemaps(floors, obstacles, walls);
-        // }
 
-        // Find Start Position
+        // Find Start Position (New Logic)
         if (map != null)
         {
-            var spawn = map.transform.Find("PlayerStart");
-            if (spawn != null)
+            Vector3 spawnPos = Vector3.zero;
+            bool found = false;
+
+            // 1. Try Find Components
+            var points = map.GetComponentsInChildren<PlayerSpawnPoint>();
+            if (points != null && points.Length > 0)
             {
-                Vector3 pos = spawn.position;
-                pos.z = 0f;
-                player.transform.position = pos;
+                var target = points[Random.Range(0, points.Length)];
+                spawnPos = target.transform.position;
+                found = true;
+                // Debug.Log($"[EntitySpawner] Spawned at 'PlayerSpawnPoint' ({spawnPos})");
+            }
+
+            // 2. Fallback to Name Search
+            if (!found)
+            {
+                var spawn = map.transform.Find("PlayerStart");
+                if (spawn != null)
+                {
+                    spawnPos = spawn.position;
+                    found = true;
+                    // Debug.Log($"[EntitySpawner] Spawned at 'PlayerStart' ({spawnPos})");
+                }
+            }
+
+            if (found)
+            {
+                spawnPos.z = 0f;
+                player.transform.position = spawnPos;
             }
             else
             {
-                Debug.LogWarning("[EntitySpawner] 'PlayerStart' point not found in map.");
+                Debug.LogWarning("[EntitySpawner] No Spawn Point found (PlayerSpawnPoint or 'PlayerStart').");
             }
         }
 
@@ -68,10 +85,25 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
         var spawner = map.GetComponentInChildren<MapObjectSpawner>();
         if (spawner == null) return;
 
-        List<Collider2D> excludeList = new List<Collider2D>();
-        var tagged = map.GetComponentsInChildren<Collider2D>().Where(c => c.CompareTag("ExcludeSpawn"));
-        excludeList.AddRange(tagged);
+        // Collect Exclude Positions from PlayerSpawnPoints
+        List<Vector3Int> excludePositions = new List<Vector3Int>();
+        var points = map.GetComponentsInChildren<PlayerSpawnPoint>();
+        if (points != null)
+        {
+            foreach (var p in points)
+            {
+                // Convert World Pos to Cell Pos (assuming first floor map is reference)
+                if (floors != null && floors.Count > 0)
+                {
+                    excludePositions.Add(floors[0].WorldToCell(p.transform.position));
+                }
+            }
+        }
 
-        spawner.Spawn(floors, obstacles, walls, excludeList.ToArray());
+        List<Collider2D> excludeColliders = new List<Collider2D>();
+        var tagged = map.GetComponentsInChildren<Collider2D>().Where(c => c.CompareTag("ExcludeSpawn"));
+        excludeColliders.AddRange(tagged);
+
+        spawner.Spawn(floors, obstacles, walls, excludePositions, excludeColliders.ToArray());
     }
 }

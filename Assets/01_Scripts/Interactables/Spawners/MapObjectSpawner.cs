@@ -60,7 +60,7 @@ public class MapObjectSpawner : MonoBehaviour
 
 
 
-    public async void Spawn(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall, params Collider2D[] _excludeColliders)
+    public async void Spawn(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall, List<Vector3Int> excludePositions = null, params Collider2D[] _excludeColliders)
 
     {
 
@@ -174,36 +174,28 @@ public class MapObjectSpawner : MonoBehaviour
 
             bool isExcluded = false;
 
-            if (_excludeColliders != null)
-
+            // 1. Check Coordinate Exclusion (SpawnPoints)
+            if (excludePositions != null && excludePositions.Contains(pos))
             {
-
-                foreach (var col in _excludeColliders)
-
-                {
-
-                    if (col != null && col.OverlapPoint(worldPos))
-
-                    {
-
-                        isExcluded = true;
-
-                        break;
-
-                    }
-
-                }
-
+                isExcluded = true;
             }
 
-
+            // 2. Check Collider Exclusion (Legacy/Bounds)
+            if (!isExcluded && _excludeColliders != null)
+            {
+                foreach (var col in _excludeColliders)
+                {
+                    if (col != null && col.OverlapPoint(worldPos))
+                    {
+                        isExcluded = true;
+                        break;
+                    }
+                }
+            }
 
             if (!isExcluded)
-
             {
-
                 candidates.Add(new SpawnCandidate { map = map, cell = pos, worldPos = worldPos });
-
             }
 
         }

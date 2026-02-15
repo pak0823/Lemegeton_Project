@@ -1,26 +1,13 @@
-using Project.UI;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UIElements;
-
-public class ExplorationResetUi : MonoBehaviour
-{
-    public void OnNormalMapReset()
-    {
-        if (!PuzzleManager.Instance.IsPuzzleActive)
-        {
-            MapManager.Instance.ResetExplorationMap();
-            Debug.Log("[TestUI]:탐험맵 초기화 완료");
-        }
-    }
-
-    //public void OnUiShown()
-    //{
-    //    if (resetButton) resetButton.SetActive(true);
-    //}
-    //public void OnUiHidden()
-    //{
-    //    if (resetButton) resetButton.SetActive(false);
-    //}
-}
+using UnityEngine;
+
+public class ExplorationResetUi : MonoBehaviour
+{
+    public void OnNormalMapReset()
+    {
+        if (MapManager.Instance != null)
+        {
+            MapManager.Instance.ResetExplorationMap();
+            Debug.Log("[TestUI]:탐험맵 초기화 완료");
+        }
+    }
+}
