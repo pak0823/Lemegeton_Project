@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-[CreateAssetMenu(
-    menuName = "Battle/Skills/Common/Fear On Bleed",
-    fileName = "FearOnBleedSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Active/FearOnBleed", fileName = "CS_FearOnBleed")]
 public class FearOnBleedSkill : SkillAsset
 {
     [Header("기본 공포 효과")]

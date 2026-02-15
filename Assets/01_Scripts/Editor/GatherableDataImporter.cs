@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 using System.IO;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEngine.Networking;
@@ -9,13 +10,37 @@ using Project.Data;
 public class GatherableDataImporter : EditorWindow
 {
     // [Mod] 파일 대신 URL 입력 필드 사용
-    private string csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=1395977100&single=true&output=csv";
-    private string targetPath = "Assets/03_Data/Interactions/Gatherasble";
+    private static string csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=1395977100&single=true&output=csv";
+    private static string targetPath = "Assets/03_Data/Interactions/Gatherasble";
 
-    [MenuItem("Tools/Gatherable Data Importer")]
+    [MenuItem("Tools/Lemegeton/Data/Import Gatherables")]
     public static void ShowWindow()
     {
         GetWindow<GatherableDataImporter>("Gatherable Importer");
+    }
+
+    public static IEnumerator ImportRoutine()
+    {
+        string url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=1395977100&single=true&output=csv";
+        yield return ImportRoutine(url);
+    }
+
+    public static IEnumerator ImportRoutine(string url)
+    {
+        Debug.Log($"[GatherableImporter] Downloading CSV... {url}");
+        using (UnityWebRequest www = UnityWebRequest.Get(url))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                ImportData(www.downloadHandler.text);
+            }
+            else
+            {
+                Debug.LogError($"[GatherableImporter] Error: {www.error}");
+            }
+        }
     }
 
     private void OnGUI()
@@ -32,7 +57,7 @@ public class GatherableDataImporter : EditorWindow
         {
             if (!string.IsNullOrEmpty(csvUrl))
             {
-                ImportFromUrl();
+                Unity.EditorCoroutines.Editor.EditorCoroutineUtility.StartCoroutineOwnerless(ImportRoutine(csvUrl));
             }
             else
             {
@@ -40,37 +65,14 @@ public class GatherableDataImporter : EditorWindow
             }
         }
     }
-
+    
+    // Legacy support for non-static context if needed, but we use static routine now.
     private void ImportFromUrl()
     {
-        Debug.Log("Downloading CSV...");
-        
-        // 간단한 동기식 다운로드 (에디터 툴이므로 WebClient 사용 가능)
-        // UnityWebRequest는 비동기라 에디터에서 코루틴 없이 쓰기 번거로움
-        string csvData = "";
-        try 
-        {
-            using (var client = new System.Net.WebClient())
-            {
-                csvData = client.DownloadString(csvUrl);
-            }
-        }
-        catch (System.Exception e)
-        {
-            Debug.LogError($"Download Failed: {e.Message}");
-            return;
-        }
-
-        if (string.IsNullOrEmpty(csvData))
-        {
-            Debug.LogError("Downloaded data is empty.");
-            return;
-        }
-
-        ImportData(csvData);
+         Unity.EditorCoroutines.Editor.EditorCoroutineUtility.StartCoroutineOwnerless(ImportRoutine(csvUrl));
     }
 
-    private void ImportData(string textData)
+    private static void ImportData(string textData)
     {
         string[] lines = textData.Split('\n');
         
@@ -121,12 +123,12 @@ public class GatherableDataImporter : EditorWindow
         Debug.Log($"Import Complete! {successCount} items processed/updated.");
     }
 
-    private string[] SplitCsvLine(string line)
+    private static string[] SplitCsvLine(string line)
     {
         return line.Split(',');
     }
 
-    private void CreateAssetFromRow(string[] row)
+    private static void CreateAssetFromRow(string[] row)
     {
         // 0: ID
         // 1: Name 
@@ -181,7 +183,7 @@ public class GatherableDataImporter : EditorWindow
         EditorUtility.SetDirty(data);
     }
 
-    private void ParseAndAddOutcome(GatherableDataSO data, string[] row, int textIdx, int resultIdx, int probIdx)
+    private static void ParseAndAddOutcome(GatherableDataSO data, string[] row, int textIdx, int resultIdx, int probIdx)
     {
         if (row.Length <= probIdx) return;
 
@@ -236,7 +238,7 @@ public class GatherableDataImporter : EditorWindow
         }
     }
 
-    private (string, int) ParseStatPenalty(string text)
+    private static (string, int) ParseStatPenalty(string text)
     {
         int value = 1;
         string stat = "STR"; 

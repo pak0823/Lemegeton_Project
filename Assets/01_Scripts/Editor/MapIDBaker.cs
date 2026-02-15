@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 public class MapIDBaker : EditorWindow
 {
-    [MenuItem("Tools/Lemegeton/Bake Map IDs")]
+    [MenuItem("Tools/Lemegeton/Map/Bake Map IDs")]
     public static void Init()
     {
         GetWindow<MapIDBaker>("Map ID Baker");

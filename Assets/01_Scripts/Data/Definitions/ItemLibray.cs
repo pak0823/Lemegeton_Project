@@ -6,7 +6,7 @@ using System.Linq;
 
 
 
-[CreateAssetMenu(fileName = "ItemLibrary", menuName = "Data/ItemLibrary")]
+[CreateAssetMenu(fileName = "ItemLibrary", menuName = "Data/Definition/ItemLibrary")]
 
 public class ItemLibrary : ScriptableObject
 

@@ -2,7 +2,7 @@ using UnityEngine;
 
 
 
-[CreateAssetMenu(fileName = "New Item", menuName = "Data/ItemData")]
+[CreateAssetMenu(fileName = "New Item", menuName = "Data/Definition/Item")]
 
 public class ItemData : ScriptableObject
 

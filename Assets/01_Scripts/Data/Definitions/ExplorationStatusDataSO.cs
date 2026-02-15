@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "ExplorationStatusData", menuName = "Lemegeton/Exploration/Status Data")]
+[CreateAssetMenu(fileName = "ExplorationStatusData", menuName = "Data/Definition/ExplorationStatus")]
 public class ExplorationStatusDataSO : ScriptableObject
 {
     [System.Serializable]

@@ -14,7 +14,7 @@ public struct StatusEffectInfo
     public int duration;
 }
 
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Damage", fileName = "ParametricDamageSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Template/ParametricDamage", fileName = "ParametricDamageSkill")]
 public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
 {
     // 6개 축 방향(표준 축좌표 단위벡터)

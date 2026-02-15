@@ -1,6 +1,6 @@
 using UnityEngine;
 
-[CreateAssetMenu(menuName = "Battle/TraitAsset", fileName = "Trait_New")]
+[CreateAssetMenu(menuName = "Battle/Unit/Trait", fileName = "Trait_New")]
 public class TraitAsset : ScriptableObject
 {
     [Header("Identity")]

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Hostility Spike", fileName = "HostilitySpikeSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Active/HostilitySpike", fileName = "CS_HostilitySpike")]
 public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
 {
     [Header("Hostility Settings")]

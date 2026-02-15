@@ -6,7 +6,7 @@ public enum ISBOSS { None, Boss }  //보스 구별
 
 
 
-[CreateAssetMenu(menuName = "Battle/UnitData", fileName = "UnitData")]
+[CreateAssetMenu(menuName = "Battle/Unit/UnitDefinition", fileName = "UnitData")]
 
 public class UnitData : ScriptableObject
 

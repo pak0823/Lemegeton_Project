@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 public class MissingScriptFinder : EditorWindow
 {
-    [MenuItem("Tools/Find Missing Scripts")]
+    [MenuItem("Tools/Lemegeton/Debug/Find Missing Scripts")]
     public static void FindMissingScripts()
     {
         GameObject[] allObjects = Object.FindObjectsOfType<GameObject>();
@@ -36,13 +36,13 @@ public class MissingScriptFinder : EditorWindow
         return path;
     }
 
-    [MenuItem("Tools/Open Exploration")]
+    [MenuItem("Tools/Lemegeton/Scenes/Open Exploration")]
     public static void OpenExploration()
     {
         UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/00_Scenes/ExplorationScene.unity");
     }
 
-    [MenuItem("Tools/Open Title")]
+    [MenuItem("Tools/Lemegeton/Scenes/Open Title")]
     public static void OpenTitle()
     {
         UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/00_Scenes/TitleScene.unity");

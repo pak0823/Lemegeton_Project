@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Smoke Bomb", fileName = "SmokeBombSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Active/SmokeBomb", fileName = "CS_SmokeBomb")]
 public class SmokeBombSkill : SkillAsset, ITargetMapProvider
 {
     // 기존 HostilityVisibility / AgilityBuff 유지(호환 목적)

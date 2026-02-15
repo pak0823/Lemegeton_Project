@@ -26,6 +26,15 @@ public struct TrainingRouteInfo
     public int trainingCost;  //해금 비용
 }
 
+public enum SkillTargetPreference
+{
+    HighestHostility, // 적대감 가장 높은 대상 (기본)
+    LowestHP,         // 체력 가장 낮은 대상 (막타)
+    Random,           // 완전 랜덤
+    Closest           // 가장 가까운 대상
+}
+
+
 public abstract class SkillAsset : ScriptableObject
 {
     [Header("Identity")]

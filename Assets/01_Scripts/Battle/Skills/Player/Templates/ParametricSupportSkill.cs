@@ -11,7 +11,7 @@ public enum SupportSkillMode
     Revive      // 소생 (소생 물약)
 }
 
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Support", fileName = "ParametricSupportSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Template/ParametricSupport", fileName = "ParametricSupportSkill")]
 public class ParametricSupportSkill : SkillAsset, ISelfCastSkill, IProjectileTileSkill
 {
     // 기본 범위 설정 (기본값 Single)

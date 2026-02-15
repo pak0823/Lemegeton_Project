@@ -7,9 +7,7 @@ using UnityEngine.Tilemaps;
 /// 자신에게 'n턴 동안' UnitState를 부여하는 스킬 (쇄국 1턴 용).
 /// - 기존 SelfStateSkill은 무기한, 이건 턴 지속형.
 /// </summary>
-[CreateAssetMenu(
-    menuName = "Battle/Skills/State/Self State Timed (Isolation)",
-    fileName = "SelfIsolationTimedSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Self/IsolationTimed", fileName = "CS_IsolationTimed")]
 public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
 {
     [Header("기본 방어 중첩 효과")]

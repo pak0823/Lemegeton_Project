@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "NewRewardTable", menuName = "Data/RewardTable")]
+[CreateAssetMenu(fileName = "NewRewardTable", menuName = "Data/Definition/RewardTable")]
 public class RewardTableSO : ScriptableObject
 {
     [System.Serializable]

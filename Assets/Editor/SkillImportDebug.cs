@@ -3,7 +3,7 @@ using UnityEditor;
 
 public class SkillImportDebug
 {
-    [MenuItem("Tools/Debug/Test Skill Import (Local)")]
+    [MenuItem("Tools/Lemegeton/Debug/Test Skill Import")]
     public static void RunTest()
     {
         string csv = @"ID,Type,ParentID,Name,CostType,CostValue,TargetType,Range,FormulaType,Value1,ValueStr,Description

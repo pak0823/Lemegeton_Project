@@ -15,7 +15,7 @@ using UnityEngine.Tilemaps;
 ///  2번: 스킬 사용 시 자신 적의 감소(0.40배)
 ///  + 상태 유지 중 자신의 차례 시작 시 생명 회복
 /// </summary>
-[CreateAssetMenu(menuName = "Battle/Skills/Player/Self Ambush", fileName = "SelfAmbushSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Self/Ambush", fileName = "CS_AmbushSkill")]
 public class SelfAmbushSkill : SkillAsset, ISelfCastSkill
 {
     public bool SelfCastOnSelect => true;

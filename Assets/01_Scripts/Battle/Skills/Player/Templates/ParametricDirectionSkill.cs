@@ -5,7 +5,7 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-[CreateAssetMenu(menuName = "Battle/Skills/Common/ParametricDirectionSkill", fileName = "ParametricDirectionSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Template/ParametricDirection", fileName = "ParametricDirectionSkill")]
 public class ParametricDirectionSkill : SkillAsset, ISkillCustomPreview, ITargetMapProvider, IInstantTileSkill
 {
     public enum BackMode

@@ -8,7 +8,7 @@ using UnityEngine.Tilemaps;
 /// 선택 즉시 자기 자신에게 상태를 부여하는 스킬.
 /// 지속시간 없음(무기한). 해제는 별도 '해제 스킬'로 처리.
 /// </summary>
-[CreateAssetMenu(menuName = "Battle/Skills/State/Self State (Permanent)", fileName = "SelfStateSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Self/StateSkill", fileName = "CS_SelfStateSkill")]
 public class SelfStateSkill : SkillAsset, ISelfCastSkill
 {
     [Header("State")]

@@ -96,6 +96,13 @@ public class BattleInputHandler : MonoBehaviour
             if (battleManager.CurrentSkillSO != null
                 && battleManager.CurrentSkillSO.targetMode == SkillTargetMode.Tile)
             {
+                // [수정] 맵 유효성 검사 추가 (ITargetMapProvider 지원)
+                if (!IsValidMapForSkill(map, battleManager.CurrentSkillSO))
+                {
+                    Debug.Log($"[Input] Invalid map for skill: {map.name}");
+                    return;
+                }
+
                 battleManager.ConfirmSkillOnTile(map, cell);
                 return;
             }
@@ -145,6 +152,13 @@ public class BattleInputHandler : MonoBehaviour
         if (battleManager.CurrentSkillSO.targetMode == SkillTargetMode.Tile)
         {
             if (battleManager.CurrentSkillSO is ParametricDirectionSkill) return;
+
+            // [수정] ITargetMapProvider 우선 검사
+            if (!IsValidMapForSkill(map, battleManager.CurrentSkillSO))
+            {
+                skillHighlighter?.ClearTransient();
+                return;
+            }
 
             bool isMapValid = false;
             var skill = battleManager.CurrentSkillSO;
@@ -337,5 +351,17 @@ public class BattleInputHandler : MonoBehaviour
 
     [Header("Special Highlighters")]
     public Highlighter beastDomainHighlighter;
+
+    // [New] ITargetMapProvider 검사 헬퍼
+    private bool IsValidMapForSkill(Tilemap map, SkillAsset skill)
+    {
+        if (skill is ITargetMapProvider provider)
+        {
+            var targetMap = provider.GetTargetMap(battleManager, battleManager.ActingUnit);
+            // provider가 특정 맵을 요구하면 그것만 허용
+            if (targetMap != null && map != targetMap) return false;
+        }
+        return true;
+    }
     #endregion
 }

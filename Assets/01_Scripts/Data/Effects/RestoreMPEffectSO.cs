@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Project.Data
 {
-    [CreateAssetMenu(menuName = "Data/ItemEffect/Restore MP")]
+    [CreateAssetMenu(menuName = "Data/Effect/RestoreMP")]
     public class RestoreMPEffectSO : ItemEffectSO
     {
         [Range(0f, 1f)]

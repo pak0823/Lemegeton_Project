@@ -8,7 +8,7 @@ using UnityEngine.Tilemaps;
 /// - removeAll = true: 전부 제거
 /// - removeAll = false: 지정된 stateIds만 제거
 /// </summary>
-[CreateAssetMenu(menuName = "Battle/Skills/State/Self State Cleanse", fileName = "SelfStateCleanseSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Self/Cleanse", fileName = "CS_SelfCleanse")]
 public class SelfStateCleanseSkill : SkillAsset, ISelfCastSkill
 {
     [Header("Cleanse Options")]

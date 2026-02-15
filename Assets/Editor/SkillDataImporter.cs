@@ -15,13 +15,13 @@ public class SkillDataImporter : EditorWindow
     private const string SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR-8wA50W8w_PsLGgoW9Vs-PbhKlEQeF0avqxG4AGfTkXklONFKXhd0_46gynEq3jgE2hMXNrJUcyRc/pub?gid=1909887612&single=true&output=csv";
     private const string SAVE_PATH = "Assets/03_Data/Skills/Imported";
 
-    [MenuItem("Tools/Data/Sync Skills (New)")]
+    [MenuItem("Tools/Lemegeton/Data/Import Skills")]
     public static void SyncSkills()
     {
-        EditorCoroutineUtility.StartCoroutineOwnerless(DownloadRoutine());
+        EditorCoroutineUtility.StartCoroutineOwnerless(ImportRoutine());
     }
 
-    private static IEnumerator DownloadRoutine()
+    public static IEnumerator ImportRoutine()
     {
         Debug.Log($"[SkillImporter] Downloading CSV... {SHEET_URL}");
         using (UnityWebRequest www = UnityWebRequest.Get(SHEET_URL))

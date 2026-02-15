@@ -8,7 +8,7 @@ using UnityEngine.Tilemaps;
 /// - 영역은 스킬을 사용한 그 위치에 고정
 /// - 이 스킬을 사용한 유닛은 영역 안에서 이동할 때 행동을 소비하지 않음(턴이 끝나지 않음)
 /// </summary>
-[CreateAssetMenu(menuName = "Battle/Skills/Zone/Self Beast Domain", fileName = "SelfBeastDomainSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Self/BeastDomain", fileName = "CS_BeastDomain")]
 public class SelfBeastDomainSkill : SkillAsset, ISelfCastSkill
 {
     public bool SelfCastOnSelect => true;

@@ -7,7 +7,7 @@ namespace Project.Data
     /// 채집/상호작용 오브젝트의 데이터 설정입니다.
     /// 기획서의 각 행(Row)에 해당합니다.
     /// </summary>
-    [CreateAssetMenu(menuName = "Data/Definitions/Gatherable Object Data")]
+    [CreateAssetMenu(menuName = "Data/Definition/Gatherable")]
     public class GatherableDataSO : ScriptableObject
     {
         [Header("기본 정보")]

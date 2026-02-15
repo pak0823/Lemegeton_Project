@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-[CreateAssetMenu(menuName = "Battle/Skills/Common/Parametric Heal", fileName = "ParametricHealSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Template/ParametricHeal", fileName = "ParametricHealSkill")]
 public class ParametricHealSkill : SkillAsset, ITargetMapProvider, IProjectileTileSkill
 {
     // 기존 Damage와 동일한 프리셋을 그대로 사용해 재사용성 확보

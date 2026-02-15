@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-[CreateAssetMenu(menuName = "Battle/Skills/State/Self Vigilance", fileName = "SelfVigilanceSkill")]
+[CreateAssetMenu(menuName = "Battle/Skill/Player/Self/Vigilance", fileName = "CS_SelfVigilance")]
 public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
 {
     public int durationTurns = 1;

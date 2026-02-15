@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class AddressablesBuilder : EditorWindow
 {
-    [MenuItem("Tools/Build Addressables")]
+    [MenuItem("Tools/Lemegeton/Build/Build Addressables")]
     public static void BuildContent()
     {
         Debug.Log("Starting Addressables Build...");

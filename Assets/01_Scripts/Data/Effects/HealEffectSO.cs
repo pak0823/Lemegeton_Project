@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Project.Data
 {
-    [CreateAssetMenu(menuName = "Data/ItemEffect/Heal HP")]
+    [CreateAssetMenu(menuName = "Data/Effect/Heal")]
     public class HealEffectSO : ItemEffectSO
     {
         [Range(0f, 1f)]
