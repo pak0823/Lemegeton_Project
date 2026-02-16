@@ -98,10 +98,20 @@ public class MapManager : MonoBehaviour
         if (currentMap == null) return;
 
         // 2. Tilemap Discovery Phase
-        var (floors, obstacles, walls) = FindTilemapsMulti(currentMap);
-        if (floors.Count == 0)
+        var mapData = currentMap.GetComponent<ExplorationMapData>();
+        if (mapData == null)
         {
-            Debug.LogError("Floor 타일맵을 찾을 수 없습니다! (WalkableLayers 하위에 있는지 확인 필요)");
+            Debug.LogError($"[MapManager] '{currentMap.name}'에 ExplorationMapData 컴포넌트가 없습니다.");
+            return;
+        }
+
+        var floors = mapData.floorMaps;
+        var walls = mapData.wallMaps;
+        var obstacles = mapData.obstacleMaps;
+
+        if (floors == null || floors.Count == 0)
+        {
+            Debug.LogError("Floor 타일맵 리스트가 비어있습니다! (ExplorationMapData 확인 필요)");
             return;
         }
 
@@ -157,20 +167,7 @@ public class MapManager : MonoBehaviour
         Debug.Log("[MapManager] Snapshot restored via PersistenceManager.");
     }
 
-    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
-    {
-        List<Tilemap> floors = new List<Tilemap>();
-        List<Tilemap> obstacles = new List<Tilemap>();
-        List<Tilemap> walls = new List<Tilemap>();
 
-        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
-        {
-            if (tm.CompareTag("Wall")) walls.Add(tm);
-            else if (tm.CompareTag("Obstacle")) obstacles.Add(tm);
-            else if (tm.CompareTag("Ground")) floors.Add(tm);
-        }
-        return (floors, obstacles, walls);
-    }
 
     void HookCameraToPlayer(Transform player, GameObject map)
     {

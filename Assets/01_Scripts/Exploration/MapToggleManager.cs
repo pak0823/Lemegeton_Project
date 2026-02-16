@@ -25,21 +25,7 @@ public class MapToggleManager : MonoBehaviour
         else Destroy(gameObject);
     }
 
-    (List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls) FindTilemapsMulti(GameObject map)
-    {
-        List<Tilemap> floors = new List<Tilemap>();
-        List<Tilemap> obstacles = new List<Tilemap>();
-        List<Tilemap> walls = new List<Tilemap>();
 
-        foreach (var tm in map.GetComponentsInChildren<Tilemap>())
-        {
-            if (tm.CompareTag("Wall")) walls.Add(tm);
-            else if (tm.CompareTag("Obstacle")) obstacles.Add(tm);
-            else if (tm.CompareTag("Floor")) floors.Add(tm);
-            else Debug.LogWarning($"[MapManager] Tag가 설정되지 않은 타일맵 발견: {tm.name}");
-        }
-        return (floors, obstacles, walls);
-    }
 
     public void EnterQuizMap()
     {
@@ -92,11 +78,20 @@ public class MapToggleManager : MonoBehaviour
 
     void SetupQuizMap(GameObject quizMap)
     {
-        var (floorMaps, obstacleMaps, wallMaps) = FindTilemapsMulti(quizMap);
+        var mapData = quizMap.GetComponent<ExplorationMapData>();
+        if (mapData == null)
+        {
+            Debug.LogError($"[MapToggleManager] QuizMap '{quizMap.name}'에 ExplorationMapData가 없습니다.");
+            return;
+        }
+
+        var floorMaps = mapData.floorMaps;
+        var wallMaps = mapData.wallMaps;
+        var obstacleMaps = mapData.obstacleMaps;
 
         if (floorMaps.Count == 0)
         {
-            Debug.LogError("QuizMap Floor 못 찾음");
+            Debug.LogError("QuizMap Floor 못 찾음 (ExplorationMapData 확인 필요)");
             return;
         }
 
