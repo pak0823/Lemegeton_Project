@@ -61,7 +61,7 @@ public class SkillDataImporter : EditorWindow
 
     private static bool ProcessGroup(SkillGroup group)
     {
-        // 1. Determine Asset Type
+        // 1. 에셋 타입 결정
         System.Type targetType = DetermineClassType(group.ActiveSettings);
         if (targetType == null)
         {
@@ -69,7 +69,7 @@ public class SkillDataImporter : EditorWindow
             return false;
         }
 
-        // 2. Load or Create Asset
+        // 2. 에셋 로드 또는 생성
         string assetPath = $"{SAVE_PATH}/Skill_{group.ID}.asset";
         SkillAsset asset = AssetDatabase.LoadAssetAtPath<SkillAsset>(assetPath);
         bool isNew = false;
@@ -89,40 +89,40 @@ public class SkillDataImporter : EditorWindow
             isNew = true;
         }
 
-        // 3. Inject Fields
+        // 3. 필드 주입
         asset.id = group.ID.ToString();
         asset.displayName = group.Name;
         asset.description = group.Description;
 
-        // Active Fields
+        // 액티브 필드
         InjectActiveFields(asset, group.ActiveSettings);
 
-        // Training Fields
-        // Reset old training routes? For now assume overwriting.
-        // NOTE: SkillAsset.trainingRoutes is an Array or List? Check ParametricDamageSkill.
-        // ParametricDamageSkill inherits SkillAsset -> needs `trainingRoutes` field check.
-        // SkillAsset definition wasn't fully shown but usually it has `TrainingParams[] trainingRoutes`.
-        // Let's assume standard SkillAsset has it or we inject into specific fields.
-        // ParametricDamageSkill has fields like `trainingApplyBleed`.
+        // 훈련 필드
+        // 이전 훈련 루트 초기화? 현재는 덮어쓰기 가정.
+        // 참고: SkillAsset.trainingRoutes가 배열인지 리스트인지 확인 필요. ParametricDamageSkill 확인.
+        // ParametricDamageSkill은 SkillAsset을 상속받으므로 `trainingRoutes` 필드 확인 필요.
+        // SkillAsset 정의가 완전히 보이지 않지만 보통 `TrainingParams[] trainingRoutes`를 가짐.
+        // 표준 SkillAsset이 이를 가지고 있거나 특정 필드에 주입한다고 가정.
+        // ParametricDamageSkill에는 `trainingApplyBleed` 같은 필드가 있음.
         
-        // Actually, trainingRoutes usually stores Title/Desc. 
-        // We might need to populate `trainingRoutes` array for UI tooltip, 
-        // AND set the boolean flags for logic.
+        // 실제로 trainingRoutes는 보통 제목/설명을 저장함. 
+        // UI 툴팁을 위해 `trainingRoutes` 배열을 채워야 할 수 있음, 
+        // 그리고 로직을 위한 불리언 플래그 설정.
         
         List<TrainingRouteInfo> routes = new List<TrainingRouteInfo>();
         
-        // Process each training row (max 3 routes: 0, 1, 2)
-        // Group.Trainings is List<SkillCSVRow>
+        // 각 훈련 행 처리 (최대 3개 루트: 0, 1, 2)
+        // Group.Trainings는 List<SkillCSVRow>임
         
-        // Clear existing flags (optional, but good for cleanliness)
-        // But since we are setting them via reflection based on current data,
-        // we might leave stale true values if not careful. 
-        // Ideal: Reset all "training..." bools to false? Too risky without knowing all fields.
+        // 기존 플래그 초기화 (선택 사항이지만 깔끔함을 위해 좋음)
+        // 하지만 현재 데이터를 기반으로 리플렉션을 통해 설정하므로,
+        // 주의하지 않으면 오래된 true 값이 남을 수 있음. 
+        // 이상적: 모든 "training..." 불리언을 false로 초기화? 모든 필드를 알지 못하면 너무 위험함.
         
         for (int i = 0; i < group.Trainings.Count; i++)
         {
             var tRow = group.Trainings[i];
-            // Add metadata for tooltip
+            // 툴팁용 메타데이터 추가
             routes.Add(new TrainingRouteInfo 
             { 
                 title = tRow.Name.Replace(" 훈련", ""), 
@@ -130,11 +130,11 @@ public class SkillDataImporter : EditorWindow
                 overrideSkillDescription = tRow.OverrideDescription 
             });
 
-            // Inject Logic Fields (e.g. trainingApplyBleed = true)
+            // 로직 필드 주입 (예: trainingApplyBleed = true)
             InjectTrainingLogic(asset, tRow, i);
         }
 
-        // Reflection set `trainingRoutes` (if it exists on base)
+        // 리플렉션으로 `trainingRoutes` 설정 (기반 클래스에 존재하는 경우)
         FieldInfo routesField = typeof(SkillAsset).GetField("trainingRoutes");
         if (routesField != null)
         {
@@ -147,14 +147,14 @@ public class SkillDataImporter : EditorWindow
 
     private static System.Type DetermineClassType(SkillCSVRow row)
     {
-        // Special Cases
+        // 특수 케이스
         if (row.FormulaType == "Field_Create" && row.ValueStr == "BeastField") return typeof(SelfBeastDomainSkill);
         if (row.FormulaType == "Field_Create" && row.ValueStr == "Smoke") return typeof(SmokeBombSkill);
         if (row.FormulaType == "Status_Buff" && row.ValueStr == "Stealth") return typeof(SelfAmbushSkill);
         if (row.FormulaType == "Status_Buff" && row.ValueStr == "Guard") return typeof(SelfVigilanceSkill);
         if (row.FormulaType == "Status_Buff" && row.ValueStr == "Isolation") return typeof(SelfIsolationTimedSkill);
         
-        // Generic Cases
+        // 일반 케이스
         SkillFormulaType ft = ParseFormulaType(row.FormulaType);
         switch (ft)
         {
@@ -171,15 +171,15 @@ public class SkillDataImporter : EditorWindow
             case SkillFormulaType.Buff_Resist:
             case SkillFormulaType.Buff_Special:
             case SkillFormulaType.Buff_Immune:
-                // Check if it has damage? If Power > 0, maybe ParametricDamage?
-                // But usually Support.
+                // 데미지가 있는지 확인? Power > 0이면 ParametricDamage일 수 있음?
+                // 하지만 보통은 Support.
                 if (row.Value1 > 0 && (row.TargetType == "Enemy" || row.TargetType == "All")) 
-                    return typeof(ParametricDamageSkill); // Hybrid?
+                    return typeof(ParametricDamageSkill); // 하이브리드?
                 return typeof(ParametricSupportSkill);
 
             case SkillFormulaType.Damage_Phys:
             case SkillFormulaType.Damage_Magic:
-            case SkillFormulaType.Status_Bleed: // Active Bleed Attack
+            case SkillFormulaType.Status_Bleed: // 액티브 출혈 공격
             case SkillFormulaType.Status_Burn:
                 return typeof(ParametricDamageSkill);
                 
@@ -190,11 +190,11 @@ public class SkillDataImporter : EditorWindow
 
     private static void InjectActiveFields(SkillAsset asset, SkillCSVRow row)
     {
-        // Common
+        // 공통
         asset.cost = row.CostValue;
         if (System.Enum.TryParse(row.CostType, out SkillCostResource cr)) asset.costResource = cr;
         
-        // Target & Range logic
+        // 타겟 및 사거리 로직
         if (row.TargetType == "Self") 
         {
             SetField(asset, "areaPreset", AreaPreset.Single);
@@ -209,11 +209,11 @@ public class SkillDataImporter : EditorWindow
         }
         else if (row.TargetType == "Tile")
         {
-            // Tile targeting usually implies 'Any' alignment (or specific logic)
-            // SmokeBomb uses Tile targeting.
+            // 타일 타겟팅은 보통 'Any' 정렬(또는 특정 로직)을 의미함
+            // 연막탄은 타일 타겟팅을 사용함.
             SetField(asset, "targetMode", SkillTargetMode.Tile);
             SetField(asset, "targetAlignment", SkillTargetAlignment.Any); 
-            // AreaPreset might depend on specific skill logic or default to Single (1 tile)
+            // AreaPreset은 특정 스킬 로직에 의존하거나 기본값 Single(1 타일)일 수 있음
             SetField(asset, "areaPreset", AreaPreset.Single);
         }
         else if (row.TargetType == "All")
@@ -222,9 +222,9 @@ public class SkillDataImporter : EditorWindow
              SetField(asset, "targetMode", SkillTargetMode.Unit);
         }
 
-        // Auto-detect Animation & GapClose based on Range
-        // Range > 1 implies Ranged/Projectile -> No Gap Close
-        // Range <= 1 implies Melee -> Gap Close
+        // 사거리에 따른 애니메이션 및 GapClose 자동 감지
+        // 사거리 > 1이면 원거리/투사체 -> Gap Close 없음
+        // 사거리 <= 1이면 근접 -> Gap Close 있음
         if (row.Range > 1)
         {
             SetField(asset, "animKind", SkillAnimKind.Ranged);
@@ -236,10 +236,10 @@ public class SkillDataImporter : EditorWindow
             SetField(asset, "useGapCloseJump", true);
         }
 
-        // Power (if applicable)
+        // 파워 (해당되는 경우)
         SetField(asset, "power", row.Value1);
         
-        // Specifics based on Formula
+        // 공식에 따른 세부 사항
         SkillFormulaType ft = ParseFormulaType(row.FormulaType);
         if (ft == SkillFormulaType.Damage_Phys) SetField(asset, "school", DamageSchool.Physical);
         if (ft == SkillFormulaType.Damage_Magic) SetField(asset, "school", DamageSchool.Magical);
@@ -247,7 +247,7 @@ public class SkillDataImporter : EditorWindow
         if (row.FormulaType == "Field_Create" && asset is SelfBeastDomainSkill bd)
         {
             bd.durationTurns = (int)row.Value1;
-            // Radius unknown from CSV, default to 2
+            // CSV에서 반경을 알 수 없음, 기본값 2
         }
         
         if (asset is HostilitySpikeSkill hs) hs.referenceMultiplier = row.Value1;
@@ -259,11 +259,11 @@ public class SkillDataImporter : EditorWindow
     {
         SkillFormulaType ft = ParseFormulaType(row.FormulaType);
         
-        // Field Mapping Strategy:
-        // Identify the "feature" and set:
-        // 1. Enable Bool (e.g. trainingApplyBleed = true)
-        // 2. Route Index (e.g. routeForBleed = routeIndex)
-        // 3. Value (e.g. trainingBleedStacks = Value1)
+        // 필드 매핑 전략:
+        // "기능"을 식별하고 설정:
+        // 1. 불리언 활성화 (예: trainingApplyBleed = true)
+        // 2. 루트 인덱스 (예: routeForBleed = routeIndex)
+        // 3. 값 (예: trainingBleedStacks = Value1)
         
         switch (ft)
         {
@@ -282,8 +282,8 @@ public class SkillDataImporter : EditorWindow
                 }
                 else if (row.ValueStr == "Suppress")
                 {
-                    // "Suppress" uses trainingSuppressionOnHit (int) as both value and flag (>0), so no bool field exists.
-                    // SetTraining would fail trying to set bool check to int field.
+                    // "Suppress"는 trainingSuppressionOnHit (int)를 값과 플래그(>0) 둘 다로 사용하므로 불리언 필드가 없음.
+                    // SetTraining은 int 필드에 불리언 체크를 설정하려고 하면 실패함.
                     SetField(asset, "routeForSuppression", routeIndex);
                     SetField(asset, "trainingSuppressionOnHit", (int)row.Value1);
                 }
@@ -305,22 +305,22 @@ public class SkillDataImporter : EditorWindow
                 SetTraining(asset, routeIndex, "CostOverride", true, "trainingUseCostOverride", "routeForCostOverride");
                 SetField(asset, "trainingCostOverride", (int)row.Value1);
                 break;
-                break;
+
             case SkillFormulaType.Aggro_Up:
             case SkillFormulaType.Aggro_Down:
-                // ParametricHeal / Support / SelfAmbush all have `trainingReduceHostility` or `trainingHostilityDown`
-                // Refactoring didn't unify these completely (Ambush has HostilityDown, others ReduceHostility).
-                // Try both.
+                // ParametricHeal / Support / SelfAmbush 모두 `trainingReduceHostility` 또는 `trainingHostilityDown`을 가짐
+                // 리팩토링으로 이것들이 완전히 통합되지 않음 (Ambush는 HostilityDown, 다른 것들은 ReduceHostility).
+                // 둘 다 시도.
                 if (!SetTraining(asset, routeIndex, "HostilityDown", true, "trainingHostilityDown", "routeForHostilityDown"))
                 {
                     if (!SetTraining(asset, routeIndex, "ReduceHostility", true, "trainingReduceHostility", "routeForReduceHostility"))
                     {
-                         // HostilitySpike / Vigilance: Increase (UseHostilitySpike / ApplyHostilityDelta?)
-                         // HostilitySpike uses `trainingApplyDefenseStacks` etc. Its main function IS hostility.
-                         // But if training adds MORE hostility? 
-                         // HostilitySpike has `trainingUseHostilitySpike`? No, that's Vigilance.
-                         // HostilitySpike is pure hostility. Training adds defense.
-                         // Vigilance has `trainingUseHostilitySpike`.
+                         // HostilitySpike / Vigilance: 증가 (UseHostilitySpike / ApplyHostilityDelta?)
+                         // HostilitySpike는 `trainingApplyDefenseStacks` 등을 사용함. 주요 기능이 적대감임.
+                         // 하지만 훈련이 더 많은 적대감을 추가한다면? 
+                         // HostilitySpike에 `trainingUseHostilitySpike`가 있나? 아니, 그건 Vigilance임.
+                         // HostilitySpike는 순수 적대감임. 훈련은 방어력을 추가함.
+                         // Vigilance는 `trainingUseHostilitySpike`를 가짐.
                          SetTraining(asset, routeIndex, "UseHostilitySpike", true, "trainingUseHostilitySpike", "routeForHostilitySpike");
                     }
                 }
@@ -330,26 +330,26 @@ public class SkillDataImporter : EditorWindow
                 SetField(asset, "trainingHostilityDelta", row.Value1); // Retreat
                 SetField(asset, "referenceMultiplier", row.Value1); // HostilitySpike
                 break;
-            case SkillFormulaType.Resource_Gain: // Refund
+            case SkillFormulaType.Resource_Gain: // 환급
                 if (row.ValueStr == "Kill")
                 {
                     SetTraining(asset, routeIndex, "RefundOnKill", true, "trainingRefundOnKill", "routeForRefundOnKill");
                 }
                 break;
-            case SkillFormulaType.Buff_Resist: // Beast Domain
+            case SkillFormulaType.Buff_Resist: // 야수 도메인
                 SetTraining(asset, routeIndex, "ApplyResistanceOnCast", true, "trainingApplyResistanceOnCast", "routeForApplyResistanceOnCast");
                 SetField(asset, "resistanceStacksOnCast", (int)row.Value1);
                 break;
-             case SkillFormulaType.Resource_Drain: // Rage Reduce (Beast Domain)
+             case SkillFormulaType.Resource_Drain: // 분노 감소 (야수 도메인)
                  SetTraining(asset, routeIndex, "ApplyRageDrainOnTurnStart", true, "trainingApplyRageDrainOnTurnStart", "routeForApplyRageDrainOnTurnStart");
                  break;
-            case SkillFormulaType.Passive_Action: // Free Action
+            case SkillFormulaType.Passive_Action: // 자유 행동
                 SetTraining(asset, routeIndex, "UseFreeAction", true, "trainingUseFreeAction", "routeForFreeAction");
                 break;
-            case SkillFormulaType.Heal_Turn: // Ambush Heal
+            case SkillFormulaType.Heal_Turn: // 매복 치유
                  SetTraining(asset, routeIndex, "ApplyHealOnTurnStart", true, "trainingApplyHealOnTurnStart", "routeForApplyHealOnTurnStart");
                  break;
-            case SkillFormulaType.Passive_Immune: // Ambush No Agi
+            case SkillFormulaType.Passive_Immune: // 매복 민첩 패널티 없음
                  if (row.ValueStr == "Debuff") 
                  {
                      SetTraining(asset, routeIndex, "NoAgiPenalty", true, "trainingNoAgiPenalty", "routeForNoAgiPenalty");
@@ -357,11 +357,11 @@ public class SkillDataImporter : EditorWindow
                  break;
             case SkillFormulaType.Modify_Range:
                  SetTraining(asset, routeIndex, "AreaOverride", true, "trainingUseAreaOverride", "routeForAreaOverride");
-                 // Value1 could be used to select preset if we map float -> enum, or use ValueStr for preset name.
-                 // For now, assume a default or specific preset logic.
-                 // Let's assume ValueStr="Vertical3" maps to AreaPreset.LineDiagU3 etc.
+                 // Value1은 float -> enum 매핑 시 프리셋 선택에 사용되거나, 프리셋 이름으로 ValueStr 사용 가능.
+                 // 현재는 기본 또는 특정 프리셋 로직 가정.
+                 // ValueStr="Vertical3"가 AreaPreset.LineDiagU3 등으로 매핑된다고 가정.
                  if (System.Enum.TryParse(row.ValueStr, out AreaPreset preset)) SetField(asset, "trainingAreaPreset", preset);
-                 else SetField(asset, "trainingAreaPreset", AreaPreset.LineDiagU3); // Default fallback?
+                 else SetField(asset, "trainingAreaPreset", AreaPreset.LineDiagU3); // 기본 폴백?
                  break;
             case SkillFormulaType.Post_Move:
                  SetTraining(asset, routeIndex, "PostMove", true, "trainingUsePostMove", "routeForPostMove");
@@ -389,7 +389,7 @@ public class SkillDataImporter : EditorWindow
         FieldInfo f = target.GetType().GetField(fieldName);
         if (f != null)
         {
-            // Type conversion attempt
+            // 타입 변환 시도
             try {
                 if (f.FieldType == typeof(int) && value is float) f.SetValue(target, (int)(float)value);
                 else if (f.FieldType == typeof(float) && value is int) f.SetValue(target, (float)(int)value);
@@ -404,7 +404,7 @@ public class SkillDataImporter : EditorWindow
         return SkillFormulaType.None;
     }
 
-    // --- Data Structures ---
+    // --- 데이터 구조 ---
     private class SkillGroup
     {
         public int ID;
@@ -418,7 +418,7 @@ public class SkillDataImporter : EditorWindow
     {
         var dict = new Dictionary<int, SkillGroup>();
         
-        // 1. Create Groups from Actives
+        // 1. 액티브에서 그룹 생성
         foreach (var r in rows)
         {
             if (r.Type == "Active")
@@ -430,7 +430,7 @@ public class SkillDataImporter : EditorWindow
             }
         }
         
-        // 2. Assign Trainings
+        // 2. 훈련 할당
         foreach (var r in rows)
         {
             if (r.Type == "Training")
@@ -445,23 +445,23 @@ public class SkillDataImporter : EditorWindow
         return new List<SkillGroup>(dict.Values);
     }
 
-    // --- CSV Parser ---
+    // --- CSV 파서 ---
     private static List<SkillCSVRow> ParseCSV(string text)
     {
         var list = new List<SkillCSVRow>();
         var lines = Regex.Split(text, @"\r\n|\n\r|\n|\r");
         
-        for (int i = 1; i < lines.Length; i++) // Skip Header
+        for (int i = 1; i < lines.Length; i++) // 헤더 건너뛰기
         {
             string line = lines[i];
             if (string.IsNullOrWhiteSpace(line)) continue;
             
-            // Regex for CSV split handling quotes
+            // 따옴표 처리를 위한 CSV 분할 정규식
             var matches = Regex.Matches(line, "(?:^|,)(?:\"(?<val>[^\"]*)\"|(?<val>[^,]*))");
             var values = new List<string>();
             foreach (Match m in matches) values.Add(m.Groups["val"].Value);
             
-            if (values.Count < 5) continue; // Min cols
+            if (values.Count < 5) continue; // 최소 컬럼 수
             
             try {
                 var row = new SkillCSVRow();
@@ -480,7 +480,7 @@ public class SkillDataImporter : EditorWindow
                 float.TryParse(values[9], out row.Value1);
                 row.ValueStr = values[10];
                 
-                row.Description = values[11]; // Description might be empty or valid
+                row.Description = values[11]; // 설명은 비어있거나 유효할 수 있음
                 
                 if (values.Count > 12)
                 {

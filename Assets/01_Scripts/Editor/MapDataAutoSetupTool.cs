@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 public class MapDataAutoSetupTool : EditorWindow
 {
-    [MenuItem("Tools/Auto Setup Map Data (Selected Prefabs)")]
+    [MenuItem("Tools/Lemegeton/Map/Auto Setup Map Data")]
     public static void SetupSelectedPrefabs()
     {
         var selected = Selection.gameObjects;
@@ -47,8 +47,7 @@ public class MapDataAutoSetupTool : EditorWindow
             mapData = root.AddComponent<ExplorationMapData>();
         }
 
-        // AutoSetup 호출 (ExplorationMapData 내에 정의된 로직 재사용)
-        // Public 메서드여야 함.
+        // AutoSetup 호출
         mapData.AutoSetup();
 
         EditorUtility.SetDirty(root);

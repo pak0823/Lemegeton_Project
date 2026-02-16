@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 
 
@@ -16,11 +17,29 @@ public class StageNormalMapData : ScriptableObject
 
     // 전투 웨이브 세트 (전투씬 자동 할당용)
 
-    [Header("Battle")]
+    [Header("Basic Info")]
+    public string stageId; // 문자열 ID (예: "1-1")
 
-    public WaveSet trapEncounterWave;   // 함정 게이지로 전투 진입 시
+    [System.Serializable]
+    public class BattleContextData
+    {
+        public BattleContext contextType;
+        public WaveSet waveSet;
+    }
 
-    public WaveSet postPuzzleWave;      // 퍼즐 클리어 후 전투 진입 시
+    [Header("Waves")]
+    public List<BattleContextData> contextWaves = new();
+
+
+    // 전투 웨이브 세트 (전투씬 자동 할당용)
+    public WaveSet GetWaveSet(BattleContext ctx)
+    {
+        // 리스트에서 Context에 맞는 웨이브 세트 반환
+        var found = contextWaves.Find(x => x.contextType == ctx);
+        if (found != null && found.waveSet != null) return found.waveSet;
+
+        return null;
+    }
 
 }
 

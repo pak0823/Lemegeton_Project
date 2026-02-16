@@ -43,6 +43,7 @@ public class BattleWaveManager : MonoBehaviour
     [SerializeField] private BattleContext debugContext = BattleContext.TrapEncounter;
 
     [SerializeField] private int debugStageNumber = -1;
+    [SerializeField] private string debugStageID = ""; // 디버그용 스테이지 ID
 
 
 
@@ -345,49 +346,45 @@ public class BattleWaveManager : MonoBehaviour
 
 
     private void AutoResolveWaveSet()
-
     {
-
         if (stageDB == null) stageDB = Resources.Load<StageDatabase>("DB/StageDatabase");
 
-
-
-        // 싱글톤 참조 (BM에 있던 로직 그대로)
+        // 1. 싱글톤 또는 디버그 값 가져오기
+        string stageId = StageRuntimeContext.Instance != null && !string.IsNullOrEmpty(StageRuntimeContext.Instance.CurrentStageID)
+            ? StageRuntimeContext.Instance.CurrentStageID
+            : debugStageID;
 
         int stageNo = StageRuntimeContext.Instance != null && StageRuntimeContext.Instance.CurrentStageNumber >= 0
-
             ? StageRuntimeContext.Instance.CurrentStageNumber
-
             : debugStageNumber;
 
-
-
         var ctx = StageRuntimeContext.Instance != null
-
             ? StageRuntimeContext.Instance.CurrentBattleContext
-
             : debugContext;
 
+        if (stageDB == null) return;
 
+        StageNormalMapData found = null;
 
-        if (stageDB == null || stageNo < 0) return;
-
-
-
-        StageNormalMapData found = stageDB.normalStages.FirstOrDefault(s => s != null && s.stageNumber == stageNo);
-
-
-
-        if (found != null)
-
+        // 2. ID로 먼저 검색
+        if (!string.IsNullOrEmpty(stageId))
         {
-
-            waveSet = (ctx == BattleContext.TrapEncounter) ? found.trapEncounterWave : found.postPuzzleWave;
-
-            Debug.Log($"[WaveManager] Auto-assigned: Stage {stageNo}, {ctx} -> {waveSet?.name}");
-
+            found = stageDB.GetStage(stageId);
         }
 
+        // 3. ID 검색 실패 시 번호로 검색 (Legacy)
+        if (found == null && stageNo >= 0)
+        {
+            found = stageDB.normalStages.FirstOrDefault(s => s != null && s.stageNumber == stageNo);
+        }
+
+        // 4. 웨이브 셋 결정
+        if (found != null)
+        {
+            // 개선된 메서드 사용 (Context로 조회, 없으면 레거시 필드 반환)
+            waveSet = found.GetWaveSet(ctx);
+            Debug.Log($"[WaveManager] Auto-assigned: Stage '{found.stageId}' (No.{found.stageNumber}), {ctx} -> {waveSet?.name}");
+        }
     }
 
 }

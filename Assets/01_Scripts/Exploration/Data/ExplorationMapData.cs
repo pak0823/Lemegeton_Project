@@ -5,13 +5,11 @@ using UnityEngine.Tilemaps;
 public class ExplorationMapData : MonoBehaviour
 {
     [Header("타일맵 리스트")]
-    public List<Tilemap> floorMaps = new List<Tilemap>();     // "Ground" or "Floor"
+    public List<Tilemap> floorMaps = new List<Tilemap>();     // "Ground"
     public List<Tilemap> wallMaps = new List<Tilemap>();      // "Wall" (with Impassable Layer)
     public List<Tilemap> obstacleMaps = new List<Tilemap>();  // "Obstacle"
     
     [Header("스폰 포인트 (Optional)")]
-    // 기존에는 하위의 PlayerSpawnPoint 컴포넌트를 찾거나 PlayerStart 이름을 찾았으나,
-    // 여기서 명시적으로 관리할 수도 있음.
     public List<Transform> spawnPoints = new List<Transform>(); 
 
 #if UNITY_EDITOR
@@ -23,7 +21,7 @@ public class ExplorationMapData : MonoBehaviour
         obstacleMaps.Clear();
         spawnPoints.Clear();
 
-        // 1. Tilemap Auto Setup
+        // Tilemap Auto Setup
         foreach (var tm in GetComponentsInChildren<Tilemap>(true))
         {
             if (tm.CompareTag("Ground"))
@@ -50,7 +48,7 @@ public class ExplorationMapData : MonoBehaviour
             return oa.CompareTo(ob);
         });
 
-        // 2. Spawn Point Auto Setup (PlayerSpawnPoint 컴포넌트 기반)
+        // Spawn Point Auto Setup
         var spawnComps = GetComponentsInChildren<PlayerSpawnPoint>(true);
         foreach (var sp in spawnComps)
         {
