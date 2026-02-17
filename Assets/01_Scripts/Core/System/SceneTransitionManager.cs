@@ -12,7 +12,12 @@ public class SceneTransitionManager : MonoBehaviour
     [Header("페이드용 CanvasGroup")]
     public CanvasGroup fader;
     [Header("페이드 지속시간")]
-    private float fadeDuration = 2f;
+    private float fadeDuration = 0.5f; // 페이드 시간 단축 (로딩 UI가 있으므로)
+
+    [Header("로딩 UI (Optional)")]
+    public Slider loadingProgressBar;
+    public Text loadingText; // TMP_Text 권장하나 기존 호환성 위해 Text 사용. 필요시 변경.
+    public GameObject loadingPanel; // 로딩 바/텍스트가 포함된 패널
 
     [Header("전투 복귀 컨텍스트")]
     public string pendingReturnScene;         // 돌아갈 탐험 씬 이름
@@ -73,30 +78,83 @@ public class SceneTransitionManager : MonoBehaviour
     // sceneName 씬으로 페이드아웃 → 로드 → 페이드인
     public void FadeToScene(string sceneName)
     {
-        StartCoroutine(FadeCoroutine(sceneName));
+        StartCoroutine(LoadSceneCoroutine(sceneName));
     }
-    IEnumerator FadeCoroutine(string sceneName)
+    
+    // [Refactor] 통합 로딩 코루틴
+    IEnumerator LoadSceneCoroutine(string sceneName)
     {
-        // 페이드 아웃 (alpha 0 → 1)
+        // 1. 입력 차단 및 페이드 아웃
+        if (fader != null) fader.blocksRaycasts = true; // 터치 차단
+        
         float t = 0f;
         while (t < fadeDuration)
         {
             t += Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            if(fader) fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
 
-        // 씬 로드 (비동기)
-        yield return SceneManager.LoadSceneAsync(sceneName);
+        // 2. 로딩 UI 표시
+        if (loadingPanel != null) loadingPanel.SetActive(true);
+        if (loadingProgressBar != null) loadingProgressBar.value = 0f;
+        if (loadingText != null) loadingText.text = "Loading...";
 
-        // 페이드 인 (alpha 1 → 0)
+        // 3. 메모리 정리 (GC) - 씬 넘어가기 전 안전한 타이밍
+        yield return Resources.UnloadUnusedAssets();
+        System.GC.Collect();
+
+        // 4. 비동기 로딩 시작
+        AsyncOperation op = SceneManager.LoadSceneAsync(sceneName);
+        op.allowSceneActivation = false; // 바로 넘어가지 않게 대기
+
+        float timer = 0.0f;
+        
+        // 최소 로딩 시간 보장 (깜빡임 방지)
+        while (!op.isDone)
+        {
+            yield return null;
+            timer += Time.deltaTime;
+
+            // Unity의 progress는 0.9에서 멈춤
+            float currentProgress = op.progress;
+            
+            // UI 업데이트 (Fake 100% 연출 포함)
+            if (currentProgress >= 0.9f)
+            {
+                currentProgress = 1f; // 0.9 -> 1.0 보간
+                
+                // 최소 1초 이상 지났을 때만 전환 허용
+                if (timer > 1.0f)
+                {
+                    if (loadingProgressBar != null) loadingProgressBar.value = 1f;
+                    op.allowSceneActivation = true;
+                }
+            }
+            else
+            {
+                // 로딩 중에는 실제 진행률 반영
+                if (loadingProgressBar != null) loadingProgressBar.value = currentProgress;
+            }
+            
+            if (loadingText != null) 
+                loadingText.text = $"Loading... {(int)(currentProgress * 100)}%";
+        }
+
+        // 5. 로딩 완료 및 UI 숨김
+        if (loadingPanel != null) loadingPanel.SetActive(false);
+
+        // 6. 페이드 인
         t = fadeDuration;
         while (t > 0f)
         {
             t -= Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            if(fader) fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
+        
+        // 7. 입력 차단 해제
+        if (fader != null) fader.blocksRaycasts = false;
     }
 
     public void SaveReturnPoint(string sceneName, Vector3 worldPos)
@@ -143,18 +201,53 @@ public class SceneTransitionManager : MonoBehaviour
 
     IEnumerator ReturnCoroutine()
     {
-        // 페이드 아웃
+        // 1. 페이드 아웃 & 입력 차단
+        if (fader != null) fader.blocksRaycasts = true;
+
         float t = 0f;
         while (t < fadeDuration)
         {
             t += Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            if(fader) fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
+        
+        // 2. 로딩 UI 표시
+        if (loadingPanel != null) loadingPanel.SetActive(true);
+        if (loadingProgressBar != null) loadingProgressBar.value = 0f;
+        if (loadingText != null) loadingText.text = "Returning...";
 
-        // 탐험 씬 로드
-        yield return SceneManager.LoadSceneAsync(pendingReturnScene);
+        // 3. 메모리 정리
+        yield return Resources.UnloadUnusedAssets();
+        System.GC.Collect();
 
+        // 4. 탐험 씬 로드 (비동기)
+        AsyncOperation op = SceneManager.LoadSceneAsync(pendingReturnScene);
+        op.allowSceneActivation = false;
+        
+        float timer = 0f;
+        while (!op.isDone)
+        {
+            yield return null;
+            timer += Time.deltaTime;
+            
+            float p = op.progress;
+            if (p >= 0.9f)
+            {
+                p = 1f;
+                // 복귀도 최소 시간 보장
+                if (timer > 1.0f) op.allowSceneActivation = true;
+            }
+            if (loadingProgressBar != null) loadingProgressBar.value = p;
+            if (loadingText != null) loadingText.text = $"Returning... {(int)(p * 100)}%";
+        }
+
+        // 5. 로딩 UI 숨김
+        if (loadingPanel != null) loadingPanel.SetActive(false);
+
+        // 6. 탐험 씬 플레이어 준비 대기
+        // (이 부분은 로딩이 끝난 직후라 바로 실행됨)
+        
         // 탐험 씬에서 PlayerMovement 준비될 때까지 대기 후 순간이동
         int safety = 300; // ~5초(60FPS 가정)
         while (PlayerMovement.Instance == null && safety-- > 0)
@@ -207,16 +300,18 @@ public class SceneTransitionManager : MonoBehaviour
             Debug.LogWarning("[Return] PlayerMovement 미발견 → 텔레포트 생략");
         }
 
-        // 페이드 인
+        // 7. 페이드 인
         t = fadeDuration;
         while (t > 0f)
         {
             t -= Time.deltaTime;
-            fader.alpha = Mathf.Clamp01(t / fadeDuration);
+            if(fader) fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
-
-        // 1회성 컨텍스트 정리
+        
+        // 8. 입력 차단 해제 & 컨텍스트 정리
+        if (fader != null) fader.blocksRaycasts = false;
+        
         pendingReturnScene = null;
         _isReturning = false;   // 가드 해제
     }
@@ -251,22 +346,10 @@ public class SceneTransitionManager : MonoBehaviour
         // 전투 진입 전까지 입력 차단(타일 클릭 등)
         PlayerMovement.Instance?.LockMovementIndefinite();
 
-        string testSecne = "TestScene";//임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
-
-        var presenter = ExplorationModalPresenter.Instance;
-        if (presenter == null)
-        {
-            // 프레젠터가 없으면 즉시 진입(안전 fallback)
-            //FadeToScene(battleScene);
-            FadeToScene(testSecne);//임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
-            return;
-        }
-
         string msg = $"{monsterName}과 마주쳤습니다. 전투에 돌입합니다.";
-        presenter.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
+        ExplorationModalPresenter.Instance.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
         {
             FadeToScene(battleScene);
-            //FadeToScene(testSecne); //임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
         });
     }
 
