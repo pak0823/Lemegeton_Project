@@ -5,7 +5,7 @@ using UnityEngine;
 public class PortalController : MonoBehaviour
 {
     [Header("이동할 씬 이름")]
-    public string targetScene = "BattleScene";
+    public SceneName targetScene = SceneName.BattleScene;
 
     [Header("전투 컨텍스트 전달(선택)")]
     [Tooltip("이 포탈을 사용할 때 전투 컨텍스트를 세팅할지 여부 (BattleScene으로 갈 때만 의미 있음)")]
@@ -19,7 +19,7 @@ public class PortalController : MonoBehaviour
     public void UsePortal()
     {
         // 전투씬으로 이동하는 포탈이라면 컨텍스트를 먼저 세팅
-        if (setBattleContextOnUse && targetScene == "BattleScene")
+        if (setBattleContextOnUse && targetScene == SceneName.BattleScene)
         {
             if (StageRuntimeContext.Instance == null)
                 new GameObject("StageRuntimeContext").AddComponent<StageRuntimeContext>();

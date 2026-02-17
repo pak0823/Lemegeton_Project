@@ -160,7 +160,7 @@ public class PlayerMovement : MonoBehaviour
 
     [SerializeField] private LayerMask encounterLayerMask;
 
-    [SerializeField] private string battleSceneName = "BattleScene"; // 현재 전투 씬 이름으로
+    [SerializeField] private SceneName battleSceneName = SceneName.BattleScene; // 현재 전투 씬 이름으로
 
 
 
@@ -1276,7 +1276,7 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-                        stm.SaveReturnPoint(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name, returnPos);
+                        stm.SaveReturnPoint(SceneName.ExplorationScene, returnPos);
 
 
 

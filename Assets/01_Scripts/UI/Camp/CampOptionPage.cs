@@ -145,7 +145,7 @@ public class CampOptionPage : MonoBehaviour
     {
         GameSpeedController.Instance?.ReleasePause();
         if (CampUIManager.Instance != null) CampUIManager.Instance.Hide();
-        SceneTransitionManager.Instance.FadeToScene("TitleScene");
+        SceneTransitionManager.Instance.FadeToScene(SceneName.TitleScene);
     }
 
     public void OnBtnQuitGame()

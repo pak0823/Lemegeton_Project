@@ -20,9 +20,9 @@ public class SceneTransitionManager : MonoBehaviour
     public GameObject loadingPanel; // 로딩 바/텍스트가 포함된 패널
 
     [Header("전투 복귀 컨텍스트")]
-    public string pendingReturnScene;         // 돌아갈 탐험 씬 이름
+    public SceneName pendingReturnScene;     // 돌아갈 탐험 씬 이름 (Enum)
     public Vector3 pendingReturnPosition;     // 돌아갈 월드 좌표
-    public bool HasPendingReturn => !string.IsNullOrEmpty(pendingReturnScene);
+    public bool HasPendingReturn => pendingReturnScene != SceneName.None;
 
     [Tooltip("탐험맵 재로딩 시 이 프리팹을 사용(랜덤 재추첨 방지)")]
     public GameObject explorationMapPrefabOverride;
@@ -75,6 +75,13 @@ public class SceneTransitionManager : MonoBehaviour
         else Destroy(gameObject);
     }
 
+    // [Overload] Enum 버전
+    public void FadeToScene(SceneName scene)
+    {
+        if (scene == SceneName.None) return;
+        FadeToScene(scene.ToString());
+    }
+
     // sceneName 씬으로 페이드아웃 → 로드 → 페이드인
     public void FadeToScene(string sceneName)
     {
@@ -84,6 +91,7 @@ public class SceneTransitionManager : MonoBehaviour
     // [Refactor] 통합 로딩 코루틴
     IEnumerator LoadSceneCoroutine(string sceneName)
     {
+        // ... (기존 로직 동일) ...
         // 1. 입력 차단 및 페이드 아웃
         if (fader != null) fader.blocksRaycasts = true; // 터치 차단
         
@@ -157,11 +165,11 @@ public class SceneTransitionManager : MonoBehaviour
         if (fader != null) fader.blocksRaycasts = false;
     }
 
-    public void SaveReturnPoint(string sceneName, Vector3 worldPos)
+    public void SaveReturnPoint(SceneName scene, Vector3 worldPos)
     {
-        pendingReturnScene = sceneName;
+        pendingReturnScene = scene;
         pendingReturnPosition = worldPos;
-        Debug.Log($"[Return] Save: scene={sceneName}, pos={worldPos}");
+        Debug.Log($"[Return] Save: scene={scene}, pos={worldPos}");
     }
     public void ReturnToSavedPoint()
     {
@@ -221,8 +229,8 @@ public class SceneTransitionManager : MonoBehaviour
         yield return Resources.UnloadUnusedAssets();
         System.GC.Collect();
 
-        // 4. 탐험 씬 로드 (비동기)
-        AsyncOperation op = SceneManager.LoadSceneAsync(pendingReturnScene);
+        // 4. 탐험 씬 로드 (비동기) - Enum 사용
+        AsyncOperation op = SceneManager.LoadSceneAsync(pendingReturnScene.ToString());
         op.allowSceneActivation = false;
         
         float timer = 0f;
@@ -312,7 +320,7 @@ public class SceneTransitionManager : MonoBehaviour
         // 8. 입력 차단 해제 & 컨텍스트 정리
         if (fader != null) fader.blocksRaycasts = false;
         
-        pendingReturnScene = null;
+        pendingReturnScene = SceneName.None;
         _isReturning = false;   // 가드 해제
     }
 
@@ -341,15 +349,28 @@ public class SceneTransitionManager : MonoBehaviour
         return v;
     }
 
-    public void EnterBattleWithEncounterBanner(string monsterName, string battleScene)
+    public void EnterBattleWithEncounterBanner(string monsterName, SceneName battleScene)
     {
         // 전투 진입 전까지 입력 차단(타일 클릭 등)
         PlayerMovement.Instance?.LockMovementIndefinite();
+        
+        // 임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
+        // 필요없으면 SceneName.TestScene 사용하지 않거나 로직 제거
+        SceneName target = battleScene; 
+        //target = SceneName.TestScene; 
+
+        var presenter = ExplorationModalPresenter.Instance;
+        if (presenter == null)
+        {
+            // 프레젠터가 없으면 즉시 진입(안전 fallback)
+            FadeToScene(target);
+            return;
+        }
 
         string msg = $"{monsterName}과 마주쳤습니다. 전투에 돌입합니다.";
         ExplorationModalPresenter.Instance.ShowEncounterBanner(msg, encounterBannerSeconds, () =>
         {
-            FadeToScene(battleScene);
+            FadeToScene(target);
         });
     }
 

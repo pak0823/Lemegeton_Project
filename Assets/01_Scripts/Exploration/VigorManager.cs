@@ -32,7 +32,7 @@ public class VigorManager : MonoBehaviour
     public UnityEvent onExplorationFailed;
 
     [Header("Fail Popup (temporary)")]
-    [SerializeField] private string titleSceneName = "TitleScene";
+    [SerializeField] private SceneName titleSceneName = SceneName.TitleScene;
     private GameObject _failPopupInstance;
 
     public int CurrentVigor => currentVigor;
@@ -255,7 +255,7 @@ public class VigorManager : MonoBehaviour
             if (SceneTransitionManager.Instance != null)
                 SceneTransitionManager.Instance.FadeToScene(titleSceneName);
             else
-                SceneManager.LoadScene(titleSceneName);
+                SceneManager.LoadScene(titleSceneName.ToString());
         });
 
         _failPopupInstance = canvasGO;
