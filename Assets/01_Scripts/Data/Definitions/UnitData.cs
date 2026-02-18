@@ -76,13 +76,13 @@ public class UnitData : ScriptableObject
 
     [Header("Bond & Traits")]
 
-    [Range(0, 60)]
+    [Range(0, 12)]
 
-    public int currentBond = 0; // 현재 유대 수치 (Max 60)
+    public int currentBond = 0; // 현재 유대 수치 (Max 12)
 
-    public TraitAsset activeTrait; // 현재 장착중인 성격
+    // public TraitAsset activeTrait; // Deprecated: All unlocked traits are active now
 
-    // 성격 리스트 (순서대로 10, 30, 60에 해금)
+    // 성격 리스트 (순서대로 2, 6, 12에 해금)
 
     public TraitAsset[] traits;
 
