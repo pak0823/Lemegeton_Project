@@ -84,7 +84,11 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
             route == routeForHostilitySpike)
         {
             float maxHost = 0f;
-            foreach (var u in Object.FindObjectsOfType<BattleUnit>())
+            // [Optimization] Use BattleManager Registry
+            var bmInstance = BattleManager.Instance;
+            var targets = (bmInstance != null) ? bmInstance.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
+
+            foreach (var u in targets)
             {
                 if (u == null || u.IsDead) continue;
                 if (u.data.team != caster.data.team) continue; // 같은 편 기준(설정에 따라 바꿀 수 있음)

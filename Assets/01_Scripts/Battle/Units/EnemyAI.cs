@@ -74,8 +74,14 @@ public class EnemyAI : MonoBehaviour
 
     protected List<BattleUnit> GetAlivePlayers()
     {
-        return FindObjectsOfType<BattleUnit>()
-            .Where(u => u != null && u.data.team == Team.Player && !u.IsDead)
+        // [Optimization] Use BattleManager registry
+        var bm = BattleManager.Instance;
+        var targets = (bm != null) 
+            ? bm.GetAliveUnits(Team.Player) 
+            : FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Player && !u.IsDead).ToList();
+
+        return targets
+            .Where(u => u != null)
             .Where(u => !SkillAsset.IsUntargetableByEnemy(u)) 
             .ToList();
     }

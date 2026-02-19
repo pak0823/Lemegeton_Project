@@ -333,8 +333,11 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
 
     BattleUnit PickPrimaryTarget()
     {
-        var players = Object.FindObjectsOfType<BattleUnit>()
-            .Where(u => u && u.data.team == Team.Player && !u.IsDead).ToList();
+        // [Optimization] Use BattleManager Registry
+        var bm = BattleManager.Instance;
+        var players = (bm != null) 
+            ? bm.GetAliveUnits(Team.Player) 
+            : Object.FindObjectsOfType<BattleUnit>().Where(u => u && u.data.team == Team.Player && !u.IsDead).ToList();
         if (players.Count == 0) return null;
 
         switch (priorityMode)
@@ -542,7 +545,11 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         List<BattleUnit> victims;
         if (trainingHitAllEnemies && routeForHitAllEnemies >= 0 && route == routeForHitAllEnemies)
         {
-            victims = Object.FindObjectsOfType<BattleUnit>()
+            // [Optimization] Use BattleManager Registry
+            var bmInst = BattleManager.Instance;
+            var targets = (bmInst != null) ? bmInst.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
+
+            victims = targets
                 .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team && u.CurrentMap == _map).ToList();
         }
         else

@@ -330,8 +330,11 @@ public class BattleWaveManager : MonoBehaviour
 
 
         // 2) 잔여 적 제거 (혹시 레이아웃 밖에서 생성된 놈들)
-
-        var leftovers = FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy).ToList();
+        // [Optimization] Use registry
+        var bm = BattleManager.Instance;
+        var leftovers = (bm != null) 
+            ? bm.GetAliveUnits(Team.Enemy).ToList() 
+            : FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy).ToList();
 
         foreach (var u in leftovers)
 

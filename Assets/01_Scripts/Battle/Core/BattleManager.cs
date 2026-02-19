@@ -71,6 +71,50 @@ public class BattleManager : MonoBehaviour
     // 이동/타겟팅 데이터
     private List<Vector3Int> moveOptions = new();        // 현재 이동 가능한 타일 목록 캐싱
 
+    // Unit Registry (유닛 중앙 관리)
+    private HashSet<BattleUnit> _activeUnits = new();
+    public IEnumerable<BattleUnit> ActiveUnits => _activeUnits;
+
+    public void RegisterUnit(BattleUnit unit)
+    {
+        if (unit != null && !_activeUnits.Contains(unit))
+        {
+            _activeUnits.Add(unit);
+            // Debug.Log($"[BattleManager] Unit Registered: {unit.name} (Total: {_activeUnits.Count})");
+        }
+    }
+
+    public void UnregisterUnit(BattleUnit unit)
+    {
+        if (unit != null && _activeUnits.Contains(unit))
+        {
+            _activeUnits.Remove(unit);
+            // Debug.Log($"[BattleManager] Unit Unregistered: {unit.name} (Total: {_activeUnits.Count})");
+        }
+    }
+
+    // StatusPanel Registry
+    public void RegisterStatusPanel(UnitStatusPanelUI panel)
+    {
+        _statusPanel = panel;
+    }
+
+    // [Optimization] Helper methods for unit retrieval
+    public List<BattleUnit> GetAllUnits() => _activeUnits.ToList(); // 사본 반환 안전
+    
+    public List<BattleUnit> GetAliveUnits(Team team) 
+    {
+        return _activeUnits
+               .Where(u => u != null && !u.IsDead && u.data.team == team)
+               .ToList();
+    }
+    public List<BattleUnit> GetAliveUnits()
+    {
+         return _activeUnits
+               .Where(u => u != null && !u.IsDead)
+               .ToList();
+    }
+
     // Databases (데이터 참조)
     [Header("Databases")]
     [SerializeField] private StateStatModifierDB stateStatDb; // 상태이상 스탯 보정 DB
@@ -262,7 +306,8 @@ public class BattleManager : MonoBehaviour
     public List<BattleUnit> GetValidTargetsForCycle(SkillAsset skill, BattleUnit caster)
     {
         var list = new List<BattleUnit>();
-        var allUnits = FindObjectsOfType<BattleUnit>();
+        // var allUnits = FindObjectsOfType<BattleUnit>(); // [Optimization] Use registry
+        var allUnits = _activeUnits;
 
         foreach (var u in allUnits)
         {
@@ -369,7 +414,8 @@ public class BattleManager : MonoBehaviour
 
     private void RebindAllUnitsAndInitATB()
     {
-        var battleUnit = FindObjectsOfType<BattleUnit>()
+        // var battleUnit = FindObjectsOfType<BattleUnit>() // [Optimization] Use registry
+        var battleUnit = _activeUnits
                         .Where(u => u.gameObject.activeInHierarchy && !u.IsDead)
                         .ToList();
 
@@ -516,7 +562,8 @@ public class BattleManager : MonoBehaviour
     public IEnumerable<BattleUnit> GetLivingEnemiesOf(BattleUnit _battleunit)
     {
         if (_battleunit == null) yield break;
-        var currentUnit = FindObjectsOfType<BattleUnit>();
+        // var currentUnit = FindObjectsOfType<BattleUnit>(); // [Optimization] Use registry
+        var currentUnit = _activeUnits;
 
         foreach (var units in currentUnit)
         {
@@ -681,7 +728,8 @@ public class BattleManager : MonoBehaviour
     }
     void CheckBattleEnd()
     {
-        var units = FindObjectsOfType<BattleUnit>();
+        // var units = FindObjectsOfType<BattleUnit>(); // [Optimization] Use registry
+        var units = _activeUnits;
         bool anyPlayer = units.Any(u => u.data.team == Team.Player && !u.IsDead);
         bool anyEnemy = units.Any(u => u.data.team == Team.Enemy && !u.IsDead);
 

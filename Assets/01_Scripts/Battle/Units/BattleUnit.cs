@@ -764,23 +764,15 @@ public class BattleUnit : MonoBehaviour
 
         // 상태 변경 시 캐시 무효화(이벤트가 있다면 구독)
 
+        /* Event subscriptions moved to OnEnable/OnDisable
         if (unitStateController != null)
-
         {
-
             unitStateController.OnStatesChanged += InvalidateStatCache;
-
-            unitStateController.OnBuffsChanged += InvalidateStatCache; // 캐시 무효화
-
-
-
-            // ATB 재계산도 연결
-
+            unitStateController.OnBuffsChanged += InvalidateStatCache;
             unitStateController.OnStatesChanged += RecomputeATBFromRefs;
-
             unitStateController.OnBuffsChanged += RecomputeATBFromRefs;
-
         }
+        */
 
 
 
@@ -801,45 +793,55 @@ public class BattleUnit : MonoBehaviour
     }
 
     void OnEnable()
-
     {
-
+        if (battleManager == null) battleManager = BattleManager.Instance; // [Optimization] Use Instance
+        // Fallback if Instance is null (though unlikely in battle)
         if (battleManager == null) battleManager = FindObjectOfType<BattleManager>();
+        
+        // Register and Subscribe
+        if (battleManager != null)
+        {
+            battleManager.RegisterUnit(this);
+            battleManager.OnWaveStarted += HandleWaveStarted;
+        }
 
-        if (battleManager != null) battleManager.OnWaveStarted += HandleWaveStarted;
-
+        // Subscribe to UnitStateController
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged += InvalidateStatCache;
+            unitStateController.OnBuffsChanged += InvalidateStatCache;
+            unitStateController.OnStatesChanged += RecomputeATBFromRefs;
+            unitStateController.OnBuffsChanged += RecomputeATBFromRefs;
+        }
     }
 
+    void OnDisable()
+    {
+        // Unregister from BattleManager
+        if (battleManager != null)
+        {
+            battleManager.UnregisterUnit(this);
+            battleManager.OnWaveStarted -= HandleWaveStarted;
+        }
+        else if (BattleManager.Instance != null)
+        {
+            BattleManager.Instance.UnregisterUnit(this);
+            BattleManager.Instance.OnWaveStarted -= HandleWaveStarted;
+        }
 
+        // Unsubscribe from UnitStateController
+        if (unitStateController != null)
+        {
+            unitStateController.OnStatesChanged -= InvalidateStatCache;
+            unitStateController.OnBuffsChanged -= InvalidateStatCache;
+            unitStateController.OnStatesChanged -= RecomputeATBFromRefs;
+            unitStateController.OnBuffsChanged -= RecomputeATBFromRefs;
+        }
+    }
 
     void OnDestroy()
-
     {
-
-        if (unitStateController != null)
-
-        {
-
-            unitStateController.OnStatesChanged -= InvalidateStatCache;
-
-            unitStateController.OnBuffsChanged -= InvalidateStatCache;
-
-
-
-            unitStateController.OnStatesChanged -= RecomputeATBFromRefs;
-
-            unitStateController.OnBuffsChanged -= RecomputeATBFromRefs;
-
-        }
-
-        if (BattleManager.Instance != null)
-
-        {
-
-            BattleManager.Instance.OnWaveStarted -= HandleWaveStarted;
-
-        }
-
+        // Cleanup handled in OnDisable
     }
 
 
@@ -1620,12 +1622,6 @@ public class BattleUnit : MonoBehaviour
     public void TakeDamage(int amount)
 
     {
-
-        Stats.SetHP(Mathf.Max(HP - Mathf.Max(0, amount), 0));
-
-        OnDamaged?.Invoke(amount);
-
-
 
         int dmg = Mathf.Max(0, amount);
 

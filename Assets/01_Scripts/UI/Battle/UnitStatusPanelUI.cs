@@ -27,8 +27,14 @@ public class UnitStatusPanelUI : MonoBehaviour
 
     void Awake()
     {
+        if (!battle) battle = BattleManager.Instance;
         if (!battle) battle = FindObjectOfType<BattleManager>();
-        if (battle != null) battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
+        
+        if (battle != null)
+        {
+            battle.RegisterStatusPanel(this);
+            battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
+        }
     }
 
     void Start()
@@ -67,8 +73,10 @@ public class UnitStatusPanelUI : MonoBehaviour
 
     void BuildOnce()
     {
-        // 현재 씬의 생존 유닛 조회
-        var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
+        // 현재 씬의 생존 유닛 조회 (매니저 캐싱 사용)
+        if (battle == null) return;
+        var units = battle.ActiveUnits.Where(u => !u.IsDead).ToList();
+        // var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
 
         var enemies = Sort(units.Where(u => u.data.team == Team.Enemy), enemySort);
         var allies = Sort(units.Where(u => u.data.team == Team.Player), playerSort);

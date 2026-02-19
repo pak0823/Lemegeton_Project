@@ -98,7 +98,10 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
 
         StatusId defId = baseDefenseStatusId;
         int defStacks = Mathf.Max(1, baseDefenseStacks);
-        var allUnits = Object.FindObjectsOfType<BattleUnit>();
+        
+        // [Optimization] Use BattleManager Registry
+        var bm = BattleManager.Instance;
+        var allUnits = (bm != null) ? bm.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
 
         // 방어 중첩 적용
         if (defId != StatusId.None)

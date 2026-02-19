@@ -79,7 +79,11 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
 
         // 같은 팀 유닛들 중 Hostility 최댓값 찾기
         float maxHost = 0f;
-        foreach (var u in Object.FindObjectsOfType<BattleUnit>())
+        // [Optimization] Use BattleManager Registry
+        var bm = BattleManager.Instance;
+        var targets = (bm != null) ? bm.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
+
+        foreach (var u in targets)
         {
             if (u == null || u.IsDead) continue;
             if (u.data.team != _caster.data.team) continue;    // 같은 편 기준
