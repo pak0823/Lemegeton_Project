@@ -9,7 +9,6 @@ public class MapToggleManager : MonoBehaviour
 
     [Header("맵 참조")]
     public Transform gridParent;
-    public GameObject mainMap;
 
     [SerializeField] private Transform playerTransform;
 
@@ -37,9 +36,6 @@ public class MapToggleManager : MonoBehaviour
             Vector3 targetPos = spawn.position;
             targetPos.z = 0f;
             playerTransform.position = targetPos;
-            
-            // PuzzleManager removed
-            // PuzzleManager.Instance?.CacheInitialPlayerPosition(targetPos);
         }
         else
         {

@@ -66,45 +66,63 @@ public class PathfindingSystem : MonoBehaviour
 
     public Vector3Int GetCellFromWorldPos(Vector3 worldPos)
     {
-        // 1. 해당 위치에 있는 모든 콜라이더 검사 (Overlaps)
-        Collider2D[] cols = Physics2D.OverlapPointAll(worldPos);
-
+        // Pure Grid Logic: 모든 Floor 맵을 순회하며 수학적으로 좌표 계산
         Tilemap bestMap = null;
-        int maxOrder = int.MinValue;
+        Vector3Int bestCell = Vector3Int.zero;
+        
+        // 정렬 기준:
+        // 1. Sorting Order (높을수록 위)
+        // 2. 리스트 인덱스 (뒤쪽일수록 위)
+        int bestOrder = int.MinValue;
+        int bestIndex = -1;
 
-        foreach (var col in cols)
+        if (floorMaps != null)
         {
-            Tilemap map = col.GetComponent<Tilemap>();
-            if (map != null)
+            for (int i = 0; i < floorMaps.Count; i++)
             {
-                // 장애물은 제외하고 바닥만 체크 (필요 시 wall 포함 여부 결정)
-                if (obstacleMaps != null && obstacleMaps.Contains(map)) continue;
+                Tilemap map = floorMaps[i];
+                if (map == null) continue;
 
-                var renderer = map.GetComponent<TilemapRenderer>();
-                int order = renderer != null ? renderer.sortingOrder : 0;
+                // 1. 맵의 Grid 정보를 통해 Anchor 오프셋 계산
+                // (TileAnchor가 (0.5, 0.5, 0)이면 타일 중심이 그만큼 이동되어 보임 -> 역산해야 그리드 좌표)
+                Grid grid = map.layoutGrid;
+                
+                // 타일의 보이는 위치 = Grid위치 + AnchorOffset
+                // 따라서 Grid위치 = 보이는 위치 - AnchorOffset
+                Vector3 anchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(map.tileAnchor))
+                                     - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
+                
+                Vector3 correctedPos = worldPos - anchorOffset;
+                Vector3Int cell = map.WorldToCell(correctedPos);
+                cell.z = 0; // 2D 평면
 
-                // 가장 위에 그려진(Sorting Order가 높은) 맵 선택
-                if (order > maxOrder)
+                // 2. 해당 셀에 실제로 타일이 있는지 확인
+                if (map.HasTile(cell))
                 {
-                    maxOrder = order;
-                    bestMap = map;
+                    var renderer = map.GetComponent<TilemapRenderer>();
+                    int order = renderer != null ? renderer.sortingOrder : 0;
+
+                    // 3. 우선순위 비교 (더 위에 있는 맵 찾기)
+                    bool isBetter = false;
+                    
+                    if (bestMap == null) isBetter = true;
+                    else if (order > bestOrder) isBetter = true;
+                    else if (order == bestOrder && i > bestIndex) isBetter = true;
+
+                    if (isBetter)
+                    {
+                        bestMap = map;
+                        bestCell = cell;
+                        bestOrder = order;
+                        bestIndex = i;
+                    }
                 }
             }
         }
 
         if (bestMap != null)
         {
-            Vector3 correctedPos = worldPos;
-
-            // 밟고 있는 맵의 Anchor만큼 좌표를 보정해서 계산
-            Grid grid = bestMap.layoutGrid;
-            Vector3 anchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(bestMap.tileAnchor))
-                                 - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
-            correctedPos -= anchorOffset;
-
-            Vector3Int cell = bestMap.WorldToCell(correctedPos);
-            cell.z = 0;
-            return cell;
+            return bestCell;
         }
 
         // 바닥 맵을 못 찾았을 경우 Fallback
@@ -129,11 +147,21 @@ public class PathfindingSystem : MonoBehaviour
         if (targetMap == null) return false;
 
         // 2. 장애물 타일이 있는지 체크
+        // 2. 장애물 타일이 있는지 체크
         if (obstacleMaps != null)
         {
             foreach (var obs in obstacleMaps)
             {
                 if (obs.HasTile(cell)) return false;
+            }
+        }
+
+        // 2-1. 벽 타일이 있는지 체크 (추가됨)
+        if (wallMaps != null)
+        {
+            foreach (var wall in wallMaps)
+            {
+                if (wall.HasTile(cell)) return false;
             }
         }
 

@@ -713,7 +713,7 @@ public class BattleManager : MonoBehaviour
                 }
             }
 
-            SceneTransitionManager.Instance.ReturnToSavedPoint();
+            SceneTransitionManager.Instance.FadeToScene(SceneName.TitleScene);
         }
     }
     #endregion
