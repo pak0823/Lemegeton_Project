@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -174,7 +175,7 @@ public class BattleInputHandler : MonoBehaviour
     private void OnEscapeAction()
     {
         // BattleManager에 이미 구현된 도주 로직 호출
-        battleManager.OnClickEscape();
+        battleManager.OnClickEscape().Forget();
     }
 
     public void OnCancelAction()

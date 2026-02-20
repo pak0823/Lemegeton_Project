@@ -5,6 +5,7 @@ using UnityEngine.Tilemaps;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 
 public class MapManager : MonoBehaviour
 {
@@ -78,7 +79,7 @@ public class MapManager : MonoBehaviour
 
     public void ResetExplorationMap()
     {
-        bool isReturning = SceneTransitionManager.Instance != null && 
+        bool isReturning = SceneTransitionManager.Instance != null &&
                            SceneTransitionManager.Instance.HasExplorationSnapshot;
 
         // 1. Map Load/Find Phase
@@ -124,7 +125,7 @@ public class MapManager : MonoBehaviour
         // 3. Entity Spawn Phase (Player)
         var playerMovement = entitySpawner.SpawnPlayer(playerPrefab, currentMap, floors, obstacles, walls);
         Transform playerTransform = (playerMovement != null) ? playerMovement.transform : null;
-        
+
         HookCameraToPlayer(playerTransform, currentMap);
 
         // 4. Object Spawn Phase
@@ -136,9 +137,9 @@ public class MapManager : MonoBehaviour
         // 5. Persistence Restore Phase
         if (isReturning)
         {
-            RestoreSnapshotAsync(currentMap, floors[0], walls);
+            RestoreSnapshotAsync(currentMap, floors[0], walls).Forget();
         }
-        
+
         // 6. Fog Initialization
         // 맵의 전체 크기(Bounds)를 가져와서 Fog를 덮음
         Collider2D mapBounds = null;
@@ -146,25 +147,32 @@ public class MapManager : MonoBehaviour
         if (t) t.TryGetComponent(out mapBounds);
         if (!mapBounds) mapBounds = currentMap.GetComponentInChildren<CompositeCollider2D>(true);
         if (!mapBounds) mapBounds = currentMap.GetComponentInChildren<BoxCollider2D>(true);
-        
+
         if (mapBounds && ExplorationFogManager.Instance && playerTransform != null)
         {
             ExplorationFogManager.Instance.Initialize(playerTransform, mapBounds.bounds);
         }
     }
 
-    async void RestoreSnapshotAsync(GameObject map, Tilemap floorMap, List<Tilemap> wallMap)
+    async UniTaskVoid RestoreSnapshotAsync(GameObject map, Tilemap floorMap, List<Tilemap> wallMap)
     {
-        if (SceneTransitionManager.Instance == null || !SceneTransitionManager.Instance.HasExplorationSnapshot)
-            return;
-        
-        var snap = SceneTransitionManager.Instance.explorationSnapshot;
-        Transform container = (map != null) ? map.transform : gridParent;
+        try
+        {
+            if (SceneTransitionManager.Instance == null || !SceneTransitionManager.Instance.HasExplorationSnapshot)
+                return;
 
-        await persistenceManager.RestoreSnapshot(snap, map, container, floorMap, wallMap);
-        
-        SceneTransitionManager.Instance.ClearExplorationSnapshot();
-        Debug.Log("[MapManager] Snapshot restored via PersistenceManager.");
+            var snap = SceneTransitionManager.Instance.explorationSnapshot;
+            Transform container = (map != null) ? map.transform : gridParent;
+
+            await persistenceManager.RestoreSnapshot(snap, map, container, floorMap, wallMap);
+
+            SceneTransitionManager.Instance.ClearExplorationSnapshot();
+            Debug.Log("[MapManager] Snapshot restored via PersistenceManager.");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+        }
     }
 
 
@@ -172,7 +180,7 @@ public class MapManager : MonoBehaviour
     void HookCameraToPlayer(Transform player, GameObject map)
     {
         if (map == null) return;
-        
+
         var cam = Camera.main ? Camera.main.GetComponent<CameraFollow2D>()
                               : FindObjectOfType<CameraFollow2D>(true);
         if (!cam) return;

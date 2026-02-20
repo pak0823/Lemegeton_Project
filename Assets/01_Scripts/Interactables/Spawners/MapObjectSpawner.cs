@@ -10,6 +10,8 @@ using UnityEngine.ResourceManagement.AsyncOperations; // 비동기 핸들
 
 using System.Threading.Tasks; // Task 사용
 
+using Cysharp.Threading.Tasks; // UniTaskVoid 사용
+
 
 
 public class MapObjectSpawner : MonoBehaviour
@@ -60,10 +62,12 @@ public class MapObjectSpawner : MonoBehaviour
 
 
 
-    public async void Spawn(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall, List<Vector3Int> excludePositions = null, params Collider2D[] _excludeColliders)
+    public async UniTaskVoid Spawn(List<Tilemap> _floors, List<Tilemap> _obstacles, List<Tilemap> _wall, List<Vector3Int> excludePositions = null, params Collider2D[] _excludeColliders)
 
     {
 
+        try
+        {
         if (_floors == null || _floors.Count == 0) return;
 
 
@@ -300,6 +304,12 @@ public class MapObjectSpawner : MonoBehaviour
 
             candidates.RemoveAt(idx);
 
+        }
+
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
         }
 
     }

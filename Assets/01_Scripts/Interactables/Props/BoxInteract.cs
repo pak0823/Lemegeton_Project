@@ -41,6 +41,25 @@ public class BoxInteract : MonoBehaviour, IInteractable, IExplorationPersistable
     // === 외부 확인용 프로퍼티 ===
     public bool IsOpened => isOpened;
 
+    private Vector3Int _currentOccupiedCell;
+
+    private void RegisterObstacle()
+    {
+        if (!isOpened && PathfindingSystem.Instance != null)
+        {
+            _currentOccupiedCell = PathfindingSystem.Instance.GetCellFromWorldPos(transform.position);
+            PathfindingSystem.Instance.RegisterObstacle(_currentOccupiedCell);
+        }
+    }
+
+    private void UnregisterObstacle()
+    {
+        if (PathfindingSystem.Instance != null)
+        {
+            PathfindingSystem.Instance.UnregisterObstacle(_currentOccupiedCell);
+        }
+    }
+
     private void OnEnable()
     {
         if (isOpened)
@@ -63,6 +82,8 @@ public class BoxInteract : MonoBehaviour, IInteractable, IExplorationPersistable
     {
         if (animator == null)
             animator = GetComponent<Animator>();
+
+        RegisterObstacle();
 
         // 데이터 무결성 체크
         if (rewardTable == null)
@@ -174,6 +195,8 @@ public class BoxInteract : MonoBehaviour, IInteractable, IExplorationPersistable
     // 상자가 열린 뒤 후처리
     private void ApplyPostOpenBehavior()
     {
+        UnregisterObstacle();
+
         if (!removeOnOpen)
             return;
 
@@ -219,7 +242,7 @@ public class BoxInteract : MonoBehaviour, IInteractable, IExplorationPersistable
         {
             ApplyPostOpenBehavior(); // 상자 제거
         }
-                                 
+
         PlayerMovement.Instance?.UnlockMovementIndefinite();// 입력 해제
     }
 
@@ -244,6 +267,11 @@ public class BoxInteract : MonoBehaviour, IInteractable, IExplorationPersistable
                 isFocused = false;
             }
         }
+    }
+
+    private void OnDestroy()
+    {
+        UnregisterObstacle();
     }
 
     // 복원용: 즉시 열린 상태로 세팅

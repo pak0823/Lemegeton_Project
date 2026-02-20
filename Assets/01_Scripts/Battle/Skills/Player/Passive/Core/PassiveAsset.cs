@@ -13,14 +13,14 @@ public abstract class PassiveAsset : ScriptableObject
     [Tooltip("true면 전투 시작 시 자동 활성.")]
     public bool unlockedByDefault = false;
 
-    // 이미 해금되었는지 확인 (SaveData 등과 연동 필요, 지금은 임시로 PlayerPrefs 사용)
+    // 이미 해금되었는지 확인 — PlayerPrefs에서 PlayerDataManager 중앙 저장소로 이전
     public virtual bool IsUnlocked()
     {
         if (unlockedByDefault) return true;
-        // "Passive_패시브이름" 키가 1이면 해금된 것으로 간주
-        // id가 비어있으면 name을 사용하도록 폴백 로직 추가 가능하나, 지금은 id 위주로 감
+        if (PlayerDataManager.Instance == null) return false;
+
         string key = string.IsNullOrEmpty(id) ? name : id;
-        return PlayerPrefs.GetInt($"Passive_{key}", 0) == 1;
+        return PlayerDataManager.Instance.IsPassiveUnlocked(key);
     }
 
     // 해금 진행도 (0.0f ~ 1.0f)
@@ -30,12 +30,18 @@ public abstract class PassiveAsset : ScriptableObject
         if (IsUnlocked()) return 1.0f;
         return 0.0f; // 기본값
     }
-    // 해금 확정 (Awakened 버튼 눌렀을 때 실행)
+
+    // 해금 확정 (Awakened 버튼 눌렀을 때 실행) — PlayerPrefs → PlayerDataManager
     public virtual void Unlock()
     {
+        if (PlayerDataManager.Instance == null)
+        {
+            Debug.LogWarning("[Passive] PlayerDataManager가 없어 해금 저장 실패.");
+            return;
+        }
+
         string key = string.IsNullOrEmpty(id) ? name : id;
-        PlayerPrefs.SetInt($"Passive_{key}", 1);
-        PlayerPrefs.Save();
+        PlayerDataManager.Instance.UnlockPassive(key);
         Debug.Log($"[Passive] {displayName} 해금 완료!");
     }
 

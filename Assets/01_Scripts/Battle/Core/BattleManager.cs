@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using Cysharp.Threading.Tasks;
 
 public class BattleManager : MonoBehaviour
 {
@@ -101,8 +102,8 @@ public class BattleManager : MonoBehaviour
 
     // [Optimization] Helper methods for unit retrieval
     public List<BattleUnit> GetAllUnits() => _activeUnits.ToList(); // 사본 반환 안전
-    
-    public List<BattleUnit> GetAliveUnits(Team team) 
+
+    public List<BattleUnit> GetAliveUnits(Team team)
     {
         return _activeUnits
                .Where(u => u != null && !u.IsDead && u.data.team == team)
@@ -386,7 +387,7 @@ public class BattleManager : MonoBehaviour
                         sr.sprite = data.UnitIcon;
                     }
                     unit.ApplyData();
-                    
+
                     // [Persistence] 저장된 상태 로드 (ApplyData 이후에 호출해야 함)
                     if (PlayerDataManager.Instance != null)
                     {
@@ -672,23 +673,15 @@ public class BattleManager : MonoBehaviour
         dead.OnDied -= HandleUnitDied;
         EmitActionLabel(dead, "");
 
-        StartCoroutine(Co_DieThenDestroy(dead));
+        Co_DieThenDestroy(dead).Forget();
     }
 
-    IEnumerator Co_DieThenDestroy(BattleUnit u)
+    async UniTaskVoid Co_DieThenDestroy(BattleUnit u)
     {
-        if (u == null) { CheckBattleEnd(); yield break; }
+        if (u == null) { CheckBattleEnd(); return; }
 
-        var routine = u.PlayDieAndWait(1.0f);
-        if (routine != null)
-        {
-            while (u != null)
-            {
-                if (!routine.MoveNext()) break;
-                yield return routine.Current;
-                if (u == null || u.gameObject == null) break;
-            }
-        }
+        // 사망 애니메이션 대기 (BattleUnit.PlayDieAndWait는 UniTask)
+        await u.PlayDieAndWait(1.0f);
 
         if (u != null && u.gameObject != null) Destroy(u.gameObject);
         CheckBattleEnd();
@@ -703,10 +696,10 @@ public class BattleManager : MonoBehaviour
         // [Persistence] 살아있는 아군 상태 저장
         if (PlayerDataManager.Instance != null)
         {
-            var units = FindObjectsOfType<BattleUnit>();
-            foreach (var u in units)
+            // [Optimization] FindObjectsOfType 제거 → _activeUnits 레지스트리 사용
+            foreach (var u in _activeUnits)
             {
-                if (u.data.team == Team.Player) // 죽은 애도 저장은 해야 함 (부활 로직 위해)
+                if (u != null && u.data.team == Team.Player)
                 {
                     PlayerDataManager.Instance.SyncFromBattle(u);
                 }
@@ -745,7 +738,7 @@ public class BattleManager : MonoBehaviour
             _battleEndedOnce = true;
             Debug.Log("[Battle] 패배...");
 
-            // [Persistence] 패배 시에도 상태 저장이 필요한가? 
+            // [Persistence] 패배 시에도 상태 저장이 필요한가?
             // 보통 패배하면 게임 오버거나, 상태가 유지된 채로 마을로 돌아감.
             // 여기서는 일단 저장함.
             if (PlayerDataManager.Instance != null)
@@ -913,38 +906,46 @@ public class BattleManager : MonoBehaviour
 
     #endregion
 
-    public async void OnClickEscape()
+    public async UniTaskVoid OnClickEscape()
     {
-        if (ActingUnit == null || ActingUnit.data.team != Team.Player) return;
-        if (state == BattleState.Resolving) return;
-
-        var aliveEnemies = FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy && !u.IsDead).ToList();
-        float enemyAgiSum = Mathf.Max(0.0001f, aliveEnemies.Sum(u => u.EffectiveAGI));
-        float successChance01 = Mathf.Clamp01(ActingUnit.EffectiveAGI / enemyAgiSum);
-        int percent = Mathf.FloorToInt(successChance01 * 100f);
-
-        string unitName = GetUnitLabel(ActingUnit);
-        string safeName = unitName.Replace("<", "&lt;").Replace(">", "&gt;");
-        string msg = $"<color=#C60004>{safeName}</color> 유닛을 전투에서 제외합니다. 진행할까요?\n(탈출 성공 확률: {percent}%)";
-
-        bool ok = await PopupManager.Instance.ConfirmRetreatAsync(msg, successChance01);
-        if (!ok) return;
-        bool success = (Random.value < successChance01);
-
-        if (success)
+        try
         {
-            await PopupManager.Instance.ConfirmAsync("탈출에 성공했습니다.", "확인", "");
-            RetreatCurrentUnit(ActingUnit);
-        }
-        else
-        {
-            await PopupManager.Instance.ConfirmAsync("탈출에 실패했습니다.", "확인", "");
-            turnManager.EndPlayerTurn();
-        }
+            if (ActingUnit == null || ActingUnit.data.team != Team.Player) return;
+            if (state == BattleState.Resolving) return;
 
-        CancelCurrentAction();
-        ClearAllPreviews();
-        ClearTargetSelection();
+            // [Optimization] FindObjectsOfType 제거 → _activeUnits 레지스트리 사용
+            var aliveEnemies = _activeUnits.Where(u => u != null && u.data.team == Team.Enemy && !u.IsDead).ToList();
+            float enemyAgiSum = Mathf.Max(0.0001f, aliveEnemies.Sum(u => u.EffectiveAGI));
+            float successChance01 = Mathf.Clamp01(ActingUnit.EffectiveAGI / enemyAgiSum);
+            int percent = Mathf.FloorToInt(successChance01 * 100f);
+
+            string unitName = GetUnitLabel(ActingUnit);
+            string safeName = unitName.Replace("<", "&lt;").Replace(">", "&gt;");
+            string msg = $"<color=#C60004>{safeName}</color> 유닛을 전투에서 제외합니다. 진행할까요?\n(탈출 성공 확률: {percent}%)";
+
+            bool ok = await PopupManager.Instance.ConfirmRetreatAsync(msg, successChance01);
+            if (!ok) return;
+            bool success = (Random.value < successChance01);
+
+            if (success)
+            {
+                await PopupManager.Instance.ConfirmAsync("탈출에 성공했습니다.", "확인", "");
+                RetreatCurrentUnit(ActingUnit);
+            }
+            else
+            {
+                await PopupManager.Instance.ConfirmAsync("탈출에 실패했습니다.", "확인", "");
+                turnManager.EndPlayerTurn();
+            }
+
+            CancelCurrentAction();
+            ClearAllPreviews();
+            ClearTargetSelection();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+        }
     }
 
     private string GetUnitLabel(BattleUnit u)
@@ -1290,11 +1291,12 @@ public class BattleManager : MonoBehaviour
     public void EmitPassiveLabelAutoClear(BattleUnit u, string label, float seconds = 1.0f)
     {
         OnUnitPassiveLabel?.Invoke(u, label);
-        StartCoroutine(Co_ClearPassiveLabelAfter(seconds));
+        Co_ClearPassiveLabelAfter(seconds).Forget();
     }
-    IEnumerator Co_ClearPassiveLabelAfter(float t)
+    async UniTaskVoid Co_ClearPassiveLabelAfter(float t)
     {
-        yield return new WaitForSeconds(t);
+        // t초 후 패시브 라벨 자동 클리어
+        await UniTask.Delay(System.TimeSpan.FromSeconds(t));
         OnUnitPassiveLabel?.Invoke(null, "");
     }
 

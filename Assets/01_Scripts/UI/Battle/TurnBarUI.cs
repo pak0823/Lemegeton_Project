@@ -82,7 +82,7 @@ public class TurnBarUI : MonoBehaviour
 
     {
 
-        battle = FindObjectOfType<BattleManager>();
+        battle = BattleManager.Instance;
 
         barWidth = barImage.rect.width;
 
@@ -229,9 +229,10 @@ public class TurnBarUI : MonoBehaviour
         }
 
         // 2) 존재하지만 아이콘이 없는 유닛 추가
-
-        foreach (var u in FindObjectsOfType<BattleUnit>())
-
+        // [Optimization] FindObjectsOfType 제거 → BattleManager 레지스트리 사용
+        var bm = BattleManager.Instance;
+        var allUnits = (bm != null) ? bm.GetAllUnits() : new System.Collections.Generic.List<BattleUnit>();
+        foreach (var u in allUnits)
         {
 
             if (unitIcons.ContainsKey(u)) continue;

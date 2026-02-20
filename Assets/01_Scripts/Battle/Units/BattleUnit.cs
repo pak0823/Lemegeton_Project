@@ -15,7 +15,7 @@ public class BattleUnit : MonoBehaviour
 
     [Header("Prefab Settings")]
     public ProjectileController defaultProjectilePrefab; // 기본 투사체 프리팹
-    
+
     // Components
     public UnitStats Stats { get; private set; }
     public UnitMover Mover { get; private set; }
@@ -794,10 +794,8 @@ public class BattleUnit : MonoBehaviour
 
     void OnEnable()
     {
-        if (battleManager == null) battleManager = BattleManager.Instance; // [Optimization] Use Instance
-        // Fallback if Instance is null (though unlikely in battle)
-        if (battleManager == null) battleManager = FindObjectOfType<BattleManager>();
-        
+        if (battleManager == null) battleManager = BattleManager.Instance;
+
         // Register and Subscribe
         if (battleManager != null)
         {
@@ -1591,22 +1589,16 @@ public class BattleUnit : MonoBehaviour
 
 
 
-    public IEnumerator PlayDieAndWait(float maxWait = 1.5f)
-
+    public async UniTask PlayDieAndWait(float maxWait = 1.5f)
     {
-
         if (animator)
-
         {
-
             if (data.team == Team.Player)
-
                 animator.SetTrigger("Die");
-
         }
 
-        yield return new WaitForSeconds(maxWait); // 간단 대기
-
+        // 사망 애니메이션 재생 대기
+        await UniTask.Delay(System.TimeSpan.FromSeconds(maxWait));
     }
 
     #endregion

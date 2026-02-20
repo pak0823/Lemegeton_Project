@@ -1,3 +1,4 @@
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using System.Collections.Generic;
@@ -104,6 +105,6 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
         var tagged = map.GetComponentsInChildren<Collider2D>().Where(c => c.CompareTag("ExcludeSpawn"));
         excludeColliders.AddRange(tagged);
 
-        spawner.Spawn(floors, obstacles, walls, excludePositions, excludeColliders.ToArray());
+        spawner.Spawn(floors, obstacles, walls, excludePositions, excludeColliders.ToArray()).Forget();
     }
 }

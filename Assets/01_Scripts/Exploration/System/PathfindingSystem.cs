@@ -12,8 +12,11 @@ public class PathfindingSystem : MonoBehaviour
     public List<Tilemap> floorMaps = new List<Tilemap>();
     public List<Tilemap> wallMaps = new List<Tilemap>();
     public List<Tilemap> obstacleMaps = new List<Tilemap>();
-    
+
     [SerializeField] private LayerMask impassableLayerMask;
+
+    // === 동적 장애물 (PushObject, BoxInteract 등) 점유 시스템 ===
+    private HashSet<Vector3Int> occupiedCells = new HashSet<Vector3Int>();
 
     public Tilemap floorTilemap => (floorMaps != null && floorMaps.Count > 0) ? floorMaps[0] : null;
 
@@ -22,7 +25,7 @@ public class PathfindingSystem : MonoBehaviour
         if (Instance == null) Instance = this;
         else if (Instance != this) Destroy(this);
     }
-    
+
     private void OnDestroy()
     {
         if (Instance == this) Instance = null;
@@ -35,11 +38,27 @@ public class PathfindingSystem : MonoBehaviour
         obstacleMaps = obstacles;
         wallMaps = walls;
         impassableLayerMask = impassableMask;
+        occupiedCells.Clear();
     }
 
+    public void RegisterObstacle(Vector3Int cell)
+    {
+        if (!occupiedCells.Contains(cell))
+        {
+            occupiedCells.Add(cell);
+        }
+    }
+
+    public void UnregisterObstacle(Vector3Int cell)
+    {
+        if (occupiedCells.Contains(cell))
+        {
+            occupiedCells.Remove(cell);
+        }
+    }
 
     // --- 타일맵 유틸리티 ---
-    
+
     public Tilemap GetWalkableMapAt(Vector3Int cell)
     {
         if (floorMaps == null) return null;
@@ -51,7 +70,7 @@ public class PathfindingSystem : MonoBehaviour
         }
         return null;
     }
-    
+
     // 논리적 판단을 위한 정확한 월드 좌표 반환
     public Vector3 GetWorldPosForLogic(Vector3Int cell)
     {
@@ -69,7 +88,7 @@ public class PathfindingSystem : MonoBehaviour
         // Pure Grid Logic: 모든 Floor 맵을 순회하며 수학적으로 좌표 계산
         Tilemap bestMap = null;
         Vector3Int bestCell = Vector3Int.zero;
-        
+
         // 정렬 기준:
         // 1. Sorting Order (높을수록 위)
         // 2. 리스트 인덱스 (뒤쪽일수록 위)
@@ -86,12 +105,12 @@ public class PathfindingSystem : MonoBehaviour
                 // 1. 맵의 Grid 정보를 통해 Anchor 오프셋 계산
                 // (TileAnchor가 (0.5, 0.5, 0)이면 타일 중심이 그만큼 이동되어 보임 -> 역산해야 그리드 좌표)
                 Grid grid = map.layoutGrid;
-                
+
                 // 타일의 보이는 위치 = Grid위치 + AnchorOffset
                 // 따라서 Grid위치 = 보이는 위치 - AnchorOffset
                 Vector3 anchorOffset = grid.LocalToWorld(grid.CellToLocalInterpolated(map.tileAnchor))
                                      - grid.LocalToWorld(grid.CellToLocalInterpolated(Vector3.zero));
-                
+
                 Vector3 correctedPos = worldPos - anchorOffset;
                 Vector3Int cell = map.WorldToCell(correctedPos);
                 cell.z = 0; // 2D 평면
@@ -104,7 +123,7 @@ public class PathfindingSystem : MonoBehaviour
 
                     // 3. 우선순위 비교 (더 위에 있는 맵 찾기)
                     bool isBetter = false;
-                    
+
                     if (bestMap == null) isBetter = true;
                     else if (order > bestOrder) isBetter = true;
                     else if (order == bestOrder && i > bestIndex) isBetter = true;
@@ -142,6 +161,9 @@ public class PathfindingSystem : MonoBehaviour
 
     public bool IsWalkableCell(Vector3Int cell)
     {
+        // 0. 동적 장애물(PushObject, 상자 등)이 캐싱되어 있는지 최우선 확인
+        if (occupiedCells.Contains(cell)) return false;
+
         // 1. 바닥 타일 존재 체크
         var targetMap = GetWalkableMapAt(cell);
         if (targetMap == null) return false;
@@ -166,6 +188,9 @@ public class PathfindingSystem : MonoBehaviour
         }
 
         // 3. 물리적 충돌체(LayerMask) 확인 (OverlapBox/Point)
+        // [주의] PushObject, BoxInteract의 콜라이더 레이어는 impassableLayerMask에 포함하면 안 됩니다.
+        //        해당 오브젝트들은 occupiedCells(위 0번 단계)로 데이터 기반 판정하므로
+        //        impassableLayerMask에는 벽, 구조물 등 정적 장애물 레이어만 포함해야 합니다.
         Vector3 worldPos = targetMap.GetCellCenterWorld(cell);
         // 타일 크기 고려해서 약간 작게 잡음
         Collider2D hit = Physics2D.OverlapBox(worldPos, new Vector2(0.8f, 0.8f), 0f, impassableLayerMask);
@@ -275,7 +300,7 @@ public class PathfindingSystem : MonoBehaviour
     {
         // 짝수 행 (y%2==0)
         // NW(-1,1), NE(0,1), W(-1,0), E(1,0), SW(-1,-1), SE(0,-1)
-        
+
         // 홀수 행 (y%2==1)
         // NW(0,1), NE(1,1), W(-1,0), E(1,0), SW(0,-1), SE(1,-1)
 
@@ -283,17 +308,17 @@ public class PathfindingSystem : MonoBehaviour
         {
             case Direction.West: return new Vector3Int(-1, 0, 0);
             case Direction.East: return new Vector3Int(1, 0, 0);
-            
+
             case Direction.NW: return oddRow ? new Vector3Int(0, 1, 0) : new Vector3Int(-1, 1, 0);
             case Direction.NE: return oddRow ? new Vector3Int(1, 1, 0) : new Vector3Int(0, 1, 0);
-            
+
             case Direction.SW: return oddRow ? new Vector3Int(0, -1, 0) : new Vector3Int(-1, -1, 0);
             case Direction.SE: return oddRow ? new Vector3Int(1, -1, 0) : new Vector3Int(0, -1, 0);
-            
+
             default: return Vector3Int.zero;
         }
     }
-    
+
     // 이웃 타일 최단 경로 찾기
     public List<Vector3Int> FindPathToAdjacentCell(Vector3Int start, Vector3Int objectCell)
     {

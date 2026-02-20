@@ -11,19 +11,26 @@ public class BattleStateMachine : MonoBehaviour
         manager = _mgr;
     }
 
-    public async void ChangeState(BattleBaseState newState)
+    public async UniTaskVoid ChangeState(BattleBaseState newState)
     {
-        if (CurrentState != null)
+        try
         {
-            await CurrentState.Exit();
-        }
+            if (CurrentState != null)
+            {
+                await CurrentState.Exit();
+            }
 
-        CurrentState = newState;
-        
-        if (CurrentState != null)
+            CurrentState = newState;
+
+            if (CurrentState != null)
+            {
+                CurrentState.Initialize(this, manager);
+                await CurrentState.Enter();
+            }
+        }
+        catch (System.Exception e)
         {
-            CurrentState.Initialize(this, manager);
-            await CurrentState.Enter();
+            Debug.LogException(e);
         }
     }
 

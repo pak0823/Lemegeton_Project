@@ -6,10 +6,10 @@ using UnityEngine.Tilemaps;
 public class ExplorationInteractionController : MonoBehaviour
 {
     private PlayerMovement playerMovement;
-    
+
     // PlayerMovement에서 가져온 로직을 위해 필요한 참조들
     // 초기화 시 주입받거나 Find로 찾음
-    
+
     public void Initialize(PlayerMovement movement)
     {
         this.playerMovement = movement;
@@ -20,7 +20,7 @@ public class ExplorationInteractionController : MonoBehaviour
         // 카메라를 통해 월드 좌표 계산
         var cam = Camera.main;
         if (cam == null) return;
-        
+
         if (!cam.pixelRect.Contains(mousePos)) return;
 
         float zDist = cam.orthographic ? 0f : (transform.position.z - cam.transform.position.z);
@@ -30,17 +30,17 @@ public class ExplorationInteractionController : MonoBehaviour
         // 타일 좌표계 변환
         Vector3Int clickedCell = PathfindingSystem.Instance.GetCellFromWorldPos(wp);
         // PlayerMovement.HandleTileClickInput 로직을 이곳으로 이관 예정
-        
+
         Debug.Log($"[Interaction] Clicked Cell: {clickedCell}");
 
         // 이동 중이면 입력 무시
         if (playerMovement.IsMoving) return;
 
         // Push 타겟 선택 모드인지 확인
-        if (playerMovement.IsPushSelectMode)
+        if (playerMovement.PushHandler.IsPushSelectMode)
         {
             // 클릭한 타일이 유효한 타겟인지 PlayerMovement가 위임받아 처리
-            playerMovement.ProcessPushTargetClick(clickedCell);
+            playerMovement.PushHandler.ProcessPushTargetClick(clickedCell);
             return;
         }
 
@@ -91,7 +91,7 @@ public class ExplorationInteractionController : MonoBehaviour
         // 2. PushObject 처리
         if (clickedPush != null)
         {
-            playerMovement.ProcessPushObjectClick(clickedPush);
+            playerMovement.PushHandler.ProcessPushObjectClick(clickedPush);
             return;
         }
 

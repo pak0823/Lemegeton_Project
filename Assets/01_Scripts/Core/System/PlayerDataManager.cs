@@ -4,11 +4,15 @@ using System;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 
 [System.Serializable]
 public class SaveData
 {
     public List<InventoryItem> inventory;
+
+    // [New] 패시브 해금 상태 통합 (모든 PassiveAsset PlayerPrefs 연동 대체)
+    public List<string> unlockedPassiveIds = new List<string>();
 }
 
 [System.Serializable]
@@ -44,6 +48,25 @@ public class PlayerDataManager : MonoBehaviour
 
     // [New] 런타임 상태 저장소
     private Dictionary<UnitData, RuntimeUnitData> unitStates = new Dictionary<UnitData, RuntimeUnitData>();
+
+    // [New] Addressables 핸들 추적기 — AssetReference 기반 AddUnit 핸들 누수 방지
+    private readonly ResourceTracker _tracker = new();
+
+    // [Save System] 패시브 해금 상태 — PlayerPrefs 대체
+    private HashSet<string> _unlockedPassiveIds = new HashSet<string>();
+
+    /// <summary>해당 패시브 ID가 해금되었는지 확인. PassiveAsset에서 호출.</summary>
+    public bool IsPassiveUnlocked(string passiveId) => _unlockedPassiveIds.Contains(passiveId);
+
+    /// <summary>패시브를 해금하고 즉시 저장. PassiveAsset.Unlock()에서 호출.</summary>
+    public void UnlockPassive(string passiveId)
+    {
+        if (_unlockedPassiveIds.Add(passiveId))
+        {
+            SaveGame();
+            Debug.Log($"[Passive] {passiveId} 해금 및 저장 완료.");
+        }
+    }
 
     [Header("전투 진형")]
     public UnitData[] formation = new UnitData[19];
@@ -81,42 +104,62 @@ public class PlayerDataManager : MonoBehaviour
         else
         {
             // 유닛이 없다면 어드레서블 로딩 시도
-            LoadStartingUnitsByLabel();
+            LoadStartingUnitsByLabel().Forget();
         }
 
         LoadGame();
     }
 
-    public async void LoadStartingUnitsByLabel()
+    private void OnDestroy()
     {
-        var handle = Addressables.LoadAssetsAsync<UnitData>("StartingUnit", (loadedUnit) =>
-        {
-            if (loadedUnit != null)
-            {
-                ownedUnits.Add(loadedUnit);
-                InitializeRuntimeData(loadedUnit); // [추가] 초기 상태 생성
-                Debug.Log($"[라벨 로딩] 유닛 획득: {loadedUnit.DisplayName}");
-            }
-        });
-
-        await handle.Task;
-        IsLoading = false;
-        OnUnitsLoaded?.Invoke();
-        Debug.Log("초기 유닛 로딩 완료!");
+        // AddUnitByAddress를 통해 추적된 Addressables 핸들 일괄 해제
+        _tracker.ReleaseAll();
     }
 
-    public async void AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
+    public async UniTaskVoid LoadStartingUnitsByLabel()
+    {
+        try
+        {
+            var units = await _tracker.LoadAssetsAsync<UnitData>("StartingUnit", (loadedUnit) =>
+            {
+                if (loadedUnit != null)
+                {
+                    ownedUnits.Add(loadedUnit);
+                    InitializeRuntimeData(loadedUnit); // [추가] 초기 상태 생성
+                    Debug.Log($"[라벨 로딩] 유닛 획득: {loadedUnit.DisplayName}");
+                }
+            });
+
+            IsLoading = false;
+            OnUnitsLoaded?.Invoke();
+            Debug.Log("초기 유닛 로딩 완료!");
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
+            IsLoading = false;
+        }
+    }
+
+    public async UniTaskVoid AddUnitByAddress(AssetReferenceT<UnitData> unitRef)
     {
         if (unitRef == null) return;
 
-        var handle = unitRef.LoadAssetAsync();
-        await handle.Task;
-
-        if (handle.Status == AsyncOperationStatus.Succeeded)
+        try
         {
-            ownedUnits.Add(handle.Result);
-            InitializeRuntimeData(handle.Result); // [추가] 초기 상태 생성
-            Debug.Log($"[UnitGet] 신규 유닛 획득: {handle.Result.DisplayName}");
+            // ResourceTracker를 통해 핸들을 추적 — OnDestroy시 일괄 해제됨
+            var unit = await _tracker.LoadAsync<UnitData>(unitRef.RuntimeKey?.ToString());
+
+            if (unit != null)
+            {
+                ownedUnits.Add(unit);
+                InitializeRuntimeData(unit);
+                Debug.Log($"[UnitGet] 신규 유닛 획득: {unit.DisplayName}");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogException(e);
         }
     }
 
@@ -129,7 +172,7 @@ public class PlayerDataManager : MonoBehaviour
         }
         return ownedUnits[index];
     }
-    
+
     public int GetOwnedUnitCount()
     {
         return ownedUnits.Count;
@@ -193,7 +236,7 @@ public class PlayerDataManager : MonoBehaviour
             battleUnit.Stats.SetHP(Mathf.Clamp(applyHP, 0, maxHP));
             battleUnit.Stats.SetMP(Mathf.Clamp(savedState.currentMP, 0, maxMP));
             battleUnit.Stats.SetRage(Mathf.Clamp(savedState.currentRage, 0, maxRage));
-            
+
             Debug.Log($"[SyncToBattle] {battleUnit.name} 상태 로드: HP {battleUnit.HP}/{maxHP}");
         }
         else
@@ -235,9 +278,9 @@ public class PlayerDataManager : MonoBehaviour
             // Debug.Log($"[PlayerData] Returning saved data for {data.DisplayName}. HP:{savedState.currentHP}");
             return savedState;
         }
-        
+
         Debug.Log($"[PlayerData] No saved data found for {data.DisplayName}. Total States: {unitStates.Count}");
-        return null; 
+        return null;
     }
 
     private void InitializeRuntimeData(UnitData data)
@@ -247,9 +290,9 @@ public class PlayerDataManager : MonoBehaviour
 
         // UnitData의 Helper 메서드 사용
         var (maxHP, maxMP, maxRage) = data.CalcMaxStats();
-        
+
         // [수정] MP도 꽉 찬 상태로 시작하도록 변경 (Rage는 0 유지)
-        unitStates[data] = new RuntimeUnitData(maxHP, maxMP, 0); 
+        unitStates[data] = new RuntimeUnitData(maxHP, maxMP, 0);
         Debug.Log($"[PlayerData] {data.DisplayName} 초기 RuntimeData 생성 (HP: {maxHP}, MP: {maxMP})");
     }
 
@@ -272,11 +315,11 @@ public class PlayerDataManager : MonoBehaviour
         float oldHP = runtime.currentHP;
 		// [Fix] 소수점 버림 처리하여 정수로 회복
 		int healAmount = Mathf.FloorToInt(maxHP * ratio);
-		
+
 		// runtime.currentHP도 float이지만 UI 표시를 위해 깔끔한 정수 단위로 관리하고 싶다면 여기서도 Floor/Round 처리 고려
 		// 일단은 더해지는 값(healAmount)을 정수로 만듦
 		runtime.currentHP = Mathf.Min(maxHP, runtime.currentHP + healAmount);
-		
+
 		// 죽은 상태였다면 부활 처리 (필요 시)
 		if (runtime.isDead && runtime.currentHP > 0) runtime.isDead = false;
 
@@ -362,28 +405,50 @@ public class PlayerDataManager : MonoBehaviour
 
     // ========================================================================
 
+    // [Save System] =============================================
+    // PlayerPrefs 제거 → Application.persistentDataPath 기반 JSON 파일 저장
+    // ============================================================
+
+    private static string SavePath => System.IO.Path.Combine(Application.persistentDataPath, "savedata.json");
+
     public void SaveGame()
     {
         SaveData data = new SaveData();
+
+        // 1. 인벤토리 저장
         if (InventoryManager.Instance != null)
             data.inventory = InventoryManager.Instance.GetSaveData();
 
-        string json = JsonUtility.ToJson(data);
-        PlayerPrefs.SetString("SaveSlot_1", json);
-        PlayerPrefs.Save();
+        // 2. 패시브 해금 상태 저장 (PlayerDataManager.Instance 담당)
+        data.unlockedPassiveIds = new List<string>(_unlockedPassiveIds);
+
+        string json = JsonUtility.ToJson(data, true);
+        System.IO.File.WriteAllText(SavePath, json, System.Text.Encoding.UTF8);
+        Debug.Log($"[Save] 저장 완료: {SavePath}");
     }
 
     public void LoadGame()
     {
-        if (!PlayerPrefs.HasKey("SaveSlot_1")) return;
+        if (!System.IO.File.Exists(SavePath))
+        {
+            Debug.Log("[Save] 저장 파일 없음. 신규 게임 시작.");
+            return;
+        }
 
-        string json = PlayerPrefs.GetString("SaveSlot_1");
+        string json = System.IO.File.ReadAllText(SavePath, System.Text.Encoding.UTF8);
         SaveData data = JsonUtility.FromJson<SaveData>(json);
 
-        if (InventoryManager.Instance != null)
+        if (data == null) return;
+
+        // 1. 인벤토리 복원
+        if (InventoryManager.Instance != null && data.inventory != null)
             InventoryManager.Instance.LoadData(data.inventory);
 
-        Debug.Log("데이터 로드 완료.");
+        // 2. 패시브 해금 상태 복원
+        if (data.unlockedPassiveIds != null)
+            _unlockedPassiveIds = new HashSet<string>(data.unlockedPassiveIds);
+
+        Debug.Log("[Save] 데이터 로드 완료.");
     }
 
     private void InitNewGame()

@@ -28,8 +28,7 @@ public class UnitStatusPanelUI : MonoBehaviour
     void Awake()
     {
         if (!battle) battle = BattleManager.Instance;
-        if (!battle) battle = FindObjectOfType<BattleManager>();
-        
+
         if (battle != null)
         {
             battle.RegisterStatusPanel(this);
@@ -155,8 +154,10 @@ public class UnitStatusPanelUI : MonoBehaviour
         }
 
         // 2) 현재 씬의 '생존 적'만 다시 카드 생성
+        // [Optimization] FindObjectsOfType 제거 → battle.ActiveUnits 레지스트리 사용
         var enemies = Sort(
-        FindObjectsOfType<BattleUnit>().Where(u => u && !u.IsDead && u.data.team == Team.Enemy),
+            (battle != null ? battle.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>())
+                .Where(u => u && !u.IsDead && u.data.team == Team.Enemy),
         enemySort
             );
         foreach (var u in enemies)

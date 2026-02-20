@@ -37,9 +37,13 @@ public class GigantEndTurnRegenPassive : PassiveAsset
 
 
 
-        // 해금이 안 됐다면 테스트용으로 강제로 진행도 반환
-
+        // 해금이 안 됐다면 0 반환 (미해금 상태)
+#if UNITY_EDITOR
+        // [개발 전용] 에디터에서는 강제로 100% 진행도 반환 (테스트 편의)
         return 1.0f;
+#else
+        return 0f;
+#endif
 
     }
 
