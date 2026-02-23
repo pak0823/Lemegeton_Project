@@ -240,70 +240,40 @@ public class MapObjectSpawner : MonoBehaviour
 
 
 
-        // [문양]
+        // ── 오브젝트 생성: pattern → object → trap 순서 ──────────────────
 
+        // [문양] 가장 먼저 배치
         if (patternRefs != null && patternRefs.Count > 0 && candidates.Count > 0)
-
         {
-
             int idx = Random.Range(0, candidates.Count);
-
             await SpawnObjAsync(patternRefs, candidates[idx], patternContainer, _wall);
-
             candidates.RemoveAt(idx);
-
         }
 
-
-
-        // [함정]
-
-        for (int i = 0; i < trapSpawnCount && candidates.Count > 0; i++)
-
-        {
-
-            int idx = Random.Range(0, candidates.Count);
-
-            await SpawnObjAsync(trapRefs, candidates[idx], trapContainer, _wall);
-
-            candidates.RemoveAt(idx);
-
-        }
-
-
-
-        // [상자]
-
+        // [상자] 두 번째 배치
         for (int i = 0; i < chestSpawnCount && candidates.Count > 0; i++)
-
         {
-
             int idx = Random.Range(0, candidates.Count);
-
-
 
             GameObject obj = await SpawnObjAsync(chestRefs, candidates[idx], chestContainer, _wall);
 
-
-
             // 생성된 오브젝트가 있으면 뒤집기
-
             if (obj != null && candidates[idx].worldPos.x > 0f)
-
             {
-
                 var sr = obj.GetComponent<SpriteRenderer>();
-
                 if (sr != null) sr.flipX = true;
-
                 else obj.transform.localScale = new Vector3(-1f, 1f, 1f);
-
             }
 
-
-
             candidates.RemoveAt(idx);
+        }
 
+        // [함정] 마지막 배치
+        for (int i = 0; i < trapSpawnCount && candidates.Count > 0; i++)
+        {
+            int idx = Random.Range(0, candidates.Count);
+            await SpawnObjAsync(trapRefs, candidates[idx], trapContainer, _wall);
+            candidates.RemoveAt(idx);
         }
 
         }
@@ -350,7 +320,7 @@ public class MapObjectSpawner : MonoBehaviour
 
 
 
-            // 컴포넌트 설정 
+            // 컴포넌트 설정
 
             var pid = obj.GetComponent<ExplorationPersistId>();
 

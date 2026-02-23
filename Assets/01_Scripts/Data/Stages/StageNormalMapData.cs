@@ -13,7 +13,9 @@ public class StageNormalMapData : ScriptableObject
 
     [Tooltip("일반 맵 프리팹 리스트")] public GameObject[] normalMapPrefabs;
 
-
+    [Header("맵 연결 구조")]
+    [Tooltip("이 스테이지의 맵 간 연결 관계를 정의하는 SO. 포탈 이동 시 사용됩니다.")]
+    public MapConnectionData mapConnectionData;
 
     // 전투 웨이브 세트 (전투씬 자동 할당용)
 

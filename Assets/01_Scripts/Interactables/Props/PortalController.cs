@@ -1,43 +1,65 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-public class PortalController : MonoBehaviour
+/// <summary>
+/// 일반 포탈 컨트롤러: 연결된 맵으로 이동합니다.
+/// MapConnectionData에 등록된 연결 맵만 이동 가능하며,
+/// 연결되지 않은 맵으로의 이동 시도는 차단됩니다.
+///
+/// Inspector에서 destinationMapId에 이동할 맵 ID를 입력하세요 (예: "moat", "camp").
+/// 이 ID는 MapConnectionData의 mapId, 도착 맵의 ExplorationMapData.mapId와 일치해야 합니다.
+/// </summary>
+public class PortalController : MonoBehaviour, IInteractable
 {
-    [Header("이동할 씬 이름")]
-    public SceneName targetScene = SceneName.BattleScene;
+    [Header("목적지 맵 ID")]
+    [Tooltip("이동할 맵의 ID. MapConnectionData의 mapId와 일치해야 합니다. (예: moat, camp, village)")]
+    public string destinationMapId;
 
-    [Header("전투 컨텍스트 전달(선택)")]
-    [Tooltip("이 포탈을 사용할 때 전투 컨텍스트를 세팅할지 여부 (BattleScene으로 갈 때만 의미 있음)")]
-    [SerializeField] private bool setBattleContextOnUse = false;
-    [SerializeField] private BattleContext battleContextWhenUsed = BattleContext.AfterPuzzle;
-    [SerializeField] private StageNormalMapData currentStageData; // 현재 스테이지 데이터
-    [SerializeField] private int stageNumberOverride = -1;        // 데이터가 없으면 이 값 사용
+    [Header("힌트 UI 라벨")]
+    [Tooltip("플레이어가 포탈에 가까이 갔을 때 표시되는 상호작용 힌트 텍스트")]
+    [SerializeField] private string hintLabel = "이동";
 
-    public string GetHintLabel() => "이동";
+    // IInteractable Property
+    public bool CanInteract => !string.IsNullOrEmpty(destinationMapId);
+    public string GetInteractLabel() => hintLabel;
 
+    // InteractionHintUI에서 라벨을 가져가기 위한 레거시 지원 (필요시 삭제 가능)
+    public string GetHintLabel() => hintLabel;
+
+    public void OnInteract()
+    {
+        UsePortal();
+    }
+
+    public void SetHighlight(bool isActive)
+    {
+        // 포탈 하이라이트 연출이 필요하다면 여기에 구현 (현재는 생략)
+    }
+
+    public Transform GetTransform()
+    {
+        return transform;
+    }
+
+    /// <summary>
+    /// 포탈 사용: MapTransitionManager를 통해 맵 이동을 요청합니다.
+    /// 연결되지 않은 맵이면 이동이 차단됩니다.
+    /// </summary>
     public void UsePortal()
     {
-        // 전투씬으로 이동하는 포탈이라면 컨텍스트를 먼저 세팅
-        if (setBattleContextOnUse && targetScene == SceneName.BattleScene)
+        if (MapTransitionManager.Instance == null)
         {
-            if (StageRuntimeContext.Instance == null)
-                new GameObject("StageRuntimeContext").AddComponent<StageRuntimeContext>();
-
-            int stageNo = (currentStageData != null) ? currentStageData.stageNumber :
-                          (stageNumberOverride >= 0 ? stageNumberOverride : -1);
-
-            string stageId = (currentStageData != null) ? currentStageData.stageId : "";
-
-            if (stageNo < 0 && string.IsNullOrEmpty(stageId))
-                Debug.LogWarning("[PortalController] stage info not set. (currentStageData or stageNumberOverride)");
-
-            StageRuntimeContext.Instance.SetStageNumber(stageNo);
-            StageRuntimeContext.Instance.SetStageID(stageId);
-            StageRuntimeContext.Instance.SetBattleContext(battleContextWhenUsed);
+            Debug.LogError("[PortalController] MapTransitionManager 인스턴스가 없습니다.");
+            return;
         }
 
-        SceneTransitionManager.Instance.FadeToScene(targetScene);
-        Debug.Log("[PortalController] UsePortal -> scene transition");
+        if (string.IsNullOrEmpty(destinationMapId))
+        {
+            Debug.LogWarning("[PortalController] destinationMapId가 설정되지 않았습니다.");
+            return;
+        }
+
+        // MapTransitionManager에서 연결 여부 검증 + 이동 처리
+        MapTransitionManager.Instance.TravelToMap(destinationMapId);
     }
 }
+

@@ -1,4 +1,4 @@
-﻿// PlayerMovement.cs
+// PlayerMovement.cs
 
 using System;
 
@@ -90,7 +90,14 @@ public class PlayerMovement : MonoBehaviour
 
 
 
-    // 경로 도착 후 실행할 콜백 (예: 상자 열기)
+    /// <summary>
+    /// 플레이어가 타일 위에 다다르때 발생하는 이벤트.
+    /// HiddenPortalController등이 구독하여 특정 타일 감지에 활용합니다.
+    /// </summary>
+    public static System.Action<Vector3Int> OnTileStepped;
+
+
+// 경로 도착 후 실행할 콜백 (예: 상자 열기)
 
     private Action pathArrivalCallback = null;
 
@@ -315,7 +322,7 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    public void ProcessInteractionClick(Vector3Int clickedCell, Transform targetTr, IInteractable interactable, PortalController portal, Collider2D collider, DescriptionData desc)
+    public void ProcessInteractionClick(Vector3Int clickedCell, Transform targetTr, IInteractable interactable, Collider2D collider, DescriptionData desc)
     {
         if (HandleGlobalClickBlocking()) return;
         if (isMovingByPath) return;
@@ -344,14 +351,16 @@ public class PlayerMovement : MonoBehaviour
             selectedTargetCell = currentCell;
             currentPathCells = new List<Vector3Int> { currentCell };
 
-            InteractionHandler.SetPendingInteraction(interactable, portal, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
+            InteractionHandler.SetPendingInteraction(interactable, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
 
             ShowPathPreview(currentPathCells);
 
             InteractionHintUI.Instance?.HideAll();
 
-            if (portal != null)
-                InteractionHintUI.Instance?.ShowSurveyAt(targetTr, portal.GetHintLabel());
+            if (interactable != null && desc != null)
+                InteractionHintUI.Instance?.ShowBothAt(targetTr, interactable.GetInteractLabel());
+            else if (interactable != null)
+                InteractionHintUI.Instance?.ShowSurveyAt(targetTr, interactable.GetInteractLabel());
             else if (desc != null)
                 InteractionHintUI.Instance?.ShowBothAt(targetTr);
             else
@@ -372,12 +381,14 @@ public class PlayerMovement : MonoBehaviour
         selectedTargetCell = newPath[newPath.Count - 1];
         currentPathCells = newPath;
 
-        InteractionHandler.SetPendingInteraction(interactable, portal, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
+        InteractionHandler.SetPendingInteraction(interactable, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
 
         ShowPathPreview(newPath);
 
-        if (portal != null)
-            InteractionHintUI.Instance?.ShowSurveyAt(targetTr, portal.GetHintLabel());
+        if (interactable != null && desc != null)
+            InteractionHintUI.Instance?.ShowBothAt(targetTr, interactable.GetInteractLabel());
+        else if (interactable != null)
+            InteractionHintUI.Instance?.ShowSurveyAt(targetTr, interactable.GetInteractLabel());
         else if (desc != null)
             InteractionHintUI.Instance?.ShowBothAt(targetTr);
         else
@@ -920,6 +931,8 @@ public class PlayerMovement : MonoBehaviour
 
                 TryTriggerTrapAtCell(cells[i]);
 
+                // 타일 도착 이벤트 발생 (HiddenPortalController 등이 구독)
+                OnTileStepped?.Invoke(cells[i]);
 
 
                 // 도착 지점에서 인카운터 체크

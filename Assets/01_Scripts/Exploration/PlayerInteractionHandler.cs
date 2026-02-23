@@ -7,7 +7,6 @@ public class PlayerInteractionHandler : MonoBehaviour
 
     // 상호작용 대상, 포탈, 콜라이더 등
     public IInteractable PendingInteractable { get; private set; }
-    public PortalController PendingPortal { get; private set; }
     public Collider2D CurrentInteractTarget { get; private set; }
     public DescriptionData CurrentDescData { get; private set; }
 
@@ -36,11 +35,6 @@ public class PlayerInteractionHandler : MonoBehaviour
             PendingInteractable.OnInteract();
         }
 
-        if (PendingPortal != null)
-        {
-            PendingPortal.UsePortal();
-        }
-
         InteractionHintUI.Instance?.HideCancel();
         InteractionHintUI.Instance?.HideAll();
         ClearInteractTargets();
@@ -59,10 +53,9 @@ public class PlayerInteractionHandler : MonoBehaviour
         ClearInteractTargets();
     }
 
-    public void SetPendingInteraction(IInteractable interactable, PortalController portal, Collider2D collider, DescriptionData desc)
+    public void SetPendingInteraction(IInteractable interactable, Collider2D collider, DescriptionData desc)
     {
         PendingInteractable = interactable;
-        PendingPortal = portal;
         CurrentInteractTarget = collider;
         CurrentDescData = desc;
     }
@@ -70,7 +63,6 @@ public class PlayerInteractionHandler : MonoBehaviour
     public void ClearInteractTargets()
     {
         PendingInteractable = null;
-        PendingPortal = null;
         CurrentInteractTarget = null;
         CurrentDescData = null;
     }

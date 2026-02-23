@@ -6,4 +6,5 @@ public interface IInteractable
     void SetHighlight(bool isActive);
     Transform GetTransform();
     bool CanInteract { get; }
+    string GetInteractLabel();
 }

@@ -49,7 +49,6 @@ public class ExplorationInteractionController : MonoBehaviour
         Collider2D clickedCollider = null;
         DescriptionData clickedDesc = null;
         PushObject clickedPush = null;
-        PortalController clickedPortal = null;
 
         var hits = Physics2D.OverlapPointAll(wp);
 
@@ -63,12 +62,12 @@ public class ExplorationInteractionController : MonoBehaviour
                 if (!clickedCollider) clickedCollider = h;
             }
 
-            // 상자(부모 포함) 검사
-            var chest = h.GetComponentInParent<IInteractable>();
-            if (chest != null)
+            // 상자, 포탈 등 IInteractable 통합 검사
+            var interactableObj = h.GetComponentInParent<IInteractable>();
+            if (interactableObj != null)
             {
-                if (chest.CanInteract == false) continue;
-                if (clickedInteractable == null) clickedInteractable = chest;
+                if (interactableObj.CanInteract == false) continue;
+                if (clickedInteractable == null) clickedInteractable = interactableObj;
                 if (!clickedCollider) clickedCollider = h;
             }
 
@@ -76,14 +75,6 @@ public class ExplorationInteractionController : MonoBehaviour
             if (clickedDesc == null && h.TryGetComponent<DescriptionData>(out var descriptiondata))
             {
                 clickedDesc = descriptiondata;
-                if (!clickedCollider) clickedCollider = h;
-            }
-
-            // Portal 감지
-            var portal = h.GetComponentInParent<PortalController>();
-            if (portal != null)
-            {
-                if (clickedPortal == null) clickedPortal = portal;
                 if (!clickedCollider) clickedCollider = h;
             }
         }
@@ -96,13 +87,12 @@ public class ExplorationInteractionController : MonoBehaviour
         }
 
         // 3. 상호작용(상자, 포탈 등) 처리
-        if (clickedInteractable != null || clickedPortal != null || clickedCollider != null)
+        if (clickedInteractable != null || clickedCollider != null)
         {
             Transform targetTr = clickedInteractable != null ? clickedInteractable.GetTransform() :
-                                (clickedPortal != null ? clickedPortal.transform :
-                                    clickedCollider.transform);
+                                    clickedCollider.transform;
 
-            playerMovement.ProcessInteractionClick(clickedCell, targetTr, clickedInteractable, clickedPortal, clickedCollider, clickedDesc);
+            playerMovement.ProcessInteractionClick(clickedCell, targetTr, clickedInteractable, clickedCollider, clickedDesc);
             return;
         }
 

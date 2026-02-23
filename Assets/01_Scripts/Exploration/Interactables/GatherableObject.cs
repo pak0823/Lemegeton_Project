@@ -20,6 +20,7 @@ public class GatherableObject : MonoBehaviour, IInteractable, IExplorationPersis
 
     // IInteracable 구현
     public bool CanInteract => !isInteracted;
+    public string GetInteractLabel() => "채집";
 
     private void Awake()
     {
@@ -60,7 +61,7 @@ public class GatherableObject : MonoBehaviour, IInteractable, IExplorationPersis
         {
             if (!VigorManager.Instance.TrySpend(data.vigorCost, VigorSpendReason.InspectBox))
             {
-                // TrySpend 내부에서 실패 팝업/로그 처리가 될 수도 있지만, 
+                // TrySpend 내부에서 실패 팝업/로그 처리가 될 수도 있지만,
                 // 명시적으로 "부족" 메시지를 띄우고 싶다면 여기서 처리 가능
                 ExplorationLogUI.Instance?.Push($"활기가 부족합니다. (필요: {data.vigorCost})");
                 return;
@@ -87,11 +88,11 @@ public class GatherableObject : MonoBehaviour, IInteractable, IExplorationPersis
             }
 
             // 실제 효과 실행 (보상, 함정 등)
-            // 현재 플레이어 캐릭터를 찾아 전달 (PlayerMovement -> UnitData?) 
+            // 현재 플레이어 캐릭터를 찾아 전달 (PlayerMovement -> UnitData?)
             // *주의* 현재 ExplorationScene에서는 PlayerMovement가 "Leader" 유닛을 대변함.
-            // 정확한 "상호작용 주체"를 찾기 위해 PlayerDataManager의 첫 번째 유닛을 사용하거나, 
+            // 정확한 "상호작용 주체"를 찾기 위해 PlayerDataManager의 첫 번째 유닛을 사용하거나,
             // PlayerMovement에서 현재 리더 정보를 가져와야 함.
-            
+
             UnitData targetUnit = GetInteractionTarget();
             if (targetUnit != null && outcome.outcome != null)
             {
@@ -107,7 +108,7 @@ public class GatherableObject : MonoBehaviour, IInteractable, IExplorationPersis
         // 간소화: 현재 파티의 리더(0번) 혹은 첫 번째 생존 유닛을 대상으로 함
         if (PlayerDataManager.Instance != null && PlayerDataManager.Instance.ownedUnits.Count > 0)
         {
-            return PlayerDataManager.Instance.ownedUnits[0]; 
+            return PlayerDataManager.Instance.ownedUnits[0];
         }
         return null;
     }

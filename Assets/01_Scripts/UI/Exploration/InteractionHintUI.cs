@@ -125,35 +125,39 @@ public class InteractionHintUI : MonoBehaviour
     public void ShowCancelAt(Transform t) { BindFollow(t);SetOffsetsFrom(t); ShowCancel(); }
 
     public void ShowBothAt(Transform t) { BindFollow(t); SetOffsetsFrom(t); ShowBoth(); }
+    public void ShowBothAt(Transform t, string label)
+    {
+        BindFollow(t);
+        SetOffsetsFrom(t);
+
+        if (surveyLabel) surveyLabel.text = label;
+        ShowSurvey();
+        ShowCommunication();
+    }
 
 
 
     void Awake()
-
     {
-
         if(Instance == null) Instance = this;
-
         else Destroy(gameObject);
 
-
-
-
-
-            rootRect = transform as RectTransform;
-
+        rootRect = transform as RectTransform;
         rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
-
         if (!cam) cam = Camera.main;
 
+        // 에디터에서 모두 0으로 설정되어 겹치는 문제 방지 (배경 이미지가 90, 10에 있다고 가정)
+        if (defaultSurveyOffset == Vector2.zero && defaultCancelOffset == Vector2.zero)
+        {
+            defaultSurveyOffset = new Vector2(90f, 35f);
+            defaultCommOffset = new Vector2(90f, -5f);
+            defaultCancelOffset = new Vector2(90f, -45f);
+        }
+
         HideAll();
-
         _surveyOffset = defaultSurveyOffset;
-
         _commOffset = defaultCommOffset;
-
         _cancelOffset = defaultCancelOffset;
-
     }
 
 
@@ -227,49 +231,30 @@ public class InteractionHintUI : MonoBehaviour
     }
 
     void SetOffsetsFrom(Transform t)
-
     {
-
         // 우선 개체의 HintAnchor가 있으면 그것을 사용
-
         var anchor = t ? t.GetComponent<HintAnchor>() : null;
-
         if (anchor)
-
         {
-
             _surveyOffset = anchor.surveyOffset;
-
             _commOffset = anchor.commOffset;
-
-            _cancelOffset = anchor.cancelOffset;    //surveyOffset과 같은 위치를 사용하기에 그대로 사용
-
+            _cancelOffset = anchor.cancelOffset;
             return;
-
         }
 
-        // 없으면 기본값
-
+        // 없으면 기본값 적용하되, 동시 출력 시 겹치지 않게 자동 보정
         _surveyOffset = defaultSurveyOffset;
-
         _commOffset = defaultCommOffset;
-
         _cancelOffset = defaultCancelOffset;
-
     }
 
 
 
     public void SetOffsets(Vector2? survey = null, Vector2? comm = null)
-
     {
-
         _surveyOffset = survey ?? defaultSurveyOffset;
-
         _commOffset = comm ?? defaultCommOffset;
-
-        _cancelOffset = survey ?? defaultCancelOffset;
-
+        _cancelOffset = defaultCancelOffset;
     }
 
 
@@ -432,9 +417,9 @@ public class InteractionHintUI : MonoBehaviour
 
         if (!group) return;
 
-        group.alpha = 1f; 
+        group.alpha = 1f;
 
-        group.blocksRaycasts = true; 
+        group.blocksRaycasts = true;
 
         group.interactable = true;
 

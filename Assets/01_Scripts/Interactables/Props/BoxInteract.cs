@@ -132,6 +132,7 @@ public class BoxInteract : MonoBehaviour, IInteractable, IExplorationPersistable
     }
 
     public bool CanInteract => !isOpened;
+    public string GetInteractLabel() => "조사";
 
     [Header("보상 설정")]
     public RewardTableSO rewardTable;
