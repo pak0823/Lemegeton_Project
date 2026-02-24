@@ -2,7 +2,8 @@ Shader "Custom/FogFade"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
+        _MainTex ("Accumulated Fog (History)", 2D) = "black" {}
+        _CurrentTex ("Current Frame Fog", 2D) = "black" {}
         _FadeAmount ("Fade Amount", Range(0, 1)) = 0.005
     }
     SubShader
@@ -31,6 +32,7 @@ Shader "Custom/FogFade"
             };
 
             sampler2D _MainTex;
+            sampler2D _CurrentTex;
             float4 _MainTex_ST;
             float _FadeAmount;
 
@@ -44,17 +46,21 @@ Shader "Custom/FogFade"
 
             fixed4 frag (v2f i) : SV_Target
             {
-                // Sample the current state of the fog texture
-                fixed4 col = tex2D(_MainTex, i.uv);
-                
-                // Subtract fade amount to slowly darken the cleared area back to fog
-                // Assuming Clear = White(1), Fog = Black(0)
-                // Use max() instead of saturate() to allow values > 1.0 for delayed fade
-                col.r = max(0, col.r - _FadeAmount);
-                col.g = max(0, col.g - _FadeAmount);
-                col.b = max(0, col.b - _FadeAmount);
-                
-                return col;
+                // 누적된 이전 프레임의 안개 상태 샘플링
+                fixed4 historyCol = tex2D(_MainTex, i.uv);
+
+                // 현재 프레임의 안개 상태 샘플링 (현재 플레이어 위치 주변이 밝음)
+                fixed4 currentCol = tex2D(_CurrentTex, i.uv);
+
+                // 이전 기록을 서서히 어둡게 (안개가 다시 덮임)
+                historyCol.r = max(0, historyCol.r - _FadeAmount);
+                historyCol.g = max(0, historyCol.g - _FadeAmount);
+                historyCol.b = max(0, historyCol.b - _FadeAmount);
+
+                // 현재 상태와 서서히 지워지는 이전 기록 중 더 밝은 값을 최종 출력으로 유지
+                fixed4 finalCol = max(historyCol, currentCol);
+
+                return finalCol;
             }
             ENDCG
         }

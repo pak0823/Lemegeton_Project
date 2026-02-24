@@ -26,45 +26,24 @@ public class InteractionHintUI : MonoBehaviour
 
 
 
+    [Header("UI Offset")]
+    [SerializeField] Vector2 defaultOffset = new Vector2(90f, 35f); // 기본 전체 힌트 위치
+    Vector2 _currentOffset;   // 현재 적용중
+
     [Header("Survey")]
-
     [SerializeField] GameObject surveyRoot;
-
     [SerializeField] RectTransform surveyRect;
-
     [SerializeField] Text surveyLabel;
 
-    [SerializeField] Vector2 defaultSurveyOffset = new Vector2(60f, 0f); // 기본 힌트 위치
-
-    Vector2 _surveyOffset;   // 현재 적용중
-
-
-
     [Header("Communication")]
-
     [SerializeField] GameObject commRoot;
-
     [SerializeField] Text commLabel;
-
     [SerializeField] RectTransform commRect;
 
-    [SerializeField] Vector2 defaultCommOffset = new Vector2(0f, 80f);  // 기본 힌트 위치
-
-    Vector2 _commOffset;     // 현재 적용중
-
-
-
     [Header("Cancel")]
-
     [SerializeField] GameObject cancelRoot;
-
     [SerializeField] Text cancelLabel;
-
     [SerializeField] RectTransform cancelRect;
-
-    [SerializeField] Vector2 defaultCancelOffset = new Vector2(60f, 0f); // 기본 힌트 위치
-
-    Vector2 _cancelOffset;   // 현재 적용중
 
 
 
@@ -146,18 +125,13 @@ public class InteractionHintUI : MonoBehaviour
         rootCanvas = GetComponentInParent<Canvas>()?.rootCanvas;
         if (!cam) cam = Camera.main;
 
-        // 에디터에서 모두 0으로 설정되어 겹치는 문제 방지 (배경 이미지가 90, 10에 있다고 가정)
-        if (defaultSurveyOffset == Vector2.zero && defaultCancelOffset == Vector2.zero)
+        if (defaultOffset == Vector2.zero)
         {
-            defaultSurveyOffset = new Vector2(90f, 35f);
-            defaultCommOffset = new Vector2(90f, -5f);
-            defaultCancelOffset = new Vector2(90f, -45f);
+            defaultOffset = new Vector2(90f, 35f);
         }
 
         HideAll();
-        _surveyOffset = defaultSurveyOffset;
-        _commOffset = defaultCommOffset;
-        _cancelOffset = defaultCancelOffset;
+        _currentOffset = defaultOffset;
     }
 
 
@@ -191,6 +165,7 @@ public class InteractionHintUI : MonoBehaviour
                 // 오버레이: 스크린 좌표 그대로
 
                 rootRect.position = sp;
+                rootRect.anchoredPosition += _currentOffset;
 
             }
 
@@ -212,21 +187,11 @@ public class InteractionHintUI : MonoBehaviour
 
                     out lp);
 
-                rootRect.anchoredPosition = lp;
+                rootRect.anchoredPosition = lp + _currentOffset;
 
             }
 
         }
-
-
-
-        // 키별 오프셋은 기존처럼 유지
-
-        if (surveyRoot && surveyRoot.activeSelf && surveyRect) surveyRect.anchoredPosition = _surveyOffset;
-
-        if (commRoot && commRoot.activeSelf && commRect) commRect.anchoredPosition = _commOffset;
-
-        if (cancelRoot && cancelRoot.activeSelf && cancelRect) cancelRect.anchoredPosition = _cancelOffset;
 
     }
 
@@ -236,25 +201,19 @@ public class InteractionHintUI : MonoBehaviour
         var anchor = t ? t.GetComponent<HintAnchor>() : null;
         if (anchor)
         {
-            _surveyOffset = anchor.surveyOffset;
-            _commOffset = anchor.commOffset;
-            _cancelOffset = anchor.cancelOffset;
+            _currentOffset = anchor.uiOffset;
             return;
         }
 
-        // 없으면 기본값 적용하되, 동시 출력 시 겹치지 않게 자동 보정
-        _surveyOffset = defaultSurveyOffset;
-        _commOffset = defaultCommOffset;
-        _cancelOffset = defaultCancelOffset;
+        // 없으면 기본값 적용
+        _currentOffset = defaultOffset;
     }
 
 
 
-    public void SetOffsets(Vector2? survey = null, Vector2? comm = null)
+    public void SetOffsets(Vector2? offset = null)
     {
-        _surveyOffset = survey ?? defaultSurveyOffset;
-        _commOffset = comm ?? defaultCommOffset;
-        _cancelOffset = defaultCancelOffset;
+        _currentOffset = offset ?? defaultOffset;
     }
 
 
@@ -263,11 +222,7 @@ public class InteractionHintUI : MonoBehaviour
 
     {
 
-        _surveyOffset = defaultSurveyOffset;
-
-        _commOffset = defaultCommOffset;
-
-        _cancelOffset = defaultCancelOffset;
+        _currentOffset = defaultOffset;
 
     }
 
