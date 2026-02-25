@@ -9,7 +9,22 @@ public class StageDatabase : ScriptableObject
 
 {
 
-
+    private static StageDatabase _instance;
+    public static StageDatabase Instance
+    {
+        get
+        {
+            if (_instance == null)
+            {
+                _instance = Resources.Load<StageDatabase>("DB/StageDatabase");
+                if (_instance == null)
+                {
+                    Debug.LogError("[StageDatabase] 데이터를 찾을 수 없습니다! 반드시 'Assets/Resources/DB/StageDatabase.asset' 경로에 위치해야 합니다.");
+                }
+            }
+            return _instance;
+        }
+    }
 
     [Tooltip("일반 맵 데이터")] public StageNormalMapData[] normalStages;
 

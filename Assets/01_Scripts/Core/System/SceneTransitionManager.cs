@@ -87,14 +87,14 @@ public class SceneTransitionManager : MonoBehaviour
     {
         StartCoroutine(LoadSceneCoroutine(sceneName));
     }
-    
+
     // [Refactor] 통합 로딩 코루틴
     IEnumerator LoadSceneCoroutine(string sceneName)
     {
         // ... (기존 로직 동일) ...
         // 1. 입력 차단 및 페이드 아웃
         if (fader != null) fader.blocksRaycasts = true; // 터치 차단
-        
+
         float t = 0f;
         while (t < fadeDuration)
         {
@@ -117,7 +117,7 @@ public class SceneTransitionManager : MonoBehaviour
         op.allowSceneActivation = false; // 바로 넘어가지 않게 대기
 
         float timer = 0.0f;
-        
+
         // 최소 로딩 시간 보장 (깜빡임 방지)
         while (!op.isDone)
         {
@@ -126,12 +126,12 @@ public class SceneTransitionManager : MonoBehaviour
 
             // Unity의 progress는 0.9에서 멈춤
             float currentProgress = op.progress;
-            
+
             // UI 업데이트 (Fake 100% 연출 포함)
             if (currentProgress >= 0.9f)
             {
                 currentProgress = 1f; // 0.9 -> 1.0 보간
-                
+
                 // 최소 1초 이상 지났을 때만 전환 허용
                 if (timer > 1.0f)
                 {
@@ -144,8 +144,8 @@ public class SceneTransitionManager : MonoBehaviour
                 // 로딩 중에는 실제 진행률 반영
                 if (loadingProgressBar != null) loadingProgressBar.value = currentProgress;
             }
-            
-            if (loadingText != null) 
+
+            if (loadingText != null)
                 loadingText.text = $"Loading... {(int)(currentProgress * 100)}%";
         }
 
@@ -160,7 +160,7 @@ public class SceneTransitionManager : MonoBehaviour
             if(fader) fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
-        
+
         // 7. 입력 차단 해제
         if (fader != null) fader.blocksRaycasts = false;
     }
@@ -219,7 +219,7 @@ public class SceneTransitionManager : MonoBehaviour
             if(fader) fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
-        
+
         // 2. 로딩 UI 표시
         if (loadingPanel != null) loadingPanel.SetActive(true);
         if (loadingProgressBar != null) loadingProgressBar.value = 0f;
@@ -232,13 +232,13 @@ public class SceneTransitionManager : MonoBehaviour
         // 4. 탐험 씬 로드 (비동기) - Enum 사용
         AsyncOperation op = SceneManager.LoadSceneAsync(pendingReturnScene.ToString());
         op.allowSceneActivation = false;
-        
+
         float timer = 0f;
         while (!op.isDone)
         {
             yield return null;
             timer += Time.deltaTime;
-            
+
             float p = op.progress;
             if (p >= 0.9f)
             {
@@ -255,7 +255,7 @@ public class SceneTransitionManager : MonoBehaviour
 
         // 6. 탐험 씬 플레이어 준비 대기
         // (이 부분은 로딩이 끝난 직후라 바로 실행됨)
-        
+
         // 탐험 씬에서 PlayerMovement 준비될 때까지 대기 후 순간이동
         int safety = 300; // ~5초(60FPS 가정)
         while (PlayerMovement.Instance == null && safety-- > 0)
@@ -273,7 +273,7 @@ public class SceneTransitionManager : MonoBehaviour
 
             // 남은 경로가 있으면 이어서 이동
             var resume = ConsumeResumePath();
-            
+
             bool hasRewards = pendingRewards != null && pendingRewards.Count > 0;
             bool hasResumePath = resume != null && resume.Count >= 2;
 
@@ -316,21 +316,25 @@ public class SceneTransitionManager : MonoBehaviour
             if(fader) fader.alpha = Mathf.Clamp01(t / fadeDuration);
             yield return null;
         }
-        
+
         // 8. 입력 차단 해제 & 컨텍스트 정리
         if (fader != null) fader.blocksRaycasts = false;
-        
+
         pendingReturnScene = SceneName.None;
         _isReturning = false;   // 가드 해제
     }
 
     //IExplorationPersistable를 가지고 있는 오브젝트는 모두 스냅샷에 추가
-    public ExplorationSnapshot BuildExplorationSnapshotFromScene()
+    public ExplorationSnapshot BuildExplorationSnapshotFromScene(GameObject rootMap = null)
     {
         var snap = new ExplorationSnapshot();
 
-        // 씬 내 모든 Persistable 상태 수집
-        foreach (var mb in FindObjectsOfType<MonoBehaviour>(true))
+        MonoBehaviour[] targets = rootMap != null
+            ? rootMap.GetComponentsInChildren<MonoBehaviour>(true)
+            : FindObjectsOfType<MonoBehaviour>(true);
+
+        // 씬 내 모든(또는 특정 맵 하위) Persistable 상태 수집
+        foreach (var mb in targets)
         {
             if (mb is IExplorationPersistable ip)
             {
@@ -353,11 +357,11 @@ public class SceneTransitionManager : MonoBehaviour
     {
         // 전투 진입 전까지 입력 차단(타일 클릭 등)
         PlayerMovement.Instance?.LockMovementIndefinite();
-        
+
         // 임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
         // 필요없으면 SceneName.TestScene 사용하지 않거나 로직 제거
-        SceneName target = battleScene; 
-        //target = SceneName.TestScene; 
+        SceneName target = battleScene;
+        //target = SceneName.TestScene;
 
         var presenter = ExplorationModalPresenter.Instance;
         if (presenter == null)

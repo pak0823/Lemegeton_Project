@@ -50,7 +50,7 @@ public class ExplorationPersistenceManager : MonoBehaviour, IMapComponent
                     {
                          mb.gameObject.SetActive(false);
                     }
-                    continue; 
+                    continue;
                 }
 
                 if (existIp is PushObject existPush)
@@ -108,9 +108,6 @@ public class ExplorationPersistenceManager : MonoBehaviour, IMapComponent
 
     private AssetReferenceGameObject FindPrefabByName(GameObject map, string prefabName)
     {
-        var spawner = map.GetComponentInChildren<MapObjectSpawner>(true);
-        if (spawner == null) return null;
-
         // Helper to check list
         AssetReferenceGameObject FindInList(List<AssetReferenceGameObject> list) {
             if (list == null) return null;
@@ -120,8 +117,21 @@ public class ExplorationPersistenceManager : MonoBehaviour, IMapComponent
             return null;
         }
 
-        var result = FindInList(spawner.trapRefs) ?? FindInList(spawner.chestRefs) ?? FindInList(spawner.patternRefs);
-        return result;
+        var objSpawner = map.GetComponentInChildren<MapObjectSpawner>(true);
+        if (objSpawner != null)
+        {
+            var result = FindInList(objSpawner.trapRefs) ?? FindInList(objSpawner.chestRefs) ?? FindInList(objSpawner.patternRefs);
+            if (result != null) return result;
+        }
+
+        var monsterSpawner = map.GetComponentInChildren<EncounterMonsterSpawner>(true);
+        if (monsterSpawner != null)
+        {
+            var result = FindInList(monsterSpawner.monsterRefs);
+            if (result != null) return result;
+        }
+
+        return null;
     }
 
     private bool CheckNameMatch(AssetReferenceGameObject refObj, string targetName)

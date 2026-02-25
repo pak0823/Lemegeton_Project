@@ -37,17 +37,17 @@ public class BattleGridManager : MonoBehaviour, IGridProvider
     }
 
     public Tilemap GetMap(Team team)
-
     {
+        if (provider == null)
+        {
+            provider = BattleMapManager.Instance;
+            if (provider == null) return null; // 여전히 없으면 null 반환
+        }
 
         if (team == Team.Player)
-
             return provider.PlayerFloor;
-
         else
-
             return provider.EnemyFloor;
-
     }
 
 

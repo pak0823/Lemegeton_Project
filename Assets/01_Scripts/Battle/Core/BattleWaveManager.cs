@@ -160,47 +160,67 @@ public class BattleWaveManager : MonoBehaviour
 
 
         if (w.enemyLayoutPrefab)
-
         {
-
             _spawnedEnemyLayout = Instantiate(w.enemyLayoutPrefab, enemyRoot ? enemyRoot : transform);
 
-
-
             // 맵 프로바이더 탐색
-
             localProvider = _spawnedEnemyLayout.GetComponentInChildren<BattleMapManager>(true);
 
-
-
             if (localProvider != null)
-
             {
-
                 waveEnemyFloor = localProvider.EnemyFloor;
-
             }
-
             else
-
             {
-
                 // Fallback: 이름으로 찾기
-
                 waveEnemyFloor = _spawnedEnemyLayout.GetComponentsInChildren<Tilemap>(true)
-
                     .FirstOrDefault(t => t.name.IndexOf("Enemy", System.StringComparison.OrdinalIgnoreCase) >= 0);
-
             }
-
-
 
             // 오버레이 찾기
-
             waveEnemyOverlay = _spawnedEnemyLayout.GetComponentsInChildren<Tilemap>(true)
-
                 .FirstOrDefault(t => t.name.IndexOf("Overlay_Skill", System.StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+        else if (w.enemySpawns != null && w.enemySpawns.Count > 0)
+        {
+            // 동적 소환을 위해 임시 레이아웃 생성
+            _spawnedEnemyLayout = new GameObject("[DynamicEnemyLayout]");
+            _spawnedEnemyLayout.transform.SetParent(enemyRoot ? enemyRoot : transform, false);
 
+            // 베이스 맵은 없으므로 일단 널
+            localProvider = null;
+            waveEnemyFloor = null;
+            waveEnemyOverlay = null;
+
+            // BattleManager의 Grid 맵 인스턴스를 활용하여 위치 지정
+            var bm = BattleManager.Instance;
+            var gridManager = UnityEngine.Object.FindObjectOfType<BattleGridManager>();
+
+            if (bm != null && gridManager != null && gridManager.GetMap(Team.Enemy) != null)
+            {
+                foreach (var spawnInfo in w.enemySpawns)
+                {
+                    if (spawnInfo.enemyPrefab == null) continue;
+
+                    GameObject obj = Instantiate(spawnInfo.enemyPrefab, _spawnedEnemyLayout.transform);
+                    Vector3 worldPos = gridManager.GetMap(Team.Enemy).GetCellCenterWorld(spawnInfo.spawnCell);
+                    worldPos.z = 0; // z 보정
+                    obj.transform.position = worldPos;
+
+                    var unit = obj.GetComponent<BattleUnit>();
+                    if (unit != null)
+                    {
+                        // Set the unit's cell position if a setter exists, or use reflection if private.
+                        // For now we assume the Mover will handle it when initialized, or we just set transform.
+                        // Since Cell is get-only, rely on Mover or external initialization setting it.
+                        // unit.Cell = spawnInfo.spawnCell;
+                    }
+                }
+            }
+            else
+            {
+                Debug.LogError("[WaveManager] BattleGridManager or Enemy map is missing, cannot place dynamic enemies onto grid!");
+            }
         }
 
 
@@ -332,8 +352,8 @@ public class BattleWaveManager : MonoBehaviour
         // 2) 잔여 적 제거 (혹시 레이아웃 밖에서 생성된 놈들)
         // [Optimization] Use registry
         var bm = BattleManager.Instance;
-        var leftovers = (bm != null) 
-            ? bm.GetAliveUnits(Team.Enemy).ToList() 
+        var leftovers = (bm != null)
+            ? bm.GetAliveUnits(Team.Enemy).ToList()
             : FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy).ToList();
 
         foreach (var u in leftovers)
@@ -350,20 +370,26 @@ public class BattleWaveManager : MonoBehaviour
 
     private void AutoResolveWaveSet()
     {
-        if (stageDB == null) stageDB = Resources.Load<StageDatabase>("DB/StageDatabase");
+        if (stageDB == null) stageDB = StageDatabase.Instance;
 
-        // 1. 싱글톤 또는 디버그 값 가져오기
+        // 1. 싱글톤에서 우선적으로 값 가져오기
         string stageId = StageRuntimeContext.Instance != null && !string.IsNullOrEmpty(StageRuntimeContext.Instance.CurrentStageID)
             ? StageRuntimeContext.Instance.CurrentStageID
-            : debugStageID;
-
+            : "";
         int stageNo = StageRuntimeContext.Instance != null && StageRuntimeContext.Instance.CurrentStageNumber >= 0
             ? StageRuntimeContext.Instance.CurrentStageNumber
-            : debugStageNumber;
-
-        var ctx = StageRuntimeContext.Instance != null
+            : -1;
+        var ctx = StageRuntimeContext.Instance != null && StageRuntimeContext.Instance.CurrentStageNumber >= 0
             ? StageRuntimeContext.Instance.CurrentBattleContext
             : debugContext;
+
+        // 싱글톤에서 아무것도 건지지 못한 경우 (주로 전투씬 다이렉트 테스트 시) 인스펙터 디버그 값 활용
+        if (string.IsNullOrEmpty(stageId) && stageNo < 0)
+        {
+            stageId = debugStageID;
+            stageNo = debugStageNumber;
+            ctx = debugContext;
+        }
 
         if (stageDB == null) return;
 
@@ -381,11 +407,26 @@ public class BattleWaveManager : MonoBehaviour
             found = stageDB.normalStages.FirstOrDefault(s => s != null && s.stageNumber == stageNo);
         }
 
-        // 4. 웨이브 셋 결정
+        // 4. [안전 장치] 테스트 중 스테이지 정보가 잘못되어도 테스트용으로 첫번째 스테이지 강제 할당
+        if (found == null && stageDB.normalStages != null && stageDB.normalStages.Length > 0)
+        {
+            found = stageDB.normalStages[0];
+            Debug.LogWarning($"[WaveManager] 지정된(또는 디버그) 스테이지를 찾을 수 없어 DB의 첫 번째 스테이지(No.{found.stageNumber})를 임시 할당합니다.");
+        }
+
+        // 5. 웨이브 셋 결정
         if (found != null)
         {
-            // 개선된 메서드 사용 (Context로 조회, 없으면 레거시 필드 반환)
+            // Context로 조회, 없으면 레거시 필드 반환
             waveSet = found.GetWaveSet(ctx);
+
+            // [안전 장치] 테스트 중 (예: Trap Encounter) 해당 컨텍스트가 DB에 없을 경우 아무 웨이브라도 할당하기 위해 폴백
+            if (waveSet == null && found.contextWaves != null && found.contextWaves.Count > 0)
+            {
+                Debug.LogWarning($"[WaveManager] '{ctx}' 컨텍스트에 할당된 웨이브가 없어 빈 오브젝트를 방지하기 위해 첫 번째 컨텍스트의 웨이브를 가져옵니다.");
+                waveSet = found.GetWaveSet(found.contextWaves[0].contextType);
+            }
+
             Debug.Log($"[WaveManager] Auto-assigned: Stage '{found.stageId}' (No.{found.stageNumber}), {ctx} -> {waveSet?.name}");
         }
     }

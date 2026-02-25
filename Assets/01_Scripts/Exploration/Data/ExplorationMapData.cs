@@ -12,9 +12,6 @@ public class ExplorationMapData : MonoBehaviour
     [Tooltip("어느 맵에서 왔는지에 따라 플레이어를 다른 위치에 스폰합니다.")]
     public List<PortalArrivalPoint> arrivalPoints = new List<PortalArrivalPoint>();
 
-    [Header("숨겨진 포탈 (선택)")]
-    [Tooltip("특정 타일에 플레이어가 도달하면 숨겨진 맵으로 이동하는 포탈 목록")]
-    public List<HiddenPortalData> hiddenPortals = new List<HiddenPortalData>();
 
     [Header("타일맵 리스트")]
     public List<Tilemap> floorMaps = new List<Tilemap>();     // "Ground" 태그
@@ -56,9 +53,8 @@ public class ExplorationMapData : MonoBehaviour
             return oa.CompareTo(ob);
         });
 
-        // 포탈 스폰 및 히든 포탈 초기화 추가
+        // 포탈 스폰 초기화
         arrivalPoints.Clear();
-        hiddenPortals.Clear();
 
         // 임시 스폰 마커들을 담을 부모 컨테이너 생성/탐색
         Transform spawnContainer = transform.Find("_SpawnPoints");
@@ -69,8 +65,6 @@ public class ExplorationMapData : MonoBehaviour
             containerGo.transform.localPosition = Vector3.zero;
             spawnContainer = containerGo.transform;
         }
-        hiddenPortals.Clear();
-
         // 1. 일반 포탈 컨트롤러 스캔 (도착 스폰 포인트 자동 등록)
         // PortalController의 destinationMapId를 fromMapId로 역산하여 스폰 포인트를 세팅합니다.
         foreach (var portal in GetComponentsInChildren<PortalController>(true))
@@ -103,26 +97,7 @@ public class ExplorationMapData : MonoBehaviour
             }
         }
 
-        // 2. 히든 포탈 컨트롤러 스캔
-        foreach (var hidden in GetComponentsInChildren<HiddenPortalController>(true))
-        {
-            if (!string.IsNullOrEmpty(hidden.hiddenMapId))
-            {
-                bool exists = hiddenPortals.Exists(h => h.hiddenMapId == hidden.hiddenMapId);
-                if (!exists)
-                {
-                    hiddenPortals.Add(new HiddenPortalData
-                    {
-                        hiddenMapId = hidden.hiddenMapId,
-                        hiddenMapPrefab = hidden.hiddenMapPrefab,
-                        exitSpawnTransform = hidden.exitSpawnTransform,
-                        triggerTileCell = hidden.triggerTileCell
-                    });
-                }
-            }
-        }
-
-        Debug.Log($"[ExplorationMapData] Auto Setup 완료: Floor({floorMaps.Count}), Wall({wallMaps.Count}), Obstacle({obstacleMaps.Count}), ArrivalPoints({arrivalPoints.Count}), HiddenPortals({hiddenPortals.Count})");
+        Debug.Log($"[ExplorationMapData] Auto Setup 완료: Floor({floorMaps.Count}), Wall({wallMaps.Count}), Obstacle({obstacleMaps.Count}), ArrivalPoints({arrivalPoints.Count})");
         UnityEditor.EditorUtility.SetDirty(this);
     }
 

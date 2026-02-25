@@ -70,7 +70,6 @@ public class MapTransitionManager : MonoBehaviour
 
     /// <summary>
     /// 숨겨진 포탈 진입. 복귀 시 원래 맵의 지정 탈출 위치로 되돌아옵니다.
-    /// hiddenMapPrefab은 HiddenPortalData에서 직접 참조하므로 MapConnectionData 등록이 불필요합니다.
     /// </summary>
     public void EnterHiddenMap(string hiddenMapId, string returnMapId, string returnTag, GameObject hiddenMapPrefab)
     {
@@ -105,12 +104,27 @@ public class MapTransitionManager : MonoBehaviour
     /// 맵 전환 코루틴.
     /// 페이드 아웃 → 맵 교체 → 플레이어 스폰 → 페이드 인 순으로 동작합니다.
     /// </summary>
+    private void SaveCurrentMapSnapshot()
+    {
+        if (StageRuntimeContext.Instance != null && MapManager.Instance != null && MapManager.Instance.CurrentMapData != null)
+        {
+            var mapData = MapManager.Instance.CurrentMapData;
+            if (SceneTransitionManager.Instance != null)
+            {
+                // 현재 씬 전체(또는 맵 하위)의 스냅샷 생성 후 StageRuntimeContext에 저장
+                var snap = SceneTransitionManager.Instance.BuildExplorationSnapshotFromScene(MapManager.Instance.mapLoader?.CurrentMap);
+                StageRuntimeContext.Instance.SaveMapSnapshot(mapData.mapId, snap);
+            }
+        }
+    }
+
     /// <summary>
     /// 숨겨진 맵 전용 코루틴. 프리팩을 직접 받아 LoadHiddenMap으로 로드합니다.
     /// </summary>
     private IEnumerator Co_HiddenTransition(string hiddenMapId, GameObject prefab, string fromMapId)
     {
         PlayerMovement.Instance?.LockMovementIndefinite();
+        SaveCurrentMapSnapshot(); // 기존 맵 스냅샷 저장
         yield return StartCoroutine(Co_Fade(0f, 1f));
 
         // 숨겨진 맵은 프리팩을 직접 지정하여 로드
@@ -128,11 +142,13 @@ public class MapTransitionManager : MonoBehaviour
         Debug.Log($"[MapTransitionManager] 숨겨진 맵 전환 완료 → {hiddenMapId}");
     }
 
-    
+
 private IEnumerator Co_TransitionToMap(string destinationMapId, string fromMapId, string forceArrivalTag = null)
     {
         // 1. 이동 중 입력 차단
         PlayerMovement.Instance?.LockMovementIndefinite();
+
+        SaveCurrentMapSnapshot(); // 기존 맵 스냅샷 저장
 
         // 2. 페이드 아웃
         yield return StartCoroutine(Co_Fade(0f, 1f));

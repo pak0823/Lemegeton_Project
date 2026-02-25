@@ -32,7 +32,7 @@ public class BattleRewardManager : MonoBehaviour
         }
     }
 
-    public List<RewardData> GenerateRewards()
+    public List<RewardData> GenerateRewards(WaveSet.RewardProfile profile = null)
     {
         List<RewardData> rewards = new List<RewardData>();
 
@@ -45,7 +45,7 @@ public class BattleRewardManager : MonoBehaviour
         // 1. 대상 아이템 풀 수집 (Material, Consumable)
         var materials = itemLibrary.GetItemsByType(ItemType.Material);
         var consumables = itemLibrary.GetItemsByType(ItemType.Consumable);
-        
+
         var pool = new List<ItemData>();
         pool.AddRange(materials);
         pool.AddRange(consumables);
@@ -58,7 +58,7 @@ public class BattleRewardManager : MonoBehaviour
 
         // 2. 보상 종류 개수 결정 (3~5개)
         int rewardTypeCount = Random.Range(minRewardTypes, maxRewardTypes + 1);
-        
+
         // 풀에서 랜덤하게 선택 (중복 없이)
         // Fisher-Yates Shuffle or similar approach
         var selectedItems = pool.OrderBy(x => Random.value).Take(rewardTypeCount).ToList();
@@ -77,7 +77,29 @@ public class BattleRewardManager : MonoBehaviour
                 count = Random.Range(minConsumableCount, maxConsumableCount + 1);
             }
 
+            if (profile != null)
+            {
+                count = Mathf.CeilToInt(count * profile.rewardMultiplier);
+            }
+
             rewards.Add(new RewardData(item.itemID, count));
+        }
+
+        // 4. 추가 확정 보상 (Elite, Boss 등에서 지정된 보상)
+        if (profile != null && profile.guaranteedRewards != null)
+        {
+            foreach (var gr in profile.guaranteedRewards)
+            {
+                var existing = rewards.Find(r => r.itemID == gr.itemID);
+                if (existing != null)
+                {
+                    existing.count += gr.count;
+                }
+                else
+                {
+                    rewards.Add(new RewardData(gr.itemID, gr.count));
+                }
+            }
         }
 
         return rewards;

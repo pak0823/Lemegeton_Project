@@ -1146,6 +1146,9 @@ public class PlayerMovement : MonoBehaviour
 
         ClearPath();
 
+        // 텔레포트 시 카메라가 부드럽게 따라오지 않고 즉시 스냅하도록 처리 (페이드 인 시 화면 팝핑 방지)
+        UnityEngine.Object.FindAnyObjectByType<CameraFollow2D>()?.SnapToTarget();
+
     }
 
 

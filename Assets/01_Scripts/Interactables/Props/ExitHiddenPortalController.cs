@@ -9,37 +9,50 @@ using UnityEngine;
 /// - 숨겨진 맵 프리팹에 이 컴포넌트를 가진 오브젝트를 배치합니다.
 /// - 기존 포탈 오브젝트와 동일하게 IInteractable 인터페이스를 통해 상호작용합니다.
 /// </summary>
-public class ExitHiddenPortalController : MonoBehaviour, IInteractable
+public class ExitHiddenPortalController : MonoBehaviour
 {
-    [Header("힌트 UI 라벨")]
-    [SerializeField] private string hintLabel = "탈출";
-
-    // IInteractable Property
-    public bool CanInteract => true;
-    public string GetInteractLabel() => hintLabel;
-
-    // InteractionHintUI에서 라벨을 가져가기 위한 레거시 메서드 (필요시 삭제)
-    public string GetHintLabel() => hintLabel;
-
-    public void OnInteract()
+    private void OnEnable()
     {
-        UsePortal();
+        PlayerMovement.OnTileStepped += HandleTileStepped;
     }
 
-    public void SetHighlight(bool isActive)
+    private void OnDisable()
     {
-        // 하이라이트 연출 필요시 구현
+        PlayerMovement.OnTileStepped -= HandleTileStepped;
     }
 
-    public Transform GetTransform()
+    private void HandleTileStepped(Vector3Int arrivedCell)
     {
-        return transform;
+        if (PathfindingSystem.Instance == null || PathfindingSystem.Instance.floorTilemap == null) return;
+
+        // 1. 콜라이더 바운딩 박스 겹침 확인 (직관적인 시각적 매칭)
+        // 플레이어 몸체(Collider) 와 포탈 스프라이트(Collider) 영역이 조금이라도 겹치면 포탈 작동
+        Collider2D myCol = GetComponent<Collider2D>();
+        var player = PlayerMovement.Instance;
+        if (myCol != null && player != null)
+        {
+            Collider2D playerCol = player.GetComponent<Collider2D>();
+            if (playerCol != null && myCol.bounds.Intersects(playerCol.bounds))
+            {
+                UsePortal();
+                return;
+            }
+        }
+
+        // 2. 콜라이더가 제대로 없을 경우를 대비한 최후의 셀 매칭 (정 중앙 배치용)
+        var tilemap = PathfindingSystem.Instance.floorTilemap;
+        Vector3 anchorOffset = tilemap.tileAnchor;
+        Vector3 logicalPosition = transform.position - anchorOffset;
+        Vector3Int myCell = tilemap.WorldToCell(logicalPosition);
+
+        if (arrivedCell == myCell)
+        {
+            UsePortal();
+        }
     }
 
     /// <summary>
     /// 탈출 포탈 사용: 저장된 원래 맵으로 복귀합니다.
-    /// PlayerInteractionHandler에서 UsePortal() 대신 이 메서드를 호출하거나
-    /// PortalController와 동일한 방식으로 상호작용에 연결합니다.
     /// </summary>
     public void UsePortal()
     {

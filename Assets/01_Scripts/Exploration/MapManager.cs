@@ -150,6 +150,10 @@ public void LoadSpecificMap(string mapId)
 
         HookCameraToPlayer(PlayerMovement.Instance?.transform, currentMap);
 
+        // === 추가됨: 포탈 이동 시에도 상태 복구 혹은 최초 배치가 적용되도록 SyncMapEntities 호출 ===
+        Vector3Int playerUsedCell = new Vector3Int(int.MinValue, int.MinValue, 0);
+        SyncMapEntities(currentMap, floors, obstacles, walls, playerUsedCell);
+
         Collider2D mapBounds = null;
         var t = currentMap.transform.Find("WorldBounds");
         if (t) t.TryGetComponent(out mapBounds);
@@ -205,19 +209,17 @@ void GenerateStageMap()
 
     public void ResetExplorationMap()
     {
-        bool isReturning = SceneTransitionManager.Instance != null &&
+        bool isReturningFromBattle = SceneTransitionManager.Instance != null &&
                            SceneTransitionManager.Instance.HasExplorationSnapshot;
 
         // 1. Map Load/Find Phase
-        if (!isReturning)
+        if (!isReturningFromBattle)
         {
-            // Fresh start -> Destroy old, Create New
             persistenceManager.ClearActiveAddressables();
             mapLoader.LoadMap(gridParent, forceCreate: true);
         }
         else
         {
-            // Returning -> Try Find
             mapLoader.LoadMap(gridParent, forceCreate: false);
         }
 
@@ -238,39 +240,38 @@ void GenerateStageMap()
         var walls = mapData.wallMaps;
         var obstacles = mapData.obstacleMaps;
 
-        if (floors == null || floors.Count == 0)
-        {
-            Debug.LogError("Floor 타일맵 리스트가 비어있습니다! (ExplorationMapData 확인 필요)");
-            return;
-        }
+        if (floors == null || floors.Count == 0) return;
 
-        // Initialize PathfindingSystem
         if (pathfindingSystem)
-        {
             pathfindingSystem.Initialize(floors, obstacles, walls, impassableLayerMask);
-        }
 
-        // 3. Entity Spawn Phase (Player): 랜덤 이동 가능 타일에 플레이어 배치
-        Vector3Int playerUsedCell;
-        var playerMovement = entitySpawner.SpawnPlayer(playerPrefab, currentMap, floors, obstacles, walls, out playerUsedCell);
-        Transform playerTransform = (playerMovement != null) ? playerMovement.transform : null;
+        // 3. Entity Spawn Phase (Player): 랜덤 방 시작일 때만 랜덤 위치 스폰
+        Vector3Int playerUsedCell = new Vector3Int(int.MinValue, int.MinValue, 0);
+        Transform playerTransform = null;
+
+        if (!isReturningFromBattle)
+        {
+            // Stage 최초 진입 시 스테이지 분배치 초기화 (Global Object Distribution)
+            if (stageDB != null)
+            {
+                var data = stageDB.normalStages.FirstOrDefault(x => x.stageNumber == currentStage);
+                if (data != null) StageRuntimeContext.Instance?.InitializeDistribution(data);
+            }
+
+            var playerMovement = entitySpawner.SpawnPlayer(playerPrefab, currentMap, floors, obstacles, walls, out playerUsedCell);
+            playerTransform = playerMovement != null ? playerMovement.transform : null;
+        }
+        else
+        {
+            playerTransform = PlayerMovement.Instance != null ? PlayerMovement.Instance.transform : null;
+        }
 
         HookCameraToPlayer(playerTransform, currentMap);
 
-        // 4. Object Spawn Phase: 플레이어 타일 제외 후 pattern → object → trap 순으로 배치
-        if (!isReturning)
-        {
-            entitySpawner.SpawnMapObjects(currentMap, floors, obstacles, walls, playerUsedCell);
-        }
-
-        // 5. Persistence Restore Phase
-        if (isReturning)
-        {
-            RestoreSnapshotAsync(currentMap, floors[0], walls).Forget();
-        }
+        // 4 & 5. Object Spawn & Persistence Restore
+        SyncMapEntities(currentMap, floors, obstacles, walls, playerUsedCell);
 
         // 6. Fog Initialization
-        // 맵의 전체 크기(Bounds)를 가져와서 Fog를 덮음
         Collider2D mapBounds = null;
         var t = currentMap.transform.Find("WorldBounds");
         if (t) t.TryGetComponent(out mapBounds);
@@ -282,25 +283,40 @@ void GenerateStageMap()
             ExplorationFogManager.Instance.Initialize(playerTransform, mapBounds.bounds);
         }
 
-        // MapTransitionManager에 현재 맵 ID 알림
         if (MapTransitionManager.Instance != null && mapData != null)
             MapTransitionManager.Instance.SetCurrentMapId(mapData.mapId);
     }
 
-    async UniTaskVoid RestoreSnapshotAsync(GameObject map, Tilemap floorMap, List<Tilemap> wallMap)
+    public void SyncMapEntities(GameObject map, List<Tilemap> floors, List<Tilemap> obstacles, List<Tilemap> walls, Vector3Int playerUsedCell)
+    {
+        var mapData = map.GetComponent<ExplorationMapData>();
+        if (mapData == null) return;
+
+        string mapId = mapData.mapId;
+        var snapshot = StageRuntimeContext.Instance?.GetMapSnapshot(mapId);
+
+        if (snapshot != null)
+        {
+            // 이 맵을 이전에 방문했으므로 개별 맵 스냅샷 복원
+            RestoreSnapshotAsync(snapshot, map, floors[0], walls).Forget();
+        }
+        else
+        {
+            // 첫 방문이므로 오브젝트 스폰 및 최초 스냅샷 생성
+            entitySpawner.SpawnMapObjects(map, floors, obstacles, walls, playerUsedCell);
+        }
+    }
+
+    async UniTaskVoid RestoreSnapshotAsync(ExplorationSnapshot snap, GameObject map, Tilemap floorMap, List<Tilemap> wallMap)
     {
         try
         {
-            if (SceneTransitionManager.Instance == null || !SceneTransitionManager.Instance.HasExplorationSnapshot)
-                return;
+            if (snap == null) return;
 
-            var snap = SceneTransitionManager.Instance.explorationSnapshot;
             Transform container = (map != null) ? map.transform : gridParent;
-
             await persistenceManager.RestoreSnapshot(snap, map, container, floorMap, wallMap);
 
-            SceneTransitionManager.Instance.ClearExplorationSnapshot();
-            Debug.Log("[MapManager] Snapshot restored via PersistenceManager.");
+            Debug.Log($"[MapManager] Snapshot restored for Map: {map.name}");
         }
         catch (System.Exception e)
         {

@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using Cysharp.Threading.Tasks;
 
-[RequireComponent(typeof(UnitStats), typeof(UnitMover), typeof(UnitVisual))]
+// [RequireComponent(typeof(UnitStats), typeof(UnitMover), typeof(UnitVisual))]
 public class BattleUnit : MonoBehaviour
 {
     #region 1. Core Data & Configuration (데이터 및 설정)
@@ -786,10 +786,15 @@ public class BattleUnit : MonoBehaviour
         if (Visual == null) Visual = gameObject.AddComponent<UnitVisual>();
 
         Visual.Initialize();
+        if (data == null)
+        {
+            Debug.LogError($"[BattleUnit] 프리팹 '{gameObject.name}'의 Unit Data가 인스펙터에 할당되지 않았습니다! 반드시 채워주세요.");
+            return;
+        }
+
         if (Stats != null) Stats.Initialize(data);
 
         ApplyData(); // 데이터 반영(HP/MP 초기화 포함)
-
     }
 
     void OnEnable()
@@ -869,10 +874,10 @@ public class BattleUnit : MonoBehaviour
     #region Data Initialization
 
     public void ApplyData()
-
     {
+        if (data == null) return;
 
-        gameObject.name = data.DisplayName;
+        gameObject.name = string.IsNullOrEmpty(data.DisplayName) ? gameObject.name : data.DisplayName;
 
         Hostility = data.baseHostility; // 런타임에 변하는 값만 초기값 대입
 

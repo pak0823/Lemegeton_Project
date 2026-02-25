@@ -19,17 +19,12 @@ namespace Project.UI
         [System.Serializable]
 
         public class MenuItem
-
         {
-
             public string id;               // 식별자 (디버그용)
-
             public Button button;           // UI 버튼
-
             public bool requiresSaveData;   // 세이브 데이터가 있어야 활성화되는지
-
+            public Image highlightImage;    // 하이라이트용 배경/그림 이미지
             // 필요하다면 여기에 UnityEvent onClick 등을 추가해 인스펙터에서 연결 가능
-
         }
 
 
@@ -462,18 +457,23 @@ namespace Project.UI
 
 
 
-            // 2. 텍스트 색상 변경
+            // 2. 텍스트 색상 변경 및 하이라이트 이미지 갱신
+            for (int i = 0; i < menuItems.Count; i++)
+            {
+                bool isSelected = (i == _currentIndex);
+
+                // 하이라이트 이미지 On/Off
+                if (menuItems[i].highlightImage != null)
+                {
+                    menuItems[i].highlightImage.enabled = isSelected;
+                }
+            }
 
             foreach (var kv in _originalTextColors)
-
             {
-
                 // 선택된 버튼의 텍스트인지 확인
-
-                bool isSelected = IsTextChildOfSelectedButton(kv.Key);
-
-                kv.Key.color = isSelected ? focusTextColor : kv.Value;
-
+                bool isSelectedText = IsTextChildOfSelectedButton(kv.Key);
+                kv.Key.color = isSelectedText ? focusTextColor : kv.Value;
             }
 
         }
@@ -493,17 +493,20 @@ namespace Project.UI
 
 
         private void ResetVisuals()
-
         {
-
             foreach (var kv in _originalTextColors)
-
             {
-
                 if (kv.Key) kv.Key.color = kv.Value;
-
             }
 
+            // 모든 하이라이트 이미지 끄기
+            foreach (var item in menuItems)
+            {
+                if (item.highlightImage != null)
+                {
+                    item.highlightImage.enabled = false;
+                }
+            }
         }
 
 

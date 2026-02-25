@@ -5,6 +5,9 @@ public class EncounterMonster : MonoBehaviour
     [SerializeField] private bool destroyOnTrigger = true;
     public bool IsActive { get; private set; } = true;
 
+    // 추가: 필드 보스 여부
+    public bool IsFieldBoss { get; set; } = false;
+
     public void MarkConsumed()
     {
         if (!IsActive) return;

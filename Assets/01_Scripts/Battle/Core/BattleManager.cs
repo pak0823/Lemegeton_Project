@@ -709,7 +709,9 @@ public class BattleManager : MonoBehaviour
         // [Reward] 전투 승리 보상 생성 및 전달
         if (BattleRewardManager.Instance != null)
         {
-            var rewards = BattleRewardManager.Instance.GenerateRewards();
+            var profile = waveManager?.CurrentWaveSet?.rewardProfile;
+            var rewards = BattleRewardManager.Instance.GenerateRewards(profile);
+
             if (SceneTransitionManager.Instance != null)
             {
                 SceneTransitionManager.Instance.SetPendingRewards(rewards);

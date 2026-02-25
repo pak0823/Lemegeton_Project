@@ -8,36 +8,50 @@ using UnityEngine;
 /// Inspector에서 destinationMapId에 이동할 맵 ID를 입력하세요 (예: "moat", "camp").
 /// 이 ID는 MapConnectionData의 mapId, 도착 맵의 ExplorationMapData.mapId와 일치해야 합니다.
 /// </summary>
-public class PortalController : MonoBehaviour, IInteractable
+public class PortalController : MonoBehaviour
 {
     [Header("목적지 맵 ID")]
     [Tooltip("이동할 맵의 ID. MapConnectionData의 mapId와 일치해야 합니다. (예: moat, camp, village)")]
     public string destinationMapId;
 
-    [Header("힌트 UI 라벨")]
-    [Tooltip("플레이어가 포탈에 가까이 갔을 때 표시되는 상호작용 힌트 텍스트")]
-    [SerializeField] private string hintLabel = "이동";
-
-    // IInteractable Property
-    public bool CanInteract => !string.IsNullOrEmpty(destinationMapId);
-    public string GetInteractLabel() => hintLabel;
-
-    // InteractionHintUI에서 라벨을 가져가기 위한 레거시 지원 (필요시 삭제 가능)
-    public string GetHintLabel() => hintLabel;
-
-    public void OnInteract()
+    private void OnEnable()
     {
-        UsePortal();
+        PlayerMovement.OnTileStepped += HandleTileStepped;
     }
 
-    public void SetHighlight(bool isActive)
+    private void OnDisable()
     {
-        // 포탈 하이라이트 연출이 필요하다면 여기에 구현 (현재는 생략)
+        PlayerMovement.OnTileStepped -= HandleTileStepped;
     }
 
-    public Transform GetTransform()
+    private void HandleTileStepped(Vector3Int arrivedCell)
     {
-        return transform;
+        if (PathfindingSystem.Instance == null || PathfindingSystem.Instance.floorTilemap == null) return;
+
+        // 1. 콜라이더 바운딩 박스 겹침 확인 (직관적인 시각적 매칭)
+        // 플레이어 몸체(Collider) 와 포탈 스프라이트(Collider) 영역이 조금이라도 겹치면 포탈 작동
+        Collider2D myCol = GetComponent<Collider2D>();
+        var player = PlayerMovement.Instance;
+        if (myCol != null && player != null)
+        {
+            Collider2D playerCol = player.GetComponent<Collider2D>();
+            if (playerCol != null && myCol.bounds.Intersects(playerCol.bounds))
+            {
+                UsePortal();
+                return;
+            }
+        }
+
+        // 2. 콜라이더가 제대로 없을 경우를 대비한 최후의 셀 매칭 (정 중앙 배치용)
+        var tilemap = PathfindingSystem.Instance.floorTilemap;
+        Vector3 anchorOffset = tilemap.tileAnchor;
+        Vector3 logicalPosition = transform.position - anchorOffset;
+        Vector3Int myCell = tilemap.WorldToCell(logicalPosition);
+
+        if (arrivedCell == myCell)
+        {
+            UsePortal();
+        }
     }
 
     /// <summary>

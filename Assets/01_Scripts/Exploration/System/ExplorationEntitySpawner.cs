@@ -126,13 +126,7 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
                 if (!excludePositions.Contains(cell)) excludePositions.Add(cell);
             }
 
-            // 3. 히든 포탈 진입점 (설정된 트리거 셀 직접 사용)
-            var hiddenPortals = map.GetComponentsInChildren<HiddenPortalController>();
-            foreach (var hidden in hiddenPortals)
-            {
-                if (!excludePositions.Contains(hidden.triggerTileCell))
-                    excludePositions.Add(hidden.triggerTileCell);
-            }
+
         }
 
         // ExcludeSpawn 태그가 붙은 콜라이더 영역 제외
