@@ -27,7 +27,7 @@ public class InventoryManager : MonoBehaviour, IInventory
             slots = new InventoryItem[maxSlots];
             DontDestroyOnLoad(gameObject); // 매니저 객체 유지 보장
         }
-        else 
+        else
         {
             // 중복 생성 시 객체 전체 파괴 (InventoryManager + PlayerDataManager가 같이 있다면 통째로 정리됨)
             Destroy(gameObject);
@@ -53,12 +53,12 @@ public class InventoryManager : MonoBehaviour, IInventory
     private void UpdateCache(string id, int delta)
     {
         if (string.IsNullOrEmpty(id)) return;
-        
+
         if (!_itemCountCache.ContainsKey(id))
             _itemCountCache[id] = 0;
-        
+
         _itemCountCache[id] += delta;
-        
+
         if (_itemCountCache[id] <= 0)
             _itemCountCache.Remove(id);
     }
@@ -211,17 +211,25 @@ public class InventoryManager : MonoBehaviour, IInventory
         return false;
     }
 
-    // 인벤에서 아이템을 버릴 시 
+    // 인벤에서 아이템을 버릴 시
     public void RemoveItemAtSlot(int index)
     {
         if (index >= 0 && index < maxSlots && slots[index] != null)
         {
             // 캐시 업데이트
             UpdateCache(slots[index].itemID, -slots[index].count);
-            
+
             slots[index] = null;
             OnInventoryChanged?.Invoke();
         }
+    }
+
+    public void ClearInventory()
+    {
+        Array.Clear(slots, 0, slots.Length);
+        _itemCountCache.Clear();
+        OnInventoryChanged?.Invoke();
+        Debug.Log("[InventoryManager] 인벤토리 초기화 완료.");
     }
 
     public List<InventoryItem> GetSaveData()
@@ -301,7 +309,7 @@ public class InventoryManager : MonoBehaviour, IInventory
         if (slotIndex < 0 || slotIndex >= maxSlots) return false;
         var item = slots[slotIndex];
         if (item == null || targetUnit == null) return false;
-        
+
         // [Refactor] 전략 패턴 사용: 아이템 데이터에 할당된 효과 실행
         // 아이템 ID 하드코딩 제거됨
         // InventoryUIManager -> InventoryUI 로 수정 (싱글톤 이름 확인 필요, 보통 InventoryUI)
@@ -337,7 +345,7 @@ public class InventoryManager : MonoBehaviour, IInventory
             // 아이템 1개 감소
             item.count--;
             if (item.count <= 0) slots[slotIndex] = null;
-            
+
             UpdateCache(item.itemID, -1);
             OnInventoryChanged?.Invoke();
 

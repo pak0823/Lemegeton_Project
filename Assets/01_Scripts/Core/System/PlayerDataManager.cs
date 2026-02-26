@@ -451,8 +451,34 @@ public class PlayerDataManager : MonoBehaviour
         Debug.Log("[Save] 데이터 로드 완료.");
     }
 
-    private void InitNewGame()
+    public void ClearSaveDataAndReset()
     {
-        SaveGame();
+        // 1. 파일 삭제
+        if (System.IO.File.Exists(SavePath))
+        {
+            System.IO.File.Delete(SavePath);
+            Debug.Log("[Save] 기존 세이브 데이터 파일 삭제 완료.");
+        }
+
+        // 2. 패시브 해금 및 유닛 상태 초기화
+        _unlockedPassiveIds.Clear();
+        unitStates.Clear();
+        ownedUnits.Clear();
+
+        // 3. 인벤토리 초기화
+        if (InventoryManager.Instance != null)
+        {
+            InventoryManager.Instance.ClearInventory();
+        }
+
+        // 4. 진형 비우기
+        Array.Clear(formation, 0, formation.Length);
+
+        // 5. 어드레서블 추적 핸들 전부 해제
+        _tracker.ReleaseAll();
+
+        // 6. 다시 초기 유닛 로드
+        IsLoading = true;
+        LoadStartingUnitsByLabel().Forget();
     }
 }

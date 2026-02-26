@@ -89,7 +89,7 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
     /// 플레이어가 선점한 타일(playerUsedCell)을 제외하고
     /// pattern → object(상자) → trap(함정) 순서로 배치합니다.
     /// </summary>
-    public void SpawnMapObjects(
+    public async UniTaskVoid SpawnMapObjects(
         GameObject map,
         List<Tilemap> floors,
         List<Tilemap> obstacles,
@@ -98,15 +98,12 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
     {
         if (map == null) return;
 
-        var spawner = map.GetComponentInChildren<MapObjectSpawner>();
-        if (spawner == null) return;
-
         // 플레이어가 사용한 셀 제외
         List<Vector3Int> excludePositions = new List<Vector3Int>();
         if (playerUsedCell.x != int.MinValue)
             excludePositions.Add(playerUsedCell);
 
-        // [추가] 맵 내 존재하는 모든 형태의 포탈 위치를 스폰 제외 영역에 병합
+        // 맵 내 존재하는 모든 형태의 포탈 위치를 스폰 제외 영역에 병합
         var tilemap = floors.FirstOrDefault();
         if (tilemap != null)
         {
@@ -125,8 +122,6 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
                 Vector3Int cell = tilemap.WorldToCell(exit.transform.position);
                 if (!excludePositions.Contains(cell)) excludePositions.Add(cell);
             }
-
-
         }
 
         // ExcludeSpawn 태그가 붙은 콜라이더 영역 제외
@@ -135,7 +130,24 @@ public class ExplorationEntitySpawner : MonoBehaviour, IMapComponent
             .Where(c => c.CompareTag("ExcludeSpawn"))
             .ToList();
 
-        spawner.Spawn(floors, obstacles, walls, excludePositions, excludeColliders.ToArray()).Forget();
+        // [신규 로직] 인카운터 몬스터 먼저 배치
+        var encounterSpawner = map.GetComponentInChildren<EncounterMonsterSpawner>();
+        if (encounterSpawner != null)
+        {
+            // 병렬 대신 대기(await)하여 이후 스폰될 상자/함정이 겹치지 않게 방어
+            List<Vector3Int> encounterUsedCells = await encounterSpawner.SpawnAsync(floors, obstacles, walls, excludePositions, excludeColliders.ToArray());
+            if (encounterUsedCells != null && encounterUsedCells.Count > 0)
+            {
+                excludePositions.AddRange(encounterUsedCells);
+            }
+        }
+
+        // 이후 나머지 오브젝트 배치
+        var spawner = map.GetComponentInChildren<MapObjectSpawner>();
+        if (spawner != null)
+        {
+            spawner.Spawn(floors, obstacles, walls, excludePositions, excludeColliders.ToArray()).Forget();
+        }
     }
 
     // ── 내부 유틸 ─────────────────────────────────────────

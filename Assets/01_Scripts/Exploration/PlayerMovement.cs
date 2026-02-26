@@ -156,7 +156,7 @@ public class PlayerMovement : MonoBehaviour
 
         InteractionHandler = GetComponent<PlayerInteractionHandler>();
         if (InteractionHandler == null) InteractionHandler = gameObject.AddComponent<PlayerInteractionHandler>();
-        InteractionHandler.Initialize(this);
+        InteractionHandler.Initialize(this, encounterLayerMask);
 
         PushHandler = GetComponent<PlayerPushHandler>();
         if (PushHandler == null) PushHandler = gameObject.AddComponent<PlayerPushHandler>();

@@ -12,11 +12,11 @@ public class PlayerInteractionHandler : MonoBehaviour
 
     [SerializeField] private LayerMask encounterLayerMask;
 
-    public void Initialize(PlayerMovement playerMovement)
+    public void Initialize(PlayerMovement playerMovement, LayerMask encounterLayer)
     {
         player = playerMovement;
-        // 기존 PlayerMovement에 있던 encounterLayerMask를 Inspector에서 초기화 하거나 여기서 복사해옵니다.
-        // 현재는 임시로 복사 (실제 씬에서는 Inspector 재설정이 필요할 수 있습니다)
+        // 기존 PlayerMovement에 있던 encounterLayerMask를 복사해옵니다.
+        encounterLayerMask = encounterLayer;
     }
 
     public void SetEncounterLayer(LayerMask layer)

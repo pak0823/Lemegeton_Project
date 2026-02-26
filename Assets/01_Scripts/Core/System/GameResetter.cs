@@ -56,9 +56,28 @@ namespace Project
 
             }
 
+            // [New] 세이브 데이터 완전 초기화 (새 게임 시작 시 구동)
+            if (deleteSaves)
+            {
+                if (PlayerDataManager.Instance != null)
+                {
+                    PlayerDataManager.Instance.ClearSaveDataAndReset();
+                }
+                else
+                {
+                    // 타이틀 씬 등에서 게임 첫 실행으로 매니저 인스턴스가 아직 없는 경우
+                    // 직접 파일 경로를 참조해 물리적으로 세이브 파일을 제거합니다.
+                    string savePath = System.IO.Path.Combine(Application.persistentDataPath, "savedata.json");
+                    if (System.IO.File.Exists(savePath))
+                    {
+                        System.IO.File.Delete(savePath);
+                        Debug.Log("[GameResetter] 런타임 인스턴스 생성 전, 기존 세이브 데이터를 물리적으로 삭제했습니다.");
+                    }
+                }
+            }
+
         }
 
     }
 
 }
-

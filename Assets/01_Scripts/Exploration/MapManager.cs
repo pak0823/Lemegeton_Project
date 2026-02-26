@@ -245,7 +245,7 @@ void GenerateStageMap()
         if (pathfindingSystem)
             pathfindingSystem.Initialize(floors, obstacles, walls, impassableLayerMask);
 
-        // 3. Entity Spawn Phase (Player): 랜덤 방 시작일 때만 랜덤 위치 스폰
+        // 3. Entity Spawn Phase (Player): 랜덤 방 시작일 때 랜덤 위치 스폰 (또는 복귀 시 임시 랜덤 스폰 후 전환 매니저가 텔레포트)
         Vector3Int playerUsedCell = new Vector3Int(int.MinValue, int.MinValue, 0);
         Transform playerTransform = null;
 
@@ -257,14 +257,12 @@ void GenerateStageMap()
                 var data = stageDB.normalStages.FirstOrDefault(x => x.stageNumber == currentStage);
                 if (data != null) StageRuntimeContext.Instance?.InitializeDistribution(data);
             }
+        }
 
-            var playerMovement = entitySpawner.SpawnPlayer(playerPrefab, currentMap, floors, obstacles, walls, out playerUsedCell);
-            playerTransform = playerMovement != null ? playerMovement.transform : null;
-        }
-        else
-        {
-            playerTransform = PlayerMovement.Instance != null ? PlayerMovement.Instance.transform : null;
-        }
+        // 전투 복귀든 최초 방문이든 Player는 여기서 항상 새롭게 스폰 (PlayerMovement 인스턴스는 비영구적)
+        // 복귀 시에는 랜덤 타일에 꽂히지만 직후 SceneTransitionManager가 정확한 원래 좌표로 즉시 Teleport 처리함
+        var playerMovement = entitySpawner.SpawnPlayer(playerPrefab, currentMap, floors, obstacles, walls, out playerUsedCell);
+        playerTransform = playerMovement != null ? playerMovement.transform : null;
 
         HookCameraToPlayer(playerTransform, currentMap);
 
@@ -303,7 +301,7 @@ void GenerateStageMap()
         else
         {
             // 첫 방문이므로 오브젝트 스폰 및 최초 스냅샷 생성
-            entitySpawner.SpawnMapObjects(map, floors, obstacles, walls, playerUsedCell);
+            entitySpawner.SpawnMapObjects(map, floors, obstacles, walls, playerUsedCell).Forget();
         }
     }
 
