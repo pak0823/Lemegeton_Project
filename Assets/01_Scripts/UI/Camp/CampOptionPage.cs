@@ -23,16 +23,16 @@ public class CampOptionPage : MonoBehaviour
     };
 
     [Header("Focus Container")]
-    [SerializeField] private RectTransform buttonsContainer; // ButtonList 오브젝트       
+    [SerializeField] private RectTransform buttonsContainer; // ButtonList 오브젝트
     [SerializeField] private RectTransform focusArrow;       // 선택 화살표
-    [SerializeField] private Vector2 arrowOffset = new Vector2(0f, 0f); 
+    [SerializeField] private Vector2 arrowOffset = new Vector2(0f, 0f);
 
     [Header("Key bindings")]
     private KeyCode upKey = KeyCode.W;
     private KeyCode downKey = KeyCode.S;
-    private KeyCode submitKey = KeyCode.E;      
+    private KeyCode submitKey = KeyCode.E;
     private KeyCode submit_V2Key = KeyCode.Return;
-    private KeyCode cancelKey = KeyCode.Q;      
+    private KeyCode cancelKey = KeyCode.Q;
 
     private readonly List<Button> focusButtons = new List<Button>();
     private int focusIndex = 0;
@@ -84,7 +84,7 @@ public class CampOptionPage : MonoBehaviour
             {
                 // 마우스 클릭 시에도 해당 인덱스로 포커스를 옮긴 후 로직 실행
                 b.onClick.AddListener(() => {
-                    SetFocus(index); 
+                    SetFocus(index);
                     OnButtonClick(index);
                 });
             }
@@ -128,9 +128,22 @@ public class CampOptionPage : MonoBehaviour
             case "타이틀로 돌아가기":
                 OnBtnReturnTitle();
                 break;
+            case "그래픽 설정":
+                // 추후 CampUIManager 인스펙터에 GraphicSettingsUI 레퍼런스를 두어 띄우거나
+                // FindObjectOfType으로 찾아서 UiModalManager.Instance.Open() 해주면 됩니다.
+                var graphicUI = FindObjectOfType<GraphicSettingsUI>(true);
+                if (graphicUI != null)
+                {
+                    UiModalManager.Instance.Open(graphicUI);
+                }
+                else
+                {
+                    Debug.LogWarning("[CampOptionPage] GraphicSettingsUI 프리팹/오브젝트를 씬에서 찾을 수 없습니다. 인스펙터 연동(Bind)이 필요합니다.");
+                }
+                break;
             default:
                 // 나머지 기능(그래픽, 사운드 등)은 여기에 추가 구현
-                Debug.Log($"{btnName} 기능은 아직 구현되지 않았습니다.");
+                Debug.Log($"{btnName} 기능은 아직 연결되지 않았습니다.");
                 break;
         }
     }
@@ -173,7 +186,7 @@ public class CampOptionPage : MonoBehaviour
     IEnumerator ReinitFocusNextFrame()
     {
         // 한 프레임 대기하여 Vertical Layout Group이 자식들 배치를 끝내길 기다림
-        yield return null; 
+        yield return null;
         RebuildFocusList();
 
         if (focusButtons.Count > 0) SetFocus(0);
@@ -203,7 +216,7 @@ void SetFocus(int index)
 void SetButtonHighlight(Button btn, bool isVisible)
 {
     if (btn == null) return;
-    
+
     // 버튼의 Image 컴포넌트(배경)를 가져와서 알파값이나 활성화 상태 조절
     Image bg = btn.GetComponent<Image>();
     if (bg != null)
@@ -227,7 +240,7 @@ void SetButtonHighlight(Button btn, bool isVisible)
 
         focusArrow.gameObject.SetActive(true);
         RectTransform targetRect = targetBtn.transform as RectTransform;
-    
+
         // 버튼의 네 모서리 월드 좌표를 가져올 배열 (0:왼쪽하단, 1:왼쪽상단, 2:오른쪽상단, 3:오른쪽하단)
         Vector3[] corners = new Vector3[4];
         targetRect.GetWorldCorners(corners);
