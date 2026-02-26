@@ -33,23 +33,38 @@ public class UnitStatusPanelUI : MonoBehaviour
         {
             battle.RegisterStatusPanel(this);
             battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
+            battle.OnWaveStarted += BuildOnce;
         }
     }
 
     void Start()
     {
-        BuildOnce();
+        // 빌드 환경 초기화 타이밍이 꼬이는 것을 방지하기 위해 0.1초 딜레이 후 강제 수행
+        Invoke(nameof(BuildOnce), 0.1f);
         if (battle != null) battle.OnUnitActionLabel += HandleActionLabel; // 기술명 라벨 업데이트
+    }
 
-        //아군 카드가 하나도 없으면 즉시 보강
-        if (!views.Keys.Any(k => k && k.data.team == Team.Player))
+    private float buildTimer = 0f;
+
+    void Update()
+    {
+        // 1초 단위로 지속적으로 아직 만들어지지 않은 패널이 있는지 체크 (빌드 타이밍 예방용 확실한 폴백)
+        buildTimer += Time.deltaTime;
+        if (buildTimer > 1f)
+        {
+            buildTimer = 0f;
             BuildOnce();
+        }
     }
 
     void OnDestroy()
     {
-        if (battle != null) battle.OnUnitActionLabel -= HandleActionLabel;
-        if (battle != null) battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
+        if (battle != null)
+        {
+            battle.OnUnitActionLabel -= HandleActionLabel;
+            battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
+            battle.OnWaveStarted -= BuildOnce;
+        }
         foreach (var kv in views)
             if (kv.Key)
             {
@@ -72,18 +87,49 @@ public class UnitStatusPanelUI : MonoBehaviour
 
     void BuildOnce()
     {
-        // 현재 씬의 생존 유닛 조회 (매니저 캐싱 사용)
-        if (battle == null) return;
-        var units = battle.ActiveUnits.Where(u => !u.IsDead).ToList();
-        // var units = FindObjectsOfType<BattleUnit>().Where(u => !u.IsDead).ToList();
+        if (battle == null)
+        {
+            battle = BattleManager.Instance;
+            if (battle != null)
+            {
+                battle.RegisterStatusPanel(this);
+                battle.OnWaveChanged -= HandleWaveChanged_RebuildEnemies;
+                battle.OnWaveChanged += HandleWaveChanged_RebuildEnemies;
+                // OnUnitActionLabel도 필요하다면 연결
+                battle.OnUnitActionLabel -= HandleActionLabel;
+                battle.OnUnitActionLabel += HandleActionLabel;
+            }
+        }
 
-        var enemies = Sort(units.Where(u => u.data.team == Team.Enemy), enemySort);
-        var allies = Sort(units.Where(u => u.data.team == Team.Player), playerSort);
+        // 현재 씬의 생존 유닛 조회 (매니저 캐싱 사용)
+        var units = (battle != null) ? battle.ActiveUnits.Where(u => u != null && !u.IsDead).ToList() : new List<BattleUnit>();
+
+        // 빌드 환경 등에서 초기화 타이밍 문제로 매니저가 유닛을 못주면
+        // 하이어라키에서 직접 한 번 더 긁어옵니다. (Fallback)
+        if (units.Count == 0)
+        {
+            units = FindObjectsOfType<BattleUnit>().Where(u => u != null && u.gameObject.activeInHierarchy && !u.IsDead).ToList();
+        }
+
+        // data가 아직 할당되지 않은 (초기화 중인) 유닛은 그리지 않음
+        var validUnits = units.Where(u => u.data != null).ToList();
+
+        // 디버깅: 빌드에서 유닛이 왜 안나오는지 카운트 체크
+        if (units.Count > 0 && validUnits.Count != lastReportedCount)
+        {
+            Debug.Log($"[UnitStatusPanelUI] BuildOnce: Found {units.Count} units. Valid Data: {validUnits.Count}. Parent(E/P): {enemyParent!=null}/{playerParent!=null}");
+            lastReportedCount = validUnits.Count;
+        }
+
+        var enemies = Sort(validUnits.Where(u => u.data.team == Team.Enemy), enemySort);
+        var allies = Sort(validUnits.Where(u => u.data.team == Team.Player), playerSort);
 
         // 이미 만들어진 카드가 있어도 없는 것만 채워 넣음
         foreach (var u in enemies) if (!views.ContainsKey(u)) SpawnCard(enemyParent, enemyItemPrefab, u);
         foreach (var u in allies) if (!views.ContainsKey(u)) SpawnCard(playerParent, playerItemPrefab, u);
     }
+
+    private int lastReportedCount = -1;
     void SpawnCard(RectTransform parent, UnitStatusItemUI prefab, BattleUnit u)
     {
         if (!parent || !prefab) return;
@@ -140,7 +186,7 @@ public class UnitStatusPanelUI : MonoBehaviour
     {
         var toRemove = views
         .Where(kv =>
-            (kv.Key != null && kv.Key.data.team == Team.Enemy) ||
+            (kv.Key != null && kv.Key.data != null && kv.Key.data.team == Team.Enemy) ||
             (kv.Key == null && kv.Value != null && kv.Value.transform != null &&
               enemyParent != null && kv.Value.transform.IsChildOf(enemyParent)))
         .Select(kv => kv.Key)
@@ -154,15 +200,22 @@ public class UnitStatusPanelUI : MonoBehaviour
         }
 
         // 2) 현재 씬의 '생존 적'만 다시 카드 생성
-        // [Optimization] FindObjectsOfType 제거 → battle.ActiveUnits 레지스트리 사용
-        var enemies = Sort(
-            (battle != null ? battle.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>())
-                .Where(u => u && !u.IsDead && u.data.team == Team.Enemy),
-        enemySort
-            );
+        var units = (battle != null ? battle.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>())
+                        .Where(u => u != null && !u.IsDead).ToList();
+
+        if (units.Count == 0 || !units.Any(u => u.data != null && u.data.team == Team.Enemy))
+        {
+            // 빌드 환경 지연 대비 Fallback
+            var fb = FindObjectsOfType<BattleUnit>().Where(u => u != null && u.gameObject.activeInHierarchy && !u.IsDead).ToList();
+            if (fb.Count > 0) units = fb;
+        }
+
+        var validEnemies = units.Where(u => u.data != null && u.data.team == Team.Enemy).ToList();
+        var enemies = Sort(validEnemies, enemySort);
+
         foreach (var u in enemies)
         {
-            if (views.ContainsKey(u)) continue; // 이미 있으면 스킵(이론상 없음)
+            if (views.ContainsKey(u)) continue;
             SpawnCard(enemyParent, enemyItemPrefab, u);
         }
     }

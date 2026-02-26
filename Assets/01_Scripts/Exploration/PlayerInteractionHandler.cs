@@ -76,10 +76,14 @@ public class PlayerInteractionHandler : MonoBehaviour
         monster = null;
 
         // PathfindingSystem을 통해 타일의 월드 좌표를 가져와서 BoxCast/OverlapCircle 수행
-        if (PathfindingSystem.Instance == null || PathfindingSystem.Instance.floorTilemap == null) return false;
+        if (PathfindingSystem.Instance == null) return false;
 
-        var world = PathfindingSystem.Instance.floorTilemap.GetCellCenterWorld(cell);
-        var hits = Physics2D.OverlapCircleAll(world, 0.4f, encounterLayerMask);
+        // 가장 높은(현재 캐릭터/몬스터가 서 있는) 맵 레이어의 실제 월드 포지션(Anchor Y 포함)을 획득
+        var world = PathfindingSystem.Instance.GetWorldPosForLogic(cell);
+
+        Physics2D.SyncTransforms(); // 빌드 환경 물리 위치 즉시 동기화
+        // 타일 크기나 콜라이더 크기에 따라 주변 몬스터가 잡힐 수 있으므로 반경을 0.1f로 확 줄여 정확히 해당 칸만 감지
+        var hits = Physics2D.OverlapCircleAll(world, 0.1f, encounterLayerMask);
 
         if (hits.Length == 0)
         {

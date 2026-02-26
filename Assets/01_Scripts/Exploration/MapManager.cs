@@ -178,6 +178,14 @@ void GenerateStageMap()
         {
             prefabToUse = SceneTransitionManager.Instance.explorationMapPrefabOverride;
             Debug.Log("[MapManager] Override prefab 사용(재로딩 유지)");
+
+            // 프리팹 재사용 시에도 ConnectionData를 스테이지 DB에서 찾아 복구해주어야 포탈 이동이 실패하지 않음
+            if (stageDB != null)
+            {
+                var data = stageDB.normalStages.FirstOrDefault(x => x.stageNumber == currentStage);
+                if (data != null)
+                    CurrentConnectionData = data.mapConnectionData;
+            }
         }
         else
         {

@@ -31,6 +31,7 @@ public class ExitHiddenPortalController : MonoBehaviour
         var player = PlayerMovement.Instance;
         if (myCol != null && player != null)
         {
+            Physics2D.SyncTransforms();
             Collider2D playerCol = player.GetComponent<Collider2D>();
             if (playerCol != null && myCol.bounds.Intersects(playerCol.bounds))
             {
@@ -40,10 +41,7 @@ public class ExitHiddenPortalController : MonoBehaviour
         }
 
         // 2. 콜라이더가 제대로 없을 경우를 대비한 최후의 셀 매칭 (정 중앙 배치용)
-        var tilemap = PathfindingSystem.Instance.floorTilemap;
-        Vector3 anchorOffset = tilemap.tileAnchor;
-        Vector3 logicalPosition = transform.position - anchorOffset;
-        Vector3Int myCell = tilemap.WorldToCell(logicalPosition);
+        Vector3Int myCell = PathfindingSystem.Instance.GetCellFromWorldPos(transform.position);
 
         if (arrivedCell == myCell)
         {

@@ -1,36 +1,34 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class ExplorationFogManager : MonoBehaviour
 {
     public static ExplorationFogManager Instance;
 
     [Header("Fog Settings")]
-    public Material fogDisplayMat; // Assign "FogMat" here
+    public Material fogDisplayMat; // Assign "FogMat" (Custom/ExplorationFogDisplay)
+    public Shader fogLogicShader; // Assign "Custom/FogFade"
     public float clearRadius = 3.0f;
     [Range(0.001f, 0.05f)]
-    public float darkenSpeed = 0.005f;
-    
-    [Header("Orientation")]
-    public bool flipX = false;
-    public bool flipY = false;
+    public float darkenSpeed = 0.5f;
 
     private Transform _player;
-    private RenderTexture _fogRT;
-    private Material _logicMat; // Custom/FogFade
     private Transform _fogPlane;
-    private Vector2 _mapSize;
-    private Vector2 _mapOrigin;
-    
+    private Camera _fogCamera;
+
+    private RenderTexture _currentRT;
+    private RenderTexture _accumRT;
+    private Material _fadeMat;
+
     private void Awake()
     {
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
-        
-        // Load Logic Shader
-        Shader logicShader = Shader.Find("Custom/FogFade");
-        if (logicShader != null)
+
+        Shader fadeShader = fogLogicShader != null ? fogLogicShader : Shader.Find("Custom/FogFade");
+        if (fadeShader != null)
         {
-            _logicMat = new Material(logicShader);
+            _fadeMat = new Material(fadeShader);
         }
         else
         {
@@ -41,134 +39,122 @@ public class ExplorationFogManager : MonoBehaviour
     public void Initialize(Transform player, Bounds mapBounds)
     {
         _player = player;
-        
-        // Calculate Map Size & Origin
-        _mapSize = new Vector2(mapBounds.size.x, mapBounds.size.y);
-        _mapOrigin = new Vector2(mapBounds.center.x, mapBounds.center.y);
 
         // Setup Fog Plane
         SetupFogPlane(mapBounds);
 
-        // Setup RenderTexture
-        SetupRenderTexture((int)_mapSize.x * 10, (int)_mapSize.y * 10); // 10 pixels per unit resolution
+        // Setup Orthographic Camera
+        SetupFogCamera(mapBounds);
     }
 
     void SetupFogPlane(Bounds bounds)
     {
         if (_fogPlane == null)
         {
-            // Create Plane if not exists
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Plane);
             go.name = "FogPlane";
             go.transform.SetParent(transform);
-            
-            // Remove Collider (not needed for visual fog)
             Destroy(go.GetComponent<Collider>());
-            
-            // Assign Material
+
             MeshRenderer mr = go.GetComponent<MeshRenderer>();
             mr.material = fogDisplayMat;
-            
             _fogPlane = go.transform;
+
+            // FogPlane은 카메라에 찍히면 안 되므로 일반 레이어를 피해줌 (선택사항, 기본값 Default)
+            go.layer = LayerMask.NameToLayer("Ignore Raycast");
         }
 
-        // Position
-        _fogPlane.position = new Vector3(bounds.center.x, bounds.center.y, -5f); 
-        
-        // Rotation
-        _fogPlane.rotation = Quaternion.Euler(-90, 0, 0); 
-        
-        // Scale Calculation (World Size -> Local Scale)
-        // Unity Plane default size is 10x10.
+        _fogPlane.position = new Vector3(bounds.center.x, bounds.center.y, -5f);
+        _fogPlane.rotation = Quaternion.Euler(-90, 0, 0);
+
         float targetWorldWidth = bounds.size.x;
         float targetWorldHeight = bounds.size.y;
-        
         Vector3 parentScale = _fogPlane.parent ? _fogPlane.parent.lossyScale : Vector3.one;
-        
-        // We need: LocalScale * ParentScale * 10 = TargetSize
-        // So: LocalScale = TargetSize / (ParentScale * 10)
-        
+
         float scaleX = targetWorldWidth / (10f * parentScale.x);
-        float scaleY = targetWorldHeight / (10f * parentScale.z); 
-        
-        // Note: Plane uses X, Z for width/height in its local space.
-        // When rotated -90 on X, Local Z points UP (World Y).
-        
-        // scaleX is already calculated above.
-        float scaleZ = targetWorldHeight / (10f * parentScale.y); 
-        
+        float scaleZ = targetWorldHeight / (10f * parentScale.y);
+
         _fogPlane.localScale = new Vector3(scaleX, 1, scaleZ);
-
-        Debug.Log($"[ExplorationFogManager] FogPlane Created. Bounds: {bounds}, Scale: {_fogPlane.localScale}, ParentScale: {parentScale}");
-
-        // Setup RenderTexture
-        SetupRenderTexture((int)_mapSize.x * 10, (int)_mapSize.y * 10); // 10 pixels per unit resolution
     }
 
-    void SetupRenderTexture(int width, int height)
+    void SetupFogCamera(Bounds bounds)
     {
-        // Safety Check for Texture Size
-        if (width <= 0 || height <= 0)
+        if (_fogCamera == null)
         {
-            Debug.LogWarning($"[ExplorationFogManager] Invalid Texture Size: {width}x{height}. Defaulting to 1024x1024.");
-            width = 1024;
-            height = 1024;
-        }
-        // Cleanup old
-        if (_fogRT != null)
-        {
-            _fogRT.Release();
+            GameObject camObj = new GameObject("InternalFogCamera");
+            camObj.transform.SetParent(transform);
+            _fogCamera = camObj.AddComponent<Camera>();
+            _fogCamera.orthographic = true;
+            _fogCamera.clearFlags = CameraClearFlags.SolidColor;
+            _fogCamera.backgroundColor = Color.black;
+            _fogCamera.depth = -100; // 메인 카메라보다 렌더링 순서 낮춤
+
+            // 플레이어 주변을 밝히는 빛(Layer)만 렌더링하도록 설정할 수 있지만
+            // 일단은 전체 렌더링 혹은 특수 레이어 렌더링
+            // _fogCamera.cullingMask = 1 << LayerMask.NameToLayer("FogLight");
+            // 현재 프로젝트 상 플레이어를 직접 찍어서 렌더러 기반으로 따냈는지 확인
         }
 
-        // Create new
-        _fogRT = new RenderTexture(width, height, 0, RenderTextureFormat.R8);
-        _fogRT.Create();
-        
-        // Clear to Black (Fog)
-        RenderTexture.active = _fogRT;
+        // Camera Position & Size
+        _fogCamera.transform.position = new Vector3(bounds.center.x, bounds.center.y, -10f);
+        // 오르토그래픽 사이즈는 세로 길이의 절반
+        _fogCamera.orthographicSize = bounds.size.y / 2f;
+
+        int width = (int)bounds.size.x * 10;
+        int height = (int)bounds.size.y * 10;
+        if (width <= 0) width = 1024;
+        if (height <= 0) height = 1024;
+
+        if (_currentRT != null) _currentRT.Release();
+        if (_accumRT != null) _accumRT.Release();
+
+        _currentRT = new RenderTexture(width, height, 0, RenderTextureFormat.R8);
+        _currentRT.Create();
+        _fogCamera.targetTexture = _currentRT;
+
+        _accumRT = new RenderTexture(width, height, 0, RenderTextureFormat.R8);
+        _accumRT.Create();
+
+        RenderTexture.active = _accumRT;
         GL.Clear(false, true, Color.black);
         RenderTexture.active = null;
 
-        // Assign to Display Material
         if (fogDisplayMat != null)
         {
-            fogDisplayMat.SetTexture("_MainTex", _fogRT);
+            fogDisplayMat.SetTexture("_MainTex", _accumRT);
         }
     }
-    
-    void Update()
+
+    private void OnEnable()
     {
-        // Auto-assign player if missing
-        if (_player == null)
-        {
-            if (PlayerMovement.Instance != null)
-            {
-                _player = PlayerMovement.Instance.transform;
-            }
-        }
-
-        if (_fogRT == null || _player == null || _logicMat == null) return;
-
-        // 1. Pass Params
-        _logicMat.SetVector("_PlayerPos", new Vector4(_player.position.x, _player.position.y, 0, 0));
-        _logicMat.SetVector("_MapSize", new Vector4(_mapSize.x, _mapSize.y, 0, 0));
-        _logicMat.SetVector("_MapOrigin", new Vector4(_mapOrigin.x, _mapOrigin.y, 0, 0));
-        _logicMat.SetFloat("_ClearRadius", clearRadius);
-        _logicMat.SetFloat("_DarkenSpeed", darkenSpeed);
-        
-        // Orientation
-        Vector4 uvMult = new Vector4(flipX ? -1f : 1f, flipY ? -1f : 1f, 0, 0);
-        _logicMat.SetVector("_UVMult", uvMult);
-
-        // 2. Double Buffer
-        RenderTexture temp = RenderTexture.GetTemporary(_fogRT.width, _fogRT.height, 0, _fogRT.format);
-        Graphics.Blit(_fogRT, temp, _logicMat);
-        Graphics.Blit(temp, _fogRT);
-        RenderTexture.ReleaseTemporary(temp);
+        RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
     }
-    
+
+    private void OnDisable()
+    {
+        RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+    }
+
+    void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
+    {
+        if (camera == _fogCamera && _currentRT != null && _accumRT != null && _fadeMat != null)
+        {
+            // Update FogCamera Position to follow player?
+            // 아니면 Map 전체를 고정으로 찍음? 현재는 전체 맵 고정.
+
+            _fadeMat.SetFloat("_FadeAmount", darkenSpeed * Time.deltaTime);
+            _fadeMat.SetTexture("_CurrentTex", _currentRT);
+
+            RenderTexture temp = RenderTexture.GetTemporary(_accumRT.width, _accumRT.height, 0, _accumRT.format);
+            Graphics.Blit(_accumRT, temp, _fadeMat);
+            Graphics.Blit(temp, _accumRT);
+            RenderTexture.ReleaseTemporary(temp);
+        }
+    }
+
     private void OnDestroy()
     {
-        if (_fogRT != null) _fogRT.Release();
+        if (_currentRT != null) _currentRT.Release();
+        if (_accumRT != null) _accumRT.Release();
     }
 }
