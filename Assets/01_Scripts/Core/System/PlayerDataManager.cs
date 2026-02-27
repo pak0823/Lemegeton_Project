@@ -13,15 +13,31 @@ public class SaveData
 
     // [New] 패시브 해금 상태 통합 (모든 PassiveAsset PlayerPrefs 연동 대체)
     public List<string> unlockedPassiveIds = new List<string>();
+
+    // [New] 런타임 유닛 상태 저장 (JSON용)
+    public List<SavedUnitState> savedUnitStates = new List<SavedUnitState>();
 }
 
 [System.Serializable]
-public class RuntimeUnitData
+public struct SavedUnitState
+{
+    public string unitAssetName;
+    public RuntimeUnitData runtimeData;
+}
+
+[System.Serializable]
+public class RuntimeUnitData : ISerializationCallbackReceiver
 {
     public float currentHP;
     public float currentMP;
     public float currentRage;
     public bool isDead;
+
+    // [New] 영구적 스탯 변화량 (음수면 감소, 양수면 증가)
+    public Dictionary<string, int> statModifiers = new Dictionary<string, int>();
+
+    [SerializeField] private List<string> _statKeys = new List<string>();
+    [SerializeField] private List<int> _statValues = new List<int>();
 
     public RuntimeUnitData(float hp, float mp, float rage)
     {
@@ -32,8 +48,28 @@ public class RuntimeUnitData
         statModifiers = new Dictionary<string, int>();
     }
 
-    // [New] 영구적 스탯 변화량 (음수면 감소, 양수면 증가)
-    public Dictionary<string, int> statModifiers = new Dictionary<string, int>();
+    public void OnBeforeSerialize()
+    {
+        _statKeys.Clear();
+        _statValues.Clear();
+        if (statModifiers != null)
+        {
+            foreach (var kvp in statModifiers)
+            {
+                _statKeys.Add(kvp.Key);
+                _statValues.Add(kvp.Value);
+            }
+        }
+    }
+
+    public void OnAfterDeserialize()
+    {
+        statModifiers = new Dictionary<string, int>();
+        for (int i = 0; i < Mathf.Min(_statKeys.Count, _statValues.Count); i++)
+        {
+            statModifiers[_statKeys[i]] = _statValues[i];
+        }
+    }
 }
 
 public class PlayerDataManager : MonoBehaviour
@@ -48,9 +84,11 @@ public class PlayerDataManager : MonoBehaviour
 
     // [New] 런타임 상태 저장소
     private Dictionary<UnitData, RuntimeUnitData> unitStates = new Dictionary<UnitData, RuntimeUnitData>();
+    private Dictionary<string, RuntimeUnitData> _pendingLoadedUnitStates = new Dictionary<string, RuntimeUnitData>();
 
     // [New] Addressables 핸들 추적기 — AssetReference 기반 AddUnit 핸들 누수 방지
     private readonly ResourceTracker _tracker = new();
+    public ResourceTracker Tracker => _tracker;
 
     // [Save System] 패시브 해금 상태 — PlayerPrefs 대체
     private HashSet<string> _unlockedPassiveIds = new HashSet<string>();
@@ -288,6 +326,14 @@ public class PlayerDataManager : MonoBehaviour
         if (data == null) return;
         if (unitStates.ContainsKey(data)) return; // 이미 있으면 패스
 
+        // 로드 대기 중인 상태가 있는지 확인 (세이브 파일에서 불러온 경우)
+        if (_pendingLoadedUnitStates.TryGetValue(data.name, out RuntimeUnitData savedData))
+        {
+            unitStates[data] = savedData;
+            Debug.Log($"[PlayerData] {data.DisplayName} 저장된 RuntimeData 로드 성공.");
+            return;
+        }
+
         // UnitData의 Helper 메서드 사용
         var (maxHP, maxMP, maxRage) = data.CalcMaxStats();
 
@@ -422,6 +468,20 @@ public class PlayerDataManager : MonoBehaviour
         // 2. 패시브 해금 상태 저장 (PlayerDataManager.Instance 담당)
         data.unlockedPassiveIds = new List<string>(_unlockedPassiveIds);
 
+        // 3. 런타임 유닛 상태 저장
+        data.savedUnitStates = new List<SavedUnitState>();
+        foreach (var kvp in unitStates)
+        {
+            if (kvp.Key != null && kvp.Value != null)
+            {
+                data.savedUnitStates.Add(new SavedUnitState
+                {
+                    unitAssetName = kvp.Key.name,
+                    runtimeData = kvp.Value
+                });
+            }
+        }
+
         string json = JsonUtility.ToJson(data, true);
         System.IO.File.WriteAllText(SavePath, json, System.Text.Encoding.UTF8);
         Debug.Log($"[Save] 저장 완료: {SavePath}");
@@ -448,6 +508,16 @@ public class PlayerDataManager : MonoBehaviour
         if (data.unlockedPassiveIds != null)
             _unlockedPassiveIds = new HashSet<string>(data.unlockedPassiveIds);
 
+        // 3. 유닛 런타임 데이터 준비 (유닛이 로딩되면 매칭됨)
+        _pendingLoadedUnitStates.Clear();
+        if (data.savedUnitStates != null)
+        {
+            foreach (var saved in data.savedUnitStates)
+            {
+                _pendingLoadedUnitStates[saved.unitAssetName] = saved.runtimeData;
+            }
+        }
+
         Debug.Log("[Save] 데이터 로드 완료.");
     }
 
@@ -463,6 +533,7 @@ public class PlayerDataManager : MonoBehaviour
         // 2. 패시브 해금 및 유닛 상태 초기화
         _unlockedPassiveIds.Clear();
         unitStates.Clear();
+        _pendingLoadedUnitStates.Clear();
         ownedUnits.Clear();
 
         // 3. 인벤토리 초기화

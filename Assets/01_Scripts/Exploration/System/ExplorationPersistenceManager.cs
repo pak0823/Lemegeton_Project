@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 public class ExplorationPersistenceManager : MonoBehaviour, IMapComponent
 {
     private MapManager _manager;
-    private List<GameObject> _activeAddressables = new List<GameObject>();
+    private readonly ResourceTracker _tracker = new ResourceTracker();
 
     public void Initialize(MapManager manager)
     {
@@ -16,11 +16,7 @@ public class ExplorationPersistenceManager : MonoBehaviour, IMapComponent
 
     public void ClearActiveAddressables()
     {
-        foreach (var obj in _activeAddressables)
-        {
-            if (obj != null) Addressables.ReleaseInstance(obj);
-        }
-        _activeAddressables.Clear();
+        _tracker.ReleaseAll();
     }
 
     public async Task RestoreSnapshot(ExplorationSnapshot snap, GameObject map, Transform container, Tilemap floorMap, List<Tilemap> wallMap)
@@ -85,7 +81,7 @@ public class ExplorationPersistenceManager : MonoBehaviour, IMapComponent
         if (handle.Status == UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
         {
             GameObject obj = handle.Result;
-            _activeAddressables.Add(obj);
+            _tracker.TrackInstance(obj);
 
             var pid = obj.GetComponent<ExplorationPersistId>();
             if (!pid) pid = obj.AddComponent<ExplorationPersistId>();

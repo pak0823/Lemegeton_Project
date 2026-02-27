@@ -20,7 +20,7 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
     }
 
     [Header("Training / MP Cost")]
-    
+
     [Header("Training / Defense Stack Buff")]
     [Tooltip("방어 중첩 상태를 부여할지 여부")]
     public bool trainingApplyDefenseStacks = false;
@@ -81,13 +81,13 @@ public class HostilitySpikeSkill : SkillAsset, ISelfCastSkill
         float maxHost = 0f;
         // [Optimization] Use BattleManager Registry
         var bm = BattleManager.Instance;
-        var targets = (bm != null) ? bm.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
+        var targets = (bm != null) ? bm.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>();
 
         foreach (var u in targets)
         {
             if (u == null || u.IsDead) continue;
             if (u.data.team != _caster.data.team) continue;    // 같은 편 기준
-            
+
             maxHost = Mathf.Max(maxHost, Mathf.Max(0f, u.Hostility));
         }
 

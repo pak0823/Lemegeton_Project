@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using Cysharp.Threading.Tasks;
 
 public class BattleSkillProcessor : MonoBehaviour
 {
@@ -258,7 +259,7 @@ public class BattleSkillProcessor : MonoBehaviour
         var area = def.GetAreaCells(originCell, SkillLibrary.IsOddColumn(originCell));
         var victims = grid.GetUnitsInArea(map, area);
 
-        // 여기서 ExecuteSkillDamage 호출하고 싶지만, 
+        // 여기서 ExecuteSkillDamage 호출하고 싶지만,
         // SkillDefinition 구조체에는 SkillAsset 정보가 없어서 대미지 처리가 애매함.
         // 기존 코드에서도 ResolveSkillAtCell은 Enemy AI 등에서 제한적으로 쓰였음.
         // 필요하다면 구현.
@@ -267,7 +268,7 @@ public class BattleSkillProcessor : MonoBehaviour
 
     #region Flows (Unit / Tile / Self)
     // 표준 유닛 스킬 흐름
-    public IEnumerator PerformStandardUnitSkillFlow(SkillAsset _skill, BattleUnit _caster, BattleUnit _target)
+    public async UniTaskVoid PerformStandardUnitSkillFlow(SkillAsset _skill, BattleUnit _caster, BattleUnit _target)
     {
         bool doGapClose = _skill.ShouldGapCloseToTarget(_caster, _target);
 
@@ -278,21 +279,20 @@ public class BattleSkillProcessor : MonoBehaviour
         {
             var mapForJump = _target.CurrentMap; // ?? provider...
                                                 // 위치 계산 로직
-            yield return _caster.AnimateJumpToWorld(GetCellRightEdgeWorld(mapForJump, frontCell), 0.08f, null, 0.2f);
+            await _caster.AnimateJumpToWorld(GetCellRightEdgeWorld(mapForJump, frontCell), 0.08f, null, 0.2f).ToUniTask(this);
         }
 
         bool resolved = false;
         System.Action OnImpact = () => {
-            resolved = true;
-            StartCoroutine(_skill.ResolveOnUnit(battleManager, _caster, _target));
+            Co_ResolveUnitThenFlag(_skill, _caster, _target, () => resolved = true).Forget();
         };
 
         _caster.OnAttackImpact += OnImpact;
         string trigger = _caster.GetAnimTriggerForSkill(_skill);
-        yield return _caster.AnimateAttack(_target, trigger);
+        await _caster.AnimateAttack(_target, trigger).ToUniTask(this);
         _caster.OnAttackImpact -= OnImpact;
 
-        if (!resolved) yield return _skill.ResolveOnUnit(battleManager, _caster, _target);
+        if (!resolved) await _skill.ResolveOnUnit(battleManager, _caster, _target).ToUniTask(this);
 
         _caster.ApplyCooldown(_skill);
         battleManager.FinishActionAfterSkill(); // BM에게 "끝났다"고 보고
@@ -300,7 +300,7 @@ public class BattleSkillProcessor : MonoBehaviour
         _caster.transform.position = originalW;
     }
 
-    public IEnumerator PerformStandardTileSkillFlow(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
+    public async UniTaskVoid PerformStandardTileSkillFlow(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster)
     {
         // 1. 투사체 스킬인 경우 (IProjectileTileSkill 인터페이스 구현 여부 확인)
         if (skill is IProjectileTileSkill projSkill)
@@ -329,12 +329,12 @@ public class BattleSkillProcessor : MonoBehaviour
                 if (!caster.TryConsumeResource(skill.costResource, cost))
                 {
                     battleManager.UnlockSkillConfirm();
-                    yield break;
+                    return;
                 }
-                yield return skill.ResolveOnTile(battleManager, map, cell, caster);
+                await skill.ResolveOnTile(battleManager, map, cell, caster).ToUniTask(this);
                 caster.ApplyCooldown(skill);
                 battleManager.FinishActionAfterSkill();
-                yield break;
+                return;
             }
 
             // 1-3) 이벤트 연결 (Cast End)
@@ -367,18 +367,18 @@ public class BattleSkillProcessor : MonoBehaviour
                 System.Action onArrive = () =>
                 {
                     if (aborted) return;
-                    StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+                    Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
                     {
                         caster.ApplyCooldown(skill);
                         projEnded = true;
-                    }));
+                    }).Forget();
                 };
 
                 if (pc != null) pc.Init(startW, targetW, onArrive, speedUnitsPerSec: projSpeed);
                 else
                 {
                     // 컨트롤러 없으면 대충 시간 떼우고 도착 처리
-                    StartCoroutine(FallbackProjectile(startW, targetW, 0.35f, onArrive));
+                    FallbackProjectile(startW, targetW, 0.35f, onArrive).Forget();
                 }
             };
             caster.OnAttackImpact += onFire;
@@ -386,9 +386,9 @@ public class BattleSkillProcessor : MonoBehaviour
             // 1-5) 애니메이션 실행
             string trigger = caster.GetAnimTriggerForSkill(skill);
             if (skill.animKind == SkillAnimKind.Ranged)
-                yield return caster.AnimateRanged(trigger);
+                await caster.AnimateRanged(trigger).ToUniTask(this);
             else
-                yield return caster.AnimateAttack(null, trigger);
+                await caster.AnimateAttack(null, trigger).ToUniTask(this);
 
             // 1-6) 안전장치: 애니메이션 끝날 때까지 임팩트 안 왔으면 강제 발사
             if (!fired && !projEnded)
@@ -401,7 +401,7 @@ public class BattleSkillProcessor : MonoBehaviour
             while (!(castEnded && projEnded) && timeout > 0f)
             {
                 timeout -= Time.deltaTime;
-                yield return null;
+                await UniTask.Yield();
             }
 
             // 1-8) 타임아웃/중단 시 정리
@@ -428,17 +428,17 @@ public class BattleSkillProcessor : MonoBehaviour
                     resolved = true;
                     return;
                 }
-                StartCoroutine(Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
+                Co_ResolveTileThenFlag(skill, map, cell, caster, () =>
                 {
                     caster.ApplyCooldown(skill);
                     resolved = true;
-                }));
+                }).Forget();
             };
 
             caster.OnAttackImpact += onImpact; // 구독
 
             string trigger = caster.GetAnimTriggerForSkill(skill);
-            yield return caster.AnimateAttack(null, trigger);
+            await caster.AnimateAttack(null, trigger).ToUniTask(this);
 
             caster.OnAttackImpact -= onImpact; // 해제
 
@@ -446,7 +446,7 @@ public class BattleSkillProcessor : MonoBehaviour
             {
                 if (caster.TryConsumeResource(skill.costResource, cost))
                 {
-                    yield return skill.ResolveOnTile(battleManager, map, cell, caster);
+                    await skill.ResolveOnTile(battleManager, map, cell, caster).ToUniTask(this);
                     caster.ApplyCooldown(skill);
                 }
                 else
@@ -459,12 +459,12 @@ public class BattleSkillProcessor : MonoBehaviour
         }
     }
 
-    public IEnumerator PerformSelfCastFlow(SkillAsset _skill, BattleUnit _caster, bool _freeAction)
+    public async UniTaskVoid PerformSelfCastFlow(SkillAsset _skill, BattleUnit _caster, bool _freeAction)
     {
         if (_skill == null || _caster == null)
         {
             _isResolvingSelfCast = false;
-            yield break;
+            return;
         }
 
         // 여기서 상태 잠금 시작
@@ -473,9 +473,9 @@ public class BattleSkillProcessor : MonoBehaviour
         try
         {
             string trigger = _caster.GetAnimTriggerForSkill(_skill);
-            yield return _caster.AnimateAttack(null, trigger);
+            await _caster.AnimateAttack(null, trigger).ToUniTask(this);
 
-            yield return _skill.ResolveOnUnit(battleManager, _caster, _caster);
+            await _skill.ResolveOnUnit(battleManager, _caster, _caster).ToUniTask(this);
 
             _caster.ApplyCooldown(_skill);
 
@@ -494,9 +494,9 @@ public class BattleSkillProcessor : MonoBehaviour
         }
     }
 
-    public IEnumerator Co_ReactiveAttackFlow(SkillAsset skill, BattleUnit caster, BattleUnit target, bool doGapClose)
+    public async UniTask Co_ReactiveAttackFlow(SkillAsset skill, BattleUnit caster, BattleUnit target, bool doGapClose)
     {
-        if (skill == null || caster == null || target == null) yield break;
+        if (skill == null || caster == null || target == null) return;
 
         var originalW = caster.transform.position;
 
@@ -504,23 +504,23 @@ public class BattleSkillProcessor : MonoBehaviour
         {
             var mapForJump = target.CurrentMap; // (provider 접근 대신 직접 참조 권장)
             var frontW = GetCellRightEdgeWorld(mapForJump, frontCell, 0.02f);
-            yield return caster.AnimateJumpToWorld(frontW, 0.08f, null, 0.2f); // 점프 시간 상수는 파라미터나 const로
+            await caster.AnimateJumpToWorld(frontW, 0.08f, null, 0.2f).ToUniTask(this); // 점프 시간 상수는 파라미터나 const로
         }
 
         bool resolved = false;
         System.Action OnImpact = () =>
         {
             // 람다 안에서 이벤트 해제 주의 (메서드로 분리하거나 조심해서 사용)
-            StartCoroutine(Co_ResolveUnitThenFlag(skill, caster, target, () => resolved = true));
+            Co_ResolveUnitThenFlag(skill, caster, target, () => resolved = true).Forget();
         };
 
         caster.OnAttackImpact += OnImpact;
         string trigger = caster.GetAnimTriggerForSkill(skill);
-        yield return caster.AnimateAttack(target, trigger);
+        await caster.AnimateAttack(target, trigger).ToUniTask(this);
         caster.OnAttackImpact -= OnImpact;
 
         if (!resolved)
-            yield return skill.ResolveOnUnit(battleManager, caster, target);
+            await skill.ResolveOnUnit(battleManager, caster, target).ToUniTask(this);
 
         caster.transform.position = originalW;
     }
@@ -605,7 +605,7 @@ public class BattleSkillProcessor : MonoBehaviour
             return true;
         }
     }
-    private Vector3 GetCellRightEdgeWorld(Tilemap map, Vector3Int cell, float margin = 0.02f) 
+    private Vector3 GetCellRightEdgeWorld(Tilemap map, Vector3Int cell, float margin = 0.02f)
     {
         if (map == null) return Vector3.zero;
         // BM 로직 그대로 복붙
@@ -617,22 +617,22 @@ public class BattleSkillProcessor : MonoBehaviour
         return center + rightDir * (cellSize.x * 0.5f - margin);
     }
 
-    IEnumerator Co_ResolveUnitThenFlag(SkillAsset skill, BattleUnit caster, BattleUnit target, System.Action done)
+    async UniTaskVoid Co_ResolveUnitThenFlag(SkillAsset skill, BattleUnit caster, BattleUnit target, System.Action done)
     {
-        yield return skill.ResolveOnUnit(battleManager, caster, target);
+        await skill.ResolveOnUnit(battleManager, caster, target).ToUniTask(this);
         done?.Invoke();
     }
 
-    IEnumerator Co_ResolveTileThenFlag(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster, System.Action done)
+    async UniTaskVoid Co_ResolveTileThenFlag(SkillAsset skill, Tilemap map, Vector3Int cell, BattleUnit caster, System.Action done)
     {
-        yield return skill.ResolveOnTile(battleManager, map, cell, caster);
+        await skill.ResolveOnTile(battleManager, map, cell, caster).ToUniTask(this);
         done?.Invoke();
     }
 
-    IEnumerator FallbackProjectile(Vector3 start, Vector3 end, float time, System.Action done)
+    async UniTaskVoid FallbackProjectile(Vector3 start, Vector3 end, float time, System.Action done)
     {
         float t = 0f;
-        while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); yield return null; }
+        while (t < 1f) { t += Time.deltaTime / Mathf.Max(0.01f, time); await UniTask.Yield(); }
         done?.Invoke();
     }
 }

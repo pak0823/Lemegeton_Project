@@ -164,7 +164,7 @@ public class TurnBarUI : MonoBehaviour
 
         // [Optimization] Use BattleManager
         var bm = BattleManager.Instance;
-        var units = (bm != null) ? bm.GetAllUnits() : FindObjectsOfType<BattleUnit>().ToList();
+        var units = (bm != null) ? bm.GetAllUnits() : new System.Collections.Generic.List<BattleUnit>();
 
         foreach (var u in units)
 

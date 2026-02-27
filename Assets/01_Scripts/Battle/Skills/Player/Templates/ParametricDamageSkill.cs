@@ -335,9 +335,9 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
     {
         // [Optimization] Use BattleManager Registry
         var bm = BattleManager.Instance;
-        var players = (bm != null) 
-            ? bm.GetAliveUnits(Team.Player) 
-            : Object.FindObjectsOfType<BattleUnit>().Where(u => u && u.data.team == Team.Player && !u.IsDead).ToList();
+        var players = (bm != null)
+            ? bm.GetAliveUnits(Team.Player)
+            : System.Linq.Enumerable.Empty<BattleUnit>().ToList();
         if (players.Count == 0) return null;
 
         switch (priorityMode)
@@ -365,7 +365,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         return mult;
     }
 
-    
+
     public enum AxialDir { E, NE, NW, W, SW, SE }
     Vector2Int DirToAx(AxialDir _d) => AX_DIRS[(int)_d];
     // 맵별/팀별/깊이별 캐시
@@ -458,7 +458,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
 
         bool oddCol = SkillLibrary.IsOddColumn(start);
 
-        // BattleManager.TryGetFrontCellOfTarget에서 쓰는 이웃 오프셋 그대로 복붙 
+        // BattleManager.TryGetFrontCellOfTarget에서 쓰는 이웃 오프셋 그대로 복붙
         Vector3Int[] neighOffsetsEven = {
         new Vector3Int(+1, 0, 0), new Vector3Int( 0,+1,0),
         new Vector3Int(-1,+1, 0), new Vector3Int(-1, 0,0),
@@ -547,7 +547,7 @@ public class ParametricDamageSkill : SkillAsset, IProjectileTileSkill
         {
             // [Optimization] Use BattleManager Registry
             var bmInst = BattleManager.Instance;
-            var targets = (bmInst != null) ? bmInst.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
+            var targets = (bmInst != null) ? bmInst.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>();
 
             victims = targets
                 .Where(u => u != null && !u.IsDead && u.data.team != _caster.data.team && u.CurrentMap == _map).ToList();

@@ -358,10 +358,12 @@ public class SceneTransitionManager : MonoBehaviour
         // 전투 진입 전까지 입력 차단(타일 클릭 등)
         PlayerMovement.Instance?.LockMovementIndefinite();
 
+        SceneName target = battleScene;
+#if UNITY_EDITOR
         // 임시 테스트용 - 인카운터로 인한 전투씬으로 가기 전 훈련씬을 거치기 위해 임시 추가
         // 필요없으면 SceneName.TestScene 사용하지 않거나 로직 제거
-        SceneName target = battleScene;
         //target = SceneName.TestScene;
+#endif
 
         var presenter = ExplorationModalPresenter.Instance;
         if (presenter == null)

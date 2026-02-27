@@ -57,6 +57,11 @@ public class PathfindingSystem : MonoBehaviour
         }
     }
 
+    public bool IsDynamicObstacle(Vector3Int cell)
+    {
+        return occupiedCells.Contains(cell);
+    }
+
     // --- 타일맵 유틸리티 ---
 
     public Tilemap GetWalkableMapAt(Vector3Int cell)

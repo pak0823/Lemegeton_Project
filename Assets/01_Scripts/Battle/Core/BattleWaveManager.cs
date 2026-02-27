@@ -354,7 +354,7 @@ public class BattleWaveManager : MonoBehaviour
         var bm = BattleManager.Instance;
         var leftovers = (bm != null)
             ? bm.GetAliveUnits(Team.Enemy).ToList()
-            : FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Enemy).ToList();
+            : new List<BattleUnit>();
 
         foreach (var u in leftovers)
 

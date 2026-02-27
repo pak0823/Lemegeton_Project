@@ -103,11 +103,270 @@ public class ExplorationInteractionController : MonoBehaviour
             return;
         }
 
-        playerMovement.ProcessMoveClick(clickedCell);
+        ProcessMoveClick(clickedCell);
     }
 
     public void HandleRightClick()
     {
-        playerMovement.ProcessRightClick();
+        ProcessRightClick();
+    }
+
+    // ==========================================
+    // Interaction Process Logic (Moved from PlayerMovement)
+    // ==========================================
+
+    public void OnClickSurveyButton()
+    {
+        DescriptionDialogUI.Instance?.Hide();
+        InteractionHintUI.Instance?.HideAll();
+
+        if (playerMovement.IsInputBlocked) return;
+        if (playerMovement.IsMoving) return;
+
+        // Push 상자 관련 처리는 PlayerMovement > PlayerPushHandler로 이관됨.
+        if (playerMovement.PushHandler.PendingPushBox != null)
+        {
+            var box = playerMovement.PushHandler.PendingPushBox;
+            var playerCell = playerMovement.floorTilemap.WorldToCell(playerMovement.rb.position);
+            var boxCell = playerMovement.floorTilemap.WorldToCell(box.transform.position);
+
+            if (playerMovement.PushHandler.IsAdjacentOrSame(playerCell, boxCell))
+            {
+                playerMovement.PushHandler.EnterPushSelectMode(box);
+                return;
+            }
+
+            var pathToReady = playerMovement.PushHandler.FindPathToPushReadyCell(playerCell, boxCell, box);
+            if (pathToReady == null || pathToReady.Count < 2)
+            {
+                ExplorationLogUI.Instance?.Push("해당 상자를 밀 수 있는 위치로 이동할 수 없습니다.");
+                box.SetHighlight(false);
+                playerMovement.PushHandler.HaltPushImmediately();
+                InteractionHintUI.Instance?.HideAll();
+                return;
+            }
+
+            InteractionHintUI.Instance?.HideAll();
+
+            System.Action onArrive = () =>
+            {
+                if (box == null) return;
+                playerMovement.PushHandler.EnterPushSelectMode(box);
+            };
+
+            playerMovement.StartPathMove(pathToReady, onArrive);
+            return;
+        }
+
+        // 상호작용 지점이 가깝거나 사거리 내인 경우 즉시 실행
+        if (playerMovement.currentPathCells == null || playerMovement.currentPathCells.Count < 2)
+        {
+            playerMovement.InteractionHandler.ExecuteSurvey();
+            playerMovement.ClearPath();
+            return;
+        }
+
+        // 목표 지점까지 이동 후 상호작용 실행
+        System.Action onArriveSurvey = () =>
+        {
+            playerMovement.InteractionHandler.ExecuteSurvey();
+        };
+
+        playerMovement.StartPathMove(playerMovement.currentPathCells, onArriveSurvey);
+    }
+
+    public void OnClickCommunicationButton()
+    {
+        if (playerMovement.IsInputBlocked) return;
+        if (playerMovement.IsMoving) return;
+
+        // 사거리 내 즉시 실행
+        if (playerMovement.currentPathCells == null || playerMovement.currentPathCells.Count < 2)
+        {
+            playerMovement.InteractionHandler.ExecuteCommunication();
+            return;
+        }
+
+        // 타겟까지 이동 후 실행
+        System.Action onArriveComm = () =>
+        {
+            playerMovement.InteractionHandler.ExecuteCommunication();
+        };
+
+        playerMovement.StartPathMove(playerMovement.currentPathCells, onArriveComm);
+    }
+
+    public bool HandleGlobalClickBlocking()
+    {
+        if (DescriptionDialogUI.Instance != null && DescriptionDialogUI.Instance.IsOpen)
+        {
+            DescriptionDialogUI.Instance.Hide();
+            playerMovement.HaltImmediately();
+            return true; // 입력 소비됨
+        }
+
+        if (playerMovement.IsInputBlocked)
+        {
+            if (!playerMovement.IsMoving) playerMovement.HaltImmediately();
+            return true;
+        }
+        return false;
+    }
+
+    public void ProcessRightClick()
+    {
+        // 우클릭은 다이얼로그 등을 닫는 동작으로 사용될 수도 있지만,
+        // 기존 로직에서는 좌클릭으로 닫았음.
+        // 우클릭 시에도 일단 블락 체크
+        if (playerMovement.IsInputBlocked) return;
+
+        if (playerMovement.PushHandler.IsPushSelectMode)
+        {
+            playerMovement.PushHandler.ExitPushSelectMode();
+            return;
+        }
+
+        if (playerMovement.PushHandler.PendingPushBox != null)
+        {
+            playerMovement.PushHandler.HaltPushImmediately();
+            InteractionHintUI.Instance?.HideAll();
+            return;
+        }
+
+        // 일반 이동/상호작용 취소
+        if (playerMovement.selectedTargetCell.HasValue || (playerMovement.currentPathCells != null && playerMovement.currentPathCells.Count > 0))
+        {
+            CancelSelectionAndHint();
+        }
+    }
+
+    public void ProcessInteractionClick(Vector3Int clickedCell, Transform targetTr, IInteractable interactable, Collider2D collider, DescriptionData desc)
+    {
+        if (HandleGlobalClickBlocking()) return;
+        if (playerMovement.IsMoving) return;
+
+        Vector3Int currentCell = PathfindingSystem.Instance.GetCellFromWorldPos(playerMovement.rb.position);
+        currentCell.z = 0;
+
+        bool isAdjacentOrSame = false;
+        if (currentCell == clickedCell)
+        {
+            isAdjacentOrSame = true;
+        }
+        else
+        {
+             Direction[] dirs = { Direction.West, Direction.East, Direction.NW, Direction.NE, Direction.SW, Direction.SE };
+             bool odd = (clickedCell.y & 1) != 0;
+             foreach (var dir in dirs)
+             {
+                 Vector3Int offset = PathfindingSystem.Instance.GetOffsetForDirection(dir, odd);
+                 if (clickedCell + offset == currentCell) { isAdjacentOrSame = true; break; }
+             }
+        }
+
+        if (isAdjacentOrSame)
+        {
+            playerMovement.selectedTargetCell = currentCell;
+            playerMovement.currentPathCells = new List<Vector3Int> { currentCell };
+
+            playerMovement.InteractionHandler.SetPendingInteraction(interactable, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
+
+            playerMovement.ShowPathPreview(playerMovement.currentPathCells);
+
+            InteractionHintUI.Instance?.HideAll();
+
+            if (interactable != null && desc != null)
+                InteractionHintUI.Instance?.ShowBothAt(targetTr, interactable.GetInteractLabel());
+            else if (interactable != null)
+                InteractionHintUI.Instance?.ShowSurveyAt(targetTr, interactable.GetInteractLabel());
+            else if (desc != null)
+                InteractionHintUI.Instance?.ShowBothAt(targetTr);
+            else
+                InteractionHintUI.Instance?.ShowSurveyAt(targetTr);
+
+            InteractionHintUI.Instance?.ShowCancelAt(targetTr);
+            return;
+        }
+
+        var newPath = PathfindingSystem.Instance.FindPathToAdjacentCell(currentCell, clickedCell);
+
+        if (newPath == null || newPath.Count < 2)
+        {
+            ClearAllSelection();
+            return;
+        }
+
+        playerMovement.selectedTargetCell = newPath[newPath.Count - 1];
+        playerMovement.currentPathCells = newPath;
+
+        playerMovement.InteractionHandler.SetPendingInteraction(interactable, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
+
+        playerMovement.ShowPathPreview(newPath);
+
+        if (interactable != null && desc != null)
+            InteractionHintUI.Instance?.ShowBothAt(targetTr, interactable.GetInteractLabel());
+        else if (interactable != null)
+            InteractionHintUI.Instance?.ShowSurveyAt(targetTr, interactable.GetInteractLabel());
+        else if (desc != null)
+            InteractionHintUI.Instance?.ShowBothAt(targetTr);
+        else
+            InteractionHintUI.Instance?.ShowSurveyAt(targetTr);
+
+        InteractionHintUI.Instance?.ShowCancelAt(targetTr);
+    }
+
+    public void ProcessMoveClick(Vector3Int clickedCell)
+    {
+        if (HandleGlobalClickBlocking()) return;
+        if (playerMovement.IsMoving) return;
+
+        if (playerMovement.selectedTargetCell.HasValue
+            && playerMovement.selectedTargetCell.Value == clickedCell
+            && playerMovement.currentPathCells != null
+            && playerMovement.currentPathCells.Count >= 2)
+        {
+            playerMovement.StartPathMove(playerMovement.currentPathCells, playerMovement.pathArrivalCallback);
+            return;
+        }
+
+        Vector3Int currentCell = PathfindingSystem.Instance.GetCellFromWorldPos(playerMovement.rb.position);
+        currentCell.z = 0;
+
+        var newPath = PathfindingSystem.Instance.FindPath(currentCell, clickedCell);
+
+        if (newPath == null || newPath.Count <= 1)
+        {
+             ClearAllSelection();
+             return;
+        }
+
+        playerMovement.selectedTargetCell = clickedCell;
+        playerMovement.currentPathCells = newPath;
+
+        playerMovement.InteractionHandler.ClearInteractTargets(); // 기존 상호작용 타겟 초기화
+
+        playerMovement.ShowPathPreview(newPath);
+        InteractionHintUI.Instance?.HideAll();
+    }
+
+    public void ClearAllSelection()
+    {
+        playerMovement.selectedTargetCell = null;
+        playerMovement.currentPathCells.Clear();
+        playerMovement.ClearPathPreview();
+        playerMovement.pathArrivalCallback = null;
+        playerMovement.InteractionHandler.ClearInteractTargets();
+        InteractionHintUI.Instance?.HideAll();
+    }
+
+    //HintUi 공통 취소 메서드
+    public void CancelSelectionAndHint()
+    {
+        playerMovement.selectedTargetCell = null;
+        playerMovement.currentPathCells.Clear();
+        playerMovement.ClearPathPreview();
+        playerMovement.pathArrivalCallback = null;
+        playerMovement.InteractionHandler.ClearInteractTargets();
+        InteractionHintUI.Instance?.HideAll();
     }
 }

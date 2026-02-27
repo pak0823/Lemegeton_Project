@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Cysharp.Threading.Tasks;
 
 public class BattleTurnManager : MonoBehaviour
 {
@@ -103,7 +104,7 @@ public class BattleTurnManager : MonoBehaviour
             battleManager.SetState(BattleState.Resolving);
             remainingActions = 0;
             usedActions.Clear();
-            StartCoroutine(battleManager.Co_HandleFearTurn(unit)); // 이건 이동 로직이라 BM/Grid 의존성이 큼
+            battleManager.Co_HandleFearTurn(unit).Forget(); // 이건 이동 로직이라 BM/Grid 의존성이 큼
             return;
         }
 

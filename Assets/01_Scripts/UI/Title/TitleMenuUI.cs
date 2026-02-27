@@ -47,7 +47,9 @@ namespace Project.UI
 
         [Header("Settings")]
 
+#if UNITY_EDITOR
         [SerializeField] private bool simulateHasSaveData = false; // 임시 데이터 플래그
+#endif
 
         [SerializeField, Range(0f, 1f)] private float disabledAlpha = 0.5f;
 
@@ -516,8 +518,11 @@ namespace Project.UI
         {
 
             // 추후 실제 데이터 매니저 연결
-
-            return simulateHasSaveData;
+#if UNITY_EDITOR
+            if (simulateHasSaveData) return true;
+#endif
+            // 임시: 현재는 실제 세이브 모듈이 없으므로 기본 반환값은 false
+            return false;
 
         }
 

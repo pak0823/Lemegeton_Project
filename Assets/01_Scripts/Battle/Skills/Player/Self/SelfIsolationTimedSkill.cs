@@ -43,8 +43,8 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }
 #endif
-    void OnEnable() 
-    { 
+    void OnEnable()
+    {
         targetMode = SkillTargetMode.Unit;
         costResource = SkillCostResource.MP;
     }
@@ -98,10 +98,10 @@ public class SelfIsolationTimedSkill : SkillAsset, ISelfCastSkill
 
         StatusId defId = baseDefenseStatusId;
         int defStacks = Mathf.Max(1, baseDefenseStacks);
-        
+
         // [Optimization] Use BattleManager Registry
         var bm = BattleManager.Instance;
-        var allUnits = (bm != null) ? bm.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
+        var allUnits = (bm != null) ? bm.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>();
 
         // 방어 중첩 적용
         if (defId != StatusId.None)

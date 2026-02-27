@@ -104,12 +104,8 @@ public class UnitStatusPanelUI : MonoBehaviour
         // 현재 씬의 생존 유닛 조회 (매니저 캐싱 사용)
         var units = (battle != null) ? battle.ActiveUnits.Where(u => u != null && !u.IsDead).ToList() : new List<BattleUnit>();
 
-        // 빌드 환경 등에서 초기화 타이밍 문제로 매니저가 유닛을 못주면
-        // 하이어라키에서 직접 한 번 더 긁어옵니다. (Fallback)
-        if (units.Count == 0)
-        {
-            units = FindObjectsOfType<BattleUnit>().Where(u => u != null && u.gameObject.activeInHierarchy && !u.IsDead).ToList();
-        }
+        // 하이어라키에서 직접 긁어오는 무거운 Fallback(FindObjectsOfType) 제거
+        // 매니저를 통한 초기화 동기화를 신뢰하도록 변경
 
         // data가 아직 할당되지 않은 (초기화 중인) 유닛은 그리지 않음
         var validUnits = units.Where(u => u.data != null).ToList();
@@ -203,12 +199,8 @@ public class UnitStatusPanelUI : MonoBehaviour
         var units = (battle != null ? battle.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>())
                         .Where(u => u != null && !u.IsDead).ToList();
 
-        if (units.Count == 0 || !units.Any(u => u.data != null && u.data.team == Team.Enemy))
-        {
-            // 빌드 환경 지연 대비 Fallback
-            var fb = FindObjectsOfType<BattleUnit>().Where(u => u != null && u.gameObject.activeInHierarchy && !u.IsDead).ToList();
-            if (fb.Count > 0) units = fb;
-        }
+        // 빌드 환경 지연 대비 무거운 Fallback 삭제
+        // 매니저 레지스트리 의존성만 유지
 
         var validEnemies = units.Where(u => u.data != null && u.data.team == Team.Enemy).ToList();
         var enemies = Sort(validEnemies, enemySort);

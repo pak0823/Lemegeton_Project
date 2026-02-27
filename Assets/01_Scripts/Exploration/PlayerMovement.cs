@@ -1,4 +1,4 @@
-// PlayerMovement.cs
+﻿// PlayerMovement.cs
 
 using System;
 
@@ -73,8 +73,7 @@ public class PlayerMovement : MonoBehaviour
     public List<Vector3Int> currentPathCells = new List<Vector3Int>();
 
     // 현재 선택된 목표 셀 (첫 번째 클릭으로 선택된 상태)
-
-    private Vector3Int? selectedTargetCell = null;
+    public Vector3Int? selectedTargetCell = null;
 
     // 경로를 따라 실제 이동 중인지 여부
 
@@ -97,14 +96,15 @@ public class PlayerMovement : MonoBehaviour
     public static System.Action<Vector3Int> OnTileStepped;
 
 
-// 경로 도착 후 실행할 콜백 (예: 상자 열기)
+    // 경로 도착 후 실행할 콜백 (예: 상자 열기)
 
-    private Action pathArrivalCallback = null;
+    public Action pathArrivalCallback = null;
 
 
 
     // 외부로 이관된 상호작용 관련 로직 핸들러
     [HideInInspector] public PlayerInteractionHandler InteractionHandler { get; private set; }
+    [HideInInspector] public ExplorationInteractionController InteractController { get; private set; }
 
 
 
@@ -165,14 +165,14 @@ public class PlayerMovement : MonoBehaviour
         // 마우스 이동 충돌 예측 필터 (자기 자신은 충돌 제외)
 
         // Controller 자동 부착 및 초기화
-        var interactionCtrl = GetComponent<ExplorationInteractionController>();
-        if (interactionCtrl == null) interactionCtrl = gameObject.AddComponent<ExplorationInteractionController>();
+        InteractController = GetComponent<ExplorationInteractionController>();
+        if (InteractController == null) InteractController = gameObject.AddComponent<ExplorationInteractionController>();
 
         var inputCtrl = GetComponent<PlayerInputController>();
         if (inputCtrl == null) inputCtrl = gameObject.AddComponent<PlayerInputController>();
 
-        interactionCtrl.Initialize(this);
-        inputCtrl.Initialize(interactionCtrl);
+        InteractController.Initialize(this);
+        inputCtrl.Initialize(InteractController);
     }
 
 
@@ -187,270 +187,18 @@ public class PlayerMovement : MonoBehaviour
 
 
     public bool IsMoving => isMovingByPath;
-    private bool IsInputBlocked => (Time.time < movementLockUntil) || (_hardLockTokens > 0) || PushHandler.IsPerformingPush || GamePause.IsPaused;
+    public bool IsInputBlocked => (Time.time < movementLockUntil) || (_hardLockTokens > 0) || PushHandler.IsPerformingPush || GamePause.IsPaused;
 
-    // 버튼 대응 (관찰/획득)
-    public void OnClickSurveyButton()
-    {
-        DescriptionDialogUI.Instance?.Hide();
-        InteractionHintUI.Instance?.HideAll();
-
-        if (IsInputBlocked) return;
-        if (isMovingByPath) return;
-
-        // Push 상자 관련 처리는 PlayerMovement > PlayerPushHandler로 이관됨.
-        if (PushHandler.PendingPushBox != null)
-        {
-            var box = PushHandler.PendingPushBox;
-            var playerCell = floorTilemap.WorldToCell(rb.position);
-            var boxCell = floorTilemap.WorldToCell(box.transform.position);
-
-            if (PushHandler.IsAdjacentOrSame(playerCell, boxCell))
-            {
-                PushHandler.EnterPushSelectMode(box);
-                return;
-            }
-
-            var pathToReady = PushHandler.FindPathToPushReadyCell(playerCell, boxCell, box);
-            if (pathToReady == null || pathToReady.Count < 2)
-            {
-                ExplorationLogUI.Instance?.Push("해당 상자를 밀 수 있는 위치로 이동할 수 없습니다.");
-                box.SetHighlight(false);
-                PushHandler.HaltPushImmediately();
-                InteractionHintUI.Instance?.HideAll();
-                return;
-            }
-
-            InteractionHintUI.Instance?.HideAll();
-
-            System.Action onArrive = () =>
-            {
-                if (box == null) return;
-                PushHandler.EnterPushSelectMode(box);
-            };
-
-            StartPathMove(pathToReady, onArrive);
-            return;
-        }
-
-        // 상호작용 지점이 가깝거나 사거리 내인 경우 즉시 실행
-        if (currentPathCells == null || currentPathCells.Count < 2)
-        {
-            InteractionHandler.ExecuteSurvey();
-            ClearPath();
-            return;
-        }
-
-        // 목표 지점까지 이동 후 상호작용 실행
-        System.Action onArriveSurvey = () =>
-        {
-            InteractionHandler.ExecuteSurvey();
-        };
-
-        StartPathMove(currentPathCells, onArriveSurvey);
-    }
-
-    public void OnClickCommunicationButton()
-    {
-        if (IsInputBlocked) return;
-        if (isMovingByPath) return;
-
-        // 사거리 내 즉시 실행
-        if (currentPathCells == null || currentPathCells.Count < 2)
-        {
-            InteractionHandler.ExecuteCommunication();
-            return;
-        }
-
-        // 타겟까지 이동 후 실행
-        System.Action onArriveComm = () =>
-        {
-            InteractionHandler.ExecuteCommunication();
-        };
-
-        StartPathMove(currentPathCells, onArriveComm);
-    }
-    // 공통적으로 클릭 시 다이얼로그가 열려있으면 닫고 입력을 소비함
-    public bool HandleGlobalClickBlocking()
-    {
-        if (DescriptionDialogUI.Instance != null && DescriptionDialogUI.Instance.IsOpen)
-        {
-            DescriptionDialogUI.Instance.Hide();
-            HaltImmediately();
-            return true; // 입력 소비됨
-        }
-
-        if (IsInputBlocked)
-        {
-            if (!isMovingByPath) HaltImmediately();
-            return true;
-        }
-        return false;
-    }
-
-    void Update()
-    {
-        // 입력 로직 제거됨 (PlayerInputController 사용)
-    }
-
-    // --- Controller에서 호출하는 메서드들 ---
-
-    public void ProcessRightClick()
-    {
-        // 우클릭은 다이얼로그 등을 닫는 동작으로 사용될 수도 있지만,
-        // 기존 로직에서는 좌클릭으로 닫았음.
-        // 우클릭 시에도 일단 블락 체크
-        if (IsInputBlocked) return;
-
-        if (PushHandler.IsPushSelectMode)
-        {
-            PushHandler.ExitPushSelectMode();
-            return;
-        }
-
-        if (PushHandler.PendingPushBox != null)
-        {
-            PushHandler.HaltPushImmediately();
-            InteractionHintUI.Instance?.HideAll();
-            return;
-        }
-
-        // 일반 이동/상호작용 취소
-        if (selectedTargetCell.HasValue || (currentPathCells != null && currentPathCells.Count > 0))
-        {
-            CancelSelectionAndHint();
-        }
-    }
-
+    // 버튼 대응 (관찰/획득) - ExplorationInteractionController로 위임
+    public void OnClickSurveyButton() => InteractController?.OnClickSurveyButton();
+    public void OnClickCommunicationButton() => InteractController?.OnClickCommunicationButton();
+    public bool HandleGlobalClickBlocking() => InteractController != null && InteractController.HandleGlobalClickBlocking();
+    public void ProcessRightClick() => InteractController?.ProcessRightClick();
     public void ProcessInteractionClick(Vector3Int clickedCell, Transform targetTr, IInteractable interactable, Collider2D collider, DescriptionData desc)
-    {
-        if (HandleGlobalClickBlocking()) return;
-        if (isMovingByPath) return;
-
-        Vector3Int currentCell = PathfindingSystem.Instance.GetCellFromWorldPos(rb.position);
-        currentCell.z = 0;
-
-        bool isAdjacentOrSame = false;
-        if (currentCell == clickedCell)
-        {
-            isAdjacentOrSame = true;
-        }
-        else
-        {
-             Direction[] dirs = { Direction.West, Direction.East, Direction.NW, Direction.NE, Direction.SW, Direction.SE };
-             bool odd = (clickedCell.y & 1) != 0;
-             foreach (var dir in dirs)
-             {
-                 Vector3Int offset = PathfindingSystem.Instance.GetOffsetForDirection(dir, odd);
-                 if (clickedCell + offset == currentCell) { isAdjacentOrSame = true; break; }
-             }
-        }
-
-        if (isAdjacentOrSame)
-        {
-            selectedTargetCell = currentCell;
-            currentPathCells = new List<Vector3Int> { currentCell };
-
-            InteractionHandler.SetPendingInteraction(interactable, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
-
-            ShowPathPreview(currentPathCells);
-
-            InteractionHintUI.Instance?.HideAll();
-
-            if (interactable != null && desc != null)
-                InteractionHintUI.Instance?.ShowBothAt(targetTr, interactable.GetInteractLabel());
-            else if (interactable != null)
-                InteractionHintUI.Instance?.ShowSurveyAt(targetTr, interactable.GetInteractLabel());
-            else if (desc != null)
-                InteractionHintUI.Instance?.ShowBothAt(targetTr);
-            else
-                InteractionHintUI.Instance?.ShowSurveyAt(targetTr);
-
-            InteractionHintUI.Instance?.ShowCancelAt(targetTr);
-            return;
-        }
-
-        var newPath = PathfindingSystem.Instance.FindPathToAdjacentCell(currentCell, clickedCell);
-
-        if (newPath == null || newPath.Count < 2)
-        {
-            ClearAllSelection();
-            return;
-        }
-
-        selectedTargetCell = newPath[newPath.Count - 1];
-        currentPathCells = newPath;
-
-        InteractionHandler.SetPendingInteraction(interactable, collider ?? (interactable != null ? interactable.GetTransform().GetComponent<Collider2D>() : null), desc);
-
-        ShowPathPreview(newPath);
-
-        if (interactable != null && desc != null)
-            InteractionHintUI.Instance?.ShowBothAt(targetTr, interactable.GetInteractLabel());
-        else if (interactable != null)
-            InteractionHintUI.Instance?.ShowSurveyAt(targetTr, interactable.GetInteractLabel());
-        else if (desc != null)
-            InteractionHintUI.Instance?.ShowBothAt(targetTr);
-        else
-            InteractionHintUI.Instance?.ShowSurveyAt(targetTr);
-
-        InteractionHintUI.Instance?.ShowCancelAt(targetTr);
-    }
-
-    public void ProcessMoveClick(Vector3Int clickedCell)
-    {
-        if (HandleGlobalClickBlocking()) return;
-        if (isMovingByPath) return;
-
-        if (selectedTargetCell.HasValue
-            && selectedTargetCell.Value == clickedCell
-            && currentPathCells != null
-            && currentPathCells.Count >= 2)
-        {
-            StartPathMove(currentPathCells, pathArrivalCallback);
-            return;
-        }
-
-        Vector3Int currentCell = PathfindingSystem.Instance.GetCellFromWorldPos(rb.position);
-        currentCell.z = 0;
-
-        var newPath = PathfindingSystem.Instance.FindPath(currentCell, clickedCell);
-
-        if (newPath == null || newPath.Count <= 1)
-        {
-             ClearAllSelection();
-             return;
-        }
-
-        selectedTargetCell = clickedCell;
-        currentPathCells = newPath;
-
-        InteractionHandler.ClearInteractTargets(); // 기존 상호작용 타겟 초기화
-
-        ShowPathPreview(newPath);
-        InteractionHintUI.Instance?.HideAll();
-    }
-
-    private void ClearAllSelection()
-    {
-        selectedTargetCell = null;
-        currentPathCells.Clear();
-        ClearPathPreview();
-        pathArrivalCallback = null;
-        InteractionHandler.ClearInteractTargets();
-        InteractionHintUI.Instance?.HideAll();
-    }
-
-    //HintUi 공통 취소 메서드
-    public void CancelSelectionAndHint()
-    {
-        selectedTargetCell = null;
-        currentPathCells.Clear();
-        ClearPathPreview();
-        pathArrivalCallback = null;
-        InteractionHandler.ClearInteractTargets();
-        InteractionHintUI.Instance?.HideAll();
-    }
+        => InteractController?.ProcessInteractionClick(clickedCell, targetTr, interactable, collider, desc);
+    public void ProcessMoveClick(Vector3Int clickedCell) => InteractController?.ProcessMoveClick(clickedCell);
+    public void ClearAllSelection() => InteractController?.ClearAllSelection();
+    public void CancelSelectionAndHint() => InteractController?.CancelSelectionAndHint();
 
 
     // 외부에서 잠금 요청
@@ -500,7 +248,7 @@ public class PlayerMovement : MonoBehaviour
         }
     }
     // 경로 프리뷰 생성 (2칸 이상일 때만 표시)
-    void ShowPathPreview(List<Vector3Int> cells)
+    public void ShowPathPreview(List<Vector3Int> cells)
     {
         ClearPathPreview();
 
@@ -606,7 +354,7 @@ public class PlayerMovement : MonoBehaviour
     }
 
     // 경로를 따라 실제 이동
-    void StartPathMove(List<Vector3Int> cells, Action onArrive = null, int? overrideVigorCost = null)
+    public void StartPathMove(List<Vector3Int> cells, Action onArrive = null, int? overrideVigorCost = null)
     {
         if (cells == null || cells.Count < 2) return; // 제자리이거나 잘못된 경로
 

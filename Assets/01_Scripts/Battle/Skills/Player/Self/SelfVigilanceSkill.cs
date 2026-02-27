@@ -10,7 +10,7 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
     public bool SelfCastOnSelect => true;
 
     [Header("Training")]
-    
+
     [Header("통찰 약화 부여")]
     [Tooltip("특정 루트에서 '자신을 공격한 적'에게 통찰 약화를 줄지 여부")]
     public bool trainingUseInsightDebuff = false;
@@ -28,8 +28,8 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
 #if UNITY_EDITOR
     void OnValidate() { targetMode = SkillTargetMode.Unit; }
 #endif
-    void OnEnable() 
-    { 
+    void OnEnable()
+    {
         targetMode = SkillTargetMode.Unit;
         school = DamageSchool.Physical;
         costResource = SkillCostResource.Rage;
@@ -86,7 +86,7 @@ public class SelfVigilanceSkill : SkillAsset, ISelfCastSkill
             float maxHost = 0f;
             // [Optimization] Use BattleManager Registry
             var bmInstance = BattleManager.Instance;
-            var targets = (bmInstance != null) ? bmInstance.ActiveUnits : Object.FindObjectsOfType<BattleUnit>();
+            var targets = (bmInstance != null) ? bmInstance.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>();
 
             foreach (var u in targets)
             {

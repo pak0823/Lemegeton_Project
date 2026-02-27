@@ -49,6 +49,39 @@ public class BattleManager : MonoBehaviour
             }
         }
     }
+
+    // FSM 연동 헬퍼: 기존 state = ... 로직을 fsm.ChangeState(...) 호출로 전환
+    public void SetStateToFSM(BattleState newState)
+    {
+        BattleBaseState fsmState = null;
+        switch (newState)
+        {
+            case BattleState.Idle: fsmState = new BattleInitState(); break;
+            case BattleState.ActionSelect: fsmState = new BattlePlayerTurnState(); break;
+            case BattleState.EnemyTurn: fsmState = new BattleEnemyTurnState(); break;
+            case BattleState.Victory: fsmState = new BattleWinState(); break;
+            case BattleState.Defeat: fsmState = new BattleLoseState(); break;
+            case BattleState.Moving: fsmState = new BattleMovingState(); break;
+            case BattleState.Targeting: fsmState = new BattleTargetingState(); break;
+            case BattleState.TargetingKnockback: fsmState = new BattleTargetingKnockbackState(); break;
+            case BattleState.Resolving: fsmState = new BattleResolvingState(); break;
+            default:
+                state = newState;
+                return;
+        }
+
+        if (fsmState != null && fsm != null)
+        {
+            var oldState = _state;
+            _state = newState; // Setter를 통하지 않고 값만 우선 갱신
+            OnStateChanged?.Invoke(oldState, _state);
+            fsm.ChangeState(fsmState).Forget();
+        }
+        else
+        {
+            state = newState;
+        }
+    }
     private bool initialized = false;                                  // 초기화 여부 플래그
     private bool _battleEndedOnce = false;                             // 전투 종료 처리 중복 방지
 
@@ -179,7 +212,7 @@ public class BattleManager : MonoBehaviour
     {
         _reactionLocks = Mathf.Max(0, _reactionLocks - 1);
     }
-    public void SetState(BattleState newState) => state = newState;
+    public void SetState(BattleState newState) => SetStateToFSM(newState);
     public static void EmitGlobalTurnStart(BattleUnit u) => OnAnyUnitTurnStarted?.Invoke(u);
 
     public void EmitActionLabel(BattleUnit u, string label) => OnUnitActionLabel?.Invoke(u, label);
@@ -259,7 +292,7 @@ public class BattleManager : MonoBehaviour
             waveManager.StartFirstWave();
         }
 
-        StartCoroutine(Co_RebindBattleInputWhenMapsReady());
+        Co_RebindBattleInputWhenMapsReady().Forget();
     }
 
     private void OnDestroy()
@@ -331,9 +364,9 @@ public class BattleManager : MonoBehaviour
             inputHandler.ClearAllPreviews();
 
             if (_isPostSkillMoveInProgress)
-                StartCoroutine(Co_MoveAfterSkillThenConsume(ActingUnit, map, cell));
+                Co_MoveAfterSkillThenConsume(ActingUnit, map, cell).Forget();
             else
-                StartCoroutine(Co_MoveThenConsume(ActingUnit, map, cell, BattleAction.Move));
+                Co_MoveThenConsume(ActingUnit, map, cell, BattleAction.Move).Forget();
 
             moveOptions.Clear();
         }
@@ -398,16 +431,16 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    IEnumerator Co_RebindBattleInputWhenMapsReady()
+    async UniTaskVoid Co_RebindBattleInputWhenMapsReady()
     {
         var provider = BattleMapManager.Instance as IBattleMapProvider;
         while (provider == null)
         {
-            yield return null;
+            await UniTask.Yield();
             provider = BattleMapManager.Instance as IBattleMapProvider ?? FindObjectOfType<BattleMapManager>(true) as IBattleMapProvider;
         }
         while (provider.PlayerFloor == null || provider.EnemyFloor == null)
-            yield return null;
+            await UniTask.Yield();
 
         if (battleInput != null)
             battleInput.RebindProviders();
@@ -459,7 +492,7 @@ public class BattleManager : MonoBehaviour
     {
         turnController.ResetAllATB();
         turnManager.ForceClearActingUnit();
-        state = BattleState.Idle;
+        SetStateToFSM(BattleState.Idle);
         OnATBReset?.Invoke();
         EmitActionLabel(null, "");
     }
@@ -515,18 +548,18 @@ public class BattleManager : MonoBehaviour
         CloseSkillPanel();
         inputHandler.ClearAllPreviews();
 
-        state = BattleState.Moving;
+        SetStateToFSM(BattleState.Moving);
         moveOptions = gridManager.GetAdjacentWalkable(ActingUnit.data.team, ActingUnit.Cell).ToList();
         inputHandler.ShowMoveOptions(ActingUnit.CurrentMap, moveOptions);
     }
 
-    IEnumerator Co_MoveThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell, BattleAction act)
+    async UniTaskVoid Co_MoveThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell, BattleAction act)
     {
-        if (unit == null || map == null) yield break;
+        if (unit == null || map == null) return;
 
         Vector3Int fromCell = unit.Cell;
         gridManager.SetOccupied(unit.data.team, fromCell, false);
-        yield return unit.AnimateMoveTo(map, toCell);
+        await unit.AnimateMoveTo(map, toCell).ToUniTask(this);
         gridManager.SetOccupied(unit.data.team, unit.Cell, true);
 
         bool freeMove = fieldManager != null && fieldManager.IsBeastDomainFreeMove(unit, map, fromCell, toCell);
@@ -534,13 +567,13 @@ public class BattleManager : MonoBehaviour
         {
             if (IsPlayerTurn)
             {
-                state = BattleState.ActionSelect;
+                SetStateToFSM(BattleState.ActionSelect);
                 EmitActionLabel(unit, "");
             }
-            yield break;
+            return;
         }
 
-        while (_reactionLocks > 0) yield return null;
+        while (_reactionLocks > 0) await UniTask.Yield();
 
         // TurnManager에게 소비 요청
         turnManager.OnActionConsumed(act);
@@ -578,7 +611,7 @@ public class BattleManager : MonoBehaviour
         if (state == BattleState.TargetingKnockback)
         {
             inputHandler.CancelCellSelection();
-            state = BattleState.Resolving;
+            SetStateToFSM(BattleState.Resolving);
             return;
         }
 
@@ -586,7 +619,7 @@ public class BattleManager : MonoBehaviour
         {
             inputHandler.ClearAllPreviews();
             currentSkillSO = null;
-            state = BattleState.ActionSelect;
+            SetStateToFSM(BattleState.ActionSelect);
             OnHint?.Invoke(string.Empty);
             OpenSkillPanel();
             return;
@@ -603,14 +636,14 @@ public class BattleManager : MonoBehaviour
             }
 
             inputHandler.ClearAllPreviews();
-            state = BattleState.ActionSelect;
+            SetStateToFSM(BattleState.ActionSelect);
             return;
         }
 
         if (isSelectingSkill)
         {
             CloseSkillPanel();
-            state = BattleState.ActionSelect;
+            SetStateToFSM(BattleState.ActionSelect);
         }
     }
     #endregion
@@ -648,7 +681,7 @@ public class BattleManager : MonoBehaviour
             return;
         }
 
-        StartCoroutine(skillProcessor.PerformStandardUnitSkillFlow(currentSkillSO, ActingUnit, target));
+        skillProcessor.PerformStandardUnitSkillFlow(currentSkillSO, ActingUnit, target).Forget();
     }
 
     void ClearTargetSelection()
@@ -667,7 +700,7 @@ public class BattleManager : MonoBehaviour
         {
             turnController.ResumeTime();
             turnManager.ForceClearActingUnit();
-            state = BattleState.Idle;
+            SetStateToFSM(BattleState.Idle);
         }
 
         dead.OnDied -= HandleUnitDied;
@@ -832,7 +865,7 @@ public class BattleManager : MonoBehaviour
 
     IEnumerator Co_EnemyResolveSkillOnUnit_NoMove(SkillDefinition def, BattleUnit caster, BattleUnit target)
     {
-        state = BattleState.Resolving;
+        SetStateToFSM(BattleState.Resolving);
 
         bool impactDone = false;
         System.Action impact = null;
@@ -853,7 +886,7 @@ public class BattleManager : MonoBehaviour
 
     public IEnumerator Co_EnemyFireWebThenConsume(BattleUnit caster, EnemyCastState.PendingCast p)
     {
-        state = BattleState.Resolving;
+        SetStateToFSM(BattleState.Resolving);
         caster.SetCasting(false);
 
         bool fired = false;
@@ -967,7 +1000,7 @@ public class BattleManager : MonoBehaviour
         {
             turnController.CompleteTurn(_battleunit);
             turnManager.ForceClearActingUnit();
-            state = BattleState.Idle;
+            SetStateToFSM(BattleState.Idle);
         }
         CheckBattleEnd();
     }
@@ -1032,11 +1065,11 @@ public class BattleManager : MonoBehaviour
             if (!isFreeAction && skill is HostilitySpikeSkill hss) { if (hss.trainingUseFreeAction && hss.routeForFreeAction >= 0 && route == hss.routeForFreeAction) isFreeAction = true; }
             if (!isFreeAction && skill is SelfBeastDomainSkill bds) { if (bds.trainingUseFreeAction && bds.routeForFreeAction >= 0 && route == bds.routeForFreeAction) isFreeAction = true; }
 
-            StartCoroutine(skillProcessor.PerformSelfCastFlow(skill, ActingUnit, isFreeAction));
+            skillProcessor.PerformSelfCastFlow(skill, ActingUnit, isFreeAction).Forget();
             return;
         }
 
-        state = BattleState.Targeting;
+        SetStateToFSM(BattleState.Targeting);
         inputHandler.PrepareSkillTargeting(skill, ActingUnit);
 
         UpdateTargetingHint();
@@ -1055,39 +1088,39 @@ public class BattleManager : MonoBehaviour
     public void ConfirmSkillOnUnit(BattleUnit target)
     {
         if (state != BattleState.Targeting) return;
-        state = BattleState.Resolving;
+        SetStateToFSM(BattleState.Resolving);
         inputHandler.ClearAllPreviews();
 
-        StartCoroutine(RunSkillExecute(CurrentSkillSO, ActingUnit, target, null, default));
+        RunSkillExecute(CurrentSkillSO, ActingUnit, target, null, default).Forget();
     }
     public void ConfirmSkillOnTile(Tilemap map, Vector3Int cell)
     {
         if (state != BattleState.Targeting) return;
-        state = BattleState.Resolving;
+        SetStateToFSM(BattleState.Resolving);
         inputHandler.ClearAllPreviews();
 
-        StartCoroutine(RunSkillExecute(CurrentSkillSO, ActingUnit, null, map, cell));
+        RunSkillExecute(CurrentSkillSO, ActingUnit, null, map, cell).Forget();
     }
-    IEnumerator RunSkillExecute(SkillAsset skill, BattleUnit caster, BattleUnit target, Tilemap map, Vector3Int cell)
+    async UniTaskVoid RunSkillExecute(SkillAsset skill, BattleUnit caster, BattleUnit target, Tilemap map, Vector3Int cell)
     {
         ClearSkillPreview();
-        yield return skill.Execute(this, caster, target, map, cell);
+        await skill.Execute(this, caster, target, map, cell).ToUniTask(this);
 
         if (_skillConfirmLocked)
         {
             _skillConfirmLocked = false;
             if (state == BattleState.Resolving)
             {
-                state = BattleState.Idle;
+                SetStateToFSM(BattleState.Idle);
                 CancelCurrentAction();
-                if (IsPlayerTurn && turnManager.RemainingActions > 0) state = BattleState.ActionSelect;
+                if (IsPlayerTurn && turnManager.RemainingActions > 0) SetStateToFSM(BattleState.ActionSelect);
             }
         }
     }
 
     public IEnumerator WaitForCellSelection(Tilemap map, List<Vector3Int> candidates, System.Action<Vector3Int?> onResult)
     {
-        state = BattleState.TargetingKnockback;
+        SetStateToFSM(BattleState.TargetingKnockback);
         OnHint?.Invoke("밀어낼 위치를 선택하세요");
 
         bool done = false;
@@ -1101,7 +1134,7 @@ public class BattleManager : MonoBehaviour
         while (!done) yield return null;
 
         OnHint?.Invoke(string.Empty);
-        state = BattleState.Resolving;
+        SetStateToFSM(BattleState.Resolving);
         onResult(result);
     }
 
@@ -1114,10 +1147,10 @@ public class BattleManager : MonoBehaviour
         yield return skillProcessor.PerformStandardTileSkillFlow(skill, map, cell, caster);
     }
 
-    public Coroutine StartReactiveAttack(BattleUnit caster, BattleUnit target, SkillAsset skill, bool doGapClose)
+    public UniTask StartReactiveAttack(BattleUnit caster, BattleUnit target, SkillAsset skill, bool doGapClose)
     {
-        if (caster == null || target == null || skill == null) return null;
-        return StartCoroutine(skillProcessor.Co_ReactiveAttackFlow(skill, caster, target, doGapClose));
+        if (caster == null || target == null || skill == null) return UniTask.CompletedTask;
+        return skillProcessor.Co_ReactiveAttackFlow(skill, caster, target, doGapClose);
     }
 
     public void ResolveSkillAtCell(SkillDefinition def, Tilemap map, Vector3Int originCell, BattleUnit caster)
@@ -1155,50 +1188,50 @@ public class BattleManager : MonoBehaviour
         return false;
     }
 
-    IEnumerator Co_PostSkillMoveThenConsume(BattleUnit unit)
+    async UniTaskVoid Co_PostSkillMoveThenConsume(BattleUnit unit)
     {
         if (unit == null || gridManager == null)
         {
             turnManager.OnActionConsumed(BattleAction.Attack);
-            yield break;
+            return;
         }
 
         _isPostSkillMoveInProgress = true;
-        state = BattleState.Moving;
+        SetStateToFSM(BattleState.Moving);
         moveOptions = gridManager.GetAdjacentWalkable(unit.data.team, unit.Cell).ToList();
 
         if (moveOptions.Count == 0)
         {
             _isPostSkillMoveInProgress = false;
             turnManager.OnActionConsumed(BattleAction.Attack);
-            yield break;
+            return;
         }
 
         ShowMovePreview(unit.CurrentMap, moveOptions);
 
-        while (_isPostSkillMoveInProgress) yield return null;
+        while (_isPostSkillMoveInProgress) await UniTask.Yield();
     }
-    IEnumerator Co_MoveAfterSkillThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell)
+    async UniTaskVoid Co_MoveAfterSkillThenConsume(BattleUnit unit, Tilemap map, Vector3Int toCell)
     {
         var fromCell = unit.Cell;
         gridManager.SetOccupied(unit.data.team, fromCell, false);
 
-        yield return unit.AnimateMoveTo(map, toCell);
+        await unit.AnimateMoveTo(map, toCell).ToUniTask(this);
 
         gridManager.SetOccupied(unit.data.team, unit.Cell, true);
         _isPostSkillMoveInProgress = false;
 
-        while (_reactionLocks > 0) yield return null;
+        while (_reactionLocks > 0) await UniTask.Yield();
         turnManager.OnActionConsumed(BattleAction.Attack);
     }
 
-    public IEnumerator Co_HandleFearTurn(BattleUnit unit)
+    public async UniTaskVoid Co_HandleFearTurn(BattleUnit unit)
     {
-        if (unit == null) yield break;
+        if (unit == null) return;
         var usc = unit.GetComponent<UnitStateController>();
-        if (usc == null) yield break;
+        if (usc == null) return;
         var map = unit.CurrentMap;
-        if (map == null || gridManager == null) yield break;
+        if (map == null || gridManager == null) return;
 
         var candidates = GetFearRetreatCandidates(unit);
         if (candidates.Count > 0)
@@ -1206,7 +1239,7 @@ public class BattleManager : MonoBehaviour
             var dest = candidates[Random.Range(0, candidates.Count)];
             var from = unit.Cell;
             gridManager.SetOccupied(unit.data.team, from, false);
-            yield return unit.AnimateMoveTo(map, dest);
+            await unit.AnimateMoveTo(map, dest).ToUniTask(this);
             gridManager.SetOccupied(unit.data.team, unit.Cell, true);
         }
 
@@ -1255,7 +1288,7 @@ public class BattleManager : MonoBehaviour
             currentSkillSO = null;
             UpdateTargetingHint();
 
-            StartCoroutine(Co_PostSkillMoveThenConsume(unit));
+            Co_PostSkillMoveThenConsume(unit).Forget();
             return;
         }
 
@@ -1313,6 +1346,6 @@ public class BattleManager : MonoBehaviour
         UpdateTargetingHint();
         UnlockSkillConfirm();
 
-        if (IsPlayerTurn) state = BattleState.ActionSelect;
+        if (IsPlayerTurn) SetStateToFSM(BattleState.ActionSelect);
     }
 }

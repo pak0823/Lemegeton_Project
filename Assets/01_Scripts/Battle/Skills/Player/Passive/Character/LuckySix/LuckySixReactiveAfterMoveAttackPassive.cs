@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.Tilemaps;
 using System.Linq;
+using Cysharp.Threading.Tasks;
 
 [CreateAssetMenu(menuName = "Battle/Skill/Player/Passive/LuckySix/ReactiveAfterMoveAttack")]
 public class LuckySixReactiveAfterMoveAttackPassive : PassiveAsset
@@ -228,7 +229,7 @@ public class LuckySixReactiveAfterMoveAttackPassive : PassiveAsset
 
 
 
-        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose);
+        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose).ToCoroutine();
 
 
 

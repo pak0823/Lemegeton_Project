@@ -163,16 +163,6 @@ public class PlayerPushHandler : MonoBehaviour
         if (box == null || box.MainFloorMap == null) return results;
         if (dirKey == Direction.None) return results;
 
-        var occupied = new HashSet<Vector3Int>();
-        foreach (var po in FindObjectsOfType<PushObject>())
-        {
-            if (po == null || po == box) continue;
-            if (box.MainFloorMap != null)
-            {
-                occupied.Add(box.MainFloorMap.WorldToCell(po.transform.position));
-            }
-        }
-
         var cur = startBoxCell;
 
         while (true)
@@ -202,7 +192,8 @@ public class PlayerPushHandler : MonoBehaviour
             var obstacle = Physics2D.OverlapCircle(world, 0.1f, box.obstacleLayer);
             if (obstacle != null) break;
 
-            if (occupied.Contains(next)) break;
+            // [Optimization] FindObjectsOfType 대신 PathfindingSystem의 캐싱 기반 점유 상태 활용
+            if (PathfindingSystem.Instance != null && PathfindingSystem.Instance.IsDynamicObstacle(next)) break;
 
             results.Add(next);
             cur = next;

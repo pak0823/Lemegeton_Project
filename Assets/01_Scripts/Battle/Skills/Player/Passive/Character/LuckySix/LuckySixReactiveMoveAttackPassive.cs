@@ -1,15 +1,10 @@
 using System.Collections;
-
 using System.Collections.Generic;
-
 using UnityEngine;
-
-
+using Cysharp.Threading.Tasks;
 
 [CreateAssetMenu(menuName = "Battle/Skill/Player/Passive/LuckySix/ReactiveMoveAttack", fileName = "Passive_AttackOnEnemyMove")]
-
 public class LuckySixReactiveMoveAttackPassive : PassiveAsset
-
 {
 
     [Tooltip("이 슬롯의 스킬을 사용 (0 = 첫 번째 스킬 = '1번 스킬')")]
@@ -228,7 +223,7 @@ public class LuckySixReactiveMoveAttackPassive : PassiveAsset
 
         // 행동 토큰/턴에 영향 없는 리액션 공격 실행
 
-        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose);
+        yield return _battle.StartReactiveAttack(_owner, target, skillToUse, doGapClose).ToCoroutine();
 
 
 

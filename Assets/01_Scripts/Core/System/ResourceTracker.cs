@@ -18,6 +18,9 @@ public class ResourceTracker
     // 추적 중인 핸들 목록
     private readonly List<AsyncOperationHandle> _handles = new();
 
+    // 추적 중인 인스턴스 목록
+    private readonly List<GameObject> _instances = new();
+
     // ─── 스프라이트 전용 단순 로드 (UI에서 가장 많이 쓰는 패턴) ──────────────────
 
     /// <summary>
@@ -70,6 +73,19 @@ public class ResourceTracker
                 Addressables.Release(h);
         }
         _handles.Clear();
+
+        foreach (var obj in _instances)
+        {
+            if (obj != null)
+                Addressables.ReleaseInstance(obj);
+        }
+        _instances.Clear();
+    }
+
+    /// <summary>특정 GameObject 인스턴스를 추적 목록에 추가합니다.</summary>
+    public void TrackInstance(GameObject obj)
+    {
+        if (obj != null) _instances.Add(obj);
     }
 
     /// <summary>현재 추적 중인 핸들 수</summary>

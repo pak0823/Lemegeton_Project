@@ -54,10 +54,10 @@ public class EnemyAI : MonoBehaviour
             {
                 case SkillTargetPreference.LowestHP:
                     return candidates.OrderBy(u => u.HP).FirstOrDefault();
-                
+
                 case SkillTargetPreference.Closest:
                     return GetClosestUnit(candidates);
-                
+
                 case SkillTargetPreference.Random:
                     return candidates[Random.Range(0, candidates.Count)];
 
@@ -74,15 +74,12 @@ public class EnemyAI : MonoBehaviour
 
     protected List<BattleUnit> GetAlivePlayers()
     {
-        // [Optimization] Use BattleManager registry
         var bm = BattleManager.Instance;
-        var targets = (bm != null) 
-            ? bm.GetAliveUnits(Team.Player) 
-            : FindObjectsOfType<BattleUnit>().Where(u => u.data.team == Team.Player && !u.IsDead).ToList();
+        if (bm == null) return new List<BattleUnit>();
 
-        return targets
+        return bm.GetAliveUnits(Team.Player)
             .Where(u => u != null)
-            .Where(u => !SkillAsset.IsUntargetableByEnemy(u)) 
+            .Where(u => !SkillAsset.IsUntargetableByEnemy(u))
             .ToList();
     }
 

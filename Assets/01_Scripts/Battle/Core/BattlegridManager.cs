@@ -322,7 +322,7 @@ public class BattleGridManager : MonoBehaviour, IGridProvider
 
         // [Optimization] Use BattleManager Registry
         var bm = BattleManager.Instance;
-        var targets = (bm != null) ? bm.ActiveUnits : FindObjectsOfType<BattleUnit>();
+        var targets = (bm != null) ? bm.ActiveUnits : System.Linq.Enumerable.Empty<BattleUnit>();
 
         foreach (var u in targets)
 
