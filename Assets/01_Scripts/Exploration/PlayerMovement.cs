@@ -295,12 +295,12 @@ public class PlayerMovement : MonoBehaviour
             activePathMarkers.Add(marker);
         }
 
-        // 목표 지점에 소모 기력 표시
+        // 목표 지점에 소모 기력 표시 (과적 등 상태 배율 포함한 실제 소모량)
         var vigor = VigorManager.Instance;
         if (vigor != null && cells.Count > 0)
         {
             int steps = Mathf.Max(0, cells.Count - 1);
-            int cost = steps * Mathf.Max(0, vigor.costMovePerTile);
+            int cost = vigor.GetEffectiveMoveCost(steps); // 과적 등 상태 배율 반영
 
             Vector3Int goalCell = cells[cells.Count - 1];
             Tilemap goalMap = PathfindingSystem.Instance.GetWalkableMapAt(goalCell);

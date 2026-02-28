@@ -100,10 +100,24 @@ public class VigorManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 타일 이동 n칸에 대한 실제 활기 소모량을 반환합니다. (과적 등 상태 배율 포함)
+    /// ShowPathPreview 등 미리보기 표시 시 이 메서드를 사용합니다.
+    /// </summary>
+    public int GetEffectiveMoveCost(int steps)
+    {
+        if (steps <= 0) return 0;
+        int rawCost = steps * Mathf.Max(0, costMovePerTile);
+        float multiplier = ExplorationStatusManager.Instance != null
+            ? ExplorationStatusManager.Instance.GetVigorCostMultiplier()
+            : 1f;
+        return Mathf.CeilToInt(rawCost * multiplier);
+    }
+
     public bool CanSpend(int amount)
     {
         if (amount <= 0) return true;
-        
+
         float multiplier = ExplorationStatusManager.Instance != null ? ExplorationStatusManager.Instance.GetVigorCostMultiplier() : 1f;
         int finalAmount = Mathf.CeilToInt(amount * multiplier);
 
