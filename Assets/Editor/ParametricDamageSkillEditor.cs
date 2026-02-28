@@ -141,9 +141,9 @@ public class ParametricDamageSkillEditor : Editor
         conditionalMultipliers = serializedObject.FindProperty("conditionalMultipliers");
         selectionMode = serializedObject.FindProperty("selectionMode");
         diagUseNEAxis = serializedObject.FindProperty("diagUseNEAxis");
-        applyStatusOnHitProp = serializedObject.FindProperty("applyStatusOnHit");
-
-        // 타일 변경 관련 프로퍼티 연결
+        applyStatusOnHitProp = serializedObject.FindProperty("applyStatusOnHit");
+
+        // 타일 변경 관련 프로퍼티 연결
         changeTileToProp = serializedObject.FindProperty("changeTileTo");
         tileChangeDurationProp = serializedObject.FindProperty("tileChangeDuration");
         zoneStatusIdProp = serializedObject.FindProperty("zoneStatusId");
@@ -502,8 +502,8 @@ public class ParametricDamageSkillEditor : Editor
         EditorGUILayout.BeginVertical("box");
         EditorGUILayout.LabelField("Hit Effects & Tile (확장)", EditorStyles.boldLabel);
 
-        EditorGUILayout.PropertyField(applyStatusOnHitProp, new GUIContent("Hit Status Effects"), true);
-
+        EditorGUILayout.PropertyField(applyStatusOnHitProp, new GUIContent("Hit Status Effects"), true);
+
         EditorGUILayout.PropertyField(changeTileToProp, new GUIContent("Change Tile To"));
         if (changeTileToProp.objectReferenceValue != null)
         {
@@ -511,7 +511,7 @@ public class ParametricDamageSkillEditor : Editor
             EditorGUILayout.PropertyField(tileChangeDurationProp, new GUIContent("Tile Duration (Turns)"));
             EditorGUILayout.PropertyField(zoneStatusIdProp, new GUIContent("Zone Status (On Turn End)"));
             // 상태가 None이 아닐 때만 스택/지속시간 표시
-            if (zoneStatusIdProp.enumValueIndex != 0)
+            if (zoneStatusIdProp.enumValueIndex != 0)
             {
                 EditorGUILayout.PropertyField(zoneStatusStackProp, new GUIContent("Status Stack"));
                 EditorGUILayout.PropertyField(zoneStatusDurationProp, new GUIContent("Status Duration"));
