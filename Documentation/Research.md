@@ -1,8 +1,9 @@
 # Lemegeton Project — 심층 분석 보고서 (Research.md)
 
 **작성일:** 2026-02-27
+**최종 갱신:** 2026-03-04
 **분석 대상:** Lemegeton_Project-Dev (Unity 2D RPG, 개발 중)
-**스크립트 수:** 약 150+ `.cs` 파일
+**스크립트 수:** 약 251+ `.cs` 파일 (01_Scripts 기준)
 **엔진:** Unity URP 14.0.12 / 2D Tilemap
 
 ---
@@ -73,16 +74,74 @@ Lemegeton Project는 Unity 2D Tilemap 기반의 **탐험-전투 하이브리드 
 ```
 Assets/
 ├── 00_Scenes/         씬 파일 (Title, Exploration, Battle, Test)
-├── 01_Scripts/        C# 스크립트 전체 (도메인별 세분화)
+├── 01_Scripts/        C# 스크립트 전체 (도메인별 세분화) — 251개+
 │   ├── Battle/        전투 코어, FSM, 스킬, 유닛, AI, 시각 효과
+│   │   ├── Command/   CommandQueue, ICommand, MoveCommand, SkillCommand
+│   │   ├── Core/      BattleManager, ATBTurnController, BattleGridManager 등 코어 16개+
+│   │   ├── FSM/       BattleStateMachine, BattleBaseState, BattleConcreteStates
+│   │   ├── Projectiles/ ProjectileController
+│   │   ├── Skills/    스킬 에셋 계층 구조
+│   │   │   ├── Core/  SkillAsset, EnemySkill
+│   │   │   ├── Effects/ SmokeZoneRuntime
+│   │   │   ├── Enemies/ EnemyBasicAttack, WebCastWebTrap
+│   │   │   └── Player/ (5개 하위 폴더)
+│   │   │       ├── Core/ StateConditionalMulti
+│   │   │       ├── Passive/ 캐릭터별 패시브 (기간트/노을/럭키식스/라스트보르그)
+│   │   │       ├── Self/  SelfAmbushSkill, SelfVigilanceSkill 등 6종
+│   │   │       ├── Tactics/ AllyRetreatSwapSkill 등
+│   │   │       └── Templates/ ParametricDamageSkill 등 파라미터화 템플릿
+│   │   ├── Units/     BattleUnit, EnemyAI, StatusController, UnitStateController
+│   │   │   └── Components/ UnitStats, UnitMover, UnitVisual 등
+│   │   ├── Utils/     HexUtil 등 유틸리티
+│   │   ├── Visuals/   시각 효과 컨트롤러
+│   │   └── Waves/     웨이브 관련
 │   ├── Core/          씬 전환, 인벤토리, 이벤트 버스, 카메라
+│   │   ├── Definitions/ SceneName enum 등 정의
+│   │   └── System/    SceneTransitionManager, PlayerDataManager, GameEventBus 등
 │   ├── Data/          ScriptableObject 정의, DB, 효과 에셋
+│   │   ├── Components/ 데이터 컴포넌트
+│   │   ├── Databases/ 각종 DB SO (StateStatModifierDB, TrainingDB 등)
+│   │   ├── Definitions/ UnitData, ItemData, SkillAsset 등 SO 정의
+│   │   ├── Effects/   아이템/스킬 효과 SO
+│   │   ├── Interaction/ 상호작용 결과 데이터
+│   │   ├── Maps/      맵 데이터
+│   │   └── Stages/    스테이지 DB
 │   ├── Editor/        커스텀 에디터 툴 (임포터, 베이커 등)
 │   ├── Exploration/   맵 로더, 플레이어 이동, 안개, 영속성
+│   │   ├── Components/  탐험 컴포넌트
+│   │   ├── Core/      ExplorationMapLoader, ExplorationEntitySpawner 등
+│   │   ├── Data/      탐험 데이터
+│   │   ├── Interactables/ 탐험 전용 상호작용
+│   │   ├── System/    ExplorationFogManager, PathfindingSystem 등 16개
+│   │   ├── MapManager.cs       맵 오케스트레이터
+│   │   ├── MapTransitionManager.cs  맵 간 전환 처리
+│   │   ├── MapToggleManager.cs  맵 토글 UI 연동
+│   │   ├── PlayerMovement.cs   플레이어 이동 (리팩토링 완료, ~23KB)
+│   │   ├── PlayerInputController.cs 입력 처리 분리
+│   │   ├── PlayerInteractionHandler.cs 상호작용 판정
+│   │   ├── PlayerPushHandler.cs 소코반 밀기
+│   │   ├── ExplorationInteractionController.cs 통합 상호작용 컨트롤러
+│   │   ├── ExplorationQTEManager.cs QTE 관리
+│   │   ├── ExplorationStatusManager.cs 탐험 상태 관리
+│   │   └── VigorManager.cs     활기 자원 관리
 │   ├── Interactables/ 함정, 퍼즐, 상자, 포탈, 인카운터
+│   │   ├── Core/      IInteractable 등 기반 코드
+│   │   ├── Encounters/ 몬스터 조우
+│   │   ├── Props/     BoxInteract, PortalController 등 오브젝트
+│   │   ├── Puzzles/   PushObject, PuzzleBox, BoxGoal
+│   │   ├── Spawners/  오브젝트 스포너
+│   │   └── Traps/     TrapBehavior, WebTrapController
 │   ├── UI/            전투/탐험/캠프/공통 UI
+│   │   ├── Battle/    전투 UI
+│   │   ├── Camp/      캠프 UI (Status/Skill/Craft/Option 탭)
+│   │   ├── Common/    공통 UI 컴포넌트
+│   │   ├── Core/      팝업 매니저, 모달 베이스
+│   │   ├── Exploration/ 탐험 UI
+│   │   ├── Managers/  UI 매니저
+│   │   ├── Title/     타이틀 UI
+│   │   └── Utils/     UI 유틸리티
 │   └── Utils/         디버그, 어드레서블 테스터
-├── 02_Prefabs/        Common, Title, Exploration, Battle 프리팹
+├── 02_Prefabs/        Common, Title, Exploration, Battle 프리팹 (106개)
 ├── 03_Data/           ScriptableObject 데이터 에셋
 │   ├── Interactions/  상호작용 결과 데이터
 │   ├── Item/          아이템 정의
@@ -91,24 +150,24 @@ Assets/
 │   ├── Trap/          함정 데이터
 │   ├── Unit/          유닛 데이터 (Player/Enemy)
 │   └── VisualDB/      시각 효과 DB
-├── 04_Art/            스프라이트, 애니메이터, 폰트
-├── 07_Test/           개발용 테스트 씬 및 스크립트
+├── 04_Art/            스프라이트, 애니메이터, 폰트 (170개+ .png)
+├── 07_Test/           개발용 테스트 씬 및 스크립트 (Lemegeton.Test.asmdef 적용 완료)
 ├── AddressableAssetsData/  어드레서블 그룹 설정
 ├── Editor/            에디터 전용 스크립트
-└── Documentation/     마크다운 기술 문서 21개
+└── Documentation/     마크다운 기술 문서 26개
 ```
 
-**스크립트 도메인 분포:**
+**스크립트 도메인 분포 (2026-03-04 기준):**
 
-| 도메인                        | 역할                              |
-| ----------------------------- | --------------------------------- |
-| `Battle/` (75개, 33%)         | 전투 코어/FSM/스킬/유닛/AI        |
-| `UI/` (68개, 30%)             | 전투/탐험/캠프/공통/팝업 UI       |
-| `Data/` (27개, 12%)           | ScriptableObject 정의/DB/효과     |
-| `Exploration/` (18개, 8%)     | 맵로더/플레이어이동/안개/영속성   |
-| `Interactables/` (16개, 7%)   | 함정/퍼즐/상자/포탈/인카운터      |
-| `Core/` (12개, 5%)            | 씬전환/인벤토리/이벤트버스/카메라 |
-| `Editor/ + Utils/` (11개, 5%) | 에디터 도구/디버그                |
+| 도메인                    | 파일 수(numChildren 기준)                                                                     | 역할                                |
+| ------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `Battle/` (~88개)         | (Commands 4 + Core 16 + FSM 3 + Skills 82 + Units 11 + Utils 4 + Visuals 2 + Waves 1)         | 전투 코어/FSM/스킬/유닛/AI          |
+| `UI/` (~77개)             | (Battle 7 + Camp 22 + Common 12 + Core 6 + Exploration 16 + Managers 2 + Title 1 + Utils 3)   | 전투/탐험/캠프/공통/팝업 UI         |
+| `Data/` (~33개)           | (Components 1 + Databases 7 + Definitions 10 + Effects 3 + Interaction 4 + Maps 2 + Stages 2) | ScriptableObject 정의/DB/효과       |
+| `Exploration/` (~24개)    | (Components + Core + Data + System 16 + 직접파일 8)                                           | 맵로더/플레이어이동/안개/영속성/QTE |
+| `Interactables/` (~21개)  | (Core 3 + Encounters 2 + Props 4 + Puzzles 3 + Spawners 2 + Traps 3 + IInteractable.cs)       | 함정/퍼즐/상자/포탈/인카운터        |
+| `Core/` (~14개)           | (Definitions 3 + System 11)                                                                   | 씬전환/인벤토리/이벤트버스/카메라   |
+| `Editor/ + Utils/` (~5개) | 커스텀 에디터 도구 + 디버그 유틸                                                              | 에디터 도구/디버그                  |
 
 ---
 
@@ -310,17 +369,23 @@ MapManager (Singleton)
 
 `StageDatabase`와 `currentStage`로 현재 스테이지를 추적하며, `MapConnectionData`로 맵 간 포탈 연결 정보를 관리한다.
 
-### 6.2 PlayerMovement (1,255줄 — 리팩토링 대상)
+### 6.2 PlayerMovement (리팩토링 완료 — ~23KB)
 
-탐험씬의 플레이어 이동 전담 클래스로, 현재 다음 책임이 혼재되어 있다.
+기존 2,525줄 거대 클래스였으나 책임 분리 리팩토링이 완료되었다.
+
+**분리된 컴포넌트 구성:**
+
+- **`PlayerMovement.cs`** (~23KB): 핵심 그리드 이동, 경로 추적, 이동 잠금만 담당
+- **`PlayerInputController.cs`**: 입력 처리 전담 분리 (New Input System 연동)
+- **`PlayerInteractionHandler.cs`**: 오브젝트 상호작용 판정 전담
+- **`PlayerPushHandler.cs`**: 소코반 스타일 상자 밀기 전담
+- **`ExplorationInteractionController.cs`** (~13KB): 상호작용 통합 컨트롤러 (신규 추가)
 
 **경로 이동 시스템:** 타일 클릭 시 `PathfindingSystem`으로 BFS 경로를 구하고, 코루틴으로 셀 단위 이동을 수행한다. 이동 중 `OnTileStepped` 정적 이벤트를 발송해 포탈, 함정 등이 감지할 수 있게 한다. 이동 마커(`pathMarkerPrefab`)와 목표 마커(`goalMarkerPrefab`)로 경로를 시각화한다.
 
 **2단계 이동 UI:** 첫 번째 클릭은 목표 셀 선택(경로 미리보기), 두 번째 클릭은 이동 확정 방식이다. `selectedTargetCell`과 `isMovingByPath` 플래그로 상태를 구분한다.
 
 **이동 잠금 시스템:** 시간 기반(`movementLockUntil`)과 토큰 기반(`_hardLockTokens`) 두 가지 잠금 방식을 지원한다.
-
-**관련 핸들러:** `PlayerPushHandler`(상자 밀기), `PlayerInteractionHandler`(오브젝트 상호작용) 컴포넌트를 통해 기능을 위임한다.
 
 ### 6.3 활기(Vigor) 시스템
 
@@ -929,3 +994,4 @@ Coroutine(`IEnumerator`), `async/await`, `UniTask`가 혼용된다. 스킬 흐�
 ---
 
 _Lemegeton Project Research Report — Generated 2026-02-27 by Claude Sonnet 4.6_
+_최종 갱신: 2026-03-04 — 폴더 구조 최신화, PlayerMovement 리팩토링 완료 반영, 스크립트 수 251+개로 업데이트_
